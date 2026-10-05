@@ -23,7 +23,7 @@ auto RSP::serialize(serializer& s) -> void {
   s(dma.busy.write);
   s(dma.full.read);
   s(dma.full.write);
-  s(dma.clock.units);
+  s(dma.landing.units);
 
   s(status.semaphore);
   s(status.halted);

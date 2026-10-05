@@ -23,12 +23,6 @@ auto PIF::unload() -> void {
   node.reset();
 }
 
-auto PIF::main() -> void {
-  while(Thread::clock < cpu.clock) {
-    mainHLE();
-  }
-}
-
 auto PIF::power(bool reset) -> void {
   Thread::reset();
 
@@ -48,6 +42,7 @@ auto PIF::power(bool reset) -> void {
   io = {};
   intram = {};
   state = Init;
+  timeline.schedule({Thread::clock, (u32)EventKind::PIF_Poll});
 }
 
 }

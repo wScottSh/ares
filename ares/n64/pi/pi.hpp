@@ -67,7 +67,7 @@ struct PI : Memory::RCP<PI> {
   auto readWord(u32 address, Thread& thread) -> u32;
   auto writeWord(u32 address, u32 data, Thread& thread) -> void;
   auto writeFinished() -> void;
-  auto writeForceFinish() -> Clock;
+  auto writeForceFinish(Clock now) -> Clock;
 
   //serialization.cpp
   auto serialize(serializer&) -> void;

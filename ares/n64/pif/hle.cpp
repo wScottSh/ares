@@ -259,11 +259,18 @@ auto PIF::challenge() -> void {
   }
 }
 
+//One poll of the HLE boot handshake. The PIF has nothing to post once the
+//console runs (cicCompare is not modeled), so the poll that reaches Run is the
+//last; an Error keeps polling because each poll re-asserts the NMI.
 auto PIF::mainHLE() -> void {
   constexpr Clock clocks = pclk(10240 * 4);
-  step(clocks);
   if(intram.bootTimeout > 0) intram.bootTimeout -= clocks.units;
+  pollHLE();
+  step(clocks);
+  if(state != Run) timeline.schedule({Thread::clock, (u32)EventKind::PIF_Poll});
+}
 
+auto PIF::pollHLE() -> void {
   if(likely(state == Run)) {
     //cicCompare()
     return;

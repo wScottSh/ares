@@ -53,6 +53,7 @@ struct Options {
   u32 controllers = 1;
   std::vector<FrameDump> dumps;
   string scriptPath;
+  bool stepCap = false;
 };
 
 //cpu.profile.cpuCycles counts VR4300 PClock cycles (93.75 MHz on NTSC).
@@ -88,6 +89,7 @@ auto usage() -> void {
     "                      (640x480; repeatable)\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
     "  --script FILE       run an input script (controller 1 input, memory peeks and pokes)\n"
+    "  --step-cap          catch the timeline up before every CPU instruction; the stats must not change\n"
     "stdout carries ISViewer and emux output only. The stop line goes to stderr.\n"
     "exit: 0 emux exit, script stop, or frame limit, 2 emulated-time limit, 3 wall-time limit, 1 error\n");
 }
@@ -106,6 +108,7 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--stats") options.statsPath = value();
     else if(arg == "--script") options.scriptPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
+    else if(arg == "--step-cap") options.stepCap = true;
     else if(arg == "--dump-frame") {
       FrameDump dump;
       dump.frame = value().natural();
@@ -518,6 +521,7 @@ auto nall::main(Arguments arguments) -> void {
     }
   }
   root->power();
+  N64::timeline.setStepCap(options.stepCap);
 
   file_buffer stats;
   if(options.statsPath) {
@@ -573,6 +577,10 @@ auto nall::main(Arguments arguments) -> void {
   std::fflush(stdout);
   std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f\n",
     info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed());
+  //host cost per interpreted CPU instruction: the scheduler's own overhead shows here (plan T5)
+  std::fprintf(stderr, "n64-run: cpu_instructions=%llu ns_per_instruction=%.2f\n",
+    (unsigned long long)N64::cpu.instructionIndex,
+    N64::cpu.instructionIndex ? wallElapsed() * 1e9 / N64::cpu.instructionIndex : 0.0);
   //host time inside the engine's render calls and the pixels it rasterized (ADR 0001 risk 1)
   auto& engine = N64::rdp.engine;
   std::fprintf(stderr, "n64-run: rdp_engine render_calls=%llu render_ms=%.3f pixels=%llu ns_per_pixel=%.2f\n",

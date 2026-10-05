@@ -107,7 +107,7 @@ auto PI::ioWrite(u32 address, u32 data_) -> void {
     io.readLength = n24(data);
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
-    cpu.queueInsert(Queue::PI_DMA_Read, dmaDuration(true));
+    scheduleAfter(EventKind::PI_DMA_Read, dmaDuration(true));
     dmaRead();
   }
 
@@ -116,7 +116,7 @@ auto PI::ioWrite(u32 address, u32 data_) -> void {
     io.writeLength = n24(data);
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
-    cpu.queueInsert(Queue::PI_DMA_Write, dmaDuration(false));
+    scheduleAfter(EventKind::PI_DMA_Write, dmaDuration(false));
     dmaWrite();
   }
 
@@ -125,8 +125,8 @@ auto PI::ioWrite(u32 address, u32 data_) -> void {
     if(data.bit(0)) {
       io.dmaBusy = 0;
       io.error = 0;
-      queue.remove(Queue::PI_DMA_Read);
-      queue.remove(Queue::PI_DMA_Write);
+      cancelEvent(EventKind::PI_DMA_Read);
+      cancelEvent(EventKind::PI_DMA_Write);
     }
     if(data.bit(1)) {
       io.interrupt = 0;

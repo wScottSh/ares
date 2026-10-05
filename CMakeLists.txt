@@ -53,7 +53,9 @@ endif()
 add_subdirectory(tools/sourcery)
 
 if(n64 IN_LIST ARES_CORES)
+  enable_testing()
   add_subdirectory(tools/n64-run)
+  add_subdirectory(tools/n64-timing/tests)
 endif()
 
 message_configuration()

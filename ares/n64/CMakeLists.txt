@@ -24,6 +24,7 @@ ares_add_sources(
     rsp/rsp.cpp
     rdp/rdp.cpp
     aleck64/aleck64.cpp
+    timing/timeline.cpp
     timing/verify.cpp
 )
 
@@ -310,6 +311,8 @@ ares_add_sources(
     timing/behaviors.hpp
     timing/behaviors.tsv
     timing/clock.hpp
+    timing/events.hpp
+    timing/timeline.hpp
     timing/verify.hpp
 )
 

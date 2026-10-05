@@ -17,7 +17,7 @@ struct AI : Thread, Memory::RCP<AI> {
   //ai.cpp
   auto load(Node::Object) -> void;
   auto unload() -> void;
-  auto main() -> void;
+  auto sampleEvent() -> void;
   auto sample() -> void;
   auto power(bool reset) -> void;
   auto updateDecay() -> void;

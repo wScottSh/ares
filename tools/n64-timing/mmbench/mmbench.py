@@ -267,7 +267,7 @@ def with_shots(steps, scene_dir):
     return out
 
 
-def run_scene(exe, rom, name, steps, outdir, shots):
+def run_scene(exe, rom, name, steps, outdir, shots, extra=()):
     scene_dir = outdir / name
     scene_dir.mkdir(parents=True, exist_ok=True)
     if shots:
@@ -277,14 +277,14 @@ def run_scene(exe, rom, name, steps, outdir, shots):
     stats = scene_dir / "stats.tsv"
     proc = subprocess.run(
         [exe, rom, "--script", str(script), "--stats", str(stats),
-         "--frames", "3000", "--wall-seconds", "600"],
+         "--frames", "3000", "--wall-seconds", "600", *extra],
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     lines = [l for l in proc.stderr.splitlines() if l.startswith("n64-run: ")]
     stop = next((l for l in lines if l.startswith("n64-run: stop=")), "")
     wall = float(re.search(r"wall_s=([\d.]+)", stop).group(1)) if "wall_s=" in stop else float("nan")
-    events = [l[len("n64-run: "):] for l in lines if not l.startswith(("n64-run: stop=", "n64-run: rdp_"))]
+    events = [l[len("n64-run: "):] for l in lines if not l.startswith(("n64-run: stop=", "n64-run: rdp_", "n64-run: cpu_instructions="))]
     (scene_dir / "events.txt").write_text("\n".join(events) + "\n", newline="\n")
-    rdp_lines = [l[len("n64-run: "):] for l in lines if l.startswith("n64-run: rdp_")]
+    rdp_lines = [l[len("n64-run: "):] for l in lines if l.startswith(("n64-run: rdp_", "n64-run: cpu_instructions="))]
     (scene_dir / "rdp.txt").write_text("\n".join(rdp_lines) + "\n", newline="\n")
     if "stop=script-stop" not in stop:
         raise SystemExit(f"{name}: run did not reach the end of its script: {stop or proc.stderr[-500:]}")
@@ -422,13 +422,13 @@ def confirm_buffers(sct_fields, peeks):
     return rows
 
 
-def bench(args, out):
+def bench(args, out, extra=()):
     scripts = scene_scripts()
     names = args.scenes.split(",")
     out.mkdir(parents=True, exist_ok=True)
     began = time.perf_counter()
     with ThreadPoolExecutor(max_workers=args.jobs or len(names)) as pool:
-        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots)
+        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots, extra)
                    for n in names}
         results = {n: f.result() for n, f in futures.items()}
     total_wall = time.perf_counter() - began
@@ -490,21 +490,24 @@ def main():
                    help="save start.ppm/end.ppm per scene from the RDRAM image the VI samples (visual check only)")
     p.add_argument("--check-determinism", action="store_true",
                    help="run the bench twice (OUT/run1, OUT/run2) and compare every output except wall.tsv")
+    p.add_argument("--check-step-cap", action="store_true",
+                   help="run the bench normally (OUT/run1) and with n64-run --step-cap (OUT/run2) and compare the same way")
     args = p.parse_args()
 
     md5 = rom_md5(args.rom)
     if md5 != ROM_MD5:
         raise SystemExit(f"ROM is not Majora's Mask NTSC-U 1.0 (md5 {md5}, want {ROM_MD5})")
 
-    if not args.check_determinism:
+    if not args.check_determinism and not args.check_step_cap:
         bench(args, args.out)
         return
-    for run in ("run1", "run2"):
-        bench(args, args.out / run)
+    label = "stepcap" if args.check_step_cap else "determinism"
+    bench(args, args.out / "run1")
+    bench(args, args.out / "run2", ("--step-cap",) if args.check_step_cap else ())
     files, differing = identical_trees(args.out / "run1", args.out / "run2")
     if differing:
-        raise SystemExit("determinism: FAIL, differing files: " + " ".join(map(str, differing)))
-    print(f"determinism: PASS, {len(files)} files byte-identical (wall.tsv excluded)")
+        raise SystemExit(f"{label}: FAIL, differing files: " + " ".join(map(str, differing)))
+    print(f"{label}: PASS, {len(files)} files byte-identical (wall.tsv excluded)")
 
 
 if __name__ == "__main__":

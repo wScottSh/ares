@@ -72,7 +72,6 @@ auto CPU::serialize(serializer& s) -> void {
   s(scc.count);
   s(scc.compare);
   s(countClock.units);
-  s(syncClock.units);
   s(instructionIndex);
   s(scc.status.interruptEnable);
   s(scc.status.exceptionLevel);

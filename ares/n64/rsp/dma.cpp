@@ -1,14 +1,6 @@
 auto RSP::dmaQueue(Clock clocks, Thread& thread) -> void {
-  dma.clock = (Thread::clock - thread.clock) - clocks;
-}
-
-auto RSP::dmaStep(Clock clocks) -> void {
-  if(dma.busy.any()) {
-    dma.clock += clocks;
-    if(dma.clock >= Clock{}) {
-      dmaTransferStep();
-    }
-  }
+  dma.landing = thread.clock + clocks;
+  timeline.wake(Timing::ActorId::RSP);
 }
 
 auto RSP::dmaTransferStart(Thread& thread) -> void {

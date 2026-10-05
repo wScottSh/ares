@@ -25,5 +25,5 @@ if [ ! -f "$build/CMakeCache.txt" ]; then
     -DARES_SKIP_DEPS=ON \
     -DENABLE_CCACHE=OFF
 fi
-cmake --build "$build" --target n64-run
+cmake --build "$build" --target n64-run n64-timing-tests
 echo "$build/n64-run/rundir/n64-run.exe"

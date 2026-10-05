@@ -1,7 +1,7 @@
 id	value	unit	basis	reference	verify	note
 clock.unit	750000000	Hz	derived	clocks.md: LCM of RCLK 250, PClock 93.75, RCP 62.5 MHz (X2 x17)	nemu64:rsp_timing/clock-cpu-vs-rdp	
 clock.vclk	5500/357	units	derived	clocks.md: VCLK = 315/22 MHz x 17/5 (X1); exact rational	mm:south-clock-town	AI and VI share the accumulator; removes the +33 ppm AI truncation
-scheduler.tie-rank	Bus,Events,SysAD,RDP,RSP,CPU	order	model-choice	none: equal-time ordering between independent RCP blocks is unpublished	det stepcap	convention; cannot be observed by a test ROM except through an exact tie
+scheduler.tie-rank	Bus,Events,SysAD,RDP,RSP,CPU	order	model-choice	none: equal-time ordering between independent RCP blocks is unpublished	det stepcap unit:timeline	convention; cannot be observed by a test ROM except through an exact tie
 ri.read-hit	10	tc	datasheet	NEC uPD488170L tReadHit (rdram-bus-arbitration.md B8)	unit:ri-cost-table nemu64:timing/load-from-uncached-vi-off	
 ri.write-hit	4	tc	datasheet	NEC uPD488170L tWriteHit (B8)	unit:ri-cost-table bench:mi-memset-uncached	
 ri.octbyte	4	tc	datasheet	NEC uPD488170L 2 B per tc (B8)	unit:ri-cost-table bench:sp-dma-sweep	
@@ -89,14 +89,14 @@ rdp.write-run	per-contiguous-run	rule	measured	snapper64 Span Tri console dumps,
 rdp.noise-step	every-rclk	rule	measured	Thar0 RDP-Noise dumps re-solved (rdp-noise.md)	noise:a noise:b noise:c	
 rdp.noise-reset	all-ones	rule	measured	Thar0 data reproduction (rdp-noise.md)	noise:a	
 rdp.noise-pixel-offset	0	rclk	model-choice	rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured	noise:rect-1016	calibration #16
-legacy.clock.vclk-pal	49656530	Hz	legacy	ares/n64/system/system.cpp:89	pending:no-corpus	no plan unit: PAL is not the target console
+legacy.clock.vclk-pal	49656530	Hz	legacy	ares/n64/system/system.cpp:88	pending:no-corpus	no plan unit: PAL is not the target console
 legacy.cpu.instruction	1	pclk	legacy	ares/n64/cpu/memory.cpp:158	nemu64:timing/just-nops	replaced by T7a: Pipeline::issue
-legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:117	nemu64:cop0hazard/softwareinterrupt	replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
-legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:125	pending:no-corpus	replaced by T7b: exception stage costs
-legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:130	pending:no-corpus	replaced by T6: SysAD port
+legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:95	nemu64:cop0hazard/softwareinterrupt	replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
+legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:103	pending:no-corpus	replaced by T7b: exception stage costs
+legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:108	pending:no-corpus	replaced by T6: SysAD port
 legacy.cpu.address-error	1	pclk	legacy	ares/n64/cpu/memory.cpp:212	nemu64:timing/exceptions	replaced by T7b: exception stage costs (cpu.exc-ex)
-legacy.cpu.icache-fill	48	pclk	legacy	ares/n64/cpu/cpu.hpp:189	bench:ifill-isolated	replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)
-legacy.cpu.icache-writeback	48	pclk	legacy	ares/n64/cpu/cpu.hpp:197	pending:no-corpus	replaced by T7d: I-cache CACHE ops through SysAD
+legacy.cpu.icache-fill	48	pclk	legacy	ares/n64/cpu/cpu.hpp:190	bench:ifill-isolated	replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)
+legacy.cpu.icache-writeback	48	pclk	legacy	ares/n64/cpu/cpu.hpp:198	pending:no-corpus	replaced by T7d: I-cache CACHE ops through SysAD
 legacy.cpu.dcache-hit	1	pclk	legacy	ares/n64/cpu/dcache.cpp:61	nemu64:timing/cached-loads-and-store	replaced by T6: D-hit +1 removed (cpu.dcache-hit folds into the issue cycle)
 legacy.cpu.dcache-fill	40	pclk	legacy	ares/n64/cpu/dcache.cpp:7	nemu64:timing/load-miss-vi-off	replaced by T6: SysAD::fill (cpu.dfill-total)
 legacy.cpu.dcache-writeback	40	pclk	legacy	ares/n64/cpu/dcache.cpp:16	bench:dirty-miss-isolated	replaced by T6: fill-then-writeback (cpu.dirty-miss-order)
@@ -127,13 +127,10 @@ legacy.si.dma-read-controller	22000	rclk	legacy	ares/n64/pif/hle.cpp:228	bench:s
 legacy.si.dma-read-empty-port	18000	rclk	legacy	ares/n64/pif/hle.cpp:230	bench:si-dma	replaced by T8: SiDma; per channel without a device
 legacy.si.dma-read-accessory	20000	rclk	legacy	ares/n64/pif/hle.cpp:234	bench:si-dma	replaced by T8: SiDma; per cartridge channel
 legacy.si.dma-read-short-command	1420	rclk	legacy	ares/n64/pif/hle.cpp:240	bench:si-dma	replaced by T8: SiDma; per end, skip, reset or padding byte
-legacy.pif.step-quantum	40960	pclk	legacy	ares/n64/pif/hle.cpp:263	stepcap	replaced by T5: PIF events on the Timeline
-legacy.pif.boot-timeout	6	s	legacy	ares/n64/pif/hle.cpp:353	pending:no-corpus	no plan unit: CIC boot handshake timeout
-legacy.rsp.halted-quantum	64	pclk	legacy	ares/n64/rsp/rsp.cpp:37	stepcap	replaced by T5: a halted RSP is Parked and costs nothing
-legacy.rsp.dma-bytes-per-rclk	8	B	legacy	ares/n64/rsp/dma.cpp:20	bench:sp-dma-sweep	replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst)
-legacy.rdp.step-quantum	1	s	legacy	ares/n64/rdp/rdp.cpp:36	stepcap	replaced by T5: the RDP steps as a timeline actor
-legacy.ai.power-on-rate	44100	Hz	legacy	ares/n64/ai/ai.cpp:76	pending:no-corpus	no plan unit: the DAC rate before the first AI_DACRATE write
-legacy.vi.inactive-line	2048	vclk	legacy	ares/n64/vi/vi.cpp:105	stepcap	replaced by T5: the VI posts no events while disabled
+legacy.pif.step-quantum	40960	pclk	legacy	ares/n64/pif/hle.cpp:266	stepcap	no plan unit: the PIF HLE boot-handshake poll period, a timeline event from T5; the CIC handshake has no timing reference
+legacy.pif.boot-timeout	6	s	legacy	ares/n64/pif/hle.cpp:360	pending:no-corpus	no plan unit: CIC boot handshake timeout
+legacy.rsp.dma-bytes-per-rclk	8	B	legacy	ares/n64/rsp/dma.cpp:12	bench:sp-dma-sweep	replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst)
+legacy.ai.power-on-rate	44100	Hz	legacy	ares/n64/ai/ai.cpp:75	pending:no-corpus	no plan unit: the DAC rate before the first AI_DACRATE write
 legacy.cart.eeprom-write	6	ms	legacy	ares/n64/cartridge/joybus.cpp:48	pending:no-corpus	no plan unit: EEPROM write busy time
 legacy.cart.rtc-tick	1	s	legacy	ares/n64/cartridge/rtc.cpp:42	pending:no-corpus	no plan unit: cartridge RTC one-second tick
 legacy.cart.flash-mx-sector-erase	85	ms	legacy	ares/n64/cartridge/flash.cpp:4	pending:no-corpus	no plan unit: Macronix flash sector erase

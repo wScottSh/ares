@@ -14,7 +14,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 2 |
 | model-choice | no published value; the reference states why the model chose this one | 11 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 53 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 50 |
 
 ## Behaviors
 
@@ -29,7 +29,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 
 | Behavior | Value | Basis | Reference | Checks | Note |
 |---|---|---|---|---|---|
-| `scheduler.tie-rank` | Bus,Events,SysAD,RDP,RSP,CPU order | model-choice | none: equal-time ordering between independent RCP blocks is unpublished | `det` `stepcap` | convention; cannot be observed by a test ROM except through an exact tie |
+| `scheduler.tie-rank` | Bus,Events,SysAD,RDP,RSP,CPU order | model-choice | none: equal-time ordering between independent RCP blocks is unpublished | `det` `stepcap` `unit:timeline` | convention; cannot be observed by a test ROM except through an exact tie |
 
 ### ri
 
@@ -169,14 +169,14 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 | Behavior | Value | Code site | Checks | Note |
 |---|---|---|---|---|
-| `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:89 | pending (no-corpus) | no plan unit: PAL is not the target console |
+| `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:88 | pending (no-corpus) | no plan unit: PAL is not the target console |
 | `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:158 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
-| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:117 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
-| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:125 | pending (no-corpus) | replaced by T7b: exception stage costs |
-| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:130 | pending (no-corpus) | replaced by T6: SysAD port |
+| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:95 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
+| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:103 | pending (no-corpus) | replaced by T7b: exception stage costs |
+| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:108 | pending (no-corpus) | replaced by T6: SysAD port |
 | `legacy.cpu.address-error` | 1 pclk | ares/n64/cpu/memory.cpp:212 | `nemu64:timing/exceptions` | replaced by T7b: exception stage costs (cpu.exc-ex) |
-| `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/cpu.hpp:189 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
-| `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/cpu.hpp:197 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
+| `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/cpu.hpp:190 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
+| `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/cpu.hpp:198 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
 | `legacy.cpu.dcache-hit` | 1 pclk | ares/n64/cpu/dcache.cpp:61 | `nemu64:timing/cached-loads-and-store` | replaced by T6: D-hit +1 removed (cpu.dcache-hit folds into the issue cycle) |
 | `legacy.cpu.dcache-fill` | 40 pclk | ares/n64/cpu/dcache.cpp:7 | `nemu64:timing/load-miss-vi-off` | replaced by T6: SysAD::fill (cpu.dfill-total) |
 | `legacy.cpu.dcache-writeback` | 40 pclk | ares/n64/cpu/dcache.cpp:16 | `bench:dirty-miss-isolated` | replaced by T6: fill-then-writeback (cpu.dirty-miss-order) |
@@ -207,13 +207,10 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma` | replaced by T8: SiDma; per channel without a device |
 | `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma` | replaced by T8: SiDma; per cartridge channel |
 | `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma` | replaced by T8: SiDma; per end, skip, reset or padding byte |
-| `legacy.pif.step-quantum` | 40960 pclk | ares/n64/pif/hle.cpp:263 | `stepcap` | replaced by T5: PIF events on the Timeline |
-| `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:353 | pending (no-corpus) | no plan unit: CIC boot handshake timeout |
-| `legacy.rsp.halted-quantum` | 64 pclk | ares/n64/rsp/rsp.cpp:37 | `stepcap` | replaced by T5: a halted RSP is Parked and costs nothing |
-| `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:20 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
-| `legacy.rdp.step-quantum` | 1 s | ares/n64/rdp/rdp.cpp:36 | `stepcap` | replaced by T5: the RDP steps as a timeline actor |
-| `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:76 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
-| `legacy.vi.inactive-line` | 2048 vclk | ares/n64/vi/vi.cpp:105 | `stepcap` | replaced by T5: the VI posts no events while disabled |
+| `legacy.pif.step-quantum` | 40960 pclk | ares/n64/pif/hle.cpp:266 | `stepcap` | no plan unit: the PIF HLE boot-handshake poll period, a timeline event from T5; the CIC handshake has no timing reference |
+| `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:360 | pending (no-corpus) | no plan unit: CIC boot handshake timeout |
+| `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:12 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
+| `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:75 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
 | `legacy.cart.eeprom-write` | 6 ms | ares/n64/cartridge/joybus.cpp:48 | pending (no-corpus) | no plan unit: EEPROM write busy time |
 | `legacy.cart.rtc-tick` | 1 s | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |
 | `legacy.cart.flash-mx-sector-erase` | 85 ms | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash sector erase |
@@ -237,7 +234,8 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `pending:snapper-lfs` | pending | - | - | gate | snapper64 assets need git lfs pull (plan R3) |
 | `pending:no-corpus` | pending | - | - | gate | no corpus in the program measures this behavior; it stays pending until one does |
 | `det` | det | tools/n64-timing/determinism.sh | every mm scene | equal | two runs byte-identical, stats and trace_hash (plan T2) |
-| `stepcap` | stepcap | n64-run --step-cap | every mm scene and nemu64 ROM | equal | step-capped run equals the normal run byte for byte (plan T5) |
+| `stepcap` | stepcap | tools/n64-timing/determinism.sh --step-cap | every mm scene and nemu64 ROM | equal | step-capped run equals the normal run byte for byte (plan T5) |
+| `unit:timeline` | unit | n64-timing-tests | timeline | pass | scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5) |
 | `gen` | gen | tools/n64-timing/behaviors.py --check | - | pass | this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3) |
 | `mm:file-select` | mm | tools/n64-timing/mmbench | file-select | report | Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench) |
 | `mm:south-clock-town` | mm | tools/n64-timing/mmbench | south-clock-town | report | Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench) |

@@ -2,6 +2,7 @@
 
 struct CPU : Thread {
   Node::Object node;
+  CPU() { Thread::actor = Timing::ActorId::CPU; }
 
   struct Debugger {
     //debugger.cpp
@@ -36,15 +37,15 @@ struct CPU : Thread {
   static constexpr u64 CountMask = (1ull << 33) - 1;
 
   auto main() -> void;
-  auto synchronize() -> void;
   auto stepCount(u64 clocks) -> void;
   auto flushCount() -> void;
+  auto compareMatch() -> void;
+  auto scheduleCompare() -> void;
   auto pendingCount() const -> u64 { return (Thread::clock - countClock).units / Timing::UnitsPerPclk; }
   auto effectiveCount() const -> u64 { return (scc.count + pendingCount()) & CountMask; }
   auto setInterruptPending(u32 bit, bool value) -> void;
 
   auto gdbPoll() -> void;
-  auto queueInsert(u32 event, Clock delay) -> void;
 
   auto instruction() -> void;
   auto instructionPrologue(u64 address, u32 instruction) -> void;
@@ -946,7 +947,6 @@ struct CPU : Thread {
   auto INVALID() -> void;
 
   Clock countClock;  //time up to which COUNT has been stepped
-  Clock syncClock;   //time of the last synchronize; the device queue counts from it
   u64 instructionIndex = 0;  //instructions executed since load; CP0 Random counts these
 
   struct Disassembler {

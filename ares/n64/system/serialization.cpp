@@ -1,4 +1,4 @@
-static const string SerializerVersion = "v153.3-clock750";
+static const string SerializerVersion = "v153.4-timeline";
 
 auto System::serialize(bool synchronize) -> serializer {
   serializer s;
@@ -33,12 +33,13 @@ auto System::unserialize(serializer& s) -> bool {
 
   if(synchronize) power(/* reset = */ false);
   serialize(s, synchronize);
+  timeline.refreshHorizon();
   return true;
 }
 
 auto System::serialize(serializer& s, bool synchronize) -> void {
   s(random);
-  s(queue);
+  s(timeline);
   s(cartridge);
   s(controllerPort1);
   s(controllerPort2);

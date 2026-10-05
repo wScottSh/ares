@@ -18,7 +18,7 @@ auto Cartridge::Flash::setModel(string name) -> void {
 }
 
 auto Cartridge::Flash::power(bool) -> void {
-  queue.remove(Queue::Flash_Complete);
+  cancelEvent(EventKind::Flash_Complete);
   mode = Mode::ReadArray;
   status.data = 0;
   status.wsmReady() = 1;
@@ -205,7 +205,7 @@ auto Cartridge::Flash::command(u32 data) -> void {
     status.eraseBusy() = 1;
     statusStale = macronix();
     busy = Busy::Erase;
-    cpu.queueInsert(Queue::Flash_Complete, duration);
+    scheduleAfter(EventKind::Flash_Complete, duration);
     return;
   }
 
@@ -222,7 +222,7 @@ auto Cartridge::Flash::command(u32 data) -> void {
     status.programBusy() = 1;
     statusStale = macronix();
     busy = Busy::Program;
-    cpu.queueInsert(Queue::Flash_Complete, model->programClocks);
+    scheduleAfter(EventKind::Flash_Complete, model->programClocks);
     return;
   }
 

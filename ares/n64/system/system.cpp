@@ -44,7 +44,6 @@ auto option(string name, string value) -> bool {
 }
 
 System system;
-Queue queue;
 Random random;
 #include "serialization.cpp"
 
@@ -400,7 +399,7 @@ auto System::power(bool reset) -> void {
     traceHash = {};
   }
 
-  queue.reset();
+  timeline.reset(fireEvent);
   cartridge.power(reset);
   rdram.power(reset);
   if(_DD()) dd.power(reset);

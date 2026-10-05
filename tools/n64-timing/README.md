@@ -113,6 +113,16 @@ tools/n64-timing/determinism.sh ROM [FRAMES]
 
 Runs the ROM twice and fails unless every output file is byte-identical, `trace_hash` included. Majora's Mask NTSC-U 1.0 runs every mmbench scene; any other ROM runs FRAMES fields (default 600). A failure prints the first differing row and its columns for each TSV. `N64_RUN` skips the build, and `DET_OUT` sets the output directory (default `$N64_TIMING_HOME/determinism/<rom>`).
 
+```sh
+tools/n64-timing/determinism.sh --step-cap ROM [FRAMES]
+```
+
+Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CPU catch the timeline up before every instruction instead of only at the timeline's horizon. Every output must still be byte-identical, which proves the horizon skip changes nothing. The default output directory is `$N64_TIMING_HOME/stepcap/<rom>`.
+
+### Unit tests
+
+`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` in the build directory, or `ctest` there. `unit:timeline` drives `Timing::Timeline` with scripted actors.
+
 ## nemu64-test corpus
 
 ```sh

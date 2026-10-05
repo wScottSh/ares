@@ -3,23 +3,10 @@
 
 namespace Timing {
 
-enum class ActorId : u8 {
-  Bus,
-  Events,
-  SysAD,
-  RDP,
-  RSP,
-  CPU,
-};
-
 struct TraceHash {
-  //Folds one action into the rolling hash. The device event queue is the only caller until
-  //the timeline (plan T5) folds every actor step and bus grant.
-  auto fold(u64 pclock, ActorId actor, u8 kind, u64 payload) -> void;
-
-  //Folds a hash of the whole serialized machine state into the rolling hash and returns the
-  //result. A divergence therefore shows in every later field, and the first differing field
-  //is where it began.
+  //Folds a hash of the whole serialized machine state, which carries the timeline's rolling
+  //hash of every step and event, into the rolling hash and returns the result. A divergence
+  //therefore shows in every later field, and the first differing field is where it began.
   auto fieldBoundary() -> u64;
 
   u64 rolling = 0;

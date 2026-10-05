@@ -172,6 +172,7 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
   case  9:  //count
     flushCount();
     scc.count = data.bit(0,31) << 1;
+    scheduleCompare();
     break;
   case 10:  //entryhi
     scc.tlb.addressSpaceID            = data.bit( 0, 7);
@@ -182,6 +183,7 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
     flushCount();
     scc.compare = data.bit(0,31) << 1;
     setInterruptPending(Interrupt::Timer, 0);
+    scheduleCompare();
     break;
   case 12: {//status
     bool floatingPointMode = scc.status.floatingPointMode;

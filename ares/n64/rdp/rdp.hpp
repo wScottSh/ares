@@ -20,7 +20,6 @@ struct RDP : Thread, Memory::RCP<RDP> {
   auto load(Node::Object) -> void;
   auto unload() -> void;
 
-  auto main() -> void;
   auto power(bool reset) -> void;
   auto crash(const char *reason) -> void;
 
@@ -59,7 +58,7 @@ struct RDP : Thread, Memory::RCP<RDP> {
     n24 start;
     n24 end;
     n24 current;
-    n24 clock;
+    Clock clockOrigin;  //DPC_CLOCK counts RCP clocks since this time
     n24 bufferBusy;
     n24 pipeBusy;
     n24 tmemBusy;

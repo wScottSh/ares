@@ -37,12 +37,12 @@ struct PIF : Thread, Memory::SI<PIF> {
   //pif.cpp
   auto load(Node::Object) -> void;
   auto unload() -> void;
-  auto main() -> void;
   auto power(bool reset) -> void;
   auto estimateTiming() -> u32;
 
   //hle.cpp
   auto mainHLE() -> void;
+  auto pollHLE() -> void;
   auto addressCRC(u16 address) const -> n5;
   auto dataCRC(std::span<const u8> data) const -> n8;
   auto descramble(n4 *buf, int size) -> void;

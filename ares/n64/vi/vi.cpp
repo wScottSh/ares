@@ -9,6 +9,7 @@ VI vi;
 
 auto VI::step(u32 vclks) -> void {
   Thread::clock = vclk.advance(vclks);
+  timeline.schedule({Thread::clock, (u32)EventKind::VI_Line});
 }
 
 auto VI::load(Node::Object parent) -> void {
@@ -52,58 +53,56 @@ auto VI::unload() -> void {
   node.reset();
 }
 
-auto VI::main() -> void {
-  while(Thread::clock < cpu.clock) {
-    if(active()) {
-      ++io.vcounter;
-      int halfline = io.vcounter << 1 | io.field;
-      if(halfline >= io.halfLinesPerField+1) {
-        io.vcounter = 0;
-        io.field += !io.halfLinesPerField.bit(0);
-        if(++io.leapCounter == 5) io.leapCounter = 0;
-      }
-
-      if(io.vcounter == io.vstart >> 1) {
-        refreshed = true;
-        screen->frame();
-        ri.checkRefresh();
-      }
-
-      if(io.halfLinesPerField.bit(0)) { // progressive
-        if(io.vcounter == io.coincidence >> 1) {
-          mi.raise(MI::IRQ::VI);
-        }
-      } else { // interlaced
-        if(io.coincidence.bit(0)) {
-          if(io.vcounter == io.coincidence >> 1)
-            mi.raise(MI::IRQ::VI);
-        }
-        if(!io.coincidence.bit(0)) {
-          int halfline = io.vcounter << 1 | io.field;
-          if(!io.field && halfline == io.coincidence)
-            mi.raise(MI::IRQ::VI);
-          if(io.field && halfline+1 == io.coincidence)
-            mi.raise(MI::IRQ::VI);
-          if(!io.field && halfline == io.halfLinesPerField && io.coincidence == 0)
-            mi.raise(MI::IRQ::VI);
-        }
-      }
-
-      u32 lineDuration = io.quarterLineDuration+1;
-      if(io.vcounter == 1)
-        lineDuration = io.hsyncLeap[io.leapPattern.bit(io.leapCounter)];      
-      step(lineDuration);
-    } else {
-      // Arbitrarily call screen->frame() every once in a while to keep the UI responsive.
-      // We do that every 200 simulated lines of 0x800 quarter-clocks. This is just arbitrary,
-      // the real VI is not clocking at all when inactive.
+auto VI::line() -> void {
+  if(active()) {
+    ++io.vcounter;
+    int halfline = io.vcounter << 1 | io.field;
+    if(halfline >= io.halfLinesPerField+1) {
       io.vcounter = 0;
-      if(++inactiveCounter >= 200) {
-        inactiveCounter = 0;
-        refreshed = true;
-      }
-      step(0x800);
+      io.field += !io.halfLinesPerField.bit(0);
+      if(++io.leapCounter == 5) io.leapCounter = 0;
     }
+
+    if(io.vcounter == io.vstart >> 1) {
+      refreshed = true;
+      screen->frame();
+      ri.checkRefresh();
+    }
+
+    if(io.halfLinesPerField.bit(0)) { // progressive
+      if(io.vcounter == io.coincidence >> 1) {
+        mi.raise(MI::IRQ::VI);
+      }
+    } else { // interlaced
+      if(io.coincidence.bit(0)) {
+        if(io.vcounter == io.coincidence >> 1)
+          mi.raise(MI::IRQ::VI);
+      }
+      if(!io.coincidence.bit(0)) {
+        int halfline = io.vcounter << 1 | io.field;
+        if(!io.field && halfline == io.coincidence)
+          mi.raise(MI::IRQ::VI);
+        if(io.field && halfline+1 == io.coincidence)
+          mi.raise(MI::IRQ::VI);
+        if(!io.field && halfline == io.halfLinesPerField && io.coincidence == 0)
+          mi.raise(MI::IRQ::VI);
+      }
+    }
+
+    u32 lineDuration = io.quarterLineDuration+1;
+    if(io.vcounter == 1)
+      lineDuration = io.hsyncLeap[io.leapPattern.bit(io.leapCounter)];      
+    step(lineDuration);
+  } else {
+    // Arbitrarily call screen->frame() every once in a while to keep the UI responsive.
+    // We do that every 200 simulated lines of 0x800 quarter-clocks. This is just arbitrary,
+    // the real VI is not clocking at all when inactive; the period is host liveness, not a cost.
+    io.vcounter = 0;
+    if(++inactiveCounter >= 200) {
+      inactiveCounter = 0;
+      refreshed = true;
+    }
+    step(0x800);
   }
 }
 
@@ -179,6 +178,7 @@ auto VI::power(bool reset) -> void {
   io = {};
   refreshed = false;
   vclk = {system.vclkPeriod()};
+  timeline.schedule({Thread::clock, (u32)EventKind::VI_Line});
 }
 
 }
