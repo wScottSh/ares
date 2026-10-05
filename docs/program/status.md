@@ -1,10 +1,10 @@
 # Orchestrate status
 
-Generated: 2026-10-05T21:44:17.048Z
+Generated: 2026-10-05T23:02:51.489Z
 
 ## Units
 
-States: done=17, landed=23, running=3
+States: done=19, landed=26
 
 | ID | Track | State | Branch | PR | SHA | Brief |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -48,9 +48,11 @@ States: done=17, landed=23, running=3
 | verify-52 | verify | done |  |  |  |  |
 | fitprov | tools | landed |  | 53 |  |  |
 | verify-51 | verify | done |  |  |  |  |
-| t7a | build | running |  |  |  |  |
-| t8 | build | running |  |  |  |  |
-| labels-t6 | tools | running |  |  |  |  |
+| t7a | build | landed | feat/t7a | 56 | 1326f3f4 |  |
+| t8 | build | landed | feat/t8 | 57 | 808e5f54 |  |
+| labels-t6 | tools | landed |  | 55 |  |  |
+| verify-56 | verify | done |  |  |  |  |
+| verify-57 | verify | done |  |  |  |  |
 
 ## Verification ledger
 
@@ -72,4 +74,4 @@ Lowest unmerged: none
 | land-stack | resolved | Merging PRs is blocked for agents (classifier: Merge Without Review). Land the stacked PRs yourself, bottom up, starting at #30? | land them as they verify \| add a permission rule letting the coordinator merge verified PRs | stack keeps growing on branches; nothing reaches master until you land it | Scott added allow rule Bash(gh pr merge:*) via /permissions (2026-10-05); coordinator lands verified PRs |
 | build-corpora | resolved | Building test ROMs from external source (nemu64-test via cargo, libdragon-based n64-systembench / Thar0 RDP-Timing-Tests) was blocked for agents (classifier: Code from External). Run tools/n64-timing/build-nemu64.sh yourself, or allow it? | run it yourself \| allow agents to build external test ROMs \| skip these corpora | verify with MM, prebuilt ROMs (pi_dma_test, hydra rdp tests, bigbass timing) and in-repo checks; behaviors whose only check is these corpora are marked verification-pending | default taken: corpora ported into in-repo romgen (nemu64, Thar0, systemtest, repeater64, snapper64); n64-systembench numbers used as cited values only |
 
-<!-- orch-summary {"unitStates":{"done":17,"landed":23,"running":3},"ledgerVerdicts":{},"frontierGeneration":0,"openGateIds":[]} -->
+<!-- orch-summary {"unitStates":{"done":19,"landed":26},"ledgerVerdicts":{},"frontierGeneration":0,"openGateIds":[]} -->

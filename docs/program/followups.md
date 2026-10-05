@@ -10,3 +10,8 @@
 - rdp_hidden_read_row hardcoded 8 MB mask rdp.c:156 (verify-35) -> T13.
 - AI power-on DACRATE truncation 1103 vs nearest 1104 (verify-44); priority-queue timeToNextEvent s32 dead code.
 - clock-rebase.py lists removed ares/n64/vulkan skip path (stack report).
+- (verify-56) behaviors.tsv labels: cpu.ldi row silent on two inferred extensions (COP2 checks rt only; LWC1/LDC1 FPR result uses LDI latency); cpu.dcb has no corpus case (say so); cpu.fpu-trivial reference narrower than implemented classes; BC1 rt-field check against pending GPR loads is unmeasured.
+- (t7a) Load Miss mean: 9 values fail because the D-miss model lacks its tail (refresh while VI off / re-derive D-fill across rclk phases); exposed by correct LDI on harness LD;JALR. Also romgen DCB test (store then load next slot / slot after).
+- (t7a) pi-dma-sizes cart-to-ram-8 196.0 rclk, still failing (T8 owns).
+- (verify-57) RI rule "HSYNC adds no refresh while one waits/runs" (ri/bus.cpp:13-16) has no behaviors row: add model-choice row, no reference. PiEdgeWait 0.5 rclk and the PI row-hit assumption are code-only constants: add rows.
+- (t8/verify-57) mi-memset-rspdma 6.473 B/rclk fails band (rclk-grid quantization: 19 or 20 rclk per 128 B, 19.7 unreachable); pi-dma-sizes 8 B 197.33 fails (poll phase, untested); pidma 8-31 B up to +15% (model ~12 rclk low, unreferenced); PI first block ending at RDRAM row end ~29 rclk short; no bench:si-dma ROM.
