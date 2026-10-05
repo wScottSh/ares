@@ -1,0 +1,12 @@
+# Follow-ups (parked; fix only when they block the frontier, else bundle into a cleanup unit)
+- lint-literals.py skips single-line `auto f(...) -> void { step(13); }` bodies (verify-40 note 1). No such line today.
+- RBusDevice::ARES_JIT dead enum (n64.hpp:117, rdram.hpp:232); double blank line cpu.cpp:115 (verify-32).
+- desktop-ui "Deterministic Entropy" hint now does nothing for N64 (verify-36).
+- CPU::power never resets countClock; profile.cpuCycles not serialized (t2 report).
+- MM GameState.gfxCtx reads 0 in title scene; bench uses fixed address (mmbench).
+- nemu64 clock-vs-CPU test alignment-sensitive (.align 32 pin); bench routines alignment (tools-integrate).
+- thar0 RUNS=1000 unmeasured (~18 min).
+- repeater64 FillTri/UndefShade ports; rdpstat:1prim has no source (r4).
+- rdp_hidden_read_row hardcoded 8 MB mask rdp.c:156 (verify-35) -> T13.
+- AI power-on DACRATE truncation 1103 vs nearest 1104 (verify-44); priority-queue timeToNextEvent s32 dead code.
+- clock-rebase.py lists removed ares/n64/vulkan skip path (stack report).

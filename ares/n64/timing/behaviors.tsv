@@ -14,7 +14,7 @@ ri.bank-of	addr[22:20]	map	wiki	n64brew RDRAM_Interface address mapping (B6)	nem
 ri.row-of	addr[19:11]	map	datasheet	NEC 2 KiB RowSenseAmpCache (B6)	nemu64:timing/load-from-uncached-vi-on-same-bank		
 ri.refresh-clean	52	rclk	vendor	IPL3 6105 RI_REFRESH 0x007E3634 CleanRefreshDelay (B12)	bench:uncached-vs-hpos		
 ri.refresh-dirty	54	rclk	vendor	IPL3 6105 RI_REFRESH DirtyRefreshDelay (B12)	bench:uncached-vs-hpos		
-ri.refresh-trigger	hsync	event	wiki	n64brew RDRAM_Interface: one SetRR per VI HSYNC (B11)	bench:uncached-vs-hpos		
+ri.refresh-trigger	hsync	event	wiki	n64brew RDRAM_Interface: one SetRR per VI HSYNC (B11)	bench:uncached-vs-hpos		SOURCE CONFLICT: rdram-bus-arbitration.md B11 says refresh runs before VI init (H_TOTAL 0x7FF, ~42 us per line); nemu64-test's VI-off loads (nemu64:timing/load-from-uncached-vi-off, nemu64:timing/load-miss-vi-off) average 32.54 pclk uncached, which a 52-rclk holdoff every line would raise by about 2. The model follows the nemu64 data: refresh runs only while the VI is active (vi.cpp VI::line). Reason: it is the only measurement of VI-off timing, and B11's pre-init claim is from n64brew prose, unmeasured. A blank VI sending no HSYNC is consistent with both; a pre-init refresh at the 0x7FF line rate remains unverified
 ri.refresh-waits-for-burst	1	flag	model-choice	no mid-burst preemption (B5); refresh waits for the in-flight burst	bench:uncached-vs-hpos		calibration #16
 ri.arbitration	rank,arrival,requester,sequence	order	model-choice	none published (B4); VI first is an inference from its hard real-time role	nemu64:timing/load-miss-vi-on thar0:vi-on-separate-bank		calibration #16 re-ranks via ri.rank.*; rejected alternatives recorded: fixed list VI,AI,SI,PI,CPU,SP,DP (fable), Refresh>VI>AI>CPU>SI>PI>SP>DPcmd>DPmem (sonnet), MiSTer DDR3Mux order
 ri.rank.refresh	0	rank	wiki	n64brew: refresh holds off every client (B12)	bench:uncached-vs-hpos		
@@ -26,7 +26,7 @@ ri.overhead-rdp	20	units	model-choice	assumed equal to the unquantized ri.overhe
 ri.request-latency	1	units	model-choice	none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does	det stepcap		
 cpu.uncached-read-total	32	pclk	measured	nemu64-test cache.rs:288-382 median, VI off	nemu64:timing/load-from-uncached-vi-off		sysad.fixed-path is derived from this minus modeled wire
 cpu.uncached-read-dword-total	37	pclk	measured	n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's)	bench:uncached-sizes		
-cpu.dfill-total	41	pclk	measured	nemu64-test cache.rs:193-286 median, VI off	nemu64:timing/load-miss-vi-off		
+cpu.dfill-total	41	pclk	measured	nemu64-test cache.rs:193-286 median, VI off	nemu64:timing/load-miss-vi-off		assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost
 cpu.ifill-stall	45	pclk	derived	NEC Table 11-2 with M from D-fill (cpu-memory-costs.md)	bench:ifill-isolated		no public hardware value; the bench reports
 cpu.dcache-hit	1	pclk	measured	nemu64-test Cached loads and store, 19 cases	nemu64:timing/cached-loads-and-store		
 cpu.ldi	1	pclk	vendor	NEC VR4300 UM s.4.6.5; n64brew register-field overlap rule	nemu64:timing/cpu-register-dependency		
@@ -43,6 +43,15 @@ cpu.fpu-div-s	29	pclk	measured	nemu64-test COP1 tables	nemu64:timing/cop1instruc
 cpu.fpu-div-d	58	pclk	measured	nemu64-test COP1 tables	nemu64:timing/cop1instructions64		
 cpu.fpu-trivial	2	pclk	measured	nemu64-test COP1 value tables (operand 0, -0, Inf, qNaN)	nemu64:timing/cop1instructions32		
 cpu.fpu-forward	1	pclk	measured	nemu64-test COP1RegisterDependency	nemu64:timing/cop1-register-dependency		
+cpu.issue	1	pclk	measured	nemu64-test PreciseMeasureJustNOPs: N NOPs cost N	nemu64:timing/just-nops		
+cpu.mult	5	pclk	measured	nemu64-test SingleInstructionCPUTiming MULT/MULTU; HiLoInterlockTiming: the pipeline stalls for the full duration	nemu64:timing/mult-div-interlock		
+cpu.dmult	8	pclk	measured	nemu64-test SingleInstructionCPUTiming DMULT/DMULTU; HiLoInterlockTiming	nemu64:timing/mult-div-interlock		
+cpu.div	37	pclk	measured	nemu64-test SingleInstructionCPUTiming DIV/DIVU; HiLoInterlockTiming	nemu64:timing/mult-div-interlock		
+cpu.ddiv	69	pclk	measured	nemu64-test SingleInstructionCPUTiming DDIV/DDIVU; HiLoInterlockTiming	nemu64:timing/mult-div-interlock		
+cpu.fpu-sqrt-s	29	pclk	measured	nemu64-test COP1 tables (SQRT.S 123, 16, 4, 1)	nemu64:timing/cop1instructions32		
+cpu.fpu-sqrt-d	58	pclk	measured	nemu64-test COP1 tables (SQRT.D 123, 16, 4, 1)	nemu64:timing/cop1instructions64		
+cpu.fpu-convert	5	pclk	measured	nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L	nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64		
+cpu.fpu-cvt-s-d	2	pclk	measured	nemu64-test COP1 tables (CVT.S.D)	nemu64:timing/cop1instructions64		
 cpu.likely-nullified	1	pclk	measured	nemu64-test Likely branch (C8)	nemu64:timing/likely-branch		
 cpu.mtc0-slow-regs	2	pclk	measured	nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5)	nemu64:timing/individual-instructions		
 cpu.cache-index-op	5	pclk	measured	nemu64-test CACHE DataIndexLoadTag (C10)	nemu64:timing/cache		
@@ -55,8 +64,8 @@ cpu.wb-block-entries	2	entries	vendor	R4300i datasheet p.9	bench:mi-memset-cache
 cpu.wb-release	slot	rule	vendor	NEC 'has a space' (s.4.9) chosen over R4300i datasheet 'emptied'; burst shape only	bench:wb-fifth-store		conflict recorded; no public hardware value
 cpu.rcp-register-read	22	pclk	measured	n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value)	bench:rcp-reg-read		
 cpu.pif-ram-read	1974	rclk	measured	n64-systembench PIF RAM read (cited value)	bench:pif-ram-read		
-sysad.rdram-write-period	12	rclk	fit	n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is VI fetch contention (plan T11)	bench:mi-memset-uncached	bench:mi-memset-uncached	verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit
-sysad.rdram-block-write-period	12	rclk	fit	n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is VI fetch contention (plan T11)	bench:mi-memset-cached bench:dirty-miss-isolated	bench:mi-memset-cached	verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period
+sysad.rdram-write-period	12	rclk	fit	n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is inferred, not measured, to be VI fetch contention (plan T11)	bench:mi-memset-uncached	bench:mi-memset-uncached	verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit
+sysad.rdram-block-write-period	12	rclk	fit	n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is inferred, not measured, to be VI fetch contention (plan T11)	bench:mi-memset-cached bench:dirty-miss-isolated	bench:mi-memset-cached	verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period
 sysad.register-write	5	rclk	model-choice	no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases	pending:no-corpus		a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining
 cpu.random-rule	decrement-per-pclk	rule	vendor	NEC UM ch.5; nemu64-test Random (decrement), Random (masking)	nemu64:timing/random		
 sp.dma-burst	128	B	model-choice	inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md)	bench:sp-dma-sweep		
@@ -99,26 +108,12 @@ rdp.noise-step	every-rclk	rule	measured	Thar0 RDP-Noise dumps re-solved (rdp-noi
 rdp.noise-reset	all-ones	rule	measured	Thar0 data reproduction (rdp-noise.md)	noise:a		
 rdp.noise-pixel-offset	0	rclk	model-choice	rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured	noise:rect-1016		calibration #16
 legacy.clock.vclk-pal	49656530	Hz	legacy	ares/n64/system/system.cpp:88	pending:no-corpus		no plan unit: PAL is not the target console
-legacy.cpu.instruction	1	pclk	legacy	ares/n64/cpu/memory.cpp:148	nemu64:timing/just-nops		replaced by T7a: Pipeline::issue
-legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:96	nemu64:cop0hazard/softwareinterrupt		replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
-legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:104	pending:no-corpus		replaced by T7b: exception stage costs
-legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:109	pending:no-corpus		replaced by T6: SysAD port
+legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:97	nemu64:cop0hazard/softwareinterrupt		replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
+legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:105	pending:no-corpus		replaced by T7b: exception stage costs
+legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:110	pending:no-corpus		replaced by T6: SysAD port
 legacy.cpu.address-error	1	pclk	legacy	ares/n64/cpu/memory.cpp:202	nemu64:timing/exceptions		replaced by T7b: exception stage costs (cpu.exc-ex)
 legacy.cpu.icache-fill	48	pclk	legacy	ares/n64/cpu/sysad.hpp:60	bench:ifill-isolated		replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)
 legacy.cpu.icache-writeback	48	pclk	legacy	ares/n64/cpu/sysad.cpp:262	pending:no-corpus		replaced by T7d: I-cache CACHE ops through SysAD
-legacy.cpu.mult	5	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:640	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.dmult	8	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:349	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.div	37	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:315	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.ddiv	69	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:289	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.fpu-add	3	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:470	nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64		replaced by T7a: OpTiming (cpu.fpu-add)
-legacy.cpu.fpu-mul-s	5	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:875	nemu64:timing/cop1instructions32		replaced by T7a: OpTiming (cpu.fpu-mul-s)
-legacy.cpu.fpu-mul-d	8	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:885	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming (cpu.fpu-mul-d)
-legacy.cpu.fpu-div-s	29	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:810	nemu64:timing/cop1instructions32		replaced by T7a: OpTiming (cpu.fpu-div-s)
-legacy.cpu.fpu-div-d	58	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:820	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming (cpu.fpu-div-d)
-legacy.cpu.fpu-sqrt-s	29	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:953	nemu64:timing/cop1instructions32		replaced by T7a: OpTiming
-legacy.cpu.fpu-sqrt-d	58	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:963	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming
-legacy.cpu.fpu-convert	5	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:489	nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64		replaced by T7a: OpTiming; CVT, ROUND, TRUNC, CEIL and FLOOR except CVT.S.D
-legacy.cpu.fpu-cvt-s-d	2	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:706	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming
 legacy.pi.cart-read	250	pclk	legacy	ares/n64/pi/bus.hpp:63	pending:no-corpus		replaced by T8: PI bus timing from the BSD registers
 legacy.pi.write-busy	200	pclk	legacy	ares/n64/pi/bus.hpp:77	bench:pi-io-write		replaced by T8: PI I/O busy (pi.io-busy)
 legacy.si.bus-write	2150	rclk	legacy	ares/n64/si/io.cpp:66	pending:no-corpus		no plan unit: the SI I/O write busy; T8 left it, no hardware reference

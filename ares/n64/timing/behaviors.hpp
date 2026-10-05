@@ -56,6 +56,15 @@ namespace Behavior {
   constexpr Clock CpuFpuDivD = {464};  //58 pclk
   constexpr Clock CpuFpuTrivial = {16};  //2 pclk
   constexpr Clock CpuFpuForward = {8};  //1 pclk
+  constexpr Clock CpuIssue = {8};  //1 pclk
+  constexpr Clock CpuMult = {40};  //5 pclk
+  constexpr Clock CpuDmult = {64};  //8 pclk
+  constexpr Clock CpuDiv = {296};  //37 pclk
+  constexpr Clock CpuDdiv = {552};  //69 pclk
+  constexpr Clock CpuFpuSqrtS = {232};  //29 pclk
+  constexpr Clock CpuFpuSqrtD = {464};  //58 pclk
+  constexpr Clock CpuFpuConvert = {40};  //5 pclk
+  constexpr Clock CpuFpuCvtSD = {16};  //2 pclk
   constexpr Clock CpuLikelyNullified = {8};  //1 pclk
   constexpr Clock CpuMtc0SlowRegs = {16};  //2 pclk
   constexpr Clock CpuCacheIndexOp = {40};  //5 pclk
@@ -121,7 +130,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"ri.row-of", Basis::Datasheet, "addr[19:11]", "map", "NEC 2 KiB RowSenseAmpCache (B6)", "nemu64:timing/load-from-uncached-vi-on-same-bank", ""},
   {"ri.refresh-clean", Basis::Vendor, "52", "rclk", "IPL3 6105 RI_REFRESH 0x007E3634 CleanRefreshDelay (B12)", "bench:uncached-vs-hpos", ""},
   {"ri.refresh-dirty", Basis::Vendor, "54", "rclk", "IPL3 6105 RI_REFRESH DirtyRefreshDelay (B12)", "bench:uncached-vs-hpos", ""},
-  {"ri.refresh-trigger", Basis::Wiki, "hsync", "event", "n64brew RDRAM_Interface: one SetRR per VI HSYNC (B11)", "bench:uncached-vs-hpos", ""},
+  {"ri.refresh-trigger", Basis::Wiki, "hsync", "event", "n64brew RDRAM_Interface: one SetRR per VI HSYNC (B11)", "bench:uncached-vs-hpos", "SOURCE CONFLICT: rdram-bus-arbitration.md B11 says refresh runs before VI init (H_TOTAL 0x7FF, ~42 us per line); nemu64-test's VI-off loads (nemu64:timing/load-from-uncached-vi-off, nemu64:timing/load-miss-vi-off) average 32.54 pclk uncached, which a 52-rclk holdoff every line would raise by about 2. The model follows the nemu64 data: refresh runs only while the VI is active (vi.cpp VI::line). Reason: it is the only measurement of VI-off timing, and B11's pre-init claim is from n64brew prose, unmeasured. A blank VI sending no HSYNC is consistent with both; a pre-init refresh at the 0x7FF line rate remains unverified"},
   {"ri.refresh-waits-for-burst", Basis::ModelChoice, "1", "flag", "no mid-burst preemption (B5); refresh waits for the in-flight burst", "bench:uncached-vs-hpos", "calibration #16"},
   {"ri.arbitration", Basis::ModelChoice, "rank,arrival,requester,sequence", "order", "none published (B4); VI first is an inference from its hard real-time role", "nemu64:timing/load-miss-vi-on thar0:vi-on-separate-bank", "calibration #16 re-ranks via ri.rank.*; rejected alternatives recorded: fixed list VI,AI,SI,PI,CPU,SP,DP (fable), Refresh>VI>AI>CPU>SI>PI>SP>DPcmd>DPmem (sonnet), MiSTer DDR3Mux order"},
   {"ri.rank.refresh", Basis::Wiki, "0", "rank", "n64brew: refresh holds off every client (B12)", "bench:uncached-vs-hpos", ""},
@@ -133,7 +142,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"ri.request-latency", Basis::ModelChoice, "1", "units", "none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does", "det stepcap", ""},
   {"cpu.uncached-read-total", Basis::Measured, "32", "pclk", "nemu64-test cache.rs:288-382 median, VI off", "nemu64:timing/load-from-uncached-vi-off", "sysad.fixed-path is derived from this minus modeled wire"},
   {"cpu.uncached-read-dword-total", Basis::Measured, "37", "pclk", "n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's)", "bench:uncached-sizes", ""},
-  {"cpu.dfill-total", Basis::Measured, "41", "pclk", "nemu64-test cache.rs:193-286 median, VI off", "nemu64:timing/load-miss-vi-off", ""},
+  {"cpu.dfill-total", Basis::Measured, "41", "pclk", "nemu64-test cache.rs:193-286 median, VI off", "nemu64:timing/load-miss-vi-off", "assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost"},
   {"cpu.ifill-stall", Basis::Derived, "45", "pclk", "NEC Table 11-2 with M from D-fill (cpu-memory-costs.md)", "bench:ifill-isolated", "no public hardware value; the bench reports"},
   {"cpu.dcache-hit", Basis::Measured, "1", "pclk", "nemu64-test Cached loads and store, 19 cases", "nemu64:timing/cached-loads-and-store", ""},
   {"cpu.ldi", Basis::Vendor, "1", "pclk", "NEC VR4300 UM s.4.6.5; n64brew register-field overlap rule", "nemu64:timing/cpu-register-dependency", ""},
@@ -150,6 +159,15 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.fpu-div-d", Basis::Measured, "58", "pclk", "nemu64-test COP1 tables", "nemu64:timing/cop1instructions64", ""},
   {"cpu.fpu-trivial", Basis::Measured, "2", "pclk", "nemu64-test COP1 value tables (operand 0, -0, Inf, qNaN)", "nemu64:timing/cop1instructions32", ""},
   {"cpu.fpu-forward", Basis::Measured, "1", "pclk", "nemu64-test COP1RegisterDependency", "nemu64:timing/cop1-register-dependency", ""},
+  {"cpu.issue", Basis::Measured, "1", "pclk", "nemu64-test PreciseMeasureJustNOPs: N NOPs cost N", "nemu64:timing/just-nops", ""},
+  {"cpu.mult", Basis::Measured, "5", "pclk", "nemu64-test SingleInstructionCPUTiming MULT/MULTU; HiLoInterlockTiming: the pipeline stalls for the full duration", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.dmult", Basis::Measured, "8", "pclk", "nemu64-test SingleInstructionCPUTiming DMULT/DMULTU; HiLoInterlockTiming", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.div", Basis::Measured, "37", "pclk", "nemu64-test SingleInstructionCPUTiming DIV/DIVU; HiLoInterlockTiming", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.ddiv", Basis::Measured, "69", "pclk", "nemu64-test SingleInstructionCPUTiming DDIV/DDIVU; HiLoInterlockTiming", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.fpu-sqrt-s", Basis::Measured, "29", "pclk", "nemu64-test COP1 tables (SQRT.S 123, 16, 4, 1)", "nemu64:timing/cop1instructions32", ""},
+  {"cpu.fpu-sqrt-d", Basis::Measured, "58", "pclk", "nemu64-test COP1 tables (SQRT.D 123, 16, 4, 1)", "nemu64:timing/cop1instructions64", ""},
+  {"cpu.fpu-convert", Basis::Measured, "5", "pclk", "nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", ""},
+  {"cpu.fpu-cvt-s-d", Basis::Measured, "2", "pclk", "nemu64-test COP1 tables (CVT.S.D)", "nemu64:timing/cop1instructions64", ""},
   {"cpu.likely-nullified", Basis::Measured, "1", "pclk", "nemu64-test Likely branch (C8)", "nemu64:timing/likely-branch", ""},
   {"cpu.mtc0-slow-regs", Basis::Measured, "2", "pclk", "nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5)", "nemu64:timing/individual-instructions", ""},
   {"cpu.cache-index-op", Basis::Measured, "5", "pclk", "nemu64-test CACHE DataIndexLoadTag (C10)", "nemu64:timing/cache", ""},
@@ -162,8 +180,8 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.wb-release", Basis::Vendor, "slot", "rule", "NEC 'has a space' (s.4.9) chosen over R4300i datasheet 'emptied'; burst shape only", "bench:wb-fifth-store", "conflict recorded; no public hardware value"},
   {"cpu.rcp-register-read", Basis::Measured, "22", "pclk", "n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value)", "bench:rcp-reg-read", ""},
   {"cpu.pif-ram-read", Basis::Measured, "1974", "rclk", "n64-systembench PIF RAM read (cited value)", "bench:pif-ram-read", ""},
-  {"sysad.rdram-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is VI fetch contention (plan T11)", "bench:mi-memset-uncached", "verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit"},
-  {"sysad.rdram-block-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is VI fetch contention (plan T11)", "bench:mi-memset-cached bench:dirty-miss-isolated", "verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period"},
+  {"sysad.rdram-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is inferred, not measured, to be VI fetch contention (plan T11)", "bench:mi-memset-uncached", "verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit"},
+  {"sysad.rdram-block-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is inferred, not measured, to be VI fetch contention (plan T11)", "bench:mi-memset-cached bench:dirty-miss-isolated", "verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period"},
   {"sysad.register-write", Basis::ModelChoice, "5", "rclk", "no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases", "pending:no-corpus", "a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining"},
   {"cpu.random-rule", Basis::Vendor, "decrement-per-pclk", "rule", "NEC UM ch.5; nemu64-test Random (decrement), Random (masking)", "nemu64:timing/random", ""},
   {"sp.dma-burst", Basis::ModelChoice, "128", "B", "inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md)", "bench:sp-dma-sweep", ""},
@@ -206,26 +224,12 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.noise-reset", Basis::Measured, "all-ones", "rule", "Thar0 data reproduction (rdp-noise.md)", "noise:a", ""},
   {"rdp.noise-pixel-offset", Basis::ModelChoice, "0", "rclk", "rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured", "noise:rect-1016", "calibration #16"},
   {"legacy.clock.vclk-pal", Basis::Legacy, "49656530", "Hz", "ares/n64/system/system.cpp:88", "pending:no-corpus", "no plan unit: PAL is not the target console"},
-  {"legacy.cpu.instruction", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:148", "nemu64:timing/just-nops", "replaced by T7a: Pipeline::issue"},
-  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:96", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
-  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:104", "pending:no-corpus", "replaced by T7b: exception stage costs"},
-  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:109", "pending:no-corpus", "replaced by T6: SysAD port"},
+  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:97", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
+  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:105", "pending:no-corpus", "replaced by T7b: exception stage costs"},
+  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:110", "pending:no-corpus", "replaced by T6: SysAD port"},
   {"legacy.cpu.address-error", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:202", "nemu64:timing/exceptions", "replaced by T7b: exception stage costs (cpu.exc-ex)"},
   {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
   {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
-  {"legacy.cpu.mult", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:640", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.dmult", Basis::Legacy, "8", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:349", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.div", Basis::Legacy, "37", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:315", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.ddiv", Basis::Legacy, "69", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:289", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.fpu-add", Basis::Legacy, "3", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:470", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming (cpu.fpu-add)"},
-  {"legacy.cpu.fpu-mul-s", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:875", "nemu64:timing/cop1instructions32", "replaced by T7a: OpTiming (cpu.fpu-mul-s)"},
-  {"legacy.cpu.fpu-mul-d", Basis::Legacy, "8", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:885", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming (cpu.fpu-mul-d)"},
-  {"legacy.cpu.fpu-div-s", Basis::Legacy, "29", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:810", "nemu64:timing/cop1instructions32", "replaced by T7a: OpTiming (cpu.fpu-div-s)"},
-  {"legacy.cpu.fpu-div-d", Basis::Legacy, "58", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:820", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming (cpu.fpu-div-d)"},
-  {"legacy.cpu.fpu-sqrt-s", Basis::Legacy, "29", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:953", "nemu64:timing/cop1instructions32", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.fpu-sqrt-d", Basis::Legacy, "58", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:963", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.fpu-convert", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:489", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming; CVT, ROUND, TRUNC, CEIL and FLOOR except CVT.S.D"},
-  {"legacy.cpu.fpu-cvt-s-d", Basis::Legacy, "2", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:706", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
   {"legacy.pi.write-busy", Basis::Legacy, "200", "pclk", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
   {"legacy.si.bus-write", Basis::Legacy, "2150", "rclk", "ares/n64/si/io.cpp:66", "pending:no-corpus", "no plan unit: the SI I/O write busy; T8 left it, no hardware reference"},

@@ -53,50 +53,9 @@ struct CPU : Thread {
 
   auto power(bool reset) -> void;
 
-  struct Pipeline {
-    CPU& self;
-    u64 pc     = 0;  //pc after current instruction
-    u64 nextpc = 0;  //pc after next instruction
-    u32 state  = 0;  //current branch state
-    u32 nstate = 0;  //next branch state
-
-    enum : u32 {
-      DelaySlot = 1 << 1,
-    };
-
-    auto inDelaySlot() const -> bool { return state & DelaySlot; }
-    auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; }
-    auto branch(u64 address) -> void { nextpc = address; nstate |= DelaySlot; }
-    auto noBranch() -> void { nstate |= DelaySlot; }
-    auto skip() -> void { pc += 4; nextpc = pc + 4; }
-    auto begin() -> void {
-      nstate = 0;
-      pc = nextpc;
-      nextpc += 4;
-    }
-    auto end() -> void {
-      state = nstate;
-      self.ipu.pc = pc;
-    }
-  } pipeline{*this};
-
-  struct OpInfo {
-    enum : u32 {
-      Branch        = 1 << 0,
-      LikelyBranch  = 1 << 1,
-      CountCompareWrite = 1 << 3,
-      UnconditionalJump = 1 << 4,
-      UnconditionalJumpAndLink = 1 << 5,
-    };
-
-    u32 flags = 0;
-
-    auto branch() const -> bool { return flags & Branch; }
-    auto likelyBranch() const -> bool { return flags & LikelyBranch; }
-    auto countCompareWrite() const -> bool { return flags & CountCompareWrite; }
-    auto unconditionalJump() const -> bool { return flags & UnconditionalJump; }
-    auto unconditionalJumpAndLink() const -> bool { return flags & UnconditionalJumpAndLink; }
-  };
+  //pipeline.cpp
+  #include "pipeline.hpp"
+  Pipeline pipeline{*this};
 
   struct PhysAccess {
     enum Direction : u32 { Read, Write };
@@ -912,12 +871,8 @@ struct CPU : Thread {
   auto decoderSCC(u32 instruction) -> void;
   auto decoderFPU(u32 instruction) -> void;
   auto decoderCOP2(u32 instruction) -> void;
-  auto decoderEXECUTEInfo(u32 instruction) const -> OpInfo;
-  auto decoderSPECIALInfo(u32 instruction) const -> OpInfo;
-  auto decoderREGIMMInfo(u32 instruction) const -> OpInfo;
-  auto decoderSCCInfo(u32 instruction) const -> OpInfo;
-  auto decoderFPUInfo(u32 instruction) const -> OpInfo;
-  auto decoderCOP2Info(u32 instruction) const -> OpInfo;
+  static auto opTiming(u32 instruction) -> OpTiming;
+  static auto fpuTiming(u32 instruction) -> OpTiming;
 
   auto COP3() -> void;
   auto INVALID() -> void;

@@ -59,6 +59,7 @@ auto CPU::DataCache::Line::write(u32 paddr, u64 data) -> void {
 template<u32 Size>
 auto CPU::DataCache::read(u64 vaddr, u32 paddr) -> u64 {
   auto& line = this->line(vaddr);
+  self.pipeline.dataCacheAccess(false, line.hit(paddr));
   if(!line.hit(paddr)) {
     line.fill(paddr);
     self.profile.dcacheMisses++;
@@ -83,6 +84,7 @@ auto CPU::DataCache::readDebug(u64 vaddr, u32 paddr) -> u64 {
 template<u32 Size>
 auto CPU::DataCache::write(u64 vaddr, u32 paddr, u64 data) -> void {
   auto& line = this->line(vaddr);
+  self.pipeline.dataCacheAccess(true, line.hit(paddr));
   if(!line.hit(paddr)) {
     line.fill(paddr);
     self.profile.dcacheMisses++;

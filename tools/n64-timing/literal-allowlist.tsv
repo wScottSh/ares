@@ -17,51 +17,7 @@ ares/n64/cpu/cpu.cpp	instruction#2	step(pclk(1));	legacy.cpu.nmi-entry
 ares/n64/cpu/cpu.cpp	instruction#3	step(pclk(1));	legacy.cpu.sysad-frozen-step	
 ares/n64/cpu/sysad.hpp	serialize#1	static constexpr Clock IfillStall = pclk(48);	legacy.cpu.icache-fill	
 ares/n64/cpu/sysad.cpp	writeBack	cpu.step(pclk(48));	legacy.cpu.icache-writeback	
-ares/n64/cpu/interpreter-fpu.cpp	FADD_S	step(pclk(3 - 1));	legacy.cpu.fpu-add	
-ares/n64/cpu/interpreter-fpu.cpp	FADD_D	step(pclk(3 - 1));	legacy.cpu.fpu-add	
-ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCEIL_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCEIL_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_D	step(pclk(2 - 1));	legacy.cpu.fpu-cvt-s-d	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_W	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_L	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_D_W	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_D_L	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FCVT_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FDIV_S	step(pclk(29 - 1));	legacy.cpu.fpu-div-s	
-ares/n64/cpu/interpreter-fpu.cpp	FDIV_D	step(pclk(58 - 1));	legacy.cpu.fpu-div-d	
-ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FMUL_S	step(pclk(5 - 1));	legacy.cpu.fpu-mul-s	
-ares/n64/cpu/interpreter-fpu.cpp	FMUL_D	step(pclk(8 - 1));	legacy.cpu.fpu-mul-d	
-ares/n64/cpu/interpreter-fpu.cpp	FROUND_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FROUND_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FROUND_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FROUND_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FSQRT_S	step(pclk(29 - 1));	legacy.cpu.fpu-sqrt-s	
-ares/n64/cpu/interpreter-fpu.cpp	FSQRT_D	step(pclk(58 - 1));	legacy.cpu.fpu-sqrt-d	
-ares/n64/cpu/interpreter-fpu.cpp	FSUB_S	step(pclk(3 - 1));	legacy.cpu.fpu-add	
-ares/n64/cpu/interpreter-fpu.cpp	FSUB_D	step(pclk(3 - 1));	legacy.cpu.fpu-add	
-ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
-ares/n64/cpu/interpreter-ipu.cpp	DDIV	step(pclk(69 - 1));	legacy.cpu.ddiv	
-ares/n64/cpu/interpreter-ipu.cpp	DDIVU	step(pclk(69 - 1));	legacy.cpu.ddiv	
-ares/n64/cpu/interpreter-ipu.cpp	DIV	step(pclk(37 - 1));	legacy.cpu.div	
-ares/n64/cpu/interpreter-ipu.cpp	DIVU	step(pclk(37 - 1));	legacy.cpu.div	
-ares/n64/cpu/interpreter-ipu.cpp	DMULT	step(pclk(8 - 1));	legacy.cpu.dmult	
-ares/n64/cpu/interpreter-ipu.cpp	DMULTU	step(pclk(8 - 1));	legacy.cpu.dmult	
-ares/n64/cpu/interpreter-ipu.cpp	MULT	step(pclk(5 - 1));	legacy.cpu.mult	
-ares/n64/cpu/interpreter-ipu.cpp	MULTU	step(pclk(5 - 1));	legacy.cpu.mult	
 ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 - wired : 96 - wired;	-	CP0 Random wrap range (32 TLB entries, Wired), not time; plan T7c owns Random
-ares/n64/cpu/memory.cpp	fetch	step(pclk(1));	legacy.cpu.instruction	
 ares/n64/cpu/memory.cpp	vaddrAlignedError	step(pclk(1));	legacy.cpu.address-error	
 ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
 ares/n64/pi/bus.hpp	writeWord	scheduleAfter(EventKind::PI_BUS_Write, pclk(200));	legacy.pi.write-busy	
