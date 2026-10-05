@@ -24,6 +24,7 @@ ares_add_sources(
     rsp/rsp.cpp
     rdp/rdp.cpp
     aleck64/aleck64.cpp
+    timing/verify.cpp
 )
 
 target_enable_feature(ares "N64 Vulkan rendering with paraLLEl-RDP" VULKAN)
@@ -293,6 +294,13 @@ ares_add_sources(
   INCLUDED #
     system/serialization.cpp
     system/system.hpp
+)
+
+ares_add_sources(
+  CORE #
+    n64
+  INCLUDED #
+    timing/verify.hpp
 )
 
 ares_add_sources(

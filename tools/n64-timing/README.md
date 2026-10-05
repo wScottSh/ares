@@ -41,7 +41,7 @@ n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
 | `--controllers N` | Number of gamepads connected at power-on (default 1). |
 | `--script FILE` | Runs an input script. See [Input scripts](#input-scripts). |
 
-The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) and deterministic entropy on. The CPU and the RSP always run on their interpreters; the fork has no recompiler.
+The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) on. The CPU and the RSP always run on their interpreters; the fork has no recompiler.
 
 Output:
 
@@ -63,6 +63,7 @@ The runner checks the stop conditions between VI fields. A ROM that requests an 
 | `rsp_busy_clocks` | Cumulative non-halted RSP time, in the core's scheduler clocks (2 per PClock). |
 | `dpc_start`, `dpc_end` | `DPC_START` and `DPC_END` at the end of the field. |
 | `cimg`, `zimg` | The address of the last `SET_COLOR_IMAGE` and `SET_MASK_IMAGE` (Z buffer) command the core parsed. Only `--rdp none` parses commands, so both are 0 with `--rdp vulkan`. |
+| `trace_hash` | `Timing::TraceHash` (`ares/n64/timing/verify.hpp`). A rolling XXH3 hash of every device queue event the core has fired, folded at each row with a hash of the whole serialized machine state (CPU, RSP, RDP, RDRAM, every device). Two runs that diverge anywhere differ in this column from the first field after the divergence on. |
 
 ### Input scripts
 
@@ -93,14 +94,19 @@ The fork has no software RDP rasterizer. The desktop build draws through paraLLE
 
 ### Determinism
 
-The runner removes the host dependencies that the desktop build has:
+The core reads no host clock or host entropy: its random generator is always seeded with 0, CP0 Random counts instructions, `SP_PC` returns the RSP's PC, and the cartridge and 64DD RTCs start at a fixed epoch. The runner also removes the host dependencies that the desktop build has:
 
 - No screen or audio thread does work. The runner sets ares' run-ahead flag, which makes the screen and audio stream nodes skip their host-side processing, so nothing reads RDRAM concurrently with the core.
-- Deterministic entropy seeds the core's random generator with 0.
 - Save files are never loaded or written. mia's save location points at an unused directory next to the binary.
 - Wall time is used only for `--wall-seconds` and the stderr stop line.
 
-One host dependency remains: a cartridge with an RTC seeds it from the host clock. mia enables the RTC only for ROMs whose manifest declares one.
+`--rdp vulkan` remains host-dependent: paraLLEl-RDP writes RDRAM from the GPU on host time.
+
+```sh
+tools/n64-timing/determinism.sh ROM [FRAMES]
+```
+
+Runs the ROM twice and fails unless every output file is byte-identical, `trace_hash` included. Majora's Mask NTSC-U 1.0 runs every mmbench scene; any other ROM runs FRAMES fields (default 600). A failure prints the first differing row and its columns for each TSV. `N64_RUN` skips the build, and `DET_OUT` sets the output directory (default `$N64_TIMING_HOME/determinism/<rom>`).
 
 ## nemu64-test corpus
 

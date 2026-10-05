@@ -69,6 +69,7 @@ struct FrameStats {
   u32 dpcEnd;
   u32 colorImage;
   u32 depthImage;
+  u64 traceHash;
 };
 
 auto usage() -> void {
@@ -211,6 +212,7 @@ auto sample(u64 frame, u64 fbHash) -> FrameStats {
     (u32)N64::rdp.command.end,
     (u32)N64::rdp.set.color.dramAddress,
     (u32)N64::rdp.set.mask.dramAddress,
+    N64::traceHash.fieldBoundary(),
   };
 }
 
@@ -462,7 +464,6 @@ auto nall::main(Arguments arguments) -> void {
   N64::option("Quality", "SD");
   N64::option("Supersampling", "false");
   N64::option("Homebrew Mode", "true");
-  N64::option("Deterministic Entropy", "true");
   N64::option("Expansion Pak", "true");
 
   ares::Node::System root;
@@ -489,7 +490,7 @@ auto nall::main(Arguments arguments) -> void {
       std::_Exit(1);
     }
     stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks"
-                "\tdpc_start\tdpc_end\tcimg\tzimg\n");
+                "\tdpc_start\tdpc_end\tcimg\tzimg\ttrace_hash\n");
   }
 
   auto wallStart = std::chrono::steady_clock::now();
@@ -514,7 +515,7 @@ auto nall::main(Arguments arguments) -> void {
         stats.print(s.frame, "\t", hex(s.origin, 6L), "\t", s.width, "\t", s.depth, "\t",
                     hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\t",
                     hex(s.dpcStart, 6L), "\t", hex(s.dpcEnd, 6L), "\t", hex(s.colorImage, 7L), "\t",
-                    hex(s.depthImage, 7L), "\n");
+                    hex(s.depthImage, 7L), "\t", hex(s.traceHash, 16L), "\n");
       }
       frames++;
       runner.advance(frames);

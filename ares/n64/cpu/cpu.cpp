@@ -88,6 +88,7 @@ auto CPU::synchronize() -> void {
   pif.main();
 
   queue.step(clocks, [](u32 event) {
+    traceHash.fold(cpu.pclock(), Timing::ActorId::Events, event, 0);
     switch(event) {
     case Queue::PI_DMA_Read:   return pi.dmaFinished();
     case Queue::PI_DMA_Write:  return pi.dmaFinished();

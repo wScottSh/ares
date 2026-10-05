@@ -418,6 +418,7 @@ auto System::power(bool reset) -> void {
 
   if(!reset) {
     random.seed((n64)0);
+    traceHash = {};
   }
 
   queue.reset();
