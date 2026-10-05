@@ -530,7 +530,7 @@ def self_test(root):
             ("an unknown check id", TABLE, row_field("ri.read-hit", "verify", "bench:no-such-rom"), "check `bench:no-such-rom` is not defined in tools/n64-timing/checks.tsv. Add a row there"),
             ("an empty check list", TABLE, row_field("ri.write-hit", "verify", ""), "has no check. Name the check"),
             ("adding a timing literal", "ares/n64/cpu/memory.cpp", lambda t: t + new_function, "timing literal [7, 2, 14] in `step(7 * 2);`. Add a row to ares/n64/timing/behaviors.tsv"),
-            ("changing a legacy literal", "ares/n64/cpu/dcache.cpp", lambda t: t.replace("cpu.step(pclk(40));", "cpu.step(pclk(41));", 1), "If the code no longer charges this cost, delete the entry"),
+            ("changing a legacy literal", "ares/n64/cpu/interpreter-ipu.cpp", lambda t: t.replace("step(pclk(5 - 1));", "step(pclk(6 - 1));", 1), "If the code no longer charges this cost, delete the entry"),
             ("changing a legacy row's value", TABLE, row_field("legacy.cpu.div", "value", "38"), "Make ares/n64/timing/behaviors.tsv and the code agree"),
             ("referencing a value-less row", "ares/n64/cpu/memory.cpp", lambda t: t + "\nstatic auto selfTestRule = Timing::Behavior::RiArbitration;\n", "which has no numeric value"),
             ("referencing an unknown row", "ares/n64/cpu/memory.cpp", lambda t: t + "\nstatic auto selfTestRule = Timing::Behavior::RiNoSuchRow;\n", "matches no row"),
@@ -538,7 +538,7 @@ def self_test(root):
             ("an inexact time value", TABLE, row_field("ri.read-hit", "value", "10.5"), "is not a whole number of 750 MHz units"),
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("editing the generated header", HEADER, lambda t: t.replace("= 30;", "= 31;", 1), "ares/n64/timing/behaviors.hpp differs from the generated output"),
-            ("a legacy code site moving", "ares/n64/cpu/dcache.cpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),
+            ("a legacy code site moving", "ares/n64/cpu/interpreter-ipu.cpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),
         ]
         if landed:
             cases += [
