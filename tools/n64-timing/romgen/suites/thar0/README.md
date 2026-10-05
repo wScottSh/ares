@@ -23,7 +23,7 @@ python -m romgen.suites.thar0.import_hw <clone dir>        # from tools/n64-timi
 |---|---|
 | `configs.py` | The 100 `timing_specs[]` entries, in the C table's order, with the `GROUP` and `AC_GROUP` macros ported as functions. Each spec has a stable `id` such as `ac-zbsep-vioff-noimrd-1cyc`. |
 | `thar0.py` | The ROM: the per-spec VI register writes, the setup command list, and the `thar0_spec` routine (`exec_timing` and `main`'s print loop). |
-| `../../rcp.py` | Generic helpers that other suites can use: the RDP command encoders, `rdp_exec`, `wait_count`, `io_writes`, and `pif_terminate_boot`. |
+| `../../rcp.py` | Generic helpers that other suites can use: the RDP command encoders, `rdp_exec`, `wait_count` and `io_writes`. |
 | `expected.tsv` | Hardware results from `compare.py` `hw_data`, converted from ms to clocks (x 62500). `import_hw.py` generates it and checks that the values match `sample_results.txt` (100/100 match). |
 | `compare.py` | Parses the ROM output, reduces each list as `analyze.py` does (drops values outside the 1% and 99% quantiles), and prints model against hardware. |
 | `selftest.py` | Checks the RDP encodings against known GBI values, the hardware anchors 77772 and 155052, and the comparator's parsing and reduction. |

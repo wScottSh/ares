@@ -395,6 +395,9 @@ cmp_2:
     nop
 compare_template_end:
 
+# The polling loop's cost depends on its I-cache line alignment, and the Value's range is 20 clocks
+# wide, so the routine starts on a line.
+.align 32
 # rsp_timing::ClockCPUvsRSP: res[0] = DP clock delta (24 bit) over 100000 COUNT ticks
 step_dp_clock_vs_cpu:
     li $t0, 0xA4100000

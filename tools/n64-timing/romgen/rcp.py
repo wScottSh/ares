@@ -129,14 +129,6 @@ def words(dl):
 # On-target helpers. Calling convention as for runtime routines: a0-a3 in, v0 out, t-registers
 # clobbered, s-registers preserved.
 ASM = r"""
-# Sets the PIF boot-termination bit (PIF RAM byte 0x3F bit 3), as libdragon's boot code does.
-# Without it the PIF halts the CPU 5 s after boot (ares pif/hle.cpp WaitTerminateBoot).
-pif_terminate_boot:
-    li $t0, 0xBFC007FC
-    li $t1, 8
-    jr $ra
-    sw $t1, 0($t0)
-
 # a0 = COUNT ticks to wait (libdragon wait_ticks).
 wait_count:
     mfc0 $t0, $count

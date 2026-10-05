@@ -142,6 +142,8 @@ boot:
     la $t0, DATA_BASE + D_LINEBUF
     la $t1, DATA_BASE + D_LINEPOS
     sw $t0, 0($t1)
+    jal pif_terminate_boot
+    nop
     jal install_vectors
     nop
     xioctl 2
@@ -158,6 +160,14 @@ boot:
 halt:
     b halt
     nop
+
+# Sets the PIF boot-termination bit (PIF RAM byte 0x3F bit 3), as libdragon's boot code does.
+# Without it the PIF halts the CPU 5 s after boot (ares pif/hle.cpp WaitTerminateBoot).
+pif_terminate_boot:
+    li $t0, 0xBFC007FC
+    li $t1, 8
+    jr $ra
+    sw $t1, 0($t0)
 
 # ---------------------------------------------------------------------------------------
 install_vectors:

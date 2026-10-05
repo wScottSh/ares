@@ -134,8 +134,6 @@ thar0_spec:
     sd $s2, 24($sp)
     sd $s3, 32($sp)
     move $s0, $a0
-    jal pif_terminate_boot
-    nop
     jal io_writes
     lw $a0, 0($s0)
     li $a0, 20 * COUNT_PER_MS
