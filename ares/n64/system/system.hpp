@@ -13,7 +13,6 @@ struct System {
   auto model() const -> Model { return information.model; }
   auto region() const -> Region { return information.region; }
   auto _DD() const -> bool { return information.dd; }
-  auto frequency() const -> u32 { return information.frequency; }
   auto vclkPeriod() const -> Timing::Ratio { return information.vclkPeriod; }
   auto videoFrequency() const -> u32 {
     return Timing::UnitsPerSecond * information.vclkPeriod.denominator / information.vclkPeriod.numerator;
@@ -37,7 +36,6 @@ private:
     string name = "Nintendo 64";
     Model model = Model::Nintendo64;
     Region region = Region::NTSC;
-    u32 frequency = 93'750'000 * 2;
     Timing::Ratio vclkPeriod = Timing::Behavior::ClockVclk;  //units per VCLK
     bool dd = false;
   } information;

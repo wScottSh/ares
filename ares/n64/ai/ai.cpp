@@ -28,7 +28,7 @@ auto AI::main() -> void {
   while(Thread::clock < cpu.clock) {
     sample();
     stream->frame(dac.left, dac.right);
-    step(dac.period);
+    Thread::clock = dac.vclk.advance(dac.vclksPerSample);
   }
 }
 
@@ -75,7 +75,9 @@ auto AI::power(bool reset) -> void {
   dac.right = 0.0;
   dac.frequency = 44100;
   dac.precision = 16;
-  dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};
+  //The power-on rate is a whole VCLK divider too: the one nearest above 44100 Hz.
+  dac.vclksPerSample = system.videoFrequency() / dac.frequency;
+  dac.vclk = {system.vclkPeriod()};
   updateDecay();
 }
 

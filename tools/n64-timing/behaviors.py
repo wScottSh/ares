@@ -51,11 +51,11 @@ BASES = {
 }
 #750 MHz units per unit (ares/n64/timing/clock.hpp).
 TIME_UNITS = {
-    "units": 1, "tc": 3, "tick": 4, "pclk": 8, "rclk": 12, "cop0count": 16,
+    "units": 1, "tc": 3, "pclk": 8, "rclk": 12, "cop0count": 16,
     "us": 750, "ms": 750_000, "s": 750_000_000, "vclk": Fraction(5500, 357),
 }
 NUMBER_UNITS = {"Hz", "B", "entries", "dwords", "px", "lines", "instr", "rank", "bit",
-                "B/rclk", "px/rclk", "tick/pclk", "tick/rclk", "tick/ms", "tick/s"}
+                "B/rclk", "px/rclk"}
 FLAG_UNITS = {"flag"}
 TEXT_UNITS = {"order", "map", "rule", "event"}
 RUNNERS = {"nemu64", "bench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",

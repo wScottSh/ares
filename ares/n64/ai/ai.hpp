@@ -47,7 +47,8 @@ struct AI : Thread, Memory::RCP<AI> {
   struct DAC {
     u32 frequency;
     u32 precision;
-    Clock period;
+    u32 vclksPerSample;  //the DAC clock divides VCLK by AI_DACRATE + 1 (n64brew Audio_Interface)
+    Timing::VclkAccumulator vclk;
     f64 left;
     f64 right;
     f64 decayFactor;

@@ -58,7 +58,7 @@ auto AI::writeWord(u32 address, u32 data_, Thread& thread) -> void {
     auto frequency = dac.frequency;
     io.dacRate = data.bit(0,13);
     dac.frequency = max(1, system.videoFrequency() / (io.dacRate + 1));
-    dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};
+    dac.vclksPerSample = io.dacRate + 1;
     if(frequency != dac.frequency) {
       stream->setFrequency(dac.frequency);
       updateDecay();

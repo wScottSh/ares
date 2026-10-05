@@ -1,8 +1,6 @@
 path	function	line	rows	note
 ares/n64/ai/ai.cpp	power	dac.frequency = 44100;	legacy.ai.power-on-rate	
-ares/n64/ai/ai.cpp	power	dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};	legacy.clock.units-per-tick	
 ares/n64/ai/io.cpp	writeWord	dac.frequency = max(1, system.videoFrequency() / (io.dacRate + 1));	-	max(1, ...) keeps the DAC frequency nonzero for the division that follows
-ares/n64/ai/io.cpp	writeWord	dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};	legacy.clock.units-per-tick	
 ares/n64/cartridge/flash.cpp	-	{"MX29L0000",   0x00c2, 0x0000, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
 ares/n64/cartridge/flash.cpp	-	{"MX29L0001",   0x00c2, 0x0001, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
 ares/n64/cartridge/flash.cpp	-	{"MX29L1100",   0x00c2, 0x001e, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
@@ -96,6 +94,5 @@ ares/n64/rsp/rsp.cpp	main	profile.haltedCycles += pclk(64).units;	legacy.rsp.hal
 ares/n64/si/io.cpp	writeWord	cpu.queueInsert(Queue::SI_BUS_Write, rclk(2150));	legacy.si.bus-write	
 ares/n64/si/io.cpp	ioWrite	cpu.queueInsert(Queue::SI_DMA_Write, rclk(4065));	legacy.si.dma-write64	
 ares/n64/system/system.cpp	load	information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};	legacy.clock.vclk-pal	
-ares/n64/system/system.hpp	serialize	u32 frequency = 93'750'000 * 2;	legacy.clock.pclk	
 ares/n64/vi/vi.cpp	main	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
 ares/n64/vi/vi.cpp	main	step(0x800);	legacy.vi.inactive-line	
