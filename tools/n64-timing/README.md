@@ -127,6 +127,15 @@ tools/n64-timing/run-nemu64.sh [--cpu interpreter|recompiler] [timing cycle cop0
 
 `results/nemu64-<cpu>/summary.txt` concatenates the set summaries.
 
+## Thar0 RDP timing
+
+```sh
+python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms
+tools/n64-timing/run-thar0.sh [--cpu interpreter|recompiler]
+```
+
+`run-thar0.sh` writes `stdout.txt`, `stderr.txt`, `compare.tsv` and `summary.txt` under `$N64_TIMING_HOME/results/thar0-<cpu>/`. See [romgen/suites/thar0/README.md](romgen/suites/thar0/README.md).
+
 ## Self-test without the corpus
 
 `make-emux-smoke-rom.py` builds a ROM that prints one line through emux `XLOG` and then requests an emux exit. It uses libdragon's public-domain `ipl3_compat.z64` as boot code.
