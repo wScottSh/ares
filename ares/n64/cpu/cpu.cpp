@@ -32,9 +32,10 @@ auto CPU::unload() -> void {
 }
 
 auto CPU::main() -> void {
-  while(!vi.refreshed && GDB::server.reportPC(ipu.pc & 0xFFFFFFFF)) {
+  while(GDB::server.reportPC(ipu.pc & 0xFFFFFFFF)) {
     //every other actor is past this instruction's start before it samples interrupts or executes
     timeline.catchUp(Thread::clock, Timing::ActorId::CPU);
+    if(vi.refreshed) break;
     instruction();
   }
 

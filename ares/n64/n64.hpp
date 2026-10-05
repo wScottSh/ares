@@ -71,14 +71,8 @@ namespace ares::Nintendo64 {
       s(clock.units);
     }
 
-    static auto debugger() -> Thread {
-      Thread thread;
-      thread.actor = Timing::ActorId::Count;
-      return thread;
-    }
-
     Clock clock;
-    Timing::ActorId actor = Timing::ActorId::CPU;  //whose interactions this clock stamps; Count for a debugger thread
+    Timing::ActorId actor = Timing::ActorId::Count;  //the timeline actor this clock belongs to; Count (debugger, scratch threads) never syncs
   };
 
   struct BCD {

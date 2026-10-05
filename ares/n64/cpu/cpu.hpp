@@ -2,6 +2,7 @@
 
 struct CPU : Thread {
   Node::Object node;
+  CPU() { Thread::actor = Timing::ActorId::CPU; }
 
   struct Debugger {
     //debugger.cpp

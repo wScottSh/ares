@@ -110,6 +110,8 @@ struct Timeline {
   }
 
   auto schedule(Event event) -> void {
+    //every kind has one pending event in practice; a full heap means a device reposts without cancelling
+    if(count == EventCapacity) abort();
     u32 i = count;
     while(i > 0 && later(events[i - 1], event)) {
       events[i] = events[i - 1];

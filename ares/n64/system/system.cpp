@@ -190,7 +190,7 @@ auto System::initDebugHooks() -> void {
       }
       return res;
     } else if (address >= 0xffff'ffff'a000'0000ull && address + byteCount <= 0xffff'ffff'a3ef'ffffull) {
-      Thread dummyThread = Thread::debugger();
+      Thread dummyThread{};
       for(u32 i : range(byteCount)) {
         auto val = bus.read<Byte>(address & 0x1fff'ffff, dummyThread, RBusDevice::ARES_DEBUGGER);
         hexByte(resPtr, val);
@@ -202,7 +202,7 @@ auto System::initDebugHooks() -> void {
       // Otherwise, use 32-bit reads to read the data. This is the expected
       // read for RCP, so it's the one that's most likely to return the data
       // as the user would expect.
-      Thread dummyThread = Thread::debugger();
+      Thread dummyThread{};
       res.resize((byteCount + 3) / 4 * 4 * 2);
       for (u32 i : range((byteCount + 3) / 4)) {
         u64 value = bus.read<Word>(address & 0x1fff'ffff, dummyThread, RBusDevice::ARES_DEBUGGER);
@@ -253,7 +253,7 @@ auto System::initDebugHooks() -> void {
         address++;
       }
     } else if (address >= 0xffff'ffff'a000'0000ull && address + data.size() <= 0xffff'ffff'a3ef'ffffull) {
-      Thread dummyThread = Thread::debugger();
+      Thread dummyThread{};
       for(auto b : data) {
         bus.write<Byte>(address & 0x1fff'ffff, b, dummyThread, RBusDevice::ARES_DEBUGGER);
         address++;
@@ -262,7 +262,7 @@ auto System::initDebugHooks() -> void {
       // Otherwise, use 32-bit writes to write the data. This is the expected
       // write for RCP, so it's the one that's most likely to write the data
       // as the user would expect.
-      Thread dummyThread = Thread::debugger();
+      Thread dummyThread{};
       for(u32 i = 0; i < data.size() / 4; i++) {
         u64 value = ((u64)data[i*4+0]<<24) | ((u64)data[i*4+1]<<16) | ((u64)data[i*4+2]<<8) | ((u64)data[i*4+3]<<0);
         bus.write<Word>(address & 0x1fff'ffff, value, dummyThread, RBusDevice::ARES_DEBUGGER);
