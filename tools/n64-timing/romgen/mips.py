@@ -443,6 +443,8 @@ def encode(mnem, args, addr, ev):
     if mnem == "xlog":
         return [emux(EMUX_FUNCT["xlog"], reg(a[0]), reg(a[1]) if len(a) > 1 else 0,
                      ev(a[2]) if len(a) > 2 else 0)]
+    if mnem == "xhexdump":
+        return [emux(EMUX_FUNCT["xhexdump"], reg(a[0]), reg(a[1]))]
     if mnem == "xioctl":
         return [emux(EMUX_FUNCT["xioctl"], code=ev(a[0]))]
     if mnem == "xdetect":
