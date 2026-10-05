@@ -40,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 
-#include "common/debug.h"
+#include "cen64_compat.h"
 #include "rdp_poly.h"
 
 /***************************************************************************

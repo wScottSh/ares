@@ -236,10 +236,21 @@ ares_add_sources(
     n64
   INCLUDED #
     rdp/debugger.cpp
+    rdp/engine.cpp
     rdp/io.cpp
     rdp/rdp.hpp
     rdp/render.cpp
     rdp/serialization.cpp
+    rdp/engine/cen64_compat.h
+    rdp/engine/rdp.h
+    rdp/engine/rdp_blend.h
+    rdp/engine/rdp_blendlut.h
+    rdp/engine/rdp_core.h
+    rdp/engine/rdp_poly.h
+    rdp/engine/rdp_rgba.h
+    rdp/engine/rdp_texpipe.h
+    rdp/engine/rdp_types.h
+    rdp/engine/rdp_wqueue.h
 )
 
 ares_add_sources(
@@ -307,6 +318,23 @@ ares_add_sources(
     vi/io.cpp
     vi/serialization.cpp
     vi/vi.hpp
+)
+
+# cen64-jgemu pixel engine (rdp/engine/README.md). C sources; one worker
+# (the emulation thread) so rendering is deterministic.
+set(
+  _rdp_engine_sources
+  rdp/engine/rdp.c
+  rdp/engine/rdp_blend.c
+  rdp/engine/rdp_core.c
+  rdp/engine/rdp_poly.c
+  rdp/engine/rdp_texpipe.c
+  rdp/engine/rdp_wqueue.c
+)
+target_sources(ares PRIVATE ${_rdp_engine_sources})
+set_source_files_properties(
+  ${_rdp_engine_sources}
+  PROPERTIES COMPILE_DEFINITIONS "RDP_WQ_THREADS=1;RDP_DP_TIMED=0"
 )
 
 target_compile_definitions(ares PRIVATE VULKAN)

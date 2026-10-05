@@ -50,9 +50,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 
-#include "common/common.h"
-#include "common/debug.h"
-#include "common/endian.h"
+#include "cen64_compat.h"
 #include "rdp_core.h"
 
 // N64 RDP noise. The hardware noise source is not documented/reverse-engineered
@@ -1128,14 +1126,8 @@ static void rdp_z_store(rdp_t *rdp, const rdp_poly_state *object, uint32_t zcurp
 {
     (void)object;
     unsigned zval = rdp->m_z_com_table[z & 0x3ffff]|(enc >> 2);
-    if(zcurpixel <= MEM16_LIMIT)
-    {
-        ((uint16_t*)rdp->m_rdram)[zcurpixel] = byteswap_16(zval);
-    }
-    if(dzcurpixel <= MEM8_LIMIT)
-    {
-        rdp->m_hidden_bits[dzcurpixel ^ BYTE_IN_WORD_XOR] = enc & 3;
-    }
+    RWRITEIDX16(zcurpixel, zval);
+    HWRITEADDR8(dzcurpixel, enc & 3);
 }
 static int32_t rdp_normalize_dzpix(int32_t sum)
 {
@@ -1163,7 +1155,7 @@ static uint32_t rdp_z_decompress(rdp_t *rdp, uint32_t zcurpixel)
 static uint32_t rdp_dz_decompress(rdp_t *rdp, uint32_t zcurpixel, uint32_t dzcurpixel)
 {
     const unsigned zval = RREADIDX16(zcurpixel);
-    const unsigned dzval = (((dzcurpixel) <= 0x7fffff) ? (rdp->m_hidden_bits[(dzcurpixel) ^ BYTE_IN_WORD_XOR]) : 0);
+    const unsigned dzval = HREADADDR8(dzcurpixel);
     const unsigned dz_compressed = ((zval & 3) << 2) | (dzval & 3);
     return (1 << dz_compressed);
 }
@@ -1234,7 +1226,7 @@ static bool rdp_z_compare(rdp_t *rdp, uint32_t zcurpixel, uint32_t dzcurpixel, u
         oz = rdp_z_decompress(rdp, zcurpixel);
         dzmem = rdp_dz_decompress(rdp, zcurpixel, dzcurpixel);
         zval = RREADIDX16(zcurpixel);
-        rawdzmem = ((zval & 3) << 2) | ((((dzcurpixel) <= 0x3fffff) ? (rdp->m_hidden_bits[(dzcurpixel) ^ BYTE_IN_WORD_XOR]) : 0) & 3);
+        rawdzmem = ((zval & 3) << 2) | (HREADADDR8(dzcurpixel) & 3);
     }
     else
     {
@@ -1355,41 +1347,20 @@ uint32_t rdp_get_log2(uint32_t lod_clamp)
 /*****************************************************************************/
 static uint64_t rdp_read_data(rdp_t *rdp, uint32_t address)
 {
-    // CEN64 stores RDRAM and DMEM as big-endian byte arrays; swap each
-    // 32-bit word to host order when assembling the 64-bit command.
+    // ares port: RDRAM and DMEM hold native words (see rdp_core.h), and
+    // the renderer runs on the emulation thread, so a command is two
+    // plain word reads with no byteswap and no atomic doubleword load.
     if (rdp->m_status & 0x1)     // XBUS_DMEM_DMA enabled
     {
-        return ((uint64_t)(byteswap_32(rdp->m_dmem[(address & (RDP_DMEM_SIZE - 1u)) / 4])) << 32) | byteswap_32(rdp->m_dmem[((address + 4) & (RDP_DMEM_SIZE - 1u)) / 4]);
+        const uint32_t hi = (address & (RDP_DMEM_SIZE - 1u)) / 4;
+        const uint32_t lo = ((address + 4) & (RDP_DMEM_SIZE - 1u)) / 4;
+        return ((uint64_t)rdp->m_dmem[hi] << 32) | rdp->m_dmem[lo];
     }
     else
     {
-        /* One indivisible 8-byte read, not two word reads.
-         *
-         * This runs on the RCP thread while the VR4300 writes the
-         * command list on the other; two independent word loads can
-         * straddle a doubleword store and return the opcode half of one
-         * command with the address half of another. Exactly the tear
-         * that corrupted SP display-list fetches, on the DP's own
-         * command path -- which bypasses the bus entirely, so the
-         * atomicity added to read_rdram_pair does not reach it.
-         *
-         * m_rdram's base alignment is not guaranteed by the language;
-         * check and fall back to the old word pair if it ever fails. */
-        uint32_t offset = address & 0xfffff8;
-        unsigned char *at = (unsigned char *) rdp->m_rdram + offset;
-
-        if (!(((uintptr_t) at) & 7u) && !(address & 4u))
-        {
-            uint64_t raw = atomic_load_explicit(
-                (_Atomic uint64_t *) (void *) at, memory_order_relaxed);
-
-            /* The eight bytes are in N64 order, so the whole doubleword
-             * converts in one go and the lower address lands in the upper
-             * half whichever way round the host loaded it. */
-            return byteswap_64(raw);
-        }
-
-        return ((uint64_t)(byteswap_32(rdp->m_rdram[((address & 0xffffff) / 4)])) << 32) | byteswap_32(rdp->m_rdram[(((address + 4) & 0xffffff) / 4)]);
+        const uint32_t hi = (address & 0xffffff) / 4;
+        const uint32_t lo = ((address + 4) & 0xffffff) / 4;
+        return ((uint64_t)RREADIDX32(hi) << 32) | RREADIDX32(lo);
     }
 }
 
@@ -4635,7 +4606,7 @@ static void rdp_fill_rect_stale_read(rdp_t *rdp, uint64_t w1, int *handled)
         for (i = 0; i < st->n; i++)
         {
             cur[i] = RREADIDX16(st->idx[i]);
-            ((uint16_t *)rdp->m_rdram)[st->idx[i]] = byteswap_16(st->pre[i]);
+            RWRITEIDX16(st->idx[i], st->pre[i]);
         }
 
         {
@@ -5211,7 +5182,8 @@ void rdp_process_command_list(rdp_t *rdp)
 
 /*****************************************************************************/
 
-int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t* dmem)
+int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t rdram_size,
+    uint8_t* hidden, uint32_t* dmem)
 {
     memset(rdp, 0, sizeof(*rdp));
     if (poly_manager_init(&rdp->m_pool, rdp))
@@ -5220,6 +5192,11 @@ int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t* dmem)
 
     rdp->m_rdram = rdram;
     rdp->m_dmem = dmem;
+    rdp->m_hidden_bits = hidden;
+    rdp->m_mem8_limit = rdram_size - 1u;
+    rdp->m_mem16_limit = rdram_size / 2u - 1u;
+    rdp->m_mem32_limit = rdram_size / 4u - 1u;
+    rdp->m_pixels = 0;
 
     rdp->m_aux_buf_ptr = 0;
     rdp->m_aux_buf = NULL;
@@ -5242,8 +5219,6 @@ int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t* dmem)
     rdp->m_tmem = NULL;
     rdp->m_tmem_pool = NULL;
     rdp->m_tmem_cows = 0;
-
-    memset(rdp->m_hidden_bits, 3, sizeof rdp->m_hidden_bits);
 
     rgbaint_set_rgba(&rdp->m_prim_lod_fraction, 0, 0, 0, 0);
     rdp_z_build_com_table(rdp);
@@ -5332,6 +5307,7 @@ static void rdp_occ_accumulate(rdp_t *rdp, const poly_rect *clip,
         if (w < 0)
             continue;
 
+        rdp->m_pixels += (uint64_t)w;
         switch (cyc_type) {
             case CYCLE_TYPE_1:  cycles += (uint32_t)w;     break;
             case CYCLE_TYPE_2:  cycles += (uint32_t)w * 2; break;

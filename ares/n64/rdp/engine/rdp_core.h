@@ -78,11 +78,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define BYTE_XOR_DWORD_SWAP  (4 ^ BYTE_IN_WORD_XOR)
 #define WORD_XOR_DWORD_SWAP  (2 ^ HWORD_IN_WORD_XOR)
 
-/* Highest in-range index of each RDRAM view, from the RDP_RDRAM_SIZE
-   contract in rdp.h. */
-#define MEM8_LIMIT  (RDP_RDRAM_SIZE - 1u)
-#define MEM16_LIMIT (RDP_RDRAM_SIZE / 2u - 1u)
-#define MEM32_LIMIT (RDP_RDRAM_SIZE / 4u - 1u)
+/* Highest in-range index of each RDRAM view, from the installed RDRAM
+   size the host passes to rdp_construct. */
+#define MEM8_LIMIT  (rdp->m_mem8_limit)
+#define MEM16_LIMIT (rdp->m_mem16_limit)
+#define MEM32_LIMIT (rdp->m_mem32_limit)
 
 // DPC_STATUS bits
 #define DP_STATUS_XBUS_DMA      0x01
@@ -100,46 +100,62 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // reads return 0 and out-of-range writes are dropped, matching
 // hardware's unpopulated-RDRAM behavior. The compares are
 // well-predicted never-taken branches.
-static inline uint8_t rdp_guard_read8(const uint8_t *mem, uint32_t in) {
-  return in <= MEM8_LIMIT ? mem[in] : 0;
+//
+// ares port: RDRAM and DMEM are ares' Memory::Writable buffers, native
+// 32-bit words with the bytes of each word swizzled (byte address ^ 3,
+// halfword index ^ 1), the layout MAME's RDP was written for, so no
+// byteswap is applied. The limit is the installed RDRAM, not the
+// RDP_RDRAM_SIZE constant, because ares allocates 4 MB without the
+// Expansion Pak.
+static inline uint8_t rdp_guard_read8(const uint8_t *mem, uint32_t limit, uint32_t in) {
+  return in <= limit ? mem[in ^ 3u] : 0;
 }
-static inline void rdp_guard_write8(uint8_t *mem, uint32_t in, uint8_t val) {
-  if (in <= MEM8_LIMIT)
-    mem[in] = val;
+static inline void rdp_guard_write8(uint8_t *mem, uint32_t limit, uint32_t in, uint8_t val) {
+  if (in <= limit)
+    mem[in ^ 3u] = val;
 }
-static inline uint16_t rdp_guard_read16(const uint16_t *mem, uint32_t in) {
-  return in <= MEM16_LIMIT ? mem[in] : 0;
+static inline uint16_t rdp_guard_read16(const uint16_t *mem, uint32_t limit, uint32_t in) {
+  return in <= limit ? mem[in ^ 1u] : 0;
 }
-static inline void rdp_guard_write16(uint16_t *mem, uint32_t in,
+static inline void rdp_guard_write16(uint16_t *mem, uint32_t limit, uint32_t in,
   uint16_t val) {
-  if (in <= MEM16_LIMIT)
-    mem[in] = val;
+  if (in <= limit)
+    mem[in ^ 1u] = val;
 }
-static inline uint32_t rdp_guard_read32(const uint32_t *mem, uint32_t in) {
-  return in <= MEM32_LIMIT ? mem[in] : 0;
+static inline uint32_t rdp_guard_read32(const uint32_t *mem, uint32_t limit, uint32_t in) {
+  return in <= limit ? mem[in] : 0;
 }
-static inline void rdp_guard_write32(uint32_t *mem, uint32_t in,
+static inline void rdp_guard_write32(uint32_t *mem, uint32_t limit, uint32_t in,
   uint32_t val) {
-  if (in <= MEM32_LIMIT)
+  if (in <= limit)
     mem[in] = val;
 }
 
-// CEN64 stores RDRAM (and RSP DMEM) as raw byte arrays in N64 byte order,
-// byteswapping on host word access.
-#define RREADADDR8(in) rdp_guard_read8((uint8_t*)rdp->m_rdram, (in))
-#define RREADIDX16(in) byteswap_16(rdp_guard_read16((uint16_t*)rdp->m_rdram, (in)))
-#define RREADIDX32(in) byteswap_32(rdp_guard_read32(rdp->m_rdram, (in)))
+#define RREADADDR8(in) rdp_guard_read8((const uint8_t*)rdp->m_rdram, MEM8_LIMIT, (in))
+#define RREADIDX16(in) rdp_guard_read16((const uint16_t*)rdp->m_rdram, MEM16_LIMIT, (in))
+#define RREADIDX32(in) rdp_guard_read32(rdp->m_rdram, MEM32_LIMIT, (in))
 
-#define RWRITEADDR8(in, val)    rdp_guard_write8((uint8_t*)rdp->m_rdram, (in), (val))
-#define RWRITEIDX16(in, val)    rdp_guard_write16((uint16_t*)rdp->m_rdram, (in), byteswap_16(val))
-#define RWRITEIDX32(in, val)    rdp_guard_write32(rdp->m_rdram, (in), byteswap_32(val))
+#define RWRITEADDR8(in, val)    rdp_guard_write8((uint8_t*)rdp->m_rdram, MEM8_LIMIT, (in), (val))
+#define RWRITEIDX16(in, val)    rdp_guard_write16((uint16_t*)rdp->m_rdram, MEM16_LIMIT, (in), (val))
+#define RWRITEIDX32(in, val)    rdp_guard_write32(rdp->m_rdram, MEM32_LIMIT, (in), (val))
 
 #define GETLOWCOL(x)    (((x) & 0x3e) << 2)
 #define GETMEDCOL(x)    (((x) & 0x7c0) >> 3)
 #define GETHICOL(x)     (((x) & 0xf800) >> 8)
 
-#define HREADADDR8(in)          rdp_guard_read8(rdp->m_hidden_bits, (in) ^ BYTE_IN_WORD_XOR)
-#define HWRITEADDR8(in, val)    rdp_guard_write8(rdp->m_hidden_bits, (in) ^ BYTE_IN_WORD_XOR, (val))
+// The hidden ("9th" bit) plane is ares' HiddenRAM: one byte per 16-bit
+// RDRAM word indexed by the 16-bit word index with no swizzle, bit 1 the
+// even byte and bit 0 the odd byte. CPU and DMA writes maintain it on
+// the ares side; the renderer reads and writes the same plane.
+static inline uint8_t rdp_guard_hread(const uint8_t *plane, uint32_t limit, uint32_t in) {
+  return in <= limit ? plane[in] : 0;
+}
+static inline void rdp_guard_hwrite(uint8_t *plane, uint32_t limit, uint32_t in, uint8_t val) {
+  if (in <= limit)
+    plane[in] = val;
+}
+#define HREADADDR8(in)          rdp_guard_hread(rdp->m_hidden_bits, MEM16_LIMIT, (in))
+#define HWRITEADDR8(in, val)    rdp_guard_hwrite(rdp->m_hidden_bits, MEM16_LIMIT, (in), (val))
 
 /* sign-extension macros: branchless fixed-width sign extend, r = (x ^ m) - m
  * with m = 1 << (b-1); UB-free and bit-identical to the former smear-multiply. */
@@ -388,7 +404,16 @@ struct rdp_t
 
     rdp_texpipe_t m_tex_pipe;
 
-    uint8_t m_hidden_bits[0x800000];
+    /* ares port: the host's hidden plane and installed RDRAM size
+     * (see the accessor notes above). */
+    uint8_t*  m_hidden_bits;
+    uint32_t  m_mem8_limit;
+    uint32_t  m_mem16_limit;
+    uint32_t  m_mem32_limit;
+
+    /* ares port: pixels rasterized (clipped span widths summed), for
+     * the ns/pixel measurement. */
+    uint64_t  m_pixels;
 
     uint16_t m_dzpix_normalize[0x10000];
 
@@ -489,7 +514,8 @@ struct rdp_t
 
 // Construction/destruction. rdp_construct initializes caller-allocated
 // storage and returns nonzero on allocation failure.
-int         rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t* dmem);
+int         rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t rdram_size,
+                uint8_t* hidden, uint32_t* dmem);
 void        rdp_destroy(rdp_t *rdp);
 /* Async fences: drain if pending work may have written [addr, addr+len)
  * of RDRAM (fence) or unconditionally (fence_all). Cheap no-ops when

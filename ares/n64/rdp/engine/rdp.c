@@ -39,11 +39,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // before the frame data is in RDRAM.
 //
 
+#include <stdarg.h>
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "rdp/interface.h"
 #include "rdp.h"
 #include "rdp_core.h"
 
@@ -59,6 +60,27 @@ static struct {
 
 // Base of the renderer's hidden-bit plane; NULL outside init..destroy.
 static uint8_t *s_hidden_plane;
+
+static void rdp_log_stderr(int level, const char *fmt, ...)
+{
+    va_list va;
+    (void)level;
+    va_start(va, fmt);
+    vfprintf(stderr, fmt, va);
+    va_end(va);
+}
+
+void (*cen64_log)(int, const char *, ...) = rdp_log_stderr;
+
+void rdp_render_set_log(void (*log)(int level, const char *fmt, ...))
+{
+    cen64_log = log != NULL ? log : rdp_log_stderr;
+}
+
+uint64_t rdp_render_pixel_count(void)
+{
+    return s_ctx.rdp != NULL ? s_ctx.rdp->m_pixels : 0;
+}
 
 // dp_full_sync callback, installed on the renderer.
 static void rdp_dp_full_sync(void *opaque)
@@ -175,12 +197,13 @@ void rdp_render_quiesce(void)
     rdp_async_fence_all(s_ctx.rdp);
 }
 
-int rdp_render_init(uint32_t *rdram, uint32_t *dmem, uint32_t *dp_regs,
+int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
+    uint32_t *dmem, uint32_t *dp_regs,
     void (*dp_interrupt)(void *opaque), void *opaque)
 {
     rdp_t *rdp;
 
-    if (!rdram || !dmem || !dp_regs)
+    if (!rdram || !hidden || !dmem || !dp_regs || rdram_size < 4u)
         return 1;
 
     // In order: construct the renderer, build internal state, wire the
@@ -190,7 +213,7 @@ int rdp_render_init(uint32_t *rdram, uint32_t *dmem, uint32_t *dp_regs,
     if (rdp == NULL)
         return 1;
 
-    if (rdp_construct(rdp, rdram, dmem)) {
+    if (rdp_construct(rdp, rdram, rdram_size, hidden, dmem)) {
         free(rdp);
         return 1;
     }
@@ -220,7 +243,12 @@ int rdp_render_init(uint32_t *rdram, uint32_t *dmem, uint32_t *dp_regs,
 
     s_ctx.rdp = rdp;
     s_hidden_plane = rdp->m_hidden_bits;
-    atomic_store(&rdp->m_async_on, 1);
+    /* ares port: synchronous. Every command list drains before the
+     * DPC_END write returns and Sync_Full drains before the DP
+     * interrupt, so RDRAM is settled whenever the CPU or RSP runs and
+     * no fence is needed. RDP_WQ_THREADS=1 keeps the span work on the
+     * emulation thread (rdp_wqueue.c). */
+    atomic_store(&rdp->m_async_on, 0);
     s_ctx.dp_regs = dp_regs;
     s_ctx.dp_interrupt = dp_interrupt;
     s_ctx.opaque = opaque;

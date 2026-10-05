@@ -68,7 +68,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    paths are an A/B for the hardware validation pass and differ in
    observable timing, not in pixels. */
 #ifndef RDP_DP_TIMED
-#define RDP_DP_TIMED 1
+#define RDP_DP_TIMED 0  /* ares port: the DPC front end is ares' (T12 adds time) */
 #endif
 
 // DP register indices, in MMIO address order (0x0410_0000 base, offset >> 2).
@@ -87,7 +87,9 @@ enum rdp_dp_register {
 
 // Initializes the renderer. The host contract above governs the lifetime,
 // size and serialization requirements on these arguments.
-//   rdram:        RDP_RDRAM_SIZE-byte RDRAM block (uint32_t view)
+//   rdram:        RDRAM block of rdram_size bytes (uint32_t view), in
+//                 ares' word-swizzled layout (rdp_core.h)
+//   hidden:       hidden-bit plane, rdram_size / 2 bytes (ares HiddenRAM)
 //   dmem:         RDP_DMEM_SIZE-byte RSP DMEM block (uint32_t view); the
 //                 command source for XBUS transfers
 //   dp_regs:      RDP_NUM_DP_REGISTERS-word DP register array
@@ -95,8 +97,23 @@ enum rdp_dp_register {
 //                 has been flushed to RDRAM
 //   opaque:       passed through to dp_interrupt
 // Returns 0 on success.
-int rdp_render_init(uint32_t *rdram, uint32_t *dmem, uint32_t *dp_regs,
+int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
+  uint32_t *dmem, uint32_t *dp_regs,
   void (*dp_interrupt)(void *opaque), void *opaque);
+
+// Log sink for the renderer's cen64_log calls. Defaults to stderr.
+enum cen64_loglevel {
+  CEN64_LOG_DBG,
+  CEN64_LOG_INF,
+  CEN64_LOG_WRN,
+  CEN64_LOG_ERR,
+  CEN64_LOG_SCR
+};
+void rdp_render_set_log(void (*log)(int level, const char *fmt, ...));
+
+// Pixels rasterized since init (clipped span widths summed over every
+// queued primitive), for the ns/pixel measurement.
+uint64_t rdp_render_pixel_count(void);
 
 // Tears down the renderer and joins its worker threads.
 void rdp_render_destroy(void);

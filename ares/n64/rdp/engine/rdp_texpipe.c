@@ -50,8 +50,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ******************************************************************************/
 
-#include "common/common.h"
-#include "common/endian.h"
+#include "cen64_compat.h"
 #include "rdp_texpipe.h"
 #include "rdp_core.h"
 
