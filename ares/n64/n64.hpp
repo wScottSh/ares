@@ -143,5 +143,6 @@ namespace ares::Nintendo64 {
   #include <n64/memory/bus.hpp>
   #include <n64/mi/bus.hpp>
   #include <n64/pi/bus.hpp>
+  #include <n64/timing/behaviors.hpp>
   #include <n64/timing/verify.hpp>
 }

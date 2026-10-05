@@ -300,8 +300,19 @@ ares_add_sources(
   CORE #
     n64
   INCLUDED #
+    timing/behaviors.hpp
+    timing/behaviors.tsv
     timing/verify.hpp
 )
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_custom_target(
+  n64-timing-gen
+  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/n64-timing/behaviors.py" --check
+  COMMENT "Checking N64 timing behaviors, spec, check manifest and literal lint"
+  VERBATIM
+)
+add_dependencies(ares n64-timing-gen)
 
 ares_add_sources(
   CORE #
