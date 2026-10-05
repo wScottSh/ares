@@ -152,3 +152,26 @@ auto testRi() -> u32 {
   else std::printf("ri-cost-table: ok\n");
   return failures;
 }
+
+//unit:ri-split: a DMA transfer's bursts are at most 128 B and never cross a
+//2 KiB row (n64brew RDRAM_Interface Count, B2, B6). Defects: no row clip, no
+//size cap, a clip one byte off, a short transfer padded to a full burst.
+auto testRiSplit() -> u32 {
+  u32 before = failures;
+  CHECK(split(0x0000, 4096) == 128, "a long aligned transfer bursts 128 B");
+  CHECK(split(0x07c0, 4096) == 64, "a burst stops at the 2 KiB row end");
+  CHECK(split(0x07f8, 4096) == 8, "8 B before the row end");
+  CHECK(split(0x0800, 4096) == 128, "the next row starts a full burst");
+  CHECK(split(0x1234, 40) == 40, "a short transfer is one burst of its own size");
+  CHECK(split(0x07ff, 2) == 1, "the last byte of a row");
+  u32 n = 0, sum = 0;
+  for(u32 address = 0x7f8, left = 4096; left; n++) {
+    u32 b = split(address, left);
+    sum += b; address += b; left -= b;
+  }
+  CHECK(sum == 4096 && n == 33, "4 KiB from 8 B before a row end: 8 B then 32 full bursts");
+  u32 f = failures - before;
+  if(f) std::printf("ri-split: %u failure(s)\n", f);
+  else std::printf("ri-split: ok\n");
+  return f;
+}

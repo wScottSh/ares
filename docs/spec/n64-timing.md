@@ -14,7 +14,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 7 |
 | model-choice | no published value; the reference states why the model chose this one | 15 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 46 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 45 |
 
 ## Behaviors
 
@@ -54,8 +54,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `ri.rank.vi` | 1 rank | model-choice | inference: VI is the only hard real-time client (B4) | `nemu64:timing/load-from-uncached-vi-on-same-bank` |  |
 | `ri.rank.other` | 2 rank | model-choice | none published (B4): all other clients first-come first-served | `nemu64:timing/load-miss-vi-on` |  |
 | `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | **fit only, no independent check:** `bench:sp-dma-sweep` (fit from `bench:sp-dma-sweep`) | verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated |
-| `ri.overhead-write` | 1.7 rclk (20 units, rounded from 20.4) | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
-| `ri.overhead-rdp` | 20 units | model-choice | assumed equal to ri.overhead-write (the 1.7 rclk fit, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
+| `ri.overhead-write` | 1 rclk | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B; the RI decides on rclk edges, so a 128 B write repeats every 17 wire + 1 gap + ceil(overhead) rclk: 1 gives 19, the 1.7 of the unquantized fit gives 20 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
+| `ri.overhead-rdp` | 20 units | model-choice | assumed equal to the unquantized ri.overhead-write fit (1.7 rclk, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
 | `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` |  |
 
 ### cpu
@@ -218,7 +218,6 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma` | replaced by T8: SiDma; per end, skip, reset or padding byte |
 | `legacy.pif.step-quantum` | 40960 pclk | ares/n64/pif/hle.cpp:266 | `stepcap` | no plan unit: the PIF HLE boot-handshake poll period, a timeline event from T5; the CIC handshake has no timing reference |
 | `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:360 | pending (no-corpus) | no plan unit: CIC boot handshake timeout |
-| `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:12 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
 | `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:75 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
 | `legacy.cart.eeprom-write` | 6 ms | ares/n64/cartridge/joybus.cpp:48 | pending (no-corpus) | no plan unit: EEPROM write busy time |
 | `legacy.cart.rtc-tick` | 1 s | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |

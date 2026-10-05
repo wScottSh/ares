@@ -8,6 +8,7 @@ ares_configure_executable(n64-timing-tests)
 set_target_properties(n64-timing-tests PROPERTIES FOLDER tests PREFIX "")
 add_test(NAME unit:timeline COMMAND n64-timing-tests timeline)
 add_test(NAME unit:ri-cost-table COMMAND n64-timing-tests ri-cost-table)
+add_test(NAME unit:ri-split COMMAND n64-timing-tests ri-split)
 
 add_executable(n64-timing-dpc-regs dpc-regs.cpp)
 target_include_directories(n64-timing-dpc-regs PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/ares)

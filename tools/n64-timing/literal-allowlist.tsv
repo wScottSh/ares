@@ -80,8 +80,6 @@ ares/n64/rdram/rdram.cpp	power	chip.delay = 0x0000'0023;  //WriteDelay=4, WriteB
 ares/n64/rdram/rdram.cpp	power	chip.writeDelay = 4;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	writeRegister	chip.delay = data & 0x3838'1838;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	writeRegister	chip.writeDelay = chip.delay >> 3 & 7;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
-ares/n64/rsp/dma.cpp	dmaTransferStart	dmaQueue(rclk((dma.current.length+8) / 8), thread);	legacy.rsp.dma-bytes-per-rclk	
-ares/n64/rsp/dma.cpp	dmaTransferStep	dmaQueue(rclk((dma.current.length+8) / 8), *this);	legacy.rsp.dma-bytes-per-rclk	
 ares/n64/si/io.cpp	writeWord	scheduleAfter(EventKind::SI_BUS_Write, rclk(2150));	legacy.si.bus-write	
 ares/n64/si/io.cpp	ioWrite	scheduleAfter(EventKind::SI_DMA_Write, rclk(4065));	legacy.si.dma-write64	
 ares/n64/system/system.cpp	load	information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};	legacy.clock.vclk-pal	

@@ -32,7 +32,7 @@ auto RSP::ioRead(u32 address, Thread &thread) -> u32 {
     //SP_STATUS
     data.bit( 0) = status.halted;
     data.bit( 1) = status.broken;
-    data.bit( 2) = dma.busy.any();
+    data.bit( 2) = dma.busyAt(thread.clock);
     data.bit( 3) = dma.full.any();
     data.bit( 4) = status.full;
     data.bit( 5) = status.singleStep;
@@ -54,7 +54,7 @@ auto RSP::ioRead(u32 address, Thread &thread) -> u32 {
 
   if(address == 6) {
     //SP_DMA_BUSY
-    data.bit(0) = dma.busy.any();
+    data.bit(0) = dma.busyAt(thread.clock);
   }
 
   if(address == 7) {

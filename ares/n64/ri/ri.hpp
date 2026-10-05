@@ -1,7 +1,5 @@
 //RDRAM Interface
 
-#include <n64/ri/bus.hpp>
-
 //The RI registers, and the RDRAM channel as the timeline's Bus actor: the one
 //owner of RDRAM bytes and RDRAM time among hardware clients (ADR 0001 Decision 2).
 //Clients post bursts; at each grant the RI moves the burst's bytes between
@@ -10,12 +8,7 @@
 struct RI : Memory::RCP<RI>, Timing::Actor {
   Node::Object node;
 
-  struct Client {
-    //The buffer for burst `tag`, asked for at grant time. Reads fill it, writes drain it.
-    virtual auto buffer(const RiBus::Burst&) -> void* = 0;
-    //The bytes have moved. A client may post its next burst from here.
-    virtual auto granted(const RiBus::Grant&) -> void = 0;
-  };
+  using Client = RiBus::Client;
 
   struct Debugger {
     //debugger.cpp
@@ -43,6 +36,7 @@ struct RI : Memory::RCP<RI>, Timing::Actor {
   auto attach(RiBus::Requester, Client*) -> void;
   auto post(const RiBus::Burst&, Clock at) -> void;
   auto refresh(Clock at) -> void;
+  auto move(const RiBus::Burst&, u8* data) -> void;
   //Posts the burst and, when horizon() proves no other actor can act before
   //its decision, grants it at once. Else the timeline grants it later.
   auto postAndDecide(const RiBus::Burst&, Clock at) -> bool;
