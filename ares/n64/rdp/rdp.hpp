@@ -72,6 +72,23 @@ struct RDP : Thread, Memory::RCP<RDP> {
   //serialization.cpp
   auto serialize(serializer&) -> void;
 
+  //engine.cpp
+  struct Engine {
+    auto load() -> void;
+    auto unload() -> void;
+    auto render() -> void;
+    auto dpsArm() -> void;
+    auto dpsTake(u32 words[32]) -> bool;
+    auto pixels() -> u64;
+
+    bool enable = false;
+    bool loaded = false;
+    u32  regs[8] = {};
+    //host time spent inside render(); measurement only, never fed back into emulation
+    u64  renderNanoseconds = 0;
+    u64  renderCalls = 0;
+  } engine;
+
   struct Command {
     n24 start;
     n24 end;

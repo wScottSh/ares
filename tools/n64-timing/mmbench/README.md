@@ -17,8 +17,9 @@ The script builds `n64-run` with `../build.sh`, then runs `mmbench.py`. Pass the
 | `--out DIR` | Result directory. Default `$N64_TIMING_HOME/mmbench/results/latest`. |
 | `--scenes LIST` | Comma-separated subset of `filesel,sct,field,title`. |
 | `--jobs N` | Parallel runs. Default one per scene. |
-| `--check-determinism` | Runs the bench twice into `DIR/run1` and `DIR/run2` and fails unless every output except `wall.tsv` is byte-identical. |
-| `--shots` | Renders with paraLLEl-RDP and saves `start.ppm` and `end.ppm` per scene. Use it only to check the scenes visually. |
+| `--check-determinism` | Runs the bench twice into `DIR/run1` and `DIR/run2` and fails unless every output except `wall.tsv` and `rdp.txt` is byte-identical. `--shots` makes `script.txt` differ too (the shot paths name the run directory), so do not combine the two. |
+| `--rdp none\|vulkan\|soft` | RDP rasterizer passed to `n64-run`. Default `none`. With `soft` each scene also writes `rdp.txt`, the runner's `rdp_soft` line (render calls, render time, pixels, ns per pixel). |
+| `--shots` | Saves `start.ppm` and `end.ppm` per scene from the RDRAM image the VI samples (`vulkan` when `--rdp` is not given). Use it only to check the scenes visually. |
 
 The bench accepts only the NTSC-U 1.0 ROM (MD5 `2a0a8acb61538235bc1094d297fb6556` after conversion to big-endian `.z64`, as listed in zeldaret/mm `baseroms/n64-us/checksum-compressed.md5`). `.z64`, `.v64`, and `.n64` byte orders are accepted.
 
@@ -45,12 +46,12 @@ The bench runs with `--rdp none`, so no pixels are drawn. The four scenes do not
 
 ## Output
 
-Every file except `wall.tsv` is deterministic.
+Every file except `wall.tsv` and `rdp.txt` (host time) is deterministic.
 
 | File | Contents |
 |---|---|
-| `summary.txt`, `summary.tsv` | One row per scene: complete game frames in the window, mean fields per game frame, the distribution of game-frame lengths (1 to 5 fields, and 6 or more), mean RSP busy clocks per field, and two counters read from the game (see below). |
-| `fields.tsv` | One row per window field: `field` (0 to 599), absolute `frame`, `origin`, the per-field deltas of `cpu_cycles` and `rsp_busy_clocks`, `dpc_start`, `dpc_end`, `cimg`, and `zimg`. |
+| `summary.txt`, `summary.tsv` | One row per scene: complete game frames in the window, mean fields per game frame, the distribution of game-frame lengths (1 to 5 fields, and 6 or more), mean RSP busy clocks per field, the pixels the software engine rasterized in the window (`rdp_pixels_window`, 0 unless `--rdp soft`), and two counters read from the game (see below). |
+| `fields.tsv` | One row per window field: `field` (0 to 599), absolute `frame`, `origin`, the per-field deltas of `cpu_cycles` and `rsp_busy_clocks`, `dpc_start`, `dpc_end`, `cimg`, `zimg`, and the per-field delta of `rdp_pixels` (0 unless `--rdp soft`). |
 | `gframes.tsv` | One row per complete game frame: first window field, length in fields, and CPU and RSP clocks over those fields. |
 | `buffer-confirmation.tsv` | The run-time confirmation from `docs/research/mm-buffer-placement.md` (#23), read in the `sct` window: expected and found values with a verdict. |
 | `wall.tsv` | Host wall time, total and per scene. |

@@ -1,0 +1,72 @@
+# cen64-jgemu pixel engine
+
+Software RDP rasterizer for the N64 core, ported from the cen64 jgemu fork
+(`src/rdp` at commit `2f8d7bcdfa01814d4e296cdc4596bad5b04a4692`). MAME
+lineage (Ryan Holtz and others), translated to C11 and fitted to snapper64
+console captures by Rupert Carmichael. BSD-3-Clause; the notices stay in
+every file, `LICENSE.cen64` and `LICENSES.cen64` are the fork's license
+files, and the top-level `LICENSE` carries the block.
+
+The engine runs on the emulation thread and renders a whole command range
+inside the `DPC_END` write (`RDP::Engine::render` in `../engine.cpp`).
+Build flags: `RDP_WQ_THREADS=1` (no worker threads; the span queue drains
+on the caller) and `RDP_DP_TIMED=0` (ares owns the DPC front end). The
+`Software RDP` system option enables it; `n64-run --rdp soft` sets that.
+
+## Files dropped from the fork
+
+- `cpu.c`, `cpu.h`, `interface.c`, `interface.h`: the cen64 bus glue
+  (DPC and DPS register block, timed DPC engine, RDRAM fences). ares has
+  its own register block in `../io.cpp`.
+- `common/*`: replaced by `cen64_compat.h`.
+
+## Changes from the verbatim import
+
+The first commit of this directory is the unmodified copy; `git diff`
+against it shows every change. In summary:
+
+- `cen64_compat.h` stands in for `common/common.h`, `common/debug.h`
+  and `common/endian.h` (little-endian host only).
+- RDRAM accessors (`rdp_core.h`): ares stores RDRAM and DMEM as native
+  32-bit words with the bytes of each word swizzled (byte address `^ 3`,
+  halfword index `^ 1`), the layout the MAME RDP was written for, so the
+  `RREAD*`/`RWRITE*` macros index that way with no byteswap. Range checks
+  use the installed RDRAM size passed to `rdp_render_init` instead of the
+  8 MB constant (ares allocates 4 MB without the Expansion Pak).
+- Hidden bits: `m_hidden_bits` is a pointer to ares' `HiddenRAM` plane
+  (one byte per 16-bit word, bit 1 even byte, bit 0 odd byte, no swizzle)
+  instead of an 8 MB array inside the renderer, so CPU and DMA writes and
+  RDP writes maintain one plane. Direct `m_hidden_bits[... ^ XOR]` uses
+  became `HREADADDR8`/`HWRITEADDR8`.
+- `rdp_read_data`: command fetch is two native word reads (no byteswap,
+  no atomic doubleword load; the renderer is single-threaded here).
+- `rdp_z_store` and the fill-rect stale-read restore use the accessor
+  macros instead of casting `m_rdram`.
+- `rdp.c`: `rdp_render_init` takes the RDRAM size and hidden plane;
+  `m_async_on` is 0 (synchronous: each list and each Sync_Full drain
+  before returning, so no fence is needed); `cen64_log` is defined here
+  with `rdp_render_set_log`; `rdp_render_pixel_count` exposes the pixel
+  counter added in `rdp_occ_accumulate`.
+- `rdp.h`: `RDP_DP_TIMED` defaults to 0; `enum cen64_loglevel` lives here.
+
+## RDRAM touch sites (for the timing-core memory interface, plan unit T13)
+
+Every place the renderer reads or writes RDRAM or the hidden plane goes
+through the `RREAD*`, `RWRITE*`, `HREADADDR8` and `HWRITEADDR8` macros in
+`rdp_core.h`, plus `m_dmem[]` for XBUS command fetch. The functions, all
+in `rdp_core.c`, with the macro-call line numbers at this commit:
+
+| Function | Role | Lines |
+|---|---|---|
+| `rdp_read_data` | command fetch from RDRAM or DMEM (cen64's `read_rdram_pair` equivalent; the port has no bus) | 1357, 1363 |
+| `rdp_z_store` | Z write and dz hidden bits | 1129-1130 |
+| `rdp_z_decompress`, `rdp_dz_decompress`, `rdp_z_compare` | Z and dz reads | 1153, 1157-1158, 1228-1229 |
+| `rdp_read_pixel8`, `rdp_read_pixel16`, `rdp_read_pixel32` | color image read (image_read_en); `rdp_read_pixel4` reads nothing | 5853, 5859, 5885, 5899 |
+| `rdp_write_pixel4/8/16/32` | 1-cycle and 2-cycle color write with hidden coverage | 5719, 5740-5742, 5781-5789, 5810-5824 |
+| `rdp_copy_pixel4/8/16/32` | copy-mode color write | 5925-5950 |
+| `rdp_span_draw_fill`, `fill_write_word` | fill-mode writes (8/16/32 bpp runs and the byte-enabled burst law) | 7085-7086, 7312-7393 |
+| `rdp_cmd_load_tlut`, `rdp_cmd_load_block`, `rdp_cmd_load_tile` | TMEM load source reads | 4118, 4229-4333, 4421-4483 |
+| `rdp_fill_rect_stale_read` | rect pre-state capture and restore | 4608-4609, 4646 |
+
+`rdp_texpipe.c` touches TMEM only. The hidden plane is also read by
+`rdp_hidden_read_row` in `rdp.c` (VI support, unused by ares).
