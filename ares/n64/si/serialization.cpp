@@ -10,4 +10,9 @@ auto SI::serialize(serializer& s) -> void {
   s(io.dmaState);
   s(io.dmaError);
   s(io.interrupt);
+
+  s((u8&)dma.phase);
+  s(dma.toRdram);
+  s(dma.offset);
+  s(dma.block);
 }

@@ -13,8 +13,8 @@ auto fireEvent(const Timing::Timeline::Event& event) -> void {
   case EventKind::PI_DMA_Read:       return pi.dmaStep();
   case EventKind::PI_DMA_Write:      return pi.dmaStep();
   case EventKind::PI_BUS_Write:      return pi.writeFinished();
-  case EventKind::SI_DMA_Read:       return si.dmaRead();
-  case EventKind::SI_DMA_Write:      return si.dmaWrite();
+  case EventKind::SI_DMA_Read:       return si.dmaStep();
+  case EventKind::SI_DMA_Write:      return si.dmaStep();
   case EventKind::SI_BUS_Write:      return si.writeFinished();
   case EventKind::RTC_Tick:          return cartridge.rtc.tick();
   case EventKind::EEPROM_Write:      return cartridge.eepromFinish();

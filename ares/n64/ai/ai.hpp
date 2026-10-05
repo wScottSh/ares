@@ -18,7 +18,13 @@ struct AI : Thread, Memory::RCP<AI> {
   auto load(Node::Object) -> void;
   auto unload() -> void;
   auto sampleEvent() -> void;
-  auto sample() -> void;
+  auto sample() -> bool;
+
+  struct Fetch : RiBus::Client {
+    u8 bytes[8];
+    auto buffer(const RiBus::Burst&) -> void* override;
+    auto granted(const RiBus::Grant&) -> void override;
+  } fetch;
   auto power(bool reset) -> void;
   auto updateDecay() -> void;
 

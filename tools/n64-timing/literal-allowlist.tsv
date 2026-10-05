@@ -77,7 +77,6 @@ ares/n64/rdram/rdram.cpp	power	chip.writeDelay = 4;	-	RDRAM Delay register reset
 ares/n64/rdram/rdram.cpp	writeRegister	chip.delay = data & 0x3838'1838;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	writeRegister	chip.writeDelay = chip.delay >> 3 & 7;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/si/io.cpp	writeWord	scheduleAfter(EventKind::SI_BUS_Write, rclk(2150));	legacy.si.bus-write	
-ares/n64/si/io.cpp	ioWrite	scheduleAfter(EventKind::SI_DMA_Write, rclk(4065));	legacy.si.dma-write64	
 ares/n64/system/system.cpp	load	information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};	legacy.clock.vclk-pal	
 ares/n64/vi/vi.cpp	line	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
 ares/n64/vi/vi.cpp	line	step(0x800);	-	host liveness while the VI is disabled: the idle VI posts a line event every 0x800 VCLKs so the frame loop returns; it charges nothing and no register sees it

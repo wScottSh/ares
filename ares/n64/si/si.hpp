@@ -19,12 +19,24 @@ struct SI : Memory::RCP<SI> {
   auto power(bool reset) -> void;
 
   //dma.cpp
-  auto dmaRead() -> void;
-  auto dmaWrite() -> void;
+  struct DMA : RiBus::Client {
+    enum class Phase : u8 { Idle, Joybus, Posted, Landed, Due };
+    Phase phase = Phase::Idle;
+    n1  toRdram;   //READ64B: PIF RAM to RDRAM
+    u32 offset = 0;  //bytes of the 64 already granted
+    u8  block[64];
+
+    auto buffer(const RiBus::Burst&) -> void* override;
+    auto granted(const RiBus::Grant&) -> void override;
+  } dma;
+
+  auto dmaPost(Clock at) -> void;
+  auto dmaStep() -> void;
+  auto dmaFinish() -> void;
 
   //io.cpp
   auto ioRead(u32 address) -> u32;
-  auto ioWrite(u32 address, u32 data) -> void;
+  auto ioWrite(u32 address, u32 data, Thread& thread) -> void;
   auto readWord(u32 address, Thread& thread) -> u32;
   auto writeWord(u32 address, u32 data, Thread& thread) -> void;
   auto writeFinished() -> void;
