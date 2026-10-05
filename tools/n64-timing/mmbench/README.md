@@ -18,7 +18,7 @@ The script builds `n64-run` with `../build.sh`, then runs `mmbench.py`. Pass the
 | `--scenes LIST` | Comma-separated subset of `filesel,sct,field,title`. |
 | `--cpu interpreter\|recompiler` | CPU and RSP mode. Default `interpreter`. |
 | `--jobs N` | Parallel runs. Default one per scene. |
-| `--check-determinism` | Runs the bench twice into `DIR/run1` and `DIR/run2` and fails unless every output except `wall.tsv` is byte-identical. |
+| `--check-determinism` | Runs the bench twice into `DIR/run1` and `DIR/run2` and fails unless every output except `wall.tsv` and `rdp.txt` is byte-identical. `--shots` makes `script.txt` differ too (the shot paths name the run directory), so do not combine the two. |
 | `--rdp none\|vulkan\|soft` | RDP rasterizer passed to `n64-run`. Default `none`. With `soft` each scene also writes `rdp.txt`, the runner's `rdp_soft` line (render calls, render time, pixels, ns per pixel). |
 | `--shots` | Saves `start.ppm` and `end.ppm` per scene from the RDRAM image the VI samples (`vulkan` when `--rdp` is not given). Use it only to check the scenes visually. |
 
@@ -47,7 +47,7 @@ The bench runs with `--rdp none`, so no pixels are drawn. The four scenes do not
 
 ## Output
 
-Every file except `wall.tsv` is deterministic.
+Every file except `wall.tsv` and `rdp.txt` (host time) is deterministic.
 
 | File | Contents |
 |---|---|

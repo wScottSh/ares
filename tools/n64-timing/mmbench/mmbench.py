@@ -364,7 +364,7 @@ def bench(args, out):
 
 def identical_trees(a, b):
     def listing(root):
-        return {p.relative_to(root) for p in root.rglob("*") if p.is_file() and p.name != "wall.tsv"}
+        return {p.relative_to(root) for p in root.rglob("*") if p.is_file() and p.name not in ("wall.tsv", "rdp.txt")}
     files = sorted(listing(a) | listing(b))
     differing = [f for f in files
                  if not (a / f).is_file() or not (b / f).is_file() or (a / f).read_bytes() != (b / f).read_bytes()]
