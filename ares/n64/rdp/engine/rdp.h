@@ -193,6 +193,22 @@ int  rdp_render_dps_take(uint32_t words[32]);
 struct rdp_t *rdp_render_instance(void);
 void rdp_render_quiesce(void);
 
+/* ares port: save states. Visits every piece of renderer state that
+ * outlives a command list (modes, colors, tiles, scissor, TMEM, a
+ * trailing partial command, the noise counter, the stale-read and DPS
+ * models) in a fixed order, passing each block to io. With loading set,
+ * io fills the blocks and TMEM lands in pool slot zero. Both return
+ * paths of rdp_process_list publish the held hazard primitives and drain
+ * the span queue, so neither holds state between lists. */
+typedef void (*rdp_state_io)(void *ctx, void *data, size_t size);
+void rdp_render_serialize(rdp_state_io io, void *ctx, int loading);
+
+/* ares port: the last Set_Color_Image and Set_Mask_Image addresses, and
+ * the 4 KB TMEM image the next primitive samples. */
+uint32_t rdp_render_color_image(void);
+uint32_t rdp_render_mask_image(void);
+uint8_t *rdp_render_tmem(void);
+
 // Processes the command list delimited by DPC_CURRENT_REG..DPC_END_REG,
 // in full at the call. Untimed path; not used when the engine is active.
 void rdp_process_list(void);

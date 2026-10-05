@@ -197,7 +197,8 @@ auto RDP::flushCommands() -> void {
       debug(unusual, "[RDP] started while RDRAM DeviceId map is non-identity");
       mapIdentityWarned = 1;
     }
-    render();
+    debugger.commands();
+    engine.render();
   }
   command.bufferBusy = 0;
   command.ready = 1;

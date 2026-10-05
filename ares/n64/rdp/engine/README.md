@@ -7,11 +7,13 @@ console captures by Rupert Carmichael. BSD-3-Clause; the notices stay in
 every file, `LICENSE.cen64` and `LICENSES.cen64` are the fork's license
 files, and the top-level `LICENSE` carries the block.
 
-The engine runs on the emulation thread and renders a whole command range
-inside the `DPC_END` write (`RDP::Engine::render` in `../engine.cpp`).
-Build flags: `RDP_WQ_THREADS=1` (no worker threads; the span queue drains
-on the caller) and `RDP_DP_TIMED=0` (ares owns the DPC front end). The
-`Software RDP` system option enables it; `n64-run --rdp soft` sets that.
+The engine is the N64 core's only rasterizer. It runs on the emulation
+thread and renders a whole command range inside the `DPC_END` write
+(`RDP::Engine::render` in `../engine.cpp`). Build flags:
+`RDP_WQ_THREADS=1` (no worker threads; the span queue drains on the
+caller) and `RDP_DP_TIMED=0` (ares owns the DPC front end). `RDP::power`
+attaches it to `rdram.ram`, `rdram.hidden` (owned by `RDRAM`) and
+`rsp.dmem`.
 
 ## Files dropped from the fork
 
@@ -48,6 +50,17 @@ against it shows every change. In summary:
   with `rdp_render_set_log`; `rdp_render_pixel_count` exposes the pixel
   counter added in `rdp_occ_accumulate`.
 - `rdp.h`: `RDP_DP_TIMED` defaults to 0; `enum cen64_loglevel` lives here.
+- Save states: `rdp_render_serialize` (`rdp.c`) visits the renderer state
+  that outlives a command list, after the field list of the fork's
+  `src/device/state.c` `ss_render`; `../serialization.cpp` calls it.
+  `rdp_render_color_image` and `rdp_render_mask_image` expose the last
+  image addresses.
+- `rdp_process_command_list` publishes both held hazard primitives before
+  the drain, on the end-of-list path and on the trailing-partial-command
+  path. The fork published the 1-/2-cycle one after the drain at list end
+  and neither at a partial command, which left queued spans or a held
+  primitive across calls. Over the four Majora's Mask bench scenes the
+  stats, `fb_hash` included, are identical either way.
 
 ## RDRAM touch sites (for the timing-core memory interface, plan unit T13)
 

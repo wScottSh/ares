@@ -21,20 +21,6 @@ namespace N64 = ares::Nintendo64;
 
 namespace {
 
-//None: no RDP rasterizer runs; RDRAM holds only what the CPU and RSP write.
-//Vulkan: paraLLEl-RDP on the host GPU, the same renderer the desktop build uses.
-//Soft: the cen64-jgemu pixel engine on the emulation thread (ares/n64/rdp/engine).
-enum class RdpMode { None, Vulkan, Soft };
-
-constexpr auto rdpModeName(RdpMode mode) -> const char* {
-  switch(mode) {
-  case RdpMode::None:   return "none";
-  case RdpMode::Vulkan: return "vulkan";
-  case RdpMode::Soft:   return "soft";
-  }
-  return "unknown";
-}
-
 struct FrameDump {
   u64 frame;
   string path;
@@ -63,7 +49,6 @@ struct Options {
   u64 frames = 0;
   double emulatedSeconds = 0;
   double wallSeconds = 0;
-  RdpMode rdp = RdpMode::None;
   string statsPath;
   u32 controllers = 1;
   std::vector<FrameDump> dumps;
@@ -95,8 +80,6 @@ auto usage() -> void {
     "  --frames N          stop after N VI fields (0 = no limit)\n"
     "  --emulated-seconds S  stop after S seconds of emulated CPU time (0 = no limit)\n"
     "  --wall-seconds S    stop after S seconds of host wall time (0 = no limit)\n"
-    "  --rdp none|vulkan|soft  RDP rasterizer: none, paraLLEl-RDP on the host GPU, or the\n"
-    "                      cen64-jgemu engine on the emulation thread (default none)\n"
     "  --stats FILE        write one TSV line per VI field to FILE\n"
     "  --dump-frame N FILE write the RDRAM image the VI samples at field N as a P6 PPM\n"
     "                      (640x480; repeatable)\n"
@@ -120,13 +103,6 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--stats") options.statsPath = value();
     else if(arg == "--script") options.scriptPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
-    else if(arg == "--rdp") {
-      auto mode = value();
-      if(mode == "none") options.rdp = RdpMode::None;
-      else if(mode == "vulkan") options.rdp = RdpMode::Vulkan;
-      else if(mode == "soft") options.rdp = RdpMode::Soft;
-      else return nothing;
-    }
     else if(arg == "--dump-frame") {
       FrameDump dump;
       dump.frame = value().natural();
@@ -231,34 +207,6 @@ auto dumpFramebuffer(const string& path) -> bool {
   return true;
 }
 
-//Hashes paraLLEl-RDP's VI scanout for this field and releases the readback buffer.
-//VI::refresh normally does the release on the screen thread, which run-ahead disables;
-//without it the next field's scanout waits forever.
-//If shotPath is set, also writes the scanout to it as a binary PPM.
-auto vulkanScanoutHash(const string& shotPath) -> u64 {
-  if(!N64::vi.gpuOutputValid) return 0;
-  N64::vi.gpuOutputValid = false;
-  const u8* rgba = nullptr;
-  u32 width = 0, height = 0;
-  N64::vulkan.mapScanoutRead(rgba, width, height);
-  Fnv1a fnv;
-  fnv.mix(width);
-  fnv.mix(height);
-  if(rgba) {
-    for(u32 i : range(width * height)) fnv.mix(memory::readl<4>(rgba + i * 4) & 0xffffff);
-  }
-  if(rgba && shotPath) {
-    if(auto fp = std::fopen(shotPath.data(), "wb")) {
-      std::fprintf(fp, "P6\n%u %u\n255\n", width, height);
-      for(u32 i : range(width * height)) std::fwrite(rgba + i * 4, 1, 3, fp);
-      std::fclose(fp);
-    }
-  }
-  N64::vulkan.unmapScanoutRead();
-  N64::vulkan.endScanout();
-  return fnv.hash;
-}
-
 auto sample(u64 frame, u64 fbHash) -> FrameStats {
   return {
     frame,
@@ -270,8 +218,8 @@ auto sample(u64 frame, u64 fbHash) -> FrameStats {
     N64::rsp.profile.cycles - N64::rsp.profile.haltedCycles,
     (u32)N64::rdp.command.start,
     (u32)N64::rdp.command.end,
-    (u32)N64::rdp.set.color.dramAddress,
-    (u32)N64::rdp.set.mask.dramAddress,
+    N64::rdp.engine.colorImage(),
+    N64::rdp.engine.maskImage(),
     N64::rdp.engine.pixels(),
     N64::traceHash.fieldBoundary(),
   };
@@ -354,6 +302,7 @@ struct ScriptRunner {
   script::Pad pad;
   string shotPath;
   bool stopRequested = false;
+  ares::Node::System* root = nullptr;
 
   auto log(const char* verb, const string& name, u64 frame, const string& detail = "") -> void {
     std::fprintf(stderr, "n64-run: %s %.*s frame=%llu%s%.*s\n", verb, (int)name.size(), name.data(),
@@ -428,6 +377,31 @@ struct ScriptRunner {
     return true;
   }
 
+  auto execute(const script::SaveState& step, u64 frame) -> bool {
+    auto state = (*root)->serialize(true);
+    if(!file::write(step.path, {state.data(), state.size()})) log("save-state-failed", "-", frame);
+    return true;
+  }
+
+  //The trace hash chain and the RSP profile belong to the run, not to the machine (the load
+  //powers the core, which resets the profile), so they carry across the load: a
+  //save-then-load round trip then compares column for column with a plain run.
+  auto execute(const script::LoadState& step, u64 frame) -> bool {
+    auto data = file::read(step.path);
+    serializer state{data.data(), (u32)data.size()};
+    auto rolling = N64::traceHash.rolling;
+    auto rspProfile = N64::rsp.profile;
+    if(data.empty() || !(*root)->unserialize(state)) log("load-state-failed", "-", frame);
+    N64::traceHash.rolling = rolling;
+    N64::rsp.profile = rspProfile;
+    return true;
+  }
+
+  auto execute(const script::PokeTmem& step, u64) -> bool {
+    N64::rdp.engine.tmem()[step.offset] = step.value;
+    return true;
+  }
+
   auto execute(const script::Stop&, u64) -> bool {
     stopRequested = true;
     return true;
@@ -479,6 +453,8 @@ auto nall::main(Arguments arguments) -> void {
   auto options = *parsed;
 
   ScriptRunner runner;
+  ares::Node::System root;
+  runner.root = &root;
   if(options.scriptPath) {
     if(!file::exists(options.scriptPath)) {
       std::fprintf(stderr, "n64-run: cannot read script %s\n", options.scriptPath.data());
@@ -521,14 +497,9 @@ auto nall::main(Arguments arguments) -> void {
     std::_Exit(1);
   }
 
-  N64::option("Enable GPU acceleration", options.rdp == RdpMode::Vulkan ? "true" : "false");
-  N64::option("Software RDP", options.rdp == RdpMode::Soft ? "true" : "false");
-  N64::option("Quality", "SD");
-  N64::option("Supersampling", "false");
   N64::option("Homebrew Mode", "true");
   N64::option("Expansion Pak", "true");
 
-  ares::Node::System root;
   if(!N64::load(root, "[Nintendo] Nintendo 64 (NTSC)")) {
     std::fprintf(stderr, "n64-run: failed to load N64 system\n");
     std::_Exit(1);
@@ -566,11 +537,7 @@ auto nall::main(Arguments arguments) -> void {
   while(true) {
     root->run();
     u64 fbHash = 0;
-    if(N64::vulkan.enable) {
-      fbHash = vulkanScanoutHash(runner.shotPath);
-      runner.shotPath = {};
-    }
-    else if(N64::vi.active()) {
+    if(N64::vi.active()) {
       if(stats) fbHash = rdramFramebufferHash();
       if(runner.shotPath && !dumpFramebuffer(runner.shotPath)) std::fprintf(stderr, "n64-run: cannot write %s\n", runner.shotPath.data());
       runner.shotPath = {};
@@ -601,16 +568,14 @@ auto nall::main(Arguments arguments) -> void {
   stats.close();
   std::fflush(platform.output);
   std::fflush(stdout);
-  std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f rdp=%s\n",
-    info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed(), rdpModeName(options.rdp));
-  if(options.rdp == RdpMode::Soft) {
-    //host time inside the engine's render calls and the pixels it rasterized (ADR 0001 risk 1)
-    auto& engine = N64::rdp.engine;
-    std::fprintf(stderr, "n64-run: rdp_soft render_calls=%llu render_ms=%.3f pixels=%llu ns_per_pixel=%.2f\n",
-      (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
-      (unsigned long long)engine.pixels(),
-      engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
-  }
+  std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f\n",
+    info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed());
+  //host time inside the engine's render calls and the pixels it rasterized (ADR 0001 risk 1)
+  auto& engine = N64::rdp.engine;
+  std::fprintf(stderr, "n64-run: rdp_engine render_calls=%llu render_ms=%.3f pixels=%llu ns_per_pixel=%.2f\n",
+    (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
+    (unsigned long long)engine.pixels(),
+    engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);

@@ -5123,6 +5123,11 @@ void rdp_process_command_list(rdp_t *rdp)
                     // Partial command: keep it buffered for the
                     // next DPC_END write. CURRENT still advances.
                     rdp->m_current = rdp->m_end & 0xffffff;
+                    /* ares port: the stream has run dry here as well,
+                     * so the held hazard primitives publish as at the
+                     * end of a list (below). */
+                    rdp_fill_haz_publish(rdp);
+                    rdp_haz_publish(rdp);
                     /* Commands already executed in this call may have
                      * queued primitives; the caller (frontend or test
                      * tool) may read RDRAM once we return. Async mode
@@ -5172,11 +5177,14 @@ void rdp_process_command_list(rdp_t *rdp)
      * later write can reach the held primitive. Ahead of the drain, so the
      * published spans are queued before it flushes them. */
     rdp_fill_haz_publish(rdp);
+    /* ares port: published ahead of the drain too, so RDRAM is settled
+     * and no queued span outlives the call; rdp_render_serialize relies
+     * on that. */
+    rdp_haz_publish(rdp);
 
     if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
         rdp_pipeline_drain(rdp);
 
-    rdp_haz_publish(rdp);
     rdp->m_status |= DP_STATUS_CBUF_READY;
 }
 

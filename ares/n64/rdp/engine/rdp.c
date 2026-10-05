@@ -363,3 +363,83 @@ void rdp_process_list(void)
     set = status_out & ~status_in;
     regs[RDP_DPC_STATUS_REG] = (regs[RDP_DPC_STATUS_REG] & ~cleared) | set;
 }
+
+uint32_t rdp_render_color_image(void)
+{
+    return s_ctx.rdp != NULL ? s_ctx.rdp->m_misc_state.m_fb_address : 0;
+}
+
+uint32_t rdp_render_mask_image(void)
+{
+    return s_ctx.rdp != NULL ? s_ctx.rdp->m_misc_state.m_zb_address : 0;
+}
+
+uint8_t *rdp_render_tmem(void)
+{
+    return s_ctx.rdp != NULL ? s_ctx.rdp->m_tmem : NULL;
+}
+
+/* Field list after cen64-jgemu src/device/state.c ss_render (same commit as
+ * the import). Differences: whole structs travel as blocks, so the scissor
+ * fractions upstream drops survive; the hidden plane is ares' and travels
+ * with RDRAM; only the live prefix of the command accumulator travels; the
+ * ares pixel counter is included. */
+void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
+{
+    rdp_t *rdp = s_ctx.rdp;
+
+    if (rdp == NULL)
+        return;
+
+#define RDP_STATE(field) io(ctx, &rdp->field, sizeof(rdp->field))
+    RDP_STATE(m_misc_state);
+    RDP_STATE(m_blend_color);
+    RDP_STATE(m_prim_color);
+    RDP_STATE(m_prim_alpha);
+    RDP_STATE(m_env_color);
+    RDP_STATE(m_env_alpha);
+    RDP_STATE(m_fog_color);
+    RDP_STATE(m_key_scale);
+    RDP_STATE(m_key_center);
+    RDP_STATE(m_key_width);
+    RDP_STATE(m_lod_fraction);
+    RDP_STATE(m_prim_lod_fraction);
+    RDP_STATE(m_k02);
+    RDP_STATE(m_k13);
+    RDP_STATE(m_k4);
+    RDP_STATE(m_k5);
+    RDP_STATE(m_fill_color);
+    RDP_STATE(m_other_modes);
+    RDP_STATE(m_combine);
+    RDP_STATE(m_tiles);
+    RDP_STATE(m_scissor);
+    RDP_STATE(m_span_base);
+    RDP_STATE(m_aux_buf_ptr);
+    RDP_STATE(m_pipeline_crashed);
+    RDP_STATE(m_occ_cycles);
+    RDP_STATE(m_primitive_counter);
+    RDP_STATE(m_pixels);
+    RDP_STATE(m_rect_stale);
+    RDP_STATE(m_pipe_clean);
+    RDP_STATE(m_start);
+    RDP_STATE(m_end);
+    RDP_STATE(m_current);
+    RDP_STATE(m_status);
+
+    RDP_STATE(m_cmd_cur);
+    RDP_STATE(m_cmd_ptr);
+    if (loading && (rdp->m_cmd_ptr > CMD_DATA_WORDS || rdp->m_cmd_cur > rdp->m_cmd_ptr))
+        rdp->m_cmd_ptr = rdp->m_cmd_cur = 0;
+    io(ctx, rdp->m_cmd_data, rdp->m_cmd_ptr * sizeof(rdp->m_cmd_data[0]));
+
+    /* The setup-transient row scratch from nrows on is dead between
+     * primitives. */
+    io(ctx, &rdp->m_dps, offsetof(rdp_dps_model_t, nrows));
+
+    if (loading) {
+        rdp->m_tmem = rdp->m_tmem_pool;
+        rdp->m_tmem_cows = 0;
+    }
+    io(ctx, rdp->m_tmem, 0x1000);
+#undef RDP_STATE
+}

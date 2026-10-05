@@ -31,7 +31,6 @@ GENERATED = "ares/n64/timing/behaviors.hpp"
 SCAN_ROOT = "ares/n64"
 #Not part of the target console (map #1: NTSC retail NUS-001 with Expansion Pak).
 OUT_OF_SCOPE = {
-    "ares/n64/vulkan/parallel-rdp/": "vendored paraLLEl-RDP, deleted by plan T10",
     "ares/n64/dd/": "64DD add-on drive",
     "ares/n64/aleck64/": "Aleck 64 arcade board",
 }

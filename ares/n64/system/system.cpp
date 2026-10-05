@@ -23,18 +23,6 @@ auto load(Node::System& node, string name) -> bool {
 }
 
 auto option(string name, string value) -> bool {
-  #if defined(VULKAN)
-  if(name == "Enable GPU acceleration") vulkan.enable = value.boolean();
-  if(name == "Software RDP") rdp.engine.enable = value.boolean();
-  if(name == "Quality" && value == "SD" ) vulkan.internalUpscale = 1;
-  if(name == "Quality" && value == "HD" ) vulkan.internalUpscale = 2;
-  if(name == "Quality" && value == "UHD") vulkan.internalUpscale = 4;
-  if(name == "Supersampling") vulkan.supersampleScanout = value.boolean();
-  if(name == "Disable Video Interface Processing") vulkan.disableVideoInterfaceProcessing = value.boolean();
-  if(name == "Weave Deinterlacing") vulkan.weaveDeinterlacing = value.boolean();
-  if(vulkan.internalUpscale == 1) vulkan.supersampleScanout = false;
-  vulkan.outputUpscale = vulkan.supersampleScanout ? 1 : vulkan.internalUpscale;
-  #endif
   if(name == "Homebrew Mode") system.homebrewMode = value.boolean();
   if(Model::Nintendo64() && name == "Expansion Pak") system.expansionPak = value.boolean();
   if(Model::Nintendo64() && name == "Controller Pak Banks") {
@@ -73,10 +61,6 @@ auto System::game() -> string {
 }
 
 auto System::run() -> void {
-  if(_vulkanNeedsLoad) {
-    vulkan.load(node);
-    _vulkanNeedsLoad = false;
-  }
   cpu.main();
 }
 
@@ -137,8 +121,6 @@ auto System::load(Node::System& root, string name) -> bool {
   if(model() == Model::Aleck64) aleck64.load(node);
 
   initDebugHooks();
-  _vulkanNeedsLoad = true;
-
   return true;
 }
 
@@ -375,10 +357,6 @@ auto System::unload() -> void {
   save();
 
   if(vi.screen) vi.screen->quit(); //stop video thread
-  #if defined(VULKAN)
-  vulkan.unload();
-  _vulkanNeedsLoad = false;
-  #endif
   cartridgeSlot.unload();
   controllerPort1.unload();
   controllerPort2.unload();
@@ -428,10 +406,6 @@ auto System::power(bool reset) -> void {
   if(_DD()) dd.power(reset);
   mi.power(reset);
   vi.power(reset);
-  #if defined(VULKAN)
-  vulkan.unload();
-  _vulkanNeedsLoad = true;
-  #endif
   ai.power(reset);
   pi.power(reset);
   pif.power(reset);
