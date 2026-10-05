@@ -159,6 +159,17 @@ A row with basis `legacy` is a cost that today's core still charges. Its referen
 
 A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `file:<path>` to the suite's expected-value file, and its selector names the file's key column. When that file exists, each id under the prefix that the file defines resolves with no row of its own. Each explicit row whose expect is `suite` must then find its target and selector in the file. A `pending:<gate>` check names a corpus that the program cannot run yet. The spec prints it as pending, never as verified.
 
+## Clock units
+
+The core keeps time as `Timing::Clock` (`ares/n64/timing/clock.hpp`): absolute time since power-on in 750 MHz units. A PClock is 8 units, an RCP clock 12, an RDRAM tc 3, a COUNT tick 16. VI and AI time VCLKs with `Timing::VclkAccumulator` at the exact rational period. Write a cost as `pclk(n)`, `rclk(n)` or `Timing::us/ms/seconds(n)`; the literal lint reads their arguments.
+
+```sh
+python tools/n64-timing/codemods/clock-rebase.py --check   # lists tick-era code: 187.5 MHz ticks, n * 2, n * 3
+python tools/n64-timing/codemods/clock-rebase.py           # converts it, updates the allowlist and table, regenerates
+```
+
+Run the codemod after merging a branch that predates the rebase. It rewrites only tick-era text, so a second run changes nothing. `--check` exits 1 while anything is left, and names each line it cannot convert.
+
 ## Thar0 RDP timing
 
 ```sh
