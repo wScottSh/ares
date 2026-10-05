@@ -2,7 +2,6 @@ struct System {
   Node::System node;
   VFS::Pak pak;
   bool homebrewMode = false;
-  bool deterministicEntropy = false;
   bool expansionPak = true;
   u8 configuredControllerPakBankCount = 1;
   u8 controllerPakBankCount = 1;

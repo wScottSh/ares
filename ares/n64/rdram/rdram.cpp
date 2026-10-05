@@ -40,9 +40,6 @@ auto RDRAM::power(bool reset) -> void {
       chip.writeDelay = 4;
       chip.deviceID = 0;
       chip.deviceIDReg = 0;
-      chip.ccLow = 8 + (random() & 3);
-      chip.ccHigh = 14 + (random() & 3);
-      if(chip.ccHigh <= chip.ccLow) chip.ccHigh = chip.ccLow + 1;
     }
     mapIdentity = 0;
   }
@@ -85,7 +82,7 @@ auto RDRAM::updateMapping() -> void {
   for(u32 n : range(4)) {
     auto& chip = chips[n];
     if(!chip.present) continue;
-    if(!chip.enable || chip.deviceID != n * 2 || chip.cci < chip.ccHigh) {
+    if(!chip.enable || chip.deviceID != n * 2 || chip.cci < CcHigh) {
       mapIdentity = 0;
       return;
     }
@@ -192,13 +189,16 @@ auto RDRAM::Writable::translate(u32 address) -> maybe<u32> {
   return nothing;
 }
 
+//Between the thresholds, hardware reads are analog noise (libdragon's IPL3 collects them as
+//entropy), so no deterministic hardware rule exists. The model draws from the core's
+//generator, which System::power always seeds with 0.
 auto RDRAM::Writable::degrade(u32 address, u64 value, u32 chipIndex) -> u64 {
   auto& chip = self.chips[chipIndex];
-  if(chip.cci >= chip.ccHigh) return value;
-  if(chip.cci <= chip.ccLow) return 0;
+  if(chip.cci >= CcHigh) return value;
+  if(chip.cci <= CcLow) return 0;
 
-  u32 span = chip.ccHigh - chip.ccLow;
-  u32 progress = (u32)(chip.cci - chip.ccLow) * 256 / span;
+  u32 span = CcHigh - CcLow;
+  u32 progress = (u32)(chip.cci - CcLow) * 256 / span;
   u64 result = 0;
   for(u32 bit : range(64)) {
     if(!((value >> bit) & 1)) continue;

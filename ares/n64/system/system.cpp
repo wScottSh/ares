@@ -35,7 +35,6 @@ auto option(string name, string value) -> bool {
   vulkan.outputUpscale = vulkan.supersampleScanout ? 1 : vulkan.internalUpscale;
   #endif
   if(name == "Homebrew Mode") system.homebrewMode = value.boolean();
-  if(name == "Deterministic Entropy") system.deterministicEntropy = value.boolean();
   if(Model::Nintendo64() && name == "Expansion Pak") system.expansionPak = value.boolean();
   if(Model::Nintendo64() && name == "Controller Pak Banks") {
     if (value == "32KiB (Default)") {
@@ -418,12 +417,7 @@ auto System::power(bool reset) -> void {
   for(auto& setting : node->find<Node::Setting::Setting>()) setting->setLatch();
 
   if(!reset) {
-    if(deterministicEntropy) {
-      random.entropy(Random::Entropy::High);
-      random.seed((n64)0);
-    } else {
-      random.entropy(Random::Entropy::High);
-    }
+    random.seed((n64)0);
   }
 
   queue.reset();

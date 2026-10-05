@@ -166,11 +166,9 @@ auto RSP::Status::readWord(u32 address, Thread& thread) -> u32 {
 
   if(address == 0) {
     //SP_PC_REG
-    if(halted) {
-      data.bit(0,11) = self.ipu.pc;
-    } else {
-      data.bit(0,11) = random();
-    }
+    //n64brew (RSP, SP_PC): reads while the RSP runs return random bits. No deterministic
+    //rule is published, so the model returns the PC the interpreter has reached.
+    data.bit(0,11) = self.ipu.pc;
   }
 
   if(address == 1) {

@@ -570,7 +570,8 @@ struct CPU : Thread {
 
     //6
     struct Wired {
-      n6 index;
+      n6  index;
+      u64 randomEpoch;  //instruction index at which Random reads 31
     } wired;
 
     //8
@@ -693,6 +694,7 @@ struct CPU : Thread {
   auto getControlRegister(n5) -> u64;
   auto setControlRegister(n5, n64) -> void;
   auto getControlRandom() -> u8;
+  auto pclock() const -> u64 { return profile.cpuCycles + pendingCount(); }
 
   auto DMFC0(r64& rt, u8 rd) -> void;
   auto DMTC0(cr64& rt, u8 rd) -> void;
@@ -944,6 +946,7 @@ struct CPU : Thread {
   auto INVALID() -> void;
 
   s64 countClock = 0;
+  u64 instructionIndex = 0;  //instructions executed since load; CP0 Random counts these
 
   struct Disassembler {
     CPU& self;

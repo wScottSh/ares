@@ -140,6 +140,7 @@ auto CPU::instruction() -> void {
 
   auto data = fetch(access);
   if (!data) return;
+  instructionIndex++;
   pipeline.begin();
   instructionPrologue(ipu.pc, *data);
   decoderEXECUTE(*data);
@@ -172,6 +173,7 @@ auto CPU::power(bool reset) -> void {
   ipu.r[29].u64 = 0xffff'ffff'a400'1ff0ull;  //stack pointer
   pipeline.setPc(0xffff'ffff'bfc0'0000ull);
   scc = {};
+  scc.wired.randomEpoch = instructionIndex;
   for(auto& r : fpu.r) r.u64 = 0;
   fpu.csr = {};
   cop2 = {};

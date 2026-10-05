@@ -9,8 +9,6 @@ auto RDRAM::serialize(serializer& s) -> void {
     s(chip.writeDelay);
     s(chip.cci);
     s(chip.ccInternal);
-    s(chip.ccLow);
-    s(chip.ccHigh);
     s(chip.deviceType);
     s(chip.deviceIDReg);
     s(chip.delay);

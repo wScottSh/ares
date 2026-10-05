@@ -200,7 +200,6 @@ auto Arcade::load() -> LoadResult {
     ares::Nintendo64::option("Disable Video Interface Processing", settings.nintendo64.disableVideoInterfaceProcessing);
     ares::Nintendo64::option("Weave Deinterlacing", settings.nintendo64.weaveDeinterlacing);
     ares::Nintendo64::option("Homebrew Mode", settings.developer.homebrewMode);
-    ares::Nintendo64::option("Deterministic Entropy", settings.developer.deterministicEntropy);
 
     return successful;
   }

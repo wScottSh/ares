@@ -13,8 +13,6 @@ struct RDRAM : Memory::RCP<RDRAM> {
     n3  writeDelay;
     n6  cci;
     n6  ccInternal;
-    n6  ccLow;
-    n6  ccHigh;
     n32 deviceType;
     n32 deviceIDReg;
     n32 delay;
@@ -28,6 +26,14 @@ struct RDRAM : Memory::RCP<RDRAM> {
     n32 currentControl;
     n32 row;
   };
+
+  //Read current-control window: at CCI <= CcLow a read returns no set bits, at CCI >= CcHigh
+  //it returns the stored bits, in between each set bit reads back with probability rising
+  //linearly. No published value exists (n64brew RDRAM, current calibration, gives only the
+  //IPL3 procedure). Every console in this model is one chip: the centre of the ranges ares
+  //drew per chip at power-on (CcLow 8-11, CcHigh 14-17), rounded down.
+  static constexpr u32 CcLow  =  9;
+  static constexpr u32 CcHigh = 15;
 
   struct Writable : public Memory::Writable {
     RDRAM& self;
