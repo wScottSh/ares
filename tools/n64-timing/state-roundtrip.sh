@@ -16,6 +16,10 @@ N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 out="${OUT:-$N64_TIMING_HOME/state-roundtrip}"
 exe="${N64_RUN:-$(bash "$here/build.sh" | tail -n 1)}"
 mkdir -p "$out"
+if command -v cygpath >/dev/null; then
+  out="$(cygpath -m "$out")"
+  rom="$(cygpath -m "$rom")"
+fi
 
 state="$out/state.bin"
 printf 'wait 150\nsave-state %s\nload-state %s\nwait 150\nsave-state %s\nload-state %s\nwait 157\nsave-state %s\nload-state %s\n' \
@@ -41,18 +45,21 @@ _, poke = rows("poke.tsv")
 th = header.index("trace_hash")
 failed = False
 
-for log in ("roundtrip.log", "poke.log"):
-    if "failed" in (out / log).read_text():
+step_failed = {log: "failed" in (out / log).read_text() for log in ("roundtrip.log", "poke.log")}
+for log, bad in step_failed.items():
+    if bad:
         print(f"state-roundtrip: FAIL, {log} reports a failed step")
         failed = True
 
-if roundtrip == plain:
+if step_failed["roundtrip.log"]:
+    print("round trip: FAIL, a save or load step failed")
+elif roundtrip == plain:
     print(f"round trip: PASS, {len(plain)} fields byte-identical with saves and loads at fields 150, 300, 457")
 else:
     first = next(i for i, (a, b) in enumerate(zip(plain, roundtrip)) if a != b) if len(plain) == len(roundtrip) else min(len(plain), len(roundtrip))
     cols = [header[c] for c in range(len(header)) if first < min(len(plain), len(roundtrip)) and plain[first][c] != roundtrip[first][c]]
     print(f"round trip: FAIL, first differing field {first}, columns {cols}")
-    failed = True
+failed |= step_failed["roundtrip.log"] or roundtrip != plain
 
 first = next((i for i, (a, b) in enumerate(zip(plain, poke)) if a != b), None)
 if first is None:

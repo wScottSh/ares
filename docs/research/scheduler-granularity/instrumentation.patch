@@ -1,0 +1,406 @@
+diff --git a/ares/n64/ai/ai.cpp b/ares/n64/ai/ai.cpp
+index a3e60bc8d..81d1b076e 100644
+--- a/ares/n64/ai/ai.cpp
++++ b/ares/n64/ai/ai.cpp
+@@ -37,6 +37,7 @@ auto AI::sample() -> void {
+ 
+   if(io.dmaCount && io.dmaLength[0] && io.dmaEnable) {
+     io.dmaAddress[0].bit(13,23) += io.dmaAddressCarry;
++    m9::txn[m9::AiReads]++;
+     auto data = rdram.ram.read<Word>(io.dmaAddress[0], RBusDevice::AI_DMA);
+     dac.left  = (s16)(data >> 16) / 32768.0;
+     dac.right = (s16)(data >>  0) / 32768.0;
+diff --git a/ares/n64/cpu/cpu.cpp b/ares/n64/cpu/cpu.cpp
+index 41964d49c..7a7f51e24 100644
+--- a/ares/n64/cpu/cpu.cpp
++++ b/ares/n64/cpu/cpu.cpp
+@@ -36,7 +36,28 @@ auto CPU::unload() -> void {
+ 
+ auto CPU::main() -> void {
+   while(!vi.refreshed && GDB::server.reportPC(ipu.pc & 0xFFFFFFFF)) {
+-    if(instruction()) synchronize();
++    if(m9::prof) {
++      u64 t0 = __rdtsc();
++      bool sync = instruction();
++      u64 t1 = __rdtsc();
++      m9::tsc[m9::CpuStep] += t1 - t0;
++      m9::txn[m9::CpuInstr]++;
++      if(sync) { synchronize(); m9::tsc[m9::Sync] += __rdtsc() - t1; }
++    } else {
++      bool sync = instruction();
++      bool rspRunning = !rsp.status.halted;
++      m9::txn[m9::CpuInstr]++;
++      m9::txn[m9::CpuInstrRspRun] += rspRunning;
++      if(m9::mode == 3 && rspRunning && Thread::clock < m9::horizon) {
++        rsp.clock -= Thread::clock - m9::rspSynced;
++        m9::rspSynced = Thread::clock;
++        rsp.main();
++        m9::txn[m9::RspOnlySyncs]++;
++        sync = false;
++      } else if(m9::mode == 1 || m9::mode == 3) sync = rspRunning || Thread::clock >= m9::horizon;
++      else if(m9::mode == 2) sync = Thread::clock >= m9::batch;
++      if(sync) synchronize();
++    }
+   }
+ 
+   vi.refreshed = false;
+@@ -59,6 +80,7 @@ auto CPU::queueInsert(u32 event, u32 clocks) -> void {
+   if(queueDelta < 0) queueDelta = 0;
+   s64 queueTarget = Thread::clock + queueDelta;
+   if(queueTarget < jitClockTarget) jitClockTarget = queueTarget;
++  if(queueTarget < m9::horizon) m9::horizon = queueTarget;
+ }
+ 
+ auto CPU::forceSynchronize() -> void {
+@@ -86,19 +108,41 @@ auto CPU::synchronize() -> void {
+   Thread::clock = 0;
+   countClock = 0;
+   jitClockTarget = 0;
++  m9::inSync = true;
++  m9::txn[m9::Syncs]++;
++  m9::txn[clocks <= 2 ? m9::W2 : clocks <= 4 ? m9::W4 : clocks <= 8 ? m9::W8 : clocks <= 16 ? m9::W16 :
++          clocks <= 64 ? m9::W64 : clocks <= 128 ? m9::W128 : clocks <= 512 ? m9::W512 : clocks <= 4096 ? m9::W4096 : m9::WBig]++;
+ 
+-   vi.clock -= clocks;
+-   ai.clock -= clocks;
+-  rsp.clock -= clocks;
+-  rdp.clock -= clocks;
+-  pif.clock -= clocks;
++  s64 remaining = clocks;
++  do {
++  s64 piece = (m9::chunk > 0 && remaining > m9::chunk) ? m9::chunk : remaining;
++  remaining -= piece;
++  m9::txn[m9::Pieces]++;
++   vi.clock -= piece;
++   ai.clock -= piece;
++  rsp.clock -= piece - m9::rspSynced;
++  m9::rspSynced = 0;
++  rdp.clock -= piece;
++  pif.clock -= piece;
++  if(m9::prof) {
++    u64 t0 = __rdtsc(); vi.main();
++    u64 t1 = __rdtsc(); ai.main();
++    u64 t2 = __rdtsc(); rsp.main();
++    u64 t3 = __rdtsc(); rdp.main();
++    u64 t4 = __rdtsc(); pif.main();
++    u64 t5 = __rdtsc();
++    m9::tsc[m9::VI] += t1 - t0; m9::tsc[m9::AI] += t2 - t1; m9::tsc[m9::RSP] += t3 - t2;
++    m9::tsc[m9::RDP] += t4 - t3; m9::tsc[m9::PIF] += t5 - t4;
++  } else {
+   vi.main();
+   ai.main();
+   rsp.main();
+   rdp.main();
+   pif.main();
++  }
+ 
+-  queue.step(clocks, [](u32 event) {
++  u64 tq = m9::now();
++  queue.step(piece, [](u32 event) {
+     switch(event) {
+     case Queue::PI_DMA_Read:   return pi.dmaFinished();
+     case Queue::PI_DMA_Write:  return pi.dmaFinished();
+@@ -116,8 +160,21 @@ auto CPU::synchronize() -> void {
+     case Queue::GDB_Poll:      return cpu.gdbPoll();
+     }
+   });
++  if(m9::prof) m9::tsc[m9::Queue] += __rdtsc() - tq;
++  } while(remaining > 0);
++  m9::inSync = false;
+ 
+   stepCount((clocks - counted) >> 1);
++
++  if(m9::mode == 1 || m9::mode == 3) {
++    s64 h = min(min(vi.clock, ai.clock), min(rdp.clock, pif.clock)) + 1;
++    if(rsp.status.halted) h = min(h, rsp.clock + 1);
++    s64 queueDelta = queue.timeToNextEvent();
++    h = min(h, queueDelta < 0 ? (s64)0 : queueDelta);
++    s64 remaining = (s64)((u64)(scc.compare - effectiveCount()) & CountMask);
++    if(remaining) h = min(h, 2 * remaining);
++    m9::horizon = h;
++  }
+ }
+ 
+ auto CPU::setInterruptPending(u32 bit, bool value) -> void {
+@@ -166,7 +223,7 @@ auto CPU::instruction() -> bool {
+         if(timerDelta < 0) timerDelta = 0;
+         s64 queueDelta = queue.timeToNextEvent();
+         if(queueDelta < 0) queueDelta = 0;
+-        s64 capBudget = min<s64>(Accuracy::CPU::JitInterleaving, min(timerDelta, queueDelta));
++        s64 capBudget = min<s64>(m9::jit, min(timerDelta, queueDelta));
+         jitClockTarget = Thread::clock + capBudget;
+       }
+       block->execute(*this);
+diff --git a/ares/n64/m9.hpp b/ares/n64/m9.hpp
+new file mode 100644
+index 000000000..dad40af1a
+--- /dev/null
++++ b/ares/n64/m9.hpp
+@@ -0,0 +1,39 @@
++//measure-9 instrumentation (research only, never delivered)
++namespace m9 {
++  inline auto envInt(const char* name, s64 fallback) -> s64 {
++    auto value = std::getenv(name);
++    return value ? (s64)std::strtoll(value, nullptr, 10) : fallback;
++  }
++
++  inline bool prof     = envInt("M9_PROF", 0);
++  inline bool busSync  = envInt("M9_BUSSYNC", 0);
++  inline s64  jit      = envInt("M9_JIT", 2048 * 2);
++  inline s64  chunk    = envInt("M9_CHUNK", 0);
++  inline s64  rspMode  = envInt("M9_RSP", -1);  //-1 follow --cpu, 0 interpreter, 1 recompiler
++  inline bool inSync   = false;
++  inline s64  mode     = envInt("M9_MODE", 0);   //0 sync when instruction() asks, 1 horizon skip unless RSP runs, 2 batch
++  inline s64  batch    = envInt("M9_BATCH", 64);
++  inline s64  horizon  = 0;
++  inline s64  rspSynced = 0;
++
++  enum Slot : u32 { CpuStep, Sync, VI, AI, RSP, RDP, PIF, Queue, NumSlots };
++  inline const char* slotNames[] = {"cpu_step", "sync_total", "vi", "ai", "rsp", "rdp", "pif", "queue"};
++  inline u64 tsc[NumSlots];
++  inline u64 calls[NumSlots];
++
++  enum Txn : u32 {
++    CpuUncachedRdram, CpuRcpReg, CpuCart, CpuDcacheFill, CpuDcacheWB, CpuIcacheFill,
++    SpDmaRows, SpDmaBursts, SpDmaBytes, PiDmas, PiDmaBytes, SiDmas, AiReads,
++    RspInstr, RspHaltSteps, Syncs, BusSyncs, CpuInstr, Pieces, CpuInstrRspRun, RspOnlySyncs,
++    W2, W4, W8, W16, W64, W128, W512, W4096, WBig, NumTxn
++  };
++  inline const char* txnNames[] = {
++    "cpu_uncached_rdram", "cpu_rcp_reg", "cpu_cart", "cpu_dcache_fill", "cpu_dcache_wb", "cpu_icache_fill",
++    "sp_dma_rows", "sp_dma_bursts128", "sp_dma_bytes", "pi_dmas", "pi_dma_bytes", "si_dmas", "ai_reads",
++    "rsp_steps", "rsp_halt_steps", "syncs", "bus_syncs", "cpu_steps", "sync_pieces", "cpu_steps_rsp_running", "rsp_only_syncs",
++    "win_le2", "win_le4", "win_le8", "win_le16", "win_le64", "win_le128", "win_le512", "win_le4096", "win_gt4096"
++  };
++  inline u64 txn[NumTxn];
++
++  inline auto now() -> u64 { return prof ? __rdtsc() : 0; }
++}
+diff --git a/ares/n64/memory/bus.hpp b/ares/n64/memory/bus.hpp
+index 367308207..fb51e0f83 100644
+--- a/ares/n64/memory/bus.hpp
++++ b/ares/n64/memory/bus.hpp
+@@ -1,6 +1,23 @@
++inline auto m9SyncBeforeAccess() -> void {
++  if(m9::busSync && !m9::inSync) { m9::txn[m9::BusSyncs]++; cpu.synchronize(); }
++}
++
++inline auto m9Access(u32 address) -> void {
++  if(address <= 0x03ff'ffff) m9::txn[m9::CpuUncachedRdram]++;
++  else if(address <= 0x04ff'ffff) m9::txn[m9::CpuRcpReg]++;
++  else m9::txn[m9::CpuCart]++;
++  m9SyncBeforeAccess();
++}
++
++inline auto m9Burst(u32 kind) -> void {
++  m9::txn[kind]++;
++  m9SyncBeforeAccess();
++}
++
+ template<u32 Size>
+ inline auto Bus::read(u32 address, Thread& thread, RBusDevice device) -> u64 {
+   static_assert(Size == Byte || Size == Half || Size == Word || Size == Dual);
++  if(&thread == (Thread*)&cpu) m9Access(address);
+ 
+   if(address <= 0x03ff'ffff) return mi.readRdram<Size>(address, device, thread);
+   if(Size == Dual)           return freezeDualRead(address), 0;
+@@ -29,6 +46,7 @@ inline auto Bus::readBurst(u32 address, u32 *data, Thread& thread) -> bool {
+   RBusDevice device;
+   if constexpr(Size == DCache) device = RBusDevice::VR4300_DCACHE;
+   if constexpr(Size == ICache) device = RBusDevice::VR4300_ICACHE;
++  if(&thread == (Thread*)&cpu) m9Burst(Size == DCache ? m9::CpuDcacheFill : m9::CpuIcacheFill);
+ 
+   if(address <= 0x03ff'ffff) return mi.readRdramBurst<Size>(address, data, device, thread), true;
+ 
+@@ -43,6 +61,7 @@ inline auto Bus::readBurst(u32 address, u32 *data, Thread& thread) -> bool {
+ template<u32 Size>
+ inline auto Bus::write(u32 address, u64 data, Thread& thread, RBusDevice device) -> void {
+   static_assert(Size == Byte || Size == Half || Size == Word || Size == Dual);
++  if(&thread == (Thread*)&cpu) m9Access(address);
+   if constexpr(Accuracy::CPU::Recompiler) {
+     cpu.recompiler.invalidateRange(address, Size);
+   }
+@@ -74,6 +93,7 @@ inline auto Bus::writeBurst(u32 address, u32 *data, Thread& thread) -> bool {
+   if constexpr(Size == DCache) device = RBusDevice::VR4300_DCACHE;
+   if constexpr(Size == ICache) device = RBusDevice::VR4300_ICACHE;
+ 
++  if(&thread == (Thread*)&cpu) m9Burst(m9::CpuDcacheWB);
+   if constexpr(Accuracy::CPU::Recompiler) {
+     cpu.recompiler.invalidateRange(address, Size == DCache ? 16 : 32);
+   }
+diff --git a/ares/n64/n64.hpp b/ares/n64/n64.hpp
+index 33a2a973d..f80e4865b 100644
+--- a/ares/n64/n64.hpp
++++ b/ares/n64/n64.hpp
+@@ -12,6 +12,8 @@
+ #include <component/processor/sm5k/sm5k.hpp>
+ #include <functional>
+ #include <span>
++#include <x86intrin.h>
++#include <cstdlib>
+ #include <vector>
+ 
+ #if defined(ARCHITECTURE_AMD64)
+@@ -125,6 +127,7 @@ namespace ares::Nintendo64 {
+   };
+ 
+   #include <n64/accuracy.hpp>
++  #include <n64/m9.hpp>
+   #include <n64/memory/memory.hpp>
+   #include <n64/pi/device.hpp>
+   #include <n64/system/system.hpp>
+diff --git a/ares/n64/pi/dma.cpp b/ares/n64/pi/dma.cpp
+index f2bd41549..33307bd2f 100644
+--- a/ares/n64/pi/dma.cpp
++++ b/ares/n64/pi/dma.cpp
+@@ -1,4 +1,5 @@
+ auto PI::dmaRead() -> void {
++  m9::txn[m9::PiDmas]++; m9::txn[m9::PiDmaBytes] += io.readLength + 1;
+   io.readLength = (io.readLength | 1) + 1;
+ 
+   auto& bsd = bsdForAddress(io.pbusAddress);
+@@ -14,6 +15,7 @@ auto PI::dmaRead() -> void {
+ }
+ 
+ auto PI::dmaWrite() -> void {
++  m9::txn[m9::PiDmas]++; m9::txn[m9::PiDmaBytes] += io.writeLength + 1;
+   u8 mem[128];
+   i32 length = io.writeLength+1;
+   i32 maxBlockSize = 128;
+diff --git a/ares/n64/rsp/dma.cpp b/ares/n64/rsp/dma.cpp
+index d49cbd601..ab90685ef 100644
+--- a/ares/n64/rsp/dma.cpp
++++ b/ares/n64/rsp/dma.cpp
+@@ -22,6 +22,9 @@ auto RSP::dmaTransferStart(Thread& thread) -> void {
+ }
+ 
+ auto RSP::dmaTransferStep() -> void {
++  m9::txn[m9::SpDmaRows]++;
++  m9::txn[m9::SpDmaBursts] += (dma.current.length + 8 + 127) / 128;
++  m9::txn[m9::SpDmaBytes] += dma.current.length + 8;
+   if(dma.busy.read) {
+     if constexpr(Accuracy::RSP::Recompiler) {
+       if(dma.current.pbusRegion) {
+diff --git a/ares/n64/rsp/rsp.cpp b/ares/n64/rsp/rsp.cpp
+index b74368884..273b98385 100644
+--- a/ares/n64/rsp/rsp.cpp
++++ b/ares/n64/rsp/rsp.cpp
+@@ -36,9 +36,11 @@ auto RSP::main() -> void {
+ 
+     if(status.halted) {
+       step(128);
++      m9::txn[m9::RspHaltSteps]++;
+       profile.cycles += 128;
+       profile.haltedCycles += 128;
+     } else {
++      m9::txn[m9::RspInstr]++;
+       instruction();
+     }
+ 
+diff --git a/ares/n64/si/dma.cpp b/ares/n64/si/dma.cpp
+index c2690ab2b..2744af703 100644
+--- a/ares/n64/si/dma.cpp
++++ b/ares/n64/si/dma.cpp
+@@ -1,4 +1,5 @@
+ auto SI::dmaRead() -> void {
++  m9::txn[m9::SiDmas]++;
+   pif.dmaRead(io.readAddress, io.dramAddress);
+   io.dmaBusy = 0;
+   io.pchState = 0;
+@@ -8,6 +9,7 @@ auto SI::dmaRead() -> void {
+ }
+ 
+ auto SI::dmaWrite() -> void {
++  m9::txn[m9::SiDmas]++;
+   pif.dmaWrite(io.writeAddress, io.dramAddress);
+   io.dmaBusy = 0;
+   io.pchState = 0;
+diff --git a/ares/n64/system/system.cpp b/ares/n64/system/system.cpp
+index 25b26ef33..bcc8552d2 100644
+--- a/ares/n64/system/system.cpp
++++ b/ares/n64/system/system.cpp
+@@ -42,6 +42,7 @@ auto option(string name, string value) -> bool {
+     }
+     if constexpr(Accuracy::RSP::Recompiler) {
+       rsp.recompiler.enabled = value.boolean();
++      if(m9::rspMode >= 0) rsp.recompiler.enabled = m9::rspMode;
+     }
+   }
+   if(Model::Nintendo64() && name == "Expansion Pak") system.expansionPak = value.boolean();
+diff --git a/tools/n64-run/CMakeLists.txt b/tools/n64-run/CMakeLists.txt
+index 5ad1f141b..b69d624c0 100644
+--- a/tools/n64-run/CMakeLists.txt
++++ b/tools/n64-run/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-add_executable(n64-run n64-run.cpp)
++add_executable(n64-run n64-run.cpp m9-sampler.cpp)
+ 
+ # n64-run reads core state (VI registers, RDRAM, cycle counters) directly, so it compiles
+ # against the N64 core's private headers rather than a public interface.
+diff --git a/tools/n64-run/m9-sampler.cpp b/tools/n64-run/m9-sampler.cpp
+new file mode 100644
+index 000000000..3d75c24b1
+--- /dev/null
++++ b/tools/n64-run/m9-sampler.cpp
+@@ -0,0 +1,61 @@
++//measure-9 sampling profiler (research only, never delivered)
++#include <windows.h>
++#include <atomic>
++#include <cstdio>
++#include <cstdlib>
++#include <thread>
++#include <vector>
++
++namespace {
++  std::atomic<bool> running{false};
++  std::thread sampler;
++  std::vector<unsigned long long> samples;
++}
++
++void m9SamplerStart() {
++  if(!std::getenv("M9_SAMPLE")) return;
++  HANDLE target = nullptr;
++  DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &target,
++    THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, 0);
++  auto base = (unsigned long long)GetModuleHandleW(nullptr);
++  samples.reserve(1 << 20);
++  running = true;
++  sampler = std::thread([target, base] {
++    LARGE_INTEGER freq, start, now;
++    QueryPerformanceFrequency(&freq);
++    auto period = freq.QuadPart / 4000;
++    while(running) {
++      QueryPerformanceCounter(&start);
++      do { SwitchToThread(); QueryPerformanceCounter(&now); } while(now.QuadPart - start.QuadPart < period);
++      if(SuspendThread(target) == (DWORD)-1) continue;
++      CONTEXT context{};
++      context.ContextFlags = CONTEXT_CONTROL;
++      if(GetThreadContext(target, &context)) samples.push_back(context.Rip - base + 0x140000000ull);
++      ResumeThread(target);
++    }
++  });
++}
++
++void m9SamplerStop() {
++  if(!running) return;
++  running = false;
++  sampler.join();
++  auto path = std::getenv("M9_SAMPLE");
++  if(auto file = std::fopen(path, "wb")) {
++    for(auto rip : samples) std::fprintf(file, "%llx\n", rip);
++    std::fclose(file);
++  }
++}
++
++double m9ThreadCpuSeconds() {
++  FILETIME creation, exit, kernel, user;
++  GetThreadTimes(GetCurrentThread(), &creation, &exit, &kernel, &user);
++  auto ticks = [](FILETIME t) { return ((unsigned long long)t.dwHighDateTime << 32 | t.dwLowDateTime) / 1e7; };
++  return ticks(kernel) + ticks(user);
++}
++
++unsigned long long m9ThreadCycles() {
++  ULONG64 cycles = 0;
++  QueryThreadCycleTime(GetCurrentThread(), &cycles);
++  return cycles;
++}

@@ -1,0 +1,24 @@
+x5-m1-r1	M9_MODE=1 --cpu interpreter	23.529	19.011	18.281	mark window frame=329	busy
+x5-m3-r1	M9_MODE=3 --cpu interpreter	19.207	14.956	14.656	mark window frame=329	quiet
+x5-b512-r1	M9_MODE=2 M9_BATCH=512 --cpu interpreter	14.497	10.413	10.297	mark window frame=329	busy
+x5-m0-r1	M9_MODE=0 --cpu interpreter	20.565	14.997	14.766	mark window frame=329	quiet
+x5-m1-r2	M9_MODE=1 --cpu interpreter	17.710	13.558	13.391	mark window frame=329	busy
+x5-m3-r2	M9_MODE=3 --cpu interpreter	15.975	12.088	11.984	mark window frame=329	quiet
+x5-b512-r2	M9_MODE=2 M9_BATCH=512 --cpu interpreter	13.646	9.995	9.953	mark window frame=329	quiet
+x5-m0-r2	M9_MODE=0 --cpu interpreter	21.777	15.751	15.594	mark window frame=329	quiet
+x5-m1-r3	M9_MODE=1 --cpu interpreter	19.175	14.891	14.594	mark window frame=329	quiet
+x5-m3-r3	M9_MODE=3 --cpu interpreter	21.857	17.393	16.109	mark window frame=329	quiet
+x5-b512-r3	M9_MODE=2 M9_BATCH=512 --cpu interpreter	19.760	14.552	13.875	mark window frame=329	busy
+x5-m0-r3	M9_MODE=0 --cpu interpreter	35.755	25.071	23.312	mark window frame=329	busy
+x5-m1-r4	M9_MODE=1 --cpu interpreter	18.675	14.280	14.156	mark window frame=329	busy
+x5-m3-r4	M9_MODE=3 --cpu interpreter	16.567	12.656	12.516	mark window frame=329	quiet
+x5-b512-r4	M9_MODE=2 M9_BATCH=512 --cpu interpreter	14.970	10.972	10.875	mark window frame=329	quiet
+x5-m0-r4	M9_MODE=0 --cpu interpreter	21.644	15.583	15.484	mark window frame=329	busy
+x5-m1-r5	M9_MODE=1 --cpu interpreter	18.332	13.967	13.828	mark window frame=329	busy
+x5-m3-r5	M9_MODE=3 --cpu interpreter	16.069	12.106	12.000	mark window frame=329	busy
+x5-b512-r5	M9_MODE=2 M9_BATCH=512 --cpu interpreter	13.563	9.926	9.891	mark window frame=329	quiet
+x5-m0-r5	M9_MODE=0 --cpu interpreter	19.955	14.390	14.328	mark window frame=329	quiet
+x5-m1-r6	M9_MODE=1 --cpu interpreter	17.745	13.561	13.516	mark window frame=329	quiet
+x5-m3-r6	M9_MODE=3 --cpu interpreter	15.639	11.809	11.781	mark window frame=329	quiet
+x5-b512-r6	M9_MODE=2 M9_BATCH=512 --cpu interpreter	13.379	9.748	9.719	mark window frame=329	quiet
+x5-m0-r6	M9_MODE=0 --cpu interpreter	30.015	23.330	22.250	mark window frame=329	busy
