@@ -1,6 +1,7 @@
 """Builds romgen test ROMs.
 
-usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench --out DIR [--ipl3 IPL3_COMPAT_Z64]
+usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat --out DIR
+       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE]
 
 Writes one .z64 per set of the suite (romgen/suites/<suite>/sets.py), for example
 nemu64-timing.z64 or bench-pi-dma-sizes.z64, and a .tests.tsv next to each listing every value
@@ -55,8 +56,9 @@ def build_payload(set_def):
     for name, addr in suite.symbols.items():
         assert image.symbols[name] == addr, f"runtime symbol {name} moved"
     end = image.symbols["payload_end"]
-    if end > runtime.FB0:
-        raise SystemExit(f"payload ends at {end:#x}, past the framebuffer at {runtime.FB0:#x}")
+    limit = getattr(set_def, "payload_limit", runtime.FB0)
+    if end > limit:
+        raise SystemExit(f"payload ends at {end:#x}, past {limit:#x}")
     data = bytearray(image.data)
     offset = image.symbols["vector_image"] - runtime.PAYLOAD_BASE
     data[offset:offset + 0x300] = runtime.vector_image(image.symbols["exc_generic"])
@@ -77,7 +79,10 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--ipl3", default=DEFAULT_IPL3)
     ap.add_argument("--set", action="append", help="build only these sets")
+    ap.add_argument("--define", action="append", default=[], metavar="NAME=VALUE",
+                    help="override an integer assembler constant of the suite, e.g. RUNS=1000")
     args = ap.parse_args()
+    defines = {k: int(v, 0) for k, v in (d.split("=", 1) for d in args.define)}
     ipl3 = open(args.ipl3, "rb").read()
     if len(ipl3) != 0x1000 or ipl3[:4] != b"\x80\x37\x12\x40":
         raise SystemExit(f"{args.ipl3}: expected a 4 KiB big-endian ipl3_compat.z64")
@@ -85,6 +90,10 @@ def main():
     for set_def in suite_sets(args.suite):
         if args.set and set_def.set_name not in args.set:
             continue
+        unknown = set(defines) - set(set_def.consts)
+        if unknown:
+            raise SystemExit(f"{set_def.rom_name}: no constant {', '.join(sorted(unknown))}")
+        set_def.consts = {**set_def.consts, **defines}
         suite, payload = build_payload(set_def)
         rom = make_rom(ipl3, payload)
         path = os.path.join(args.out, f"{set_def.rom_name}.z64")

@@ -1,0 +1,101 @@
+index	id	buf_min	buf_avg	buf_max	pipe_min	pipe_avg	pipe_max	desc
+0	nozb-vioff-noimrd-1cyc	80462	80499.725	80562	80467	80505.556	80568	No ZB, No VI, image_read off, 1-cycle
+1	nozb-vioff-noimrd-2cyc	157350	157393.000	157442	157353	157396.775	157446	No ZB, No VI, image_read off, 2-cycle
+2	nozb-vioff-imrd-1cyc	163436	163555.506	163654	163464	163578.763	163676	No ZB, No VI, image_read on,  1-cycle
+3	nozb-vioff-imrd-2cyc	161978	162083.788	162190	161981	162087.556	162194	No ZB, No VI, image_read on,  2-cycle
+4	nozb-visame-noimrd-1cyc	81654	81791.406	81868	81670	81825.606	81884	No ZB, VI, FB + VI same    , image_read off, 1-cycle
+5	nozb-visame-noimrd-2cyc	158762	158943.656	159109	158777	158965.881	159127	No ZB, VI, FB + VI same    , image_read off, 2-cycle
+6	nozb-visame-imrd-1cyc	179616	180032.456	180406	179664	180092.869	180469	No ZB, VI, FB + VI same    , image_read on,  1-cycle
+7	nozb-visame-imrd-2cyc	176101	176359.644	176745	176139	176391.512	176790	No ZB, VI, FB + VI same    , image_read on,  2-cycle
+8	nozb-visep-noimrd-1cyc	80896	80973.800	81008	80917	80993.875	81027	No ZB, VI, FB + VI separate, image_read off, 1-cycle
+9	nozb-visep-noimrd-2cyc	158107	158236.425	158302	158121	158252.569	158319	No ZB, VI, FB + VI separate, image_read off, 2-cycle
+10	nozb-visep-imrd-1cyc	173832	174059.431	174382	173864	174102.475	174441	No ZB, VI, FB + VI separate, image_read on,  1-cycle
+11	nozb-visep-imrd-2cyc	167304	167635.100	168008	167319	167657.944	168024	No ZB, VI, FB + VI separate, image_read on,  2-cycle
+12	zbr-fail-zbsame-vioff-noimrd-1cyc	105942	106000.181	106082	105948	106006.438	106086	ZB Read-Only, No VI, Z Fail, FB + ZB same    , image_read off, 1-cycle
+13	zbr-fail-zbsame-vioff-noimrd-2cyc	176291	176338.762	176397	176292	176339.994	176398	ZB Read-Only, No VI, Z Fail, FB + ZB same    , image_read off, 2-cycle
+14	zbr-fail-zbsame-vioff-imrd-1cyc	189732	190637.488	191674	189758	190663.000	191698	ZB Read-Only, No VI, Z Fail, FB + ZB same    , image_read on,  1-cycle
+15	zbr-fail-zbsame-vioff-imrd-2cyc	198808	198859.544	198922	198808	198859.806	198922	ZB Read-Only, No VI, Z Fail, FB + ZB same    , image_read on,  2-cycle
+16	zbr-fail-zbsep-vioff-noimrd-1cyc	105940	105999.138	106090	105946	106005.756	106098	ZB Read-Only, No VI, Z Fail, FB + ZB separate, image_read off, 1-cycle
+17	zbr-fail-zbsep-vioff-noimrd-2cyc	176297	176340.700	176397	176298	176341.919	176398	ZB Read-Only, No VI, Z Fail, FB + ZB separate, image_read off, 2-cycle
+18	zbr-fail-zbsep-vioff-imrd-1cyc	166162	166355.706	166518	166188	166382.250	166544	ZB Read-Only, No VI, Z Fail, FB + ZB separate, image_read on,  1-cycle
+19	zbr-fail-zbsep-vioff-imrd-2cyc	183231	183346.294	183445	183232	183347.175	183448	ZB Read-Only, No VI, Z Fail, FB + ZB separate, image_read on,  2-cycle
+20	zbr-pass-zbsame-vioff-noimrd-1cyc	199364	199475.294	199576	199393	199506.381	199609	ZB Read-Only, No VI, Z Pass, FB + ZB same    , image_read off, 1-cycle
+21	zbr-pass-zbsame-vioff-noimrd-2cyc	188573	188676.669	188791	188585	188690.200	188803	ZB Read-Only, No VI, Z Pass, FB + ZB same    , image_read off, 2-cycle
+22	zbr-pass-zbsame-vioff-imrd-1cyc	263418	263511.419	263592	263467	263564.013	263641	ZB Read-Only, No VI, Z Pass, FB + ZB same    , image_read on,  1-cycle
+23	zbr-pass-zbsame-vioff-imrd-2cyc	245239	245314.050	245463	245273	245344.944	245493	ZB Read-Only, No VI, Z Pass, FB + ZB same    , image_read on,  2-cycle
+24	zbr-pass-zbsep-vioff-noimrd-1cyc	175160	175289.131	175534	175187	175317.119	175561	ZB Read-Only, No VI, Z Pass, FB + ZB separate, image_read off, 1-cycle
+25	zbr-pass-zbsep-vioff-noimrd-2cyc	182815	183005.719	183183	182829	183019.600	183195	ZB Read-Only, No VI, Z Pass, FB + ZB separate, image_read off, 2-cycle
+26	zbr-pass-zbsep-vioff-imrd-1cyc	232730	232875.394	233062	232783	232929.744	233115	ZB Read-Only, No VI, Z Pass, FB + ZB separate, image_read on,  1-cycle
+27	zbr-pass-zbsep-vioff-imrd-2cyc	215573	215742.444	215899	215602	215771.606	215924	ZB Read-Only, No VI, Z Pass, FB + ZB separate, image_read on,  2-cycle
+28	zbw-zbsame-vioff-noimrd-1cyc	187499	187557.113	187693	187575	187635.087	187769	ZB Write-Only, No VI, FB + ZB same    , image_read off, 1-cycle
+29	zbw-zbsame-vioff-noimrd-2cyc	191947	191994.625	192062	191986	192034.425	192100	ZB Write-Only, No VI, FB + ZB same    , image_read off, 2-cycle
+30	zbw-zbsame-vioff-imrd-1cyc	271910	272011.456	272116	272004	272100.331	272205	ZB Write-Only, No VI, FB + ZB same    , image_read on,  1-cycle
+31	zbw-zbsame-vioff-imrd-2cyc	276750	277179.956	277527	276827	277252.912	277607	ZB Write-Only, No VI, FB + ZB same    , image_read on,  2-cycle
+32	zbw-zbsep-vioff-noimrd-1cyc	139009	139094.450	139161	139053	139141.500	139207	ZB Write-Only, No VI, FB + ZB separate, image_read off, 1-cycle
+33	zbw-zbsep-vioff-noimrd-2cyc	161815	161929.163	162015	161838	161948.987	162032	ZB Write-Only, No VI, FB + ZB separate, image_read off, 2-cycle
+34	zbw-zbsep-vioff-imrd-1cyc	221768	221914.600	222090	221828	221975.819	222150	ZB Write-Only, No VI, FB + ZB separate, image_read on,  1-cycle
+35	zbw-zbsep-vioff-imrd-2cyc	214471	214641.919	214807	214507	214679.750	214852	ZB Write-Only, No VI, FB + ZB separate, image_read on,  2-cycle
+36	zbrw-fail-zbsame-vioff-noimrd-1cyc	106118	106180.856	106246	106126	106189.350	106252	ZB Read/Write, No VI, Z Fail, FB + ZB same    , image_read off, 1-cycle
+37	zbrw-fail-zbsame-vioff-noimrd-2cyc	176311	176358.594	176409	176314	176362.156	176412	ZB Read/Write, No VI, Z Fail, FB + ZB same    , image_read off, 2-cycle
+38	zbrw-fail-zbsame-vioff-imrd-1cyc	190748	191083.506	191524	190776	191111.025	191550	ZB Read/Write, No VI, Z Fail, FB + ZB same    , image_read on,  1-cycle
+39	zbrw-fail-zbsame-vioff-imrd-2cyc	199816	200021.062	200252	199818	200023.681	200254	ZB Read/Write, No VI, Z Fail, FB + ZB same    , image_read on,  2-cycle
+40	zbrw-fail-zbsep-vioff-noimrd-1cyc	106116	106182.125	106246	106124	106190.837	106252	ZB Read/Write, No VI, Z Fail, FB + ZB separate, image_read off, 1-cycle
+41	zbrw-fail-zbsep-vioff-noimrd-2cyc	176313	176358.750	176409	176316	176362.194	176412	ZB Read/Write, No VI, Z Fail, FB + ZB separate, image_read off, 2-cycle
+42	zbrw-fail-zbsep-vioff-imrd-1cyc	166904	167074.019	167248	166930	167102.094	167274	ZB Read/Write, No VI, Z Fail, FB + ZB separate, image_read on,  1-cycle
+43	zbrw-fail-zbsep-vioff-imrd-2cyc	183567	183612.244	183667	183570	183615.619	183670	ZB Read/Write, No VI, Z Fail, FB + ZB separate, image_read on,  2-cycle
+44	zbrw-pass-zbsame-vioff-noimrd-1cyc	274646	274737.550	274806	274736	274827.963	274894	ZB Read/Write, No VI, Z Pass, FB + ZB same    , image_read off, 1-cycle
+45	zbrw-pass-zbsame-vioff-noimrd-2cyc	278812	278913.525	278972	278858	278952.812	279010	ZB Read/Write, No VI, Z Pass, FB + ZB same    , image_read off, 2-cycle
+46	zbrw-pass-zbsame-vioff-imrd-1cyc	359816	359930.537	360044	359926	360041.400	360154	ZB Read/Write, No VI, Z Pass, FB + ZB same    , image_read on,  1-cycle
+47	zbrw-pass-zbsame-vioff-imrd-2cyc	365610	365707.612	365796	365660	365747.362	365834	ZB Read/Write, No VI, Z Pass, FB + ZB same    , image_read on,  2-cycle
+48	zbrw-pass-zbsep-vioff-noimrd-1cyc	225518	225678.562	225802	225576	225736.231	225858	ZB Read/Write, No VI, Z Pass, FB + ZB separate, image_read off, 1-cycle
+49	zbrw-pass-zbsep-vioff-noimrd-2cyc	214473	214652.194	214827	214515	214691.025	214870	ZB Read/Write, No VI, Z Pass, FB + ZB separate, image_read off, 2-cycle
+50	zbrw-pass-zbsep-vioff-imrd-1cyc	280600	280887.025	281144	280688	280975.769	281238	ZB Read/Write, No VI, Z Pass, FB + ZB separate, image_read on,  1-cycle
+51	zbrw-pass-zbsep-vioff-imrd-2cyc	277587	277823.831	278080	277620	277857.169	278102	ZB Read/Write, No VI, Z Pass, FB + ZB separate, image_read on,  2-cycle
+52	zbrw-fail-zbsep-visep-noimrd-1cyc	106778	106890.456	107028	106808	106909.231	107046	ZB Read/Write, VI, Z Fail, FB + ZB + VI separate    , image_read off, 1-cycle
+53	zbrw-fail-zbsep-visep-noimrd-2cyc	177375	177377.631	177379	177390	177392.119	177394	ZB Read/Write, VI, Z Fail, FB + ZB + VI separate    , image_read off, 2-cycle
+54	zbrw-fail-zbsep-visep-imrd-1cyc	172608	172962.481	173377	172652	173014.413	173414	ZB Read/Write, VI, Z Fail, FB + ZB + VI separate    , image_read on,  1-cycle
+55	zbrw-fail-zbsep-visep-imrd-2cyc	188181	188334.669	188569	188194	188348.538	188582	ZB Read/Write, VI, Z Fail, FB + ZB + VI separate    , image_read on,  2-cycle
+56	zbrw-fail-zbsep-visame-noimrd-1cyc	106663	106778.812	106904	106680	106798.925	106922	ZB Read/Write, VI, Z Fail, FB + VI same, ZB separate, image_read off, 1-cycle
+57	zbrw-fail-zbsep-visame-noimrd-2cyc	177375	177377.637	177379	177390	177392.131	177394	ZB Read/Write, VI, Z Fail, FB + VI same, ZB separate, image_read off, 2-cycle
+58	zbrw-fail-zbsep-visame-imrd-1cyc	180837	181103.806	181366	180876	181149.987	181424	ZB Read/Write, VI, Z Fail, FB + VI same, ZB separate, image_read on,  1-cycle
+59	zbrw-fail-zbsep-visame-imrd-2cyc	193264	193530.000	193665	193278	193543.494	193678	ZB Read/Write, VI, Z Fail, FB + VI same, ZB separate, image_read on,  2-cycle
+60	zbrw-fail-zbsame-visep-noimrd-1cyc	106706	106769.906	106904	106724	106791.050	106924	ZB Read/Write, VI, Z Fail, FB + ZB same, VI separate, image_read off, 1-cycle
+61	zbrw-fail-zbsame-visep-noimrd-2cyc	177164	177228.769	177379	177178	177243.263	177394	ZB Read/Write, VI, Z Fail, FB + ZB same, VI separate, image_read off, 2-cycle
+62	zbrw-fail-zbsame-visep-imrd-1cyc	198882	199283.394	199759	198922	199326.625	199808	ZB Read/Write, VI, Z Fail, FB + ZB same, VI separate, image_read on,  1-cycle
+63	zbrw-fail-zbsame-visep-imrd-2cyc	206155	206434.894	206676	206168	206448.381	206690	ZB Read/Write, VI, Z Fail, FB + ZB same, VI separate, image_read on,  2-cycle
+64	zbrw-fail-zbsame-visame-noimrd-1cyc	109260	109332.662	109425	109278	109351.581	109442	ZB Read/Write, VI, Z Fail, FB + ZB + VI same        , image_read off, 1-cycle
+65	zbrw-fail-zbsame-visame-noimrd-2cyc	178053	178280.650	178350	178068	178295.144	178364	ZB Read/Write, VI, Z Fail, FB + ZB + VI same        , image_read off, 2-cycle
+66	zbrw-fail-zbsame-visame-imrd-1cyc	201612	202113.744	202625	201652	202163.188	202662	ZB Read/Write, VI, Z Fail, FB + ZB + VI same        , image_read on,  1-cycle
+67	zbrw-fail-zbsame-visame-imrd-2cyc	208473	208861.181	209121	208486	208874.675	209134	ZB Read/Write, VI, Z Fail, FB + ZB + VI same        , image_read on,  2-cycle
+68	zbrw-pass-zbsep-visep-noimrd-1cyc	245078	245638.919	246077	245146	245729.081	246179	ZB Read/Write, VI, Z Pass, FB + ZB + VI separate    , image_read off, 1-cycle
+69	zbrw-pass-zbsep-visep-noimrd-2cyc	239139	239726.506	240096	239195	239778.487	240144	ZB Read/Write, VI, Z Pass, FB + ZB + VI separate    , image_read off, 2-cycle
+70	zbrw-pass-zbsep-visep-imrd-1cyc	309121	309705.587	310173	309248	309830.125	310300	ZB Read/Write, VI, Z Pass, FB + ZB + VI separate    , image_read on,  1-cycle
+71	zbrw-pass-zbsep-visep-imrd-2cyc	302523	303439.169	304165	302621	303522.794	304204	ZB Read/Write, VI, Z Pass, FB + ZB + VI separate    , image_read on,  2-cycle
+72	zbrw-pass-zbsep-visame-noimrd-1cyc	258259	258978.019	259833	258373	259094.237	259951	ZB Read/Write, VI, Z Pass, FB + VI same, ZB separate, image_read off, 1-cycle
+73	zbrw-pass-zbsep-visame-noimrd-2cyc	252775	253593.231	254273	252828	253658.425	254317	ZB Read/Write, VI, Z Pass, FB + VI same, ZB separate, image_read off, 2-cycle
+74	zbrw-pass-zbsep-visame-imrd-1cyc	338887	339780.381	340854	338984	339905.444	340982	ZB Read/Write, VI, Z Pass, FB + VI same, ZB separate, image_read on,  1-cycle
+75	zbrw-pass-zbsep-visame-imrd-2cyc	330882	333051.406	335144	331036	333101.794	335221	ZB Read/Write, VI, Z Pass, FB + VI same, ZB separate, image_read on,  2-cycle
+76	zbrw-pass-zbsame-visep-noimrd-1cyc	298542	299299.288	299809	298661	299424.681	299982	ZB Read/Write, VI, Z Pass, FB + ZB same, VI separate, image_read off, 1-cycle
+77	zbrw-pass-zbsame-visep-noimrd-2cyc	303520	304044.337	304354	303570	304102.488	304424	ZB Read/Write, VI, Z Pass, FB + ZB same, VI separate, image_read off, 2-cycle
+78	zbrw-pass-zbsame-visep-imrd-1cyc	392667	393153.575	394143	392803	393295.019	394275	ZB Read/Write, VI, Z Pass, FB + ZB same, VI separate, image_read on,  1-cycle
+79	zbrw-pass-zbsame-visep-imrd-2cyc	396167	396910.137	397336	396247	397003.406	397386	ZB Read/Write, VI, Z Pass, FB + ZB same, VI separate, image_read on,  2-cycle
+80	zbrw-pass-zbsame-visame-noimrd-1cyc	308089	308499.737	309016	308216	308629.887	309148	ZB Read/Write, VI, Z Pass, FB + ZB + VI same        , image_read off, 1-cycle
+81	zbrw-pass-zbsame-visame-noimrd-2cyc	312415	312975.281	313575	312478	313041.500	313632	ZB Read/Write, VI, Z Pass, FB + ZB + VI same        , image_read off, 2-cycle
+82	zbrw-pass-zbsame-visame-imrd-1cyc	400302	401340.575	402381	400472	401496.094	402534	ZB Read/Write, VI, Z Pass, FB + ZB + VI same        , image_read on,  1-cycle
+83	zbrw-pass-zbsame-visame-imrd-2cyc	405991	406667.000	407370	406059	406731.150	407451	ZB Read/Write, VI, Z Pass, FB + ZB + VI same        , image_read on,  2-cycle
+84	ac-zbsame-vioff-noimrd-1cyc	77772	77772.000	77772	77770	77770.000	77770	Alpha Compare, image_read off, z_compare off, FB + ZB same    , 1-cycle
+85	ac-zbsame-vioff-noimrd-2cyc	155052	155052.000	155052	155049	155049.025	155061	Alpha Compare, image_read off, z_compare off, FB + ZB same    , 2-cycle
+86	ac-zcmp-zbsame-vioff-noimrd-1cyc	105940	106000.106	106088	105948	106006.762	106096	Alpha Compare, image_read off, z_compare on,  FB + ZB same    , 1-cycle
+87	ac-zcmp-zbsame-vioff-noimrd-2cyc	176291	176339.712	176397	176292	176340.938	176398	Alpha Compare, image_read off, z_compare on,  FB + ZB same    , 2-cycle
+88	ac-zbsame-vioff-imrd-1cyc	105940	105998.981	106092	105946	106005.738	106098	Alpha Compare, image_read on,  z_compare off, FB + ZB same    , 1-cycle
+89	ac-zbsame-vioff-imrd-2cyc	158108	158166.406	158228	158105	158163.731	158225	Alpha Compare, image_read on,  z_compare off, FB + ZB same    , 2-cycle
+90	ac-zcmp-zbsame-vioff-imrd-1cyc	189564	190596.719	191672	189590	190621.806	191698	Alpha Compare, image_read on,  z_compare on,  FB + ZB same    , 1-cycle
+91	ac-zcmp-zbsame-vioff-imrd-2cyc	198806	198859.081	198916	198806	198859.425	198916	Alpha Compare, image_read on,  z_compare on,  FB + ZB same    , 2-cycle
+92	ac-zbsep-vioff-noimrd-1cyc	77772	77772.000	77772	77770	77770.031	77786	Alpha Compare, image_read off, z_compare off, FB + ZB separate, 1-cycle
+93	ac-zbsep-vioff-noimrd-2cyc	155052	155052.013	155053	155049	155049.175	155079	Alpha Compare, image_read off, z_compare off, FB + ZB separate, 2-cycle
+94	ac-zcmp-zbsep-vioff-noimrd-1cyc	105940	105999.594	106086	105948	106006.887	106094	Alpha Compare, image_read off, z_compare on,  FB + ZB separate, 1-cycle
+95	ac-zcmp-zbsep-vioff-noimrd-2cyc	176291	176338.994	176397	176292	176340.269	176398	Alpha Compare, image_read off, z_compare on,  FB + ZB separate, 2-cycle
+96	ac-zbsep-vioff-imrd-1cyc	105938	105997.431	106082	105946	106003.738	106088	Alpha Compare, image_read on,  z_compare off, FB + ZB separate, 1-cycle
+97	ac-zbsep-vioff-imrd-2cyc	158104	158165.669	158226	158101	158163.075	158223	Alpha Compare, image_read on,  z_compare off, FB + ZB separate, 2-cycle
+98	ac-zcmp-zbsep-vioff-imrd-1cyc	166182	166352.087	166520	166208	166378.938	166546	Alpha Compare, image_read on,  z_compare on,  FB + ZB separate, 1-cycle
+99	ac-zcmp-zbsep-vioff-imrd-2cyc	183229	183344.306	183447	183230	183345.469	183452	Alpha Compare, image_read on,  z_compare on,  FB + ZB separate, 2-cycle
