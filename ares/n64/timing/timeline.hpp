@@ -50,10 +50,10 @@ struct Readiness {
 
 //The contract every stepped actor implements. run(limit) performs one
 //indivisible step (an RSP issue pair, one DMA landing), then may keep going
-//while its next step starts before `limit`. A step's interactions are stamped
-//with its start time, which is the `at` the actor reported. `limit` was the
-//next contender when run() began, so a run that schedules an event or wakes an
-//actor earlier than `limit` must return after that step.
+//while !timeline.ends(next, limit). A step's interactions are stamped with
+//its start time, which is the `at` the actor reported. `limit` was the next
+//contender when run() began; ends() also stops the run at any event it
+//scheduled or actor it woke, which the run would otherwise pass over.
 struct Actor {
   virtual auto readiness() const -> Readiness = 0;
   virtual auto run(Clock limit) -> void = 0;
@@ -108,8 +108,45 @@ struct Timeline {
   auto wake(ActorId id) -> void {
     if(auto actor = actors[(u8)id]) {
       auto r = actor->readiness();
-      if(r.kind == Readiness::Kind::Runnable && r.at < cachedHorizon) cachedHorizon = r.at;
+      if(r.kind != Readiness::Kind::Runnable) return;
+      if(r.at < cachedHorizon) cachedHorizon = r.at;
+      if(r.at < wokeAt) wokeAt = r.at;
     }
+  }
+
+  //The Actor::run contract, enforced: a run whose next step starts at `next`
+  //returns when that reaches its `limit`, or reaches an actor its own steps
+  //woke (wake()), so the woken actor's earlier step is not passed over.
+  auto ends(Clock next, Clock limit) const -> bool { return next >= limit || next >= wokeAt; }
+
+  //The earliest time any actor or event other than the CPU acts, ignoring
+  //stepCap. The CPU blocked on its own SysAD transaction advances to it.
+  auto earliest() const -> Clock {
+    Clock h = count ? events[0].at : Clock::never();
+    for(u8 i = 0; i < listedCount; i++) {
+      auto id = listed[i];
+      if(id == ActorId::Events) continue;
+      auto r = actors[(u8)id]->readiness();
+      if(r.kind == Readiness::Kind::Runnable && r.at < h) h = r.at;
+    }
+    return h;
+  }
+
+  //A step taken outside advance(): the CPU deciding its own bus grant when
+  //horizon() proves no other actor can act first. It folds into the trace
+  //exactly as the same step taken inside advance() would.
+  auto record(Clock at, ActorId id) -> void { fold(at, id, 0); }
+
+  //Runs `f` as if an event handler were running at `t`, so now() is `t`: a
+  //SysAD drain performs the CPU's posted register write at the drain's time.
+  template<typename F> auto actingAt(Clock t, F&& f) -> void {
+    const bool wasFiring = firing;
+    const Clock wasFiringAt = firingAt;
+    firing = true;
+    firingAt = t;
+    f();
+    firing = wasFiring;
+    firingAt = wasFiringAt;
   }
 
   auto schedule(Event event) -> void {
@@ -123,6 +160,7 @@ struct Timeline {
     events[i] = event;
     count++;
     if(event.at < cachedHorizon) cachedHorizon = event.at;
+    if(event.at < wokeAt) wokeAt = event.at;
   }
 
   //Removes every pending event of `kind` and returns the latest of their
@@ -240,8 +278,11 @@ private:
       onStack |= 1u << (u8)best;
       stackTime[(u8)best] = at;
       fold(at, best, best == ActorId::Events ? events[0].kind : 0);
+      const Clock wasWokeAt = wokeAt;
+      wokeAt = Clock::never();
       if(best == ActorId::Events) fireEvents(limit);
       else actors[(u8)best]->run(limit);
+      if(wasWokeAt < wokeAt) wokeAt = wasWokeAt;
       onStack &= ~(1u << (u8)best);
     }
 
@@ -261,6 +302,8 @@ private:
     listed[i] = id;
   }
 
+  //A handler that wakes an actor (a VI HSYNC posting a refresh to the bus)
+  //ends the batch, so the woken actor's earlier step is not passed over.
   auto fireEvents(Clock limit) -> void {
     const bool wasFiring = firing;
     const Clock wasFiringAt = firingAt;
@@ -271,7 +314,7 @@ private:
       firing = true;
       firingAt = event.at;
       fire(event);
-    } while(count && events[0].at < limit);
+    } while(count && !ends(events[0].at, limit));
     firing = wasFiring;
     firingAt = wasFiringAt;
   }
@@ -288,6 +331,7 @@ private:
   u32     count = 0;
   bool    firing = false;
   Clock   firingAt;
+  Clock   wokeAt = Clock::never();
 };
 
 }

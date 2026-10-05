@@ -51,14 +51,23 @@ struct Scripted : Actor {
       s64 at = times[next++];
       steps.push_back({at, id, 0});
       if(at == nestAt) timeline.catchUp({nestTarget >= 0 ? nestTarget : at}, id);
-    } while(next < times.size() && Clock{times[next]} < limit);
+      if(at == wakeAt && woken) woken->kind = Readiness::Kind::Runnable, timeline.wake(woken->id);
+    } while(next < times.size() && !timeline.ends(Clock{times[next]}, limit));
   }
+
+  //makes `woken` runnable at its own next time during the step at `wakeAt`
+  Scripted* woken = nullptr;
+  s64 wakeAt = -1;
 };
+
+static Scripted* wokenByEvent = nullptr;
 
 static auto fired(const Timeline::Event& event) -> void {
   steps.push_back({event.at.units, ActorId::Events, event.kind});
   //an event that posts another one: the RTC tick reposting itself from its own time
   if(event.kind == 7) timeline.schedule({timeline.now({-1}) + Clock{5}, 8});
+  //an event that makes an actor runnable: a VI HSYNC posting a refresh to the bus
+  if(event.kind == 99) wokenByEvent->kind = Readiness::Kind::Runnable, timeline.wake(wokenByEvent->id);
 }
 
 static auto reset() -> void {
@@ -242,6 +251,31 @@ auto nall::main(Arguments) -> void {
     CHECK(steps.size() == 1, "stepCap catchUp below the real horizon steps nothing: %s", dump().c_str());
     timeline.catchUp({90}, ActorId::CPU);
     CHECK(steps.size() == 2 && timeline.horizon() == Clock{0}, "stepCap keeps the horizon at 0 after a step");
+  }
+
+  //Wakes inside a step end the step: an event handler or an actor run that
+  //makes another actor runnable before the next contender must not run past
+  //it. Defect: fireEvents or run() looping on the limit computed before the
+  //handler ran, which fires the event at 15 before the woken bus at 12.
+  {
+    reset();
+    Scripted bus{}; bus.id = ActorId::Bus; bus.kind = Readiness::Kind::Parked; bus.times = {12};
+    timeline.attach(ActorId::Bus, &bus);
+    wokenByEvent = &bus;
+    timeline.schedule({{10}, 99});
+    timeline.schedule({{15}, 1});
+    timeline.catchUp({100}, ActorId::CPU);
+    CHECK(sorted() && steps.size() == 3, "an event's wake must stop the event batch: %s", dump().c_str());
+
+    reset();
+    Scripted bus2{}; bus2.id = ActorId::Bus; bus2.kind = Readiness::Kind::Parked; bus2.times = {12};
+    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {10, 20};
+    rsp.woken = &bus2; rsp.wakeAt = 10;
+    timeline.attach(ActorId::Bus, &bus2);
+    timeline.attach(ActorId::RSP, &rsp);
+    timeline.schedule({{50}, 1});
+    timeline.catchUp({100}, ActorId::CPU);
+    CHECK(sorted() && steps.size() == 4, "an actor's wake must end its run: %s", dump().c_str());
   }
 
   if(failures) { std::printf("timeline: %u failure(s)\n", failures); std::exit(1); }
