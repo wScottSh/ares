@@ -2,6 +2,7 @@
 //Each case names the defect it detects. Exits nonzero on the first failure.
 
 #include <nall/nall.hpp>
+#include <nall/main.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -17,7 +18,7 @@ using namespace test;
 using namespace test::Timing;
 
 struct Step { s64 at; ActorId id; u32 kind; };
-static std::vector<Step> log;
+static std::vector<Step> steps;
 static Timeline timeline;
 static u32 failures = 0;
 
@@ -46,28 +47,28 @@ struct Scripted : Actor {
     runs++;
     do {
       s64 at = times[next++];
-      log.push_back({at, id, 0});
+      steps.push_back({at, id, 0});
       if(at == nestAt) timeline.catchUp({at}, id);
     } while(next < times.size() && Clock{times[next]} < limit);
   }
 };
 
 static auto fired(const Timeline::Event& event) -> void {
-  log.push_back({event.at.units, ActorId::Events, event.kind});
+  steps.push_back({event.at.units, ActorId::Events, event.kind});
   //an event that posts another one: the RTC tick reposting itself from its own time
   if(event.kind == 7) timeline.schedule({timeline.now({-1}) + Clock{5}, 8});
 }
 
 static auto reset() -> void {
-  log.clear();
+  steps.clear();
   timeline = {};
   timeline.reset(fired);
 }
 
 static auto sorted() -> bool {
-  for(u32 i = 1; i < log.size(); i++) {
-    auto& a = log[i - 1];
-    auto& b = log[i];
+  for(u32 i = 1; i < steps.size(); i++) {
+    auto& a = steps[i - 1];
+    auto& b = steps[i];
     if(a.at > b.at) return false;
     if(a.at == b.at && rank(a.id) > rank(b.id)) return false;
   }
@@ -76,11 +77,12 @@ static auto sorted() -> bool {
 
 static auto dump() -> std::string {
   std::string s;
-  for(auto& e : log) s += "(" + std::to_string(e.at) + "," + std::to_string((u32)e.id) + "," + std::to_string(e.kind) + ")";
+  for(auto& e : steps) s += "(" + std::to_string(e.at) + "," + std::to_string((u32)e.id) + "," + std::to_string(e.kind) + ")";
   return s;
 }
 
-auto main() -> int {
+//nall supplies the process entry point and calls this; a nonzero exit reports failures
+auto nall::main(Arguments) -> void {
   //Ordering invariant: every step and event before the target runs in (time, rank)
   //order, and nothing at or after the target runs. Defect: a scan that picks the
   //first runnable actor instead of the earliest.
@@ -95,8 +97,8 @@ auto main() -> int {
     timeline.schedule({{100}, 3});
     timeline.catchUp({100}, ActorId::CPU);
     CHECK(sorted(), "steps out of (time, rank) order: %s", dump().c_str());
-    CHECK(log.size() == 13, "expected 13 steps up to and including t=100, got %zu: %s", log.size(), dump().c_str());
-    CHECK(log.back().at == 100 && log.back().id == ActorId::RSP, "last step should be RSP at 100: %s", dump().c_str());
+    CHECK(steps.size() == 13, "expected 13 steps up to and including t=100, got %zu: %s", steps.size(), dump().c_str());
+    CHECK(steps.back().at == 100 && steps.back().id == ActorId::RSP, "last step should be RSP at 100: %s", dump().c_str());
     CHECK(timeline.horizon() == Clock{120}, "horizon after catch-up should be the next step (120), got %lld", (long long)timeline.horizon().units);
   }
 
@@ -114,10 +116,10 @@ auto main() -> int {
     timeline.schedule({{50}, 9});
     timeline.schedule({{50}, 4});
     timeline.catchUp({50}, ActorId::RDP);
-    CHECK(log.size() == 3, "caller RDP at 50: Events(4), Events(9), SysAD run; RDP and RSP wait: %s", dump().c_str());
-    CHECK(log.size() == 3 && log[0].kind == 4 && log[1].kind == 9 && log[2].id == ActorId::SysAD, "tie order wrong: %s", dump().c_str());
+    CHECK(steps.size() == 3, "caller RDP at 50: Events(4), Events(9), SysAD run; RDP and RSP wait: %s", dump().c_str());
+    CHECK(steps.size() == 3 && steps[0].kind == 4 && steps[1].kind == 9 && steps[2].id == ActorId::SysAD, "tie order wrong: %s", dump().c_str());
     timeline.catchUp({50}, ActorId::CPU);
-    CHECK(log.size() == 5 && log[3].id == ActorId::RDP && log[4].id == ActorId::RSP, "CPU caller at 50 should run RDP then RSP: %s", dump().c_str());
+    CHECK(steps.size() == 5 && steps[3].id == ActorId::RDP && steps[4].id == ActorId::RSP, "CPU caller at 50 should run RDP then RSP: %s", dump().c_str());
   }
 
   //Nesting: an actor that catches up from inside its own step never lets anyone
@@ -138,14 +140,14 @@ auto main() -> int {
     //inside the RSP's step at 50: Events(50) and SysAD(50) run (rank below RSP); RDP at 60 and the event at 55 must wait
     CHECK(sorted(), "nested run out of order: %s", dump().c_str());
     u32 rspIndex = 0;
-    for(u32 i = 0; i < log.size(); i++) if(log[i].id == ActorId::RSP && log[i].at == 50) rspIndex = i;
+    for(u32 i = 0; i < steps.size(); i++) if(steps[i].id == ActorId::RSP && steps[i].at == 50) rspIndex = i;
     bool before = true;
-    for(u32 i = 0; i < log.size(); i++) {
-      if(log[i].at == 55 || log[i].at == 60) before = before && i > rspIndex;
+    for(u32 i = 0; i < steps.size(); i++) {
+      if(steps[i].at == 55 || steps[i].at == 60) before = before && i > rspIndex;
     }
     CHECK(before, "a step at 55 or 60 ran before the RSP's step at 50 finished: %s", dump().c_str());
     CHECK(timeline.maxDepth == 2, "nested depth should be 2, got %u", timeline.maxDepth);
-    CHECK(log.size() == 9, "expected 9 steps, got %zu: %s", log.size(), dump().c_str());
+    CHECK(steps.size() == 9, "expected 9 steps, got %zu: %s", steps.size(), dump().c_str());
   }
 
   //Parked and Blocked actors are never stepped, whatever their time. Defect: the
@@ -160,7 +162,7 @@ auto main() -> int {
     timeline.attach(ActorId::RSP, &rsp);
     timeline.catchUp({1000}, ActorId::CPU);
     CHECK(parked.runs == 0 && blocked.runs == 0, "a Parked or Blocked actor was stepped");
-    CHECK(log.size() == 1 && log[0].id == ActorId::RSP, "only the RSP should have stepped: %s", dump().c_str());
+    CHECK(steps.size() == 1 && steps[0].id == ActorId::RSP, "only the RSP should have stepped: %s", dump().c_str());
     CHECK(timeline.horizon() == Clock::never(), "nothing runnable: horizon should be never, got %lld", (long long)timeline.horizon().units);
   }
 
@@ -175,7 +177,7 @@ auto main() -> int {
     timeline.catchUp({20}, ActorId::CPU);
     CHECK(sorted(), "batched steps crossed another actor's time: %s", dump().c_str());
     CHECK(a.runs == 3 && b.runs == 2, "RSP should run in 3 batches (10,12 | 14 | 16) and RDP in 2, got %u and %u", a.runs, b.runs);
-    CHECK(log.size() == 6 && log[3].id == ActorId::RDP && log[3].at == 16 && log[4].id == ActorId::RSP, "tie at 16 should put RDP before RSP: %s", dump().c_str());
+    CHECK(steps.size() == 6 && steps[3].id == ActorId::RDP && steps[3].at == 16 && steps[4].id == ActorId::RSP, "tie at 16 should put RDP before RSP: %s", dump().c_str());
   }
 
   //Events: out-of-order posting, equal-time order by kind then posting order,
@@ -195,8 +197,8 @@ auto main() -> int {
     CHECK(!timeline.pending(5) && timeline.pending(6), "pending() wrong after cancel");
     CHECK(timeline.horizon() == Clock{10}, "horizon should be the first event, got %lld", (long long)timeline.horizon().units);
     timeline.catchUp({25}, ActorId::CPU);
-    CHECK(log.size() == 5, "expected 5 events (3 at 10, kind 7 at 20, kind 8 at 25), got %zu: %s", log.size(), dump().c_str());
-    CHECK(log.size() == 5 && log[0].kind == 3 && log[1].kind == 6 && log[2].kind == 6 && log[3].kind == 7 && log[4].kind == 8 && log[4].at == 25,
+    CHECK(steps.size() == 5, "expected 5 events (3 at 10, kind 7 at 20, kind 8 at 25), got %zu: %s", steps.size(), dump().c_str());
+    CHECK(steps.size() == 5 && steps[0].kind == 3 && steps[1].kind == 6 && steps[2].kind == 6 && steps[3].kind == 7 && steps[4].kind == 8 && steps[4].at == 25,
       "event order or the reposted time is wrong: %s", dump().c_str());
     CHECK(timeline.now({77}) == Clock{77}, "now() outside a handler returns the fallback");
   }
@@ -215,19 +217,18 @@ auto main() -> int {
     timeline.wake(ActorId::RSP);
     CHECK(timeline.horizon() == Clock{30}, "wake should lower the horizon to 30, got %lld", (long long)timeline.horizon().units);
     timeline.catchUp({29}, ActorId::CPU);
-    CHECK(log.empty(), "catchUp below the horizon must not step: %s", dump().c_str());
+    CHECK(steps.empty(), "catchUp below the horizon must not step: %s", dump().c_str());
     timeline.catchUp({30}, ActorId::CPU);
-    CHECK(log.size() == 1 && log[0].at == 30, "catchUp at the horizon steps the RSP: %s", dump().c_str());
+    CHECK(steps.size() == 1 && steps[0].at == 30, "catchUp at the horizon steps the RSP: %s", dump().c_str());
     CHECK(timeline.horizon() == Clock{90}, "horizon should move to 90, got %lld", (long long)timeline.horizon().units);
     timeline.setStepCap(true);
     CHECK(timeline.horizon() == Clock{0}, "stepCap horizon should be 0, got %lld", (long long)timeline.horizon().units);
     timeline.catchUp({50}, ActorId::CPU);
-    CHECK(log.size() == 1, "stepCap catchUp below the real horizon steps nothing: %s", dump().c_str());
+    CHECK(steps.size() == 1, "stepCap catchUp below the real horizon steps nothing: %s", dump().c_str());
     timeline.catchUp({90}, ActorId::CPU);
-    CHECK(log.size() == 2 && timeline.horizon() == Clock{0}, "stepCap keeps the horizon at 0 after a step");
+    CHECK(steps.size() == 2 && timeline.horizon() == Clock{0}, "stepCap keeps the horizon at 0 after a step");
   }
 
-  if(failures) { std::printf("timeline: %u failure(s)\n", failures); return 1; }
+  if(failures) { std::printf("timeline: %u failure(s)\n", failures); std::exit(1); }
   std::printf("timeline: ok\n");
-  return 0;
 }

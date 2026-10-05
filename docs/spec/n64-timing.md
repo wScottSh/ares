@@ -234,7 +234,8 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `pending:snapper-lfs` | pending | - | - | gate | snapper64 assets need git lfs pull (plan R3) |
 | `pending:no-corpus` | pending | - | - | gate | no corpus in the program measures this behavior; it stays pending until one does |
 | `det` | det | tools/n64-timing/determinism.sh | every mm scene | equal | two runs byte-identical, stats and trace_hash (plan T2) |
-| `stepcap` | stepcap | n64-run --step-cap | every mm scene and nemu64 ROM | equal | step-capped run equals the normal run byte for byte (plan T5) |
+| `stepcap` | stepcap | tools/n64-timing/determinism.sh --step-cap | every mm scene and nemu64 ROM | equal | step-capped run equals the normal run byte for byte (plan T5) |
+| `unit:timeline` | unit | n64-timing-tests | timeline | pass | scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5) |
 | `gen` | gen | tools/n64-timing/behaviors.py --check | - | pass | this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3) |
 | `mm:file-select` | mm | tools/n64-timing/mmbench | file-select | report | Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench) |
 | `mm:south-clock-town` | mm | tools/n64-timing/mmbench | south-clock-town | report | Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench) |
