@@ -26,6 +26,11 @@
 !CMakeLists.txt
 !CMakePresets.json
 
+# Fork: agent and domain docs
+!/CLAUDE.md
+!/CONTEXT.md
+!/docs
+
 # Exclude old macOS Finder metadata
 .DS_Store
 
