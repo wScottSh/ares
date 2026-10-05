@@ -23,7 +23,7 @@ else
   for run in run1 run2; do
     mkdir -p "$out/$run"
     "$exe" "$rom" --frames "$frames" --stats "$out/$run/stats.tsv" > "$out/$run/stdout.txt" 2> "$out/$run/stderr.txt" || true
-    grep -v -e '^n64-run: stop=' -e '^n64-run: rdp_engine ' "$out/$run/stderr.txt" > "$out/$run/notices.txt" || true
+    grep -v -e '^n64-run: stop=' -e '^n64-run: rdp_engine ' -e '^n64-run: cpu_instructions=' "$out/$run/stderr.txt" > "$out/$run/notices.txt" || true
     rm "$out/$run/stderr.txt"
   done
 fi

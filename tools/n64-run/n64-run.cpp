@@ -573,6 +573,10 @@ auto nall::main(Arguments arguments) -> void {
   std::fflush(stdout);
   std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f\n",
     info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed());
+  //host cost per interpreted CPU instruction: the scheduler's own overhead shows here (plan T5)
+  std::fprintf(stderr, "n64-run: cpu_instructions=%llu ns_per_instruction=%.2f\n",
+    (unsigned long long)N64::cpu.instructionIndex,
+    N64::cpu.instructionIndex ? wallElapsed() * 1e9 / N64::cpu.instructionIndex : 0.0);
   //host time inside the engine's render calls and the pixels it rasterized (ADR 0001 risk 1)
   auto& engine = N64::rdp.engine;
   std::fprintf(stderr, "n64-run: rdp_engine render_calls=%llu render_ms=%.3f pixels=%llu ns_per_pixel=%.2f\n",
