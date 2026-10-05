@@ -27,7 +27,7 @@ tools/n64-timing/run-thar0.sh
 | `suite.py` | Suite model. A test has values. A value runs steps, which are runtime routines that write raw results into `RES[]`, and then checks over `RES[]`. `checkpoint()` runs checks between steps. |
 | `nemu.py` | Python port of the nemu64-test types the tables use (`Assembler`, `GPR`, `Status`, `FCSR`, float literals) |
 | `import_nemu64.py` | Translates the Rust value tables in `src/tests/timing/mod.rs` into `suites/nemu64/tables.py`. It reads the source as text and never compiles or runs it. |
-| `rcp.py` | RDP command-list encoders and on-target RCP helpers (`rdp_exec` with DPC counter reads, `wait_count`, `io_writes`) |
+| `rcp.py` | The shared RDP command builder, DPC/SP register map and on-target RCP helpers (`rdp_exec` with DPC counter reads, `wait_count`, `io_writes`) |
 | `suites/thar0/` | Port of Thar0/RDP-Timing-Tests with hardware expectations and a comparator. See [suites/thar0/README.md](suites/thar0/README.md). |
 | `suites/nemu64/` | Ported `run()` logic per feature set (`timing.py`, `cycle.py`, `cop0hazard.py`), routines, value descriptions, and the root-cause classifier |
 | `suites/bench/` | Microbenchmark ROMs for the timing-core plan (`--suite bench`). They print raw measurements; `expected.tsv` holds the cited hardware values. See [suites/bench/README.md](suites/bench/README.md). |

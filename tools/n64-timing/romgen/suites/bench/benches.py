@@ -9,7 +9,7 @@ into pclk, rclk and rates; expected.tsv holds the cited hardware values.
 import struct
 
 from ...suite import Step, Test, Value
-from . import rdp
+from ... import rcp
 
 KSEG0, KSEG1 = 0x80000000, 0xA0000000
 
@@ -174,16 +174,16 @@ RDP_EXTRA = ["clock", "bufbusy", "pipebusy", "tmembusy"]
 
 
 def rdp_prologue(atomic=False):
-    return [rdp.set_color_image(COLOR_IMAGE, 320), rdp.set_scissor(0, 0, 320, 240),
-            rdp.set_combine_prim(), rdp.set_prim_color(0xFF0000FF),
-            rdp.set_other_modes(rdp.CYCLE_1, atomic)]
+    return [rcp.set_color_image(rcp.IM_FMT_RGBA, rcp.IM_SIZ_16b, 320, COLOR_IMAGE), rcp.set_scissor(0, 0, 320, 240),
+            rcp.set_combine_lerp(*["0", "0", "0", "PRIMITIVE"] * 4), rcp.set_prim_color(0xFF0000FF),
+            rcp.set_other_mode(rcp.CYC_1CYCLE | (rcp.ATOMIC_PRIM if atomic else 0), 0)]
 
 
 def rdp_point(rom, point, body, n, consts, prologue=None, flags=VI_OFF, reps=4):
     suite = rom.suite
-    pro = rdp.words(rdp_prologue() if prologue is None else prologue)
-    body_words = rdp.words(body)
-    epi = rdp.words([rdp.bare(rdp.SYNC_FULL)])
+    pro = rcp.words(rdp_prologue() if prologue is None else prologue)
+    body_words = rcp.words(body)
+    epi = rcp.words([rcp.full_sync()])
     nbytes = 4 * (len(pro) + n * len(body_words) + len(epi))
     build = Step("bench_list_step", [
         suite.blob(pro), len(pro), suite.blob(body_words) if body_words else 0, len(body_words),
@@ -193,26 +193,26 @@ def rdp_point(rom, point, body, n, consts, prologue=None, flags=VI_OFF, reps=4):
               reps=reps, flags=flags, extra=RDP_EXTRA, pre=[build])
 
 
-SYNC_KINDS = [("pipe", rdp.SYNC_PIPE), ("tile", rdp.SYNC_TILE), ("load", rdp.SYNC_LOAD)]
-SMALL_RECT = rdp.rect(0, 0, 8, 1)
+SYNC_KINDS = [("pipe", rcp.pipe_sync()), ("tile", rcp.tile_sync()), ("load", rcp.load_sync())]
+SMALL_RECT = rcp.fill_rectangle(0, 0, 8, 1)
 
 
 def rdp_sync_sweep(suite):
     rom = Rom(suite, "rdp-sync-sweep")
     rdp_point(rom, "none-0", [], 0, [("kind", "none")])
-    for kind, code in SYNC_KINDS:
+    for kind, sync in SYNC_KINDS:
         for n in (16, 64, 256):
-            rdp_point(rom, f"{kind}-{n}", [rdp.bare(code)], n, [("kind", kind)])
+            rdp_point(rom, f"{kind}-{n}", [sync], n, [("kind", kind)])
     for n in (16, 64):
         rdp_point(rom, f"rect-{n}", [SMALL_RECT], n, [("kind", "rect")])
-        for kind, code in SYNC_KINDS:
-            rdp_point(rom, f"rect-{kind}-{n}", [SMALL_RECT, rdp.bare(code)], n,
+        for kind, sync in SYNC_KINDS:
+            rdp_point(rom, f"rect-{kind}-{n}", [SMALL_RECT, sync], n,
                       [("kind", f"rect+{kind}")])
 
 
-SETTERS = [("nop", rdp.bare(rdp.NOP)), ("prim-color", rdp.set_prim_color(0x00FF00FF)),
-           ("env-color", rdp.set_env_color(0x0000FFFF)),
-           ("other-modes", rdp.set_other_modes(rdp.CYCLE_1))]
+SETTERS = [("nop", rcp.nop()), ("prim-color", rcp.set_prim_color(0x00FF00FF)),
+           ("env-color", rcp.set_env_color(0x0000FFFF)),
+           ("other-modes", rcp.set_other_mode(rcp.CYC_1CYCLE, 0))]
 
 
 def rdp_setter_sweep(suite):
@@ -223,7 +223,7 @@ def rdp_setter_sweep(suite):
             rdp_point(rom, f"{kind}-{n}", [cmd], n, [("kind", kind)])
 
 
-ATOMIC_RECT = rdp.rect(16, 16, 32, 20)
+ATOMIC_RECT = rcp.fill_rectangle(16, 16, 32, 20)
 
 
 def rdp_atomic_sweep(suite):
@@ -236,9 +236,9 @@ def rdp_atomic_sweep(suite):
 
 def rdp_rectn(suite):
     rom = Rom(suite, "rdp-rectn")
-    rdp_point(rom, "rect-320x6", [rdp.rect(0, 0, 320, 6)], 1, [("w", 320), ("h", 6)])
-    rdp_point(rom, "rect-320x6-x8", [rdp.rect(0, 0, 320, 6)], 8, [("w", 320), ("h", 6)])
-    rdp_point(rom, "duty-320x240", [rdp.rect(0, 0, 320, 240)], 1, [("w", 320), ("h", 240)])
+    rdp_point(rom, "rect-320x6", [rcp.fill_rectangle(0, 0, 320, 6)], 1, [("w", 320), ("h", 6)])
+    rdp_point(rom, "rect-320x6-x8", [rcp.fill_rectangle(0, 0, 320, 6)], 8, [("w", 320), ("h", 6)])
+    rdp_point(rom, "duty-320x240", [rcp.fill_rectangle(0, 0, 320, 240)], 1, [("w", 320), ("h", 240)])
 
 
 ROMS = {

@@ -20,7 +20,7 @@ def check(name, got, want):
 
 
 def hexcmd(cmd):
-    return f"{cmd[0]:08X} {cmd[1]:08X}"
+    return f"{cmd >> 32:08X} {cmd & 0xFFFFFFFF:08X}"
 
 
 # libultra gbi.h gsDPSetCombineMode(G_CC_PRIMITIVE, G_CC_PRIMITIVE) is FCFFFFFF FFFDF6FB.
@@ -28,7 +28,7 @@ check("combine prim", hexcmd(rcp.set_combine_lerp(*["0", "0", "0", "PRIMITIVE"] 
 check("full sync", hexcmd(rcp.full_sync()), "E9000000 00000000")
 check("pipe sync", hexcmd(rcp.pipe_sync()), "E7000000 00000000")
 check("fill rect 320x240", hexcmd(rcp.fill_rectangle(0, 0, 320, 240)), "F65003C0 00000000")
-check("scissor 320x240", hexcmd(rcp.set_scissor_frac(0, 0, 0, 1280, 960)), "ED000000 005003C0")
+check("scissor 320x240", hexcmd(rcp.set_scissor_frac(0, 0, 1280, 960)), "ED000000 005003C0")
 check("color image rgba16 320", hexcmd(rcp.set_color_image(0, 2, 320, 0x80100000)), "FF10013F 80100000")
 check("fill mode", hexcmd(rcp.set_other_mode(rcp.CYC_FILL, 0)), "EF300000 00000000")
 

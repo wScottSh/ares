@@ -27,7 +27,7 @@ N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/rdpstat/run.sh --rd
 - `RSP::start_dma_cpu_to_sp` writes the byte length, not the length minus 1, to `SP_RD_LEN`. The port does the same.
 - The No-Sync port draws each test case once. It skips `RDPDumpTest::run`'s crash probe (a SYNC_PIPE + SYNC_FULL list followed by a PIPE_BUSY check) and the on-screen report. The ROM counts the pixels in the test region (x 16 to 304 inclusive, y 48 to 191) that differ from the reference, as `rdpDumpTest.cpp` does.
 - The Fill-Mode Syncs port draws one row (y = 100) of 160 two-pixel fill rectangles in the demo's command pattern (SetFillColor A, rectangle, SetFillColor B, SYNC_PIPE). The fill colors are fixed instead of sampled from an image, and the port appends SYNC_FULL so the CPU can wait for the list. The check expects every pixel in color B.
-- The command encoders in `rdp.py` are local to this suite. They follow both sources' encoders field for field.
+- The command encoders are the shared builder in `../../rcp.py`. They follow both sources' encoders field for field (checked by ROM bytes).
 
 ## Attribution
 

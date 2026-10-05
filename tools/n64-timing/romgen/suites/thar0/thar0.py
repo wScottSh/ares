@@ -74,7 +74,7 @@ def setup_dl(spec):
     fb = FB_ADDR
     zb = ZB_ADDR_SAME if spec.zb_same_bank else ZB_ADDR_DIFF
     dl = [
-        rcp.set_scissor_frac(rcp.SC_NON_INTERLACE, 0, 0, WIDTH * 4, HEIGHT * 4),
+        rcp.set_scissor_frac(0, 0, WIDTH * 4, HEIGHT * 4),
         rcp.set_other_mode(rcp.CYC_FILL, 0),
         rcp.set_color_image(rcp.IM_FMT_RGBA, rcp.IM_SIZ_16b, WIDTH, fb),
         rcp.set_fill_color((rcp.rgba5551(0, 0, 0, 255) << 16) | rcp.rgba5551(0, 0, 0, 255)),
@@ -102,15 +102,15 @@ def setup_dl(spec):
     if not spec.depth_pass:
         dl += [
             rcp.set_other_mode(om0, om1 | rcp.Z_UPD),
-            rcp.set_prim_color(0, 0, 255, 0, 0, 255),
+            rcp.set_prim_color(rcp.rgba8(255, 0, 0, 255)),
             rcp.set_prim_depth(0, 0),
             rcp.fill_rectangle(0, 0, WIDTH, HEIGHT),
             rcp.pipe_sync(),
         ]
     dl += [
         rcp.set_other_mode(om0, om1),
-        rcp.set_blend_color(0, 0, 0, spec.alpha_compare_threshold),
-        rcp.set_prim_color(0, 0, 0, 255, 0, spec.rectangle_alpha),
+        rcp.set_blend_color(rcp.rgba8(0, 0, 0, spec.alpha_compare_threshold)),
+        rcp.set_prim_color(rcp.rgba8(0, 255, 0, spec.rectangle_alpha)),
         rcp.set_prim_depth(0x7FFF, 0),
         rcp.full_sync(),
     ]

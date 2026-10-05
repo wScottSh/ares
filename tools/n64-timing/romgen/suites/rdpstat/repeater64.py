@@ -10,7 +10,7 @@ import os
 import struct
 
 from ...suite import Test, Value
-from . import rdp
+from ... import rcp
 from .routines import eq_dec, rle_diff, wait_eq, write32
 
 FB = 0x00500000              # repeater64 main.cpp: RGBA16 320x240 surfaces with stride 0x800
@@ -54,7 +54,7 @@ def rgba(r, g, b, a):
 
 
 def fill_color16(r, g, b, a):
-    c = rdp.rgba5551(r, g, b, a)
+    c = rcp.rgba5551(r, g, b, a)
     return c << 16 | c
 
 
@@ -69,28 +69,28 @@ CC_ENV = ((8 << 52) | (8 << 28) | (16 << 47) | (5 << 15) | (8 << 37) | (8 << 24)
 
 def clear_list():
     """RDPNoSync1C.cpp draw(): the first DPL, closed by runSync's SYNC_FULL."""
-    return rdp.DisplayList("r64_clear").add(
-        rdp.sync_pipe(),
-        rdp.color_image(FB, FB_STRIDE_PX),
-        rdp.scissor(0, 0, to_10p2(319), to_10p2(239)),
-        rdp.other_modes(rdp.CYCLE_FILL),
-        rdp.fill_color(fill_color16(0, 0, 0, 0)),
-        rdp.rect(0, 0, to_10p2(319), to_10p2(239)),
-        rdp.sync_full(),
+    return rcp.DisplayList("r64_clear").add(
+        rcp.pipe_sync(),
+        rcp.set_color_image(rcp.IM_FMT_RGBA, rcp.IM_SIZ_16b, FB_STRIDE_PX, FB),
+        rcp.set_scissor_frac(0, 0, to_10p2(319), to_10p2(239)),
+        rcp.set_other_mode(rcp.CYC_FILL, 0),
+        rcp.set_fill_color(fill_color16(0, 0, 0, 0)),
+        rcp.fill_rectangle_frac(0, 0, to_10p2(319), to_10p2(239)),
+        rcp.full_sync(),
     )
 
 
 def nosync_list(case):
     """RDPNoSync1C.cpp draw(): the second DPL (dplTri) for test case 0x10000000 | case."""
     x0, y0, x1, y1 = REGION
-    lst = rdp.DisplayList(f"r64_nosync_{case:02x}").add(
-        rdp.sync_pipe(),
-        rdp.fill_color(fill_color16(0x22, 0x22, 0x22, 0)),
-        rdp.scissor(*(to_10p2(v) for v in REGION)),
-        rdp.rect(to_10p2(x0), to_10p2(y0), to_10p2(x1), to_10p2(y1)),
-        rdp.sync_pipe(),
-        rdp.other_modes(rdp.CYCLE_1, dither_rgb=3, dither_alpha=3),
-        rdp.combine(CC_ENV),
+    lst = rcp.DisplayList(f"r64_nosync_{case:02x}").add(
+        rcp.pipe_sync(),
+        rcp.set_fill_color(fill_color16(0x22, 0x22, 0x22, 0)),
+        rcp.set_scissor_frac(*(to_10p2(v) for v in REGION)),
+        rcp.fill_rectangle_frac(to_10p2(x0), to_10p2(y0), to_10p2(x1), to_10p2(y1)),
+        rcp.pipe_sync(),
+        rcp.set_other_mode(rcp.CYC_1CYCLE | rcp.CD_DISABLE | rcp.AD_DISABLE, 0),
+        rcp.set_combine_raw(CC_ENV),
     )
     size_y, size_x = case * 6 + 1, 1
     if case >= 10:
@@ -99,13 +99,13 @@ def nosync_list(case):
     for y in range(32):
         pos_x = x0 + 2
         for x in range(64):
-            lst.add(rdp.sync_pipe(),
-                    rdp.env_color(rgba(0xFF, 0xFF, 0xFF, 0xFF)),
-                    rdp.rect(to_10p2(pos_x), to_10p2(pos_y),
+            lst.add(rcp.pipe_sync(),
+                    rcp.set_env_color(rgba(0xFF, 0xFF, 0xFF, 0xFF)),
+                    rcp.fill_rectangle_frac(to_10p2(pos_x), to_10p2(pos_y),
                              to_10p2(pos_x + x + size_x), to_10p2(pos_y + y + size_y)),
-                    rdp.env_color(rgba(0xFF, 0, 0, 0xFF)),
-                    rdp.env_color(rgba(0, 0xFF, 0, 0xFF)),
-                    rdp.env_color(rgba(0, 0, 0xFF, 0xFF)))
+                    rcp.set_env_color(rgba(0xFF, 0, 0, 0xFF)),
+                    rcp.set_env_color(rgba(0, 0xFF, 0, 0xFF)),
+                    rcp.set_env_color(rgba(0, 0, 0xFF, 0xFF)))
             pos_x += x + size_x + 1
             if pos_x + x + size_x + 1 > x1:
                 break
@@ -113,7 +113,7 @@ def nosync_list(case):
         if pos_y + y + size_y + 1 > y1:
             break
     assert len(lst.cmds) + 1 <= 2000, "RDPNoSync1C.cpp allocates dplTri{2000}"
-    return lst.add(rdp.sync_full())
+    return lst.add(rcp.full_sync())
 
 
 FILL_ROW = 100
@@ -124,18 +124,18 @@ FILL_B = fill_color16(0, 0xFF, 0, 0xFF)
 def fill_sync_list():
     """RDPSync.cpp draw(): one row of 160 two-pixel fill rectangles, each followed by a new
     SetFillColor with no sync in between. SYNC_FULL is appended so the CPU can wait."""
-    lst = rdp.DisplayList("r64_fillsync").add(
-        rdp.sync_pipe(),
-        rdp.color_image(FB, FB_STRIDE_PX),
-        rdp.scissor(0, 0, to_10p2(319), to_10p2(239)),
-        rdp.other_modes(rdp.CYCLE_FILL),
+    lst = rcp.DisplayList("r64_fillsync").add(
+        rcp.pipe_sync(),
+        rcp.set_color_image(rcp.IM_FMT_RGBA, rcp.IM_SIZ_16b, FB_STRIDE_PX, FB),
+        rcp.set_scissor_frac(0, 0, to_10p2(319), to_10p2(239)),
+        rcp.set_other_mode(rcp.CYC_FILL, 0),
     )
     for x in range(0, 320, 2):
-        lst.add(rdp.fill_color(FILL_A),
-                rdp.rect(x * 4, FILL_ROW * 4, x * 4 + 4, FILL_ROW * 4),
-                rdp.fill_color(FILL_B),
-                rdp.sync_pipe())
-    return lst.add(rdp.sync_full())
+        lst.add(rcp.set_fill_color(FILL_A),
+                rcp.fill_rectangle_frac(x * 4, FILL_ROW * 4, x * 4 + 4, FILL_ROW * 4),
+                rcp.set_fill_color(FILL_B),
+                rcp.pipe_sync())
+    return lst.add(rcp.full_sync())
 
 
 CLEAR = clear_list()
@@ -181,9 +181,9 @@ def reference_asm(assets):
 def run_list(symbols, lst):
     """DPL::runSync: wait for DMA_BUSY clear, START, END, then wait for PIPE_BUSY clear."""
     start = symbols[lst.label] & 0x1FFFFFFF
-    return [wait_eq(rdp.DPC_STATUS, rdp.DMA_BUSY, 0, WAIT, 0),
-            write32(rdp.DPC_START, start), write32(rdp.DPC_END, start + lst.size()),
-            wait_eq(rdp.DPC_STATUS, rdp.PIPE_BUSY, 0, WAIT, 0)]
+    return [wait_eq(rcp.DPC_STATUS, rcp.DMA_BUSY, 0, WAIT, 0),
+            write32(rcp.DPC_START, start), write32(rcp.DPC_END, start + lst.size()),
+            wait_eq(rcp.DPC_STATUS, rcp.PIPE_BUSY, 0, WAIT, 0)]
 
 
 def nosync(symbols):
