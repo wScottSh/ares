@@ -1,0 +1,258 @@
+until 0x801BD970 w != 0
+copy 0x801BD940 0x801BD9D0 0x30
+poke [0x801F3F60]+0x1434 h 92
+poke [0x801F3F60]+0x1436 h 92
+until 0x801BD9D0 w != 0
+wait 30
+input A
+wait 10
+input
+until [0x801E3FB0]+0xA4 h == 0x6F
+until [0x801E3FB0]+0x18B4A b != 0
+until [0x801E3FB0]+0x18B4A b == 0
+mark window
+peek gFramebuffers[0] 0x801FBB80 w
+peek gFramebuffers[1] 0x801FBB84 w
+peek gZBufferPtr 0x801FBB8C w
+peek gWorkBuffer 0x801FBB90 w
+peek gGfxSPTaskOutputBufferPtr 0x801FBB94 w
+peek gGfxSPTaskOutputBufferEnd 0x801FBB98 w
+peek gZBufferLoRes 0x801FBBA4 w
+peek gWorkBufferLoRes 0x801FBBA8 w
+peek gGfxSPTaskOutputBufferLoRes 0x801FBBAC w
+peek sKaleidoAreaPtr 0x801D0BA8 w
+peek sZeldaArena.head 0x801F5100 w
+peek malloc_arena.head 0x8009CD20 w
+peek play.tha.size [0x801E3FB0]+0x74 w
+peek play.tha.start [0x801E3FB0]+0x78 w
+peek play.tha.head [0x801E3FB0]+0x7C w
+peek play.tha.tail [0x801E3FB0]+0x80 w
+peek OSTask.type 0x801F9CB8+0x88 w
+peek OSTask.output_buff 0x801F9CB8+0x88+0x28 w
+peek OSTask.output_buff_size 0x801F9CB8+0x88+0x2C w
+peek start.gfx_tasks 0x801F9CB8+0x2C8 w
+peek start.game_frames [0x801E3FB0]+0x9C w
+peek start.update_divisor [0x801E3FB0]+0xA2 b
+input y=-32767
+wait 60
+input x=0 y=-32767
+wait 5
+input x=5690 y=-32269
+wait 5
+input x=11207 y=-30791
+wait 5
+input x=16383 y=-28377
+wait 5
+input x=21062 y=-25101
+wait 5
+input x=25101 y=-21062
+wait 5
+input x=28377 y=-16384
+wait 5
+input x=30791 y=-11207
+wait 5
+input x=32269 y=-5690
+wait 5
+input x=32767 y=0
+wait 5
+input x=32269 y=5690
+wait 5
+input x=30791 y=11207
+wait 5
+input x=28377 y=16383
+wait 5
+input x=25101 y=21062
+wait 5
+input x=21062 y=25101
+wait 5
+input x=16383 y=28377
+wait 5
+input x=11207 y=30791
+wait 5
+input x=5690 y=32269
+wait 5
+input x=0 y=32767
+wait 5
+input x=-5690 y=32269
+wait 5
+input x=-11207 y=30791
+wait 5
+input x=-16384 y=28377
+wait 5
+input x=-21062 y=25101
+wait 5
+input x=-25101 y=21062
+wait 5
+input x=-28377 y=16384
+wait 5
+input x=-30791 y=11207
+wait 5
+input x=-32269 y=5690
+wait 5
+input x=-32767 y=0
+wait 5
+input x=-32269 y=-5690
+wait 5
+input x=-30791 y=-11207
+wait 5
+input x=-28377 y=-16384
+wait 5
+input x=-25101 y=-21062
+wait 5
+input x=-21062 y=-25101
+wait 5
+input x=-16384 y=-28377
+wait 5
+input x=-11207 y=-30791
+wait 5
+input x=-5690 y=-32269
+wait 5
+input x=0 y=-32767
+wait 5
+input x=5690 y=-32269
+wait 5
+input x=11207 y=-30791
+wait 5
+input x=16383 y=-28377
+wait 5
+input x=21062 y=-25101
+wait 5
+input x=25101 y=-21062
+wait 5
+input x=28377 y=-16383
+wait 5
+input x=30791 y=-11207
+wait 5
+input x=32269 y=-5690
+wait 5
+input x=32767 y=0
+wait 5
+input x=32269 y=5690
+wait 5
+input x=30791 y=11207
+wait 5
+input x=28377 y=16383
+wait 5
+input x=25101 y=21062
+wait 5
+input x=21062 y=25101
+wait 5
+input x=16383 y=28377
+wait 5
+input x=11207 y=30791
+wait 5
+input x=5690 y=32269
+wait 5
+input x=0 y=32767
+wait 5
+input x=-5690 y=32269
+wait 5
+input x=-11207 y=30791
+wait 5
+input x=-16384 y=28377
+wait 5
+input x=-21062 y=25101
+wait 5
+input x=-25101 y=21062
+wait 5
+input x=-28377 y=16383
+wait 5
+input x=-30791 y=11207
+wait 5
+input x=-32269 y=5690
+wait 5
+input x=-32767 y=0
+wait 5
+input x=-32269 y=-5690
+wait 5
+input x=-30791 y=-11207
+wait 5
+input x=-28377 y=-16383
+wait 5
+input x=-25101 y=-21062
+wait 5
+input x=-21062 y=-25101
+wait 5
+input x=-16383 y=-28377
+wait 5
+input x=-11207 y=-30791
+wait 5
+input x=-5690 y=-32269
+wait 5
+input x=0 y=-32767
+wait 5
+input x=5690 y=-32269
+wait 5
+input x=11207 y=-30791
+wait 5
+input x=16383 y=-28377
+wait 5
+input x=21062 y=-25101
+wait 5
+input x=25101 y=-21062
+wait 5
+input x=28377 y=-16384
+wait 5
+input x=30791 y=-11207
+wait 5
+input x=32269 y=-5690
+wait 5
+input x=32767 y=0
+wait 5
+input x=32269 y=5690
+wait 5
+input x=30791 y=11207
+wait 5
+input x=28377 y=16384
+wait 5
+input x=25101 y=21062
+wait 5
+input x=21062 y=25101
+wait 5
+input x=16384 y=28377
+wait 5
+input x=11207 y=30791
+wait 5
+input x=5690 y=32269
+wait 5
+input x=0 y=32767
+wait 5
+input x=-5690 y=32269
+wait 5
+input x=-11207 y=30791
+wait 5
+input x=-16383 y=28377
+wait 5
+input x=-21062 y=25101
+wait 5
+input x=-25101 y=21062
+wait 5
+input x=-28377 y=16384
+wait 5
+input x=-30791 y=11207
+wait 5
+input x=-32269 y=5690
+wait 5
+input x=-32767 y=0
+wait 5
+input x=-32269 y=-5690
+wait 5
+input x=-30791 y=-11207
+wait 5
+input x=-28377 y=-16384
+wait 5
+input x=-25101 y=-21062
+wait 5
+input x=-21062 y=-25101
+wait 5
+input x=-16384 y=-28377
+wait 5
+input x=-11207 y=-30791
+wait 5
+input x=-5690 y=-32269
+wait 5
+peek end.gfx_tasks 0x801F9CB8+0x2C8 w
+peek end.game_frames [0x801E3FB0]+0x9C w
+peek end.update_divisor [0x801E3FB0]+0xA2 b
+peek end.scene [0x801E3FB0]+0xA4 h
+stop
