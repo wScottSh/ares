@@ -7,12 +7,17 @@ chapter 17 (FPU: COP1|fmt|ft|fs|fd|funct, COP1 MF/MT/CF/CT rs-selected). The emu
 come from nemu64-test src/emux.rs. The second half cross-checks the nemu64-compatible
 encoder API against the text assembler, so a suite table can never drift from it.
 
-usage: python -m romgen.selftest   (from tools/n64-timing)
+usage: python tools/n64-timing/romgen/selftest.py
 """
+import os
 import sys
 
-from . import mips
-from .nemu import GPR, FR, RegisterIndex, CacheOp, RegimmOpcode, Assembler, u5, u26
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "romgen"
+
+from romgen import mips  # noqa: E402
+from romgen.nemu import GPR, FR, RegisterIndex, CacheOp, RegimmOpcode, Assembler, u5, u26
 
 HAND_CHECKED = [
     # (statement, address, expected word, manual reference)
@@ -49,6 +54,14 @@ HAND_CHECKED = [
     ("mfc2 $zero, 0", 0, 0x48000000, "16 MFCz z=2"),
     ("xlog $t0, $zero, 0", 0, 0x42800025, "emux XLOG (src/emux.rs encode_xlog)"),
     ("xioctl 1", 0, 0x4200006C, "emux XIOCTL exit (src/emux.rs encode_xioctl)"),
+]
+
+# Pseudo-instructions that expand to several words.
+HAND_CHECKED_MULTI = [
+    ("li $t0, 0x80001234", [0x3C088000, 0x35081234], "16 LUI op=0x0F + ORI op=0x0D"),
+    # LLVM's no-$at `dla` sequence; %hi carries into 0x8001 because %lo is negative.
+    ("dla $t4, 0x8000F234", [0x3C0C0000, 0x658C0000, 0x000C6438, 0x658C8001, 0x000C6438,
+                             0x658CF234], "16 LUI, DADDIU op=0x19, DSLL funct=0x38 sa=16"),
 ]
 
 CROSS_CHECK = [
@@ -98,12 +111,17 @@ def main():
         if got != expected:
             failures += 1
             print(f"FAIL {text!r}: {got:#010x} != {expected:#010x} ({ref})")
+    for text, expected, ref in HAND_CHECKED_MULTI:
+        got = mips.assemble_one(text)
+        if got != expected:
+            failures += 1
+            print(f"FAIL {text!r}: {[hex(w) for w in got]} != {[hex(w) for w in expected]} ({ref})")
     for word, text in CROSS_CHECK:
         (got,) = mips.assemble_one(text, 0x80000000, {"pc": 0x80000000})
         if got != word:
             failures += 1
             print(f"FAIL nemu API vs {text!r}: {word:#010x} != {got:#010x}")
-    total = len(HAND_CHECKED) + len(CROSS_CHECK)
+    total = len(HAND_CHECKED) + len(HAND_CHECKED_MULTI) + len(CROSS_CHECK)
     print(f"assembler self-test: {total - failures}/{total} passed")
     return 1 if failures else 0
 
