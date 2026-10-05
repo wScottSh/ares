@@ -4,7 +4,8 @@
 usage: lint-literals.py [--root DIR] [--emit]
 
 A timing literal is a nonzero number in an expression that charges or schedules
-time: the arguments of step(), queueInsert() or a *Queue() call, the right side
+time: the arguments of step(), queueInsert(), a *Queue() call or a Timing::Clock
+constructor (tc, pclk, rclk, us, ms, seconds), the right side
 of an assignment to a name ending in clock, cycle, duration, period, latency,
 delay, frequency, timing or timeout, a return inside a function with such a
 name, or any line that uses a *Ms millisecond constant.
@@ -28,6 +29,7 @@ from pathlib import Path
 ALLOWLIST = "tools/n64-timing/literal-allowlist.tsv"
 BEHAVIORS = "ares/n64/timing/behaviors.tsv"
 GENERATED = "ares/n64/timing/behaviors.hpp"
+CLOCK = "ares/n64/timing/clock.hpp"  #defines the units themselves
 SCAN_ROOT = "ares/n64"
 #Not part of the target console (map #1: NTSC retail NUS-001 with Expansion Pak).
 OUT_OF_SCOPE = {
@@ -38,7 +40,7 @@ OUT_OF_SCOPE = {
 
 TIMING_WORD = r"(?:[Cc]locks?|[Cc]ycles?|[Dd]uration|[Pp]eriod|[Ll]atency|[Dd]elay|[Ff]requency|[Tt]iming|[Tt]imeout)"
 FUNCTION = re.compile(r"^\s*(?:inline\s+|static\s+)*auto\s+([\w:]+)\s*\(")
-CALL = re.compile(r"\b(?:step|queueInsert|queue\.insert|\w*Queue)\s*\(")
+CALL = re.compile(r"\b(?:step|queueInsert|queue\.insert|\w*Queue|tc|pclk|rclk|us|ms|seconds)\s*\(")
 ASSIGN = re.compile(r"\b\w*" + TIMING_WORD + r"\s*(?:[-+*/]=|<<=|>>=|=(?!=))")
 MILLISECONDS = re.compile(r"\b\w+Ms\b")
 RETURN = re.compile(r"\breturn\b")
@@ -131,7 +133,7 @@ def scan(root):
     files = sorted(p for p in (root / SCAN_ROOT).rglob("*") if p.suffix in (".cpp", ".hpp"))
     for path in files:
         rel = path.relative_to(root).as_posix()
-        if rel == GENERATED or rel.startswith(tuple(OUT_OF_SCOPE)):
+        if rel in (GENERATED, CLOCK) or rel.startswith(tuple(OUT_OF_SCOPE)):
             continue
         raw = path.read_text(encoding="utf-8", errors="replace").split("\n")
         code = strip_code("\n".join(raw)).split("\n")
