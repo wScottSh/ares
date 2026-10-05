@@ -15,7 +15,8 @@ auto TraceHash::fold(u64 pclock, ActorId actor, u8 kind, u64 payload) -> void {
 }
 
 auto TraceHash::fieldBoundary() -> u64 {
-  auto state = system.serialize(false);
+  state.setWriting();
+  system.serialize(state, false);
   rolling = XXH3_64bits_withSeed(state.data(), state.size(), rolling);
   return rolling;
 }

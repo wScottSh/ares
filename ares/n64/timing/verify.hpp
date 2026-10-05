@@ -23,6 +23,7 @@ struct TraceHash {
   auto fieldBoundary() -> u64;
 
   u64 rolling = 0;
+  serializer state;  //reused across fields so its multi-MiB buffer is allocated once
 };
 
 }

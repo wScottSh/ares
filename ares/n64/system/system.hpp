@@ -27,6 +27,7 @@ struct System {
   //serialization.cpp
   auto serialize(bool synchronize = true) -> serializer;
   auto unserialize(serializer&) -> bool;
+  auto serialize(serializer&, bool synchronize) -> void;
 
 private:
   struct Information {
@@ -42,9 +43,6 @@ private:
 
   auto initDebugHooks() -> void;
   auto _power(bool reset) -> void;
-
-  //serialization.cpp
-  auto serialize(serializer&, bool synchronize) -> void;
 };
 
 extern System system;
