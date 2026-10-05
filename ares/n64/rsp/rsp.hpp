@@ -1,7 +1,8 @@
 //Reality Signal Processor
 
-struct RSP : Thread, Memory::RCP<RSP> {
+struct RSP : Thread, Memory::RCP<RSP>, Timing::Actor {
   Node::Object node;
+  RSP() { Thread::actor = Timing::ActorId::RSP; }
   struct Writable : public Memory::Writable {
     RSP& self;
 
@@ -113,7 +114,9 @@ struct RSP : Thread, Memory::RCP<RSP> {
   auto load(Node::Object) -> void;
   auto unload() -> void;
 
-  auto main() -> void;
+  //a timeline actor: issue pairs while running, DMA landings while a transfer is in flight
+  auto readiness() const -> Timing::Readiness override;
+  auto run(Clock limit) -> void override;
 
   auto instruction() -> void;
   auto instructionPrologue(u32 instruction) -> void;
@@ -255,7 +258,6 @@ struct RSP : Thread, Memory::RCP<RSP> {
 
   //dma.cpp
   auto dmaQueue(Clock clocks, Thread& thread) -> void;
-  auto dmaStep(Clock clocks) -> void;
   auto dmaTransferStart(Thread& thread) -> void;
   auto dmaTransferStep() -> void;
 
@@ -286,10 +288,10 @@ struct RSP : Thread, Memory::RCP<RSP> {
       n1 read;
       n1 write;
 
-      auto any() -> n1 { return read | write; }
+      auto any() const -> n1 { return read | write; }
     } busy, full;
 
-    Clock clock;
+    Clock landing;  //absolute time the current transfer's bytes arrive
   } dma;
 
   struct Status : Memory::RCP<Status> {

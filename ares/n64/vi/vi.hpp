@@ -19,7 +19,7 @@ struct VI : Thread, Memory::RCP<VI> {
   auto unload() -> void;
   auto step(u32 vclks) -> void;
 
-  auto main() -> void;
+  auto line() -> void;
   auto refresh() -> void;
   auto power(bool reset) -> void;
   auto active() -> bool { return io.colorDepth != 0; }

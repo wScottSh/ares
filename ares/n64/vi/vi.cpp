@@ -9,6 +9,7 @@ VI vi;
 
 auto VI::step(u32 vclks) -> void {
   Thread::clock = vclk.advance(vclks);
+  timeline.schedule({Thread::clock, (u32)EventKind::VI_Line});
 }
 
 auto VI::load(Node::Object parent) -> void {
@@ -52,8 +53,8 @@ auto VI::unload() -> void {
   node.reset();
 }
 
-auto VI::main() -> void {
-  while(Thread::clock < cpu.clock) {
+auto VI::line() -> void {
+  {
     if(active()) {
       ++io.vcounter;
       int halfline = io.vcounter << 1 | io.field;
@@ -96,7 +97,7 @@ auto VI::main() -> void {
     } else {
       // Arbitrarily call screen->frame() every once in a while to keep the UI responsive.
       // We do that every 200 simulated lines of 0x800 quarter-clocks. This is just arbitrary,
-      // the real VI is not clocking at all when inactive.
+      // the real VI is not clocking at all when inactive; the period is host liveness, not a cost.
       io.vcounter = 0;
       if(++inactiveCounter >= 200) {
         inactiveCounter = 0;
@@ -179,6 +180,7 @@ auto VI::power(bool reset) -> void {
   io = {};
   refreshed = false;
   vclk = {system.vclkPeriod()};
+  timeline.schedule({Thread::clock, (u32)EventKind::VI_Line});
 }
 
 }

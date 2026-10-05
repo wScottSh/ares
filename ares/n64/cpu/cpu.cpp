@@ -33,32 +33,28 @@ auto CPU::unload() -> void {
 
 auto CPU::main() -> void {
   while(!vi.refreshed && GDB::server.reportPC(ipu.pc & 0xFFFFFFFF)) {
+    //every other actor is past this instruction's start before it samples interrupts or executes
+    timeline.catchUp(Thread::clock, Timing::ActorId::CPU);
     instruction();
-    synchronize();
   }
 
+  flushCount();
   vi.refreshed = false;
-  queue.remove(Queue::GDB_Poll);
+  cancelEvent(EventKind::GDB_Poll);
   if(GDB::server.hasClient()) {
-    queueInsert(Queue::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});
+    scheduleAfter(EventKind::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});
   }
 }
 
 auto CPU::gdbPoll() -> void {
   if(GDB::server.hasClient()) {
     GDB::server.updateLoop();
-    queueInsert(Queue::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});
+    scheduleAfter(EventKind::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});
   }
-}
-
-auto CPU::queueInsert(u32 event, Clock delay) -> void {
-  queue.insert(event, delay.units);
 }
 
 auto CPU::stepCount(u64 clocks) -> void {
   if(!clocks) return;
-  u64 remaining = (u64)(scc.compare - scc.count) & CountMask;
-  if(remaining && clocks >= remaining) setInterruptPending(Interrupt::Timer, 1);
   scc.count += clocks;
   profile.cpuCycles += clocks;
   if(scc.status.exceptionLevel) profile.cpuCyclesExc += clocks;
@@ -70,39 +66,20 @@ auto CPU::flushCount() -> void {
   stepCount(clocks);
 }
 
-auto CPU::synchronize() -> void {
-  auto clocks = Thread::clock - syncClock;
-  auto counted = countClock - syncClock;
-  syncClock = Thread::clock;
-  countClock = Thread::clock;
+//COUNT reaches COMPARE at one exact time, so the match is one timeline event
+//instead of a check per sync. Rescheduled by every write to COUNT or COMPARE
+//and by the match itself (the next match is one full COUNT wrap later).
+auto CPU::scheduleCompare() -> void {
+  cancelEvent(EventKind::CPU_Compare);
+  u64 remaining = (u64)(scc.compare - scc.count) & CountMask;
+  if(!remaining) remaining = CountMask + 1;
+  timeline.schedule({countClock + pclk(remaining), (u32)EventKind::CPU_Compare});
+}
 
-  vi.main();
-  ai.main();
-  rsp.main();
-  rdp.main();
-  pif.main();
-
-  queue.step(clocks.units, [](u32 event) {
-    traceHash.fold(cpu.pclock(), Timing::ActorId::Events, event, 0);
-    switch(event) {
-    case Queue::PI_DMA_Read:   return pi.dmaFinished();
-    case Queue::PI_DMA_Write:  return pi.dmaFinished();
-    case Queue::PI_BUS_Write:  return pi.writeFinished();
-    case Queue::SI_DMA_Read:   return si.dmaRead();
-    case Queue::SI_DMA_Write:  return si.dmaWrite();
-    case Queue::SI_BUS_Write:  return si.writeFinished();
-    case Queue::RTC_Tick:      return cartridge.rtc.tick();
-    case Queue::EEPROM_Write:  return cartridge.eepromFinish();
-    case Queue::Flash_Complete: return cartridge.flash.finish();
-    case Queue::DD_Clock_Tick:  return dd.rtc.tickClock();
-    case Queue::DD_MECHA_Response:  return dd.mechaResponse();
-    case Queue::DD_BM_Request:  return dd.bmRequest();
-    case Queue::DD_Motor_Mode:  return dd.motorChange();
-    case Queue::GDB_Poll:      return cpu.gdbPoll();
-    }
-  });
-
-  stepCount((clocks - counted).units / Timing::UnitsPerPclk);
+auto CPU::compareMatch() -> void {
+  flushCount();
+  setInterruptPending(Interrupt::Timer, 1);
+  scheduleCompare();
 }
 
 auto CPU::setInterruptPending(u32 bit, bool value) -> void {
@@ -155,7 +132,6 @@ auto CPU::instructionEpilogue() -> void {
 auto CPU::power(bool reset) -> void {
   Thread::reset();
   countClock = {};
-  syncClock = {};
 
   context.endian = Context::Endian::Big;
   context.mode = Context::Mode::Kernel;
@@ -178,6 +154,7 @@ auto CPU::power(bool reset) -> void {
   emuxState = {};
   fenv.setRound(float_env::toNearest);
   context.setMode();
+  scheduleCompare();
 }
 
 }

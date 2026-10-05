@@ -46,13 +46,21 @@ namespace ares::Nintendo64 {
 
   #include <n64/timing/clock.hpp>
   #include <n64/timing/behaviors.hpp>
+  #include <n64/timing/timeline.hpp>
+  #include <n64/timing/verify.hpp>
   using Timing::Clock;
   using Timing::pclk;
   using Timing::rclk;
+  #include <n64/timing/events.hpp>
 
   struct Thread {
     auto reset() -> void {
       clock = {};
+    }
+
+    //Catches the timeline up to this thread's time before it touches another device
+    auto sync() -> void {
+      if(actor != Timing::ActorId::Count) timeline.catchUp(clock, actor);
     }
 
     auto step(Clock clocks) -> void {
@@ -63,28 +71,15 @@ namespace ares::Nintendo64 {
       s(clock.units);
     }
 
-    Clock clock;
-  };
+    static auto debugger() -> Thread {
+      Thread thread;
+      thread.actor = Timing::ActorId::Count;
+      return thread;
+    }
 
-  struct Queue : priority_queue<u32[512]> {
-    enum : u32 {
-      PI_DMA_Read,
-      PI_DMA_Write,
-      PI_BUS_Write,
-      SI_DMA_Read,
-      SI_DMA_Write,
-      SI_BUS_Write,
-      RTC_Tick,
-      EEPROM_Write,
-      Flash_Complete,
-      DD_Clock_Tick,
-      DD_MECHA_Response,
-      DD_BM_Request,
-      DD_Motor_Mode,
-      GDB_Poll,
-    };
+    Clock clock;
+    Timing::ActorId actor = Timing::ActorId::CPU;  //whose interactions this clock stamps; Count for a debugger thread
   };
-  extern Queue queue;
 
   struct BCD {
     static auto encode(u8 value) -> u8 { return value / 10 << 4 | value % 10; }
@@ -138,5 +133,4 @@ namespace ares::Nintendo64 {
   #include <n64/memory/bus.hpp>
   #include <n64/mi/bus.hpp>
   #include <n64/pi/bus.hpp>
-  #include <n64/timing/verify.hpp>
 }

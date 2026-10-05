@@ -2,7 +2,7 @@ auto SI::readWord(u32 address, Thread& thread) -> u32 {
   if(address <= 0x048f'ffff) return ioRead(address);
 
   if (unlikely(io.ioBusy)) {
-    writeForceFinish(); //technically, we should wait until Queue::SI_BUS_Write
+    writeForceFinish(); //technically, we should wait until EventKind::SI_BUS_Write
     return io.busLatch;
   }
   return pif.read<Word>(address);
@@ -63,7 +63,7 @@ auto SI::writeWord(u32 address, u32 data, Thread& thread) -> void {
   io.pchState = 0xb;
   io.dmaState = 0x9;
   io.busLatch = data;
-  cpu.queueInsert(Queue::SI_BUS_Write, rclk(2150));
+  scheduleAfter(EventKind::SI_BUS_Write, rclk(2150));
   return pif.write<Word>(address, data);
 }
 
@@ -83,7 +83,7 @@ auto SI::ioWrite(u32 address, u32 data_) -> void {
     io.dmaState = 1;
     io.pchState = 4;
     int cycles = pif.estimateTiming();
-    cpu.queueInsert(Queue::SI_DMA_Read, rclk(cycles));
+    scheduleAfter(EventKind::SI_DMA_Read, rclk(cycles));
   }
 
   if(address == 2) {
@@ -100,7 +100,7 @@ auto SI::ioWrite(u32 address, u32 data_) -> void {
     io.dmaBusy = 1;
     io.dmaState = 4;
     io.pchState = 1;
-    cpu.queueInsert(Queue::SI_DMA_Write, rclk(4065));
+    scheduleAfter(EventKind::SI_DMA_Write, rclk(4065));
   }
 
   if(address == 5) {
@@ -127,5 +127,5 @@ auto SI::writeFinished() -> void {
 
 auto SI::writeForceFinish() -> void {
   io.ioBusy = 0;
-  queue.remove(Queue::SI_BUS_Write);
+  cancelEvent(EventKind::SI_BUS_Write);
 }

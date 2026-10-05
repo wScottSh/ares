@@ -44,7 +44,7 @@ auto DD::seekSector(n8 sector) -> u32 {
 auto DD::bmRequest() -> void {
   //if BM not started make sure to not do anything
   if(!io.bm.start) {
-    queue.remove(Queue::DD_BM_Request);
+    cancelEvent(EventKind::DD_BM_Request);
     lower(IRQ::BM);
     return;
   }
@@ -143,23 +143,23 @@ auto DD::bmRequest() -> void {
 }
 
 auto DD::motorActive() -> void {
-  queue.remove(Queue::DD_Motor_Mode);
+  cancelEvent(EventKind::DD_Motor_Mode);
   io.status.headRetracted = 0;
   io.status.spindleMotorStopped = 0;
   if(!ctl.standbyDelayDisable)
-    cpu.queueInsert(Queue::DD_Motor_Mode, ticks((187'500'000 / 0x17) * ctl.standbyDelay));
+    scheduleAfter(EventKind::DD_Motor_Mode, ticks((187'500'000 / 0x17) * ctl.standbyDelay));
 }
 
 auto DD::motorStandby() -> void {
-  queue.remove(Queue::DD_Motor_Mode);
+  cancelEvent(EventKind::DD_Motor_Mode);
   io.status.headRetracted = 1;
   io.status.spindleMotorStopped = 0;
   if(!ctl.sleepDelayDisable)
-      cpu.queueInsert(Queue::DD_Motor_Mode, ticks((187'500'000 / 0x17) * ctl.sleepDelay));
+      scheduleAfter(EventKind::DD_Motor_Mode, ticks((187'500'000 / 0x17) * ctl.sleepDelay));
 }
 
 auto DD::motorStop() -> void {
-  queue.remove(Queue::DD_Motor_Mode);
+  cancelEvent(EventKind::DD_Motor_Mode);
   io.status.headRetracted = 1;
   io.status.spindleMotorStopped = 1;
 }

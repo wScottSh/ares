@@ -45,7 +45,7 @@ auto Cartridge::joybusComm(n8 send, n8 recv, n8 input[], n8 output[]) -> n2 {
           cartridge.eeprom.write<Byte>(address++, input[2 + index]);
         }
         eepromBusy = 1;
-        cpu.queueInsert(Queue::EEPROM_Write, Timing::ms(6)); //6ms
+        scheduleAfter(EventKind::EEPROM_Write, Timing::ms(6)); //6ms
       }
     }
 

@@ -175,7 +175,7 @@ auto CPU::read(PhysAccess access) -> maybe<u64> {
 
 template<u32 Size>
 auto CPU::readDebug(u64 vaddr) -> u64 {
-  Thread dummyThread{};
+  Thread dummyThread = Thread::debugger();
   auto access = devirtualize<Read, Size>(vaddr, false, false);
   if(!access) return 0;
   if(access.cache) return dcache.readDebug<Size>(access.vaddr, access.paddr);
@@ -195,7 +195,7 @@ auto CPU::write(PhysAccess access, u64 data) -> bool {
 
 template<u32 Size>
 auto CPU::writeDebug(u64 vaddr, u64 data) -> bool {
-  Thread dummyThread{};
+  Thread dummyThread = Thread::debugger();
   auto access = devirtualize<Write, Size>(vaddr, false, false);
   if(!access) return false;
   GDB::server.reportMemWrite(access.vaddr, Size);

@@ -32,14 +32,6 @@ auto RDP::crash(const char *reason) -> void {
   command.bufferBusy = 1;
 }
 
-auto RDP::main() -> void {
-  constexpr Clock quantum = Timing::seconds(1);
-  while(Thread::clock < cpu.clock) {
-    step(quantum);
-    command.clock += quantum.units / Timing::UnitsPerRclk;
-  }
-}
-
 auto RDP::power(bool reset) -> void {
   Thread::reset();
   engine.unload();

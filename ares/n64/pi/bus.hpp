@@ -57,7 +57,7 @@ inline auto PI::readWord(u32 address, Thread& thread) -> u32 {
 
   if(unlikely(io.ioBusy)) {
     debug(unusual, "[PI::readWord] PI read to 0x", hex(address, 8L), " will not behave as expected because PI writing is in progress");
-    { auto remaining = writeForceFinish(); thread.step(remaining + remaining); }
+    { auto remaining = writeForceFinish(thread.clock); thread.step(remaining + remaining); }
     return io.busLatch;
   }
   thread.step(pclk(250));
@@ -74,7 +74,7 @@ inline auto PI::writeWord(u32 address, u32 data, Thread& thread) -> void {
   if(io.ioBusy) return;
   io.ioBusy = 1;
   io.pbusAddress = (address + 4) & ~1;
-  cpu.queueInsert(Queue::PI_BUS_Write, pclk(200));
+  scheduleAfter(EventKind::PI_BUS_Write, pclk(200));
   busAddress(address);
   io.busLatch = data;
   busWriteHalf(data >> 16);
@@ -85,7 +85,8 @@ inline auto PI::writeFinished() -> void {
   io.ioBusy = 0;
 }
 
-inline auto PI::writeForceFinish() -> Clock {
+inline auto PI::writeForceFinish(Clock now) -> Clock {
   io.ioBusy = 0;
-  return {(s64)queue.remove(Queue::PI_BUS_Write)};
+  auto at = cancelEvent(EventKind::PI_BUS_Write);
+  return at == Clock::never() || at < now ? Clock{} : at - now;
 }

@@ -24,12 +24,11 @@ auto AI::unload() -> void {
   node.reset();
 }
 
-auto AI::main() -> void {
-  while(Thread::clock < cpu.clock) {
-    sample();
-    stream->frame(dac.left, dac.right);
-    Thread::clock = dac.vclk.advance(dac.vclksPerSample);
-  }
+auto AI::sampleEvent() -> void {
+  sample();
+  stream->frame(dac.left, dac.right);
+  Thread::clock = dac.vclk.advance(dac.vclksPerSample);
+  timeline.schedule({Thread::clock, (u32)EventKind::AI_Sample});
 }
 
 auto AI::sample() -> void {
@@ -79,6 +78,7 @@ auto AI::power(bool reset) -> void {
   dac.vclksPerSample = system.videoFrequency() / dac.frequency;
   dac.vclk = {system.vclkPeriod()};
   updateDecay();
+  timeline.schedule({Thread::clock, (u32)EventKind::AI_Sample});
 }
 
 }

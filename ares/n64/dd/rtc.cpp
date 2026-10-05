@@ -54,8 +54,8 @@ auto DD::RTC::tick(u32 offset) -> void {
 
 auto DD::RTC::tickClock() -> void {
   tickSecond();
-  queue.remove(Queue::DD_Clock_Tick);
-  cpu.queueInsert(Queue::DD_Clock_Tick, ticks(187'500'000));
+  cancelEvent(EventKind::DD_Clock_Tick);
+  scheduleAfter(EventKind::DD_Clock_Tick, ticks(187'500'000));
 }
 
 auto DD::RTC::tickSecond() -> void {

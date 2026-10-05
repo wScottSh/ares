@@ -4,7 +4,7 @@ auto RDP::serialize(serializer& s) -> void {
   s(command.start);
   s(command.end);
   s(command.current);
-  s(command.clock);
+  s(command.clockOrigin.units);
   s(command.bufferBusy);
   s(command.pipeBusy);
   s(command.tmemBusy);

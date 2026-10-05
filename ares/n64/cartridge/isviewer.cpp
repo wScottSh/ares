@@ -12,7 +12,7 @@ auto Cartridge::ISViewer::piReadHalf(PIDeviceTiming) -> maybe<u16> {
 }
 
 auto Cartridge::ISViewer::piWriteHalf(u16 data, PIDeviceTiming) -> void {
-  pi.writeForceFinish();
+  pi.writeForceFinish(cpu.clock);
   writeHalf(piAddr, data);
   piAddr += 2;
 }

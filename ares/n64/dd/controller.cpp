@@ -28,7 +28,7 @@ auto DD::command(n16 command) -> void {
           count += 19300 * abs(io.data.bit(0,11) - io.currentTrack.bit(0,11));
           io.currentTrack = io.data | 0x6000;
           seekTrack();
-          queue.remove(Queue::DD_Motor_Mode);
+          cancelEvent(EventKind::DD_Motor_Mode);
           io.status.headRetracted = 0;
           io.status.spindleMotorStopped = 0;
           state.seek = 1;
@@ -49,7 +49,7 @@ auto DD::command(n16 command) -> void {
           count += 19300 * abs(io.data.bit(0,11) - io.currentTrack.bit(0,11));
           io.currentTrack = io.data | 0x6000;
           io.status.writeProtect = seekTrack();
-          queue.remove(Queue::DD_Motor_Mode);
+          cancelEvent(EventKind::DD_Motor_Mode);
           io.status.headRetracted = 0;
           io.status.spindleMotorStopped = 0;
           state.seek = 1;
@@ -70,7 +70,7 @@ auto DD::command(n16 command) -> void {
         count += 19300 * abs(0 - io.currentTrack.bit(0,11));
         io.currentTrack = 0x6000;
         seekTrack();
-        queue.remove(Queue::DD_Motor_Mode);
+        cancelEvent(EventKind::DD_Motor_Mode);
         io.status.headRetracted = 0;
         io.status.spindleMotorStopped = 0;
         state.seek = 1;
@@ -181,7 +181,7 @@ auto DD::command(n16 command) -> void {
   else if(ctl.error.invalidParam)     io.status.mechaError = 1;
   else if(io.status.writeProtect)     io.status.mechaError = 1;
 
-  cpu.queueInsert(Queue::DD_MECHA_Response, ticks(count));
+  scheduleAfter(EventKind::DD_MECHA_Response, ticks(count));
 }
 
 auto DD::mechaResponse() -> void {

@@ -4,7 +4,7 @@
 usage: lint-literals.py [--root DIR] [--emit]
 
 A timing literal is a nonzero number in an expression that charges or schedules
-time: the arguments of step(), queueInsert(), a *Queue() call or a Timing::Clock
+time: the arguments of step(), scheduleAfter(), timeline.schedule(), a *Queue() call or a Timing::Clock
 constructor (tc, pclk, rclk, us, ms, seconds), the right side
 of an assignment to a name ending in clock, cycle, duration, period, latency,
 delay, frequency, timing or timeout, a return inside a function with such a
@@ -39,7 +39,7 @@ OUT_OF_SCOPE = {
 
 TIMING_WORD = r"(?:[Cc]locks?|[Cc]ycles?|[Dd]uration|[Pp]eriod|[Ll]atency|[Dd]elay|[Ff]requency|[Tt]iming|[Tt]imeout)"
 FUNCTION = re.compile(r"^\s*(?:inline\s+|static\s+)*auto\s+([\w:]+)\s*\(")
-CALL = re.compile(r"\b(?:step|queueInsert|queue\.insert|\w*Queue|tc|pclk|rclk|us|ms|seconds)\s*\(")
+CALL = re.compile(r"\b(?:step|scheduleAfter|timeline\.schedule|\w*Queue|tc|pclk|rclk|us|ms|seconds)\s*\(")
 ASSIGN = re.compile(r"\b\w*" + TIMING_WORD + r"\s*(?:[-+*/]=|<<=|>>=|=(?!=))")
 MILLISECONDS = re.compile(r"\b\w+Ms\b")
 RETURN = re.compile(r"\breturn\b")

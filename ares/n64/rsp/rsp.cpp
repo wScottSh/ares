@@ -29,19 +29,25 @@ auto RSP::unload() -> void {
   node.reset();
 }
 
-auto RSP::main() -> void {
-  while(Thread::clock < cpu.clock) {
-    auto clock = Thread::clock;
+auto RSP::readiness() const -> Timing::Readiness {
+  if(dma.busy.any()) {
+    if(status.halted || dma.landing < Thread::clock) return Timing::Readiness::runnable(dma.landing);
+    return Timing::Readiness::runnable(Thread::clock);
+  }
+  if(!status.halted) return Timing::Readiness::runnable(Thread::clock);
+  return Timing::Readiness::parked();
+}
 
-    if(status.halted) {
-      step(pclk(64));
-      profile.cycles += pclk(64).units;
-      profile.haltedCycles += pclk(64).units;
+auto RSP::run(Clock limit) -> void {
+  while(true) {
+    if(dma.busy.any() && (status.halted || dma.landing <= Thread::clock)) {
+      if(Thread::clock < dma.landing) Thread::clock = dma.landing;
+      dmaTransferStep();
     } else {
       instruction();
     }
-
-    dmaStep(Thread::clock - clock);
+    auto next = readiness();
+    if(next.kind != Timing::Readiness::Kind::Runnable || next.at >= limit) return;
   }
 }
 
@@ -96,6 +102,7 @@ auto RSP::instructionEpilogue() -> void {
 
 auto RSP::power(bool reset) -> void {
   Thread::reset();
+  timeline.attach(Timing::ActorId::RSP, this);
   dmem.fill();
   imem.fill();
 

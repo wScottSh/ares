@@ -38,8 +38,8 @@ auto Cartridge::RTC::tick(int nsec) -> void {
 
 auto Cartridge::RTC::run(bool run) -> void {
   status.bit(7) = !run;
-  queue.remove(Queue::RTC_Tick);
-  if(run) cpu.queueInsert(Queue::RTC_Tick, Timing::seconds(1));
+  cancelEvent(EventKind::RTC_Tick);
+  if(run) scheduleAfter(EventKind::RTC_Tick, Timing::seconds(1));
 }
 
 auto Cartridge::RTC::running() -> bool {
