@@ -49,6 +49,7 @@ D_TEST_NAME = 0x048
 D_VALUE = 0x04C
 D_TI = 0x050
 D_VI = 0x054
+D_EXC_FCSR = 0x058
 D_DECBUF = 0x060        # 32 bytes
 D_SAVE = 0x1600         # callee-saved registers during a measurement
 D_EXC_SAVE = 0x100      # registers the exception handler uses, 16 x 8
@@ -286,6 +287,11 @@ eg_noovr:
     nop
     nop
     cfc1 $v0, 31
+    addiu $v1, $t3, -1
+    bnez $v1, eg_fcsr_seen
+    nop
+    sw $v0, D_EXC_FCSR($at)
+eg_fcsr_seen:
     li $v1, 0xFFFC0FFF
     and $v0, $v0, $v1
     ctc1 $v0, 31

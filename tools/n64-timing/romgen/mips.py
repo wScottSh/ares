@@ -159,7 +159,7 @@ class Image:
         for kind, body, consts, raw in statements:
             if kind != "label":
                 mnem = body.split(None, 1)[0].lower()
-                if mnem in ("li", "la") and _is_control(previous):
+                if mnem in ("li", "la", "dla") and _is_control(previous):
                     raise AsmError(f"{raw.strip()!r}: two-instruction pseudo in a delay slot")
                 previous = mnem
             if kind == "label":
@@ -194,6 +194,8 @@ class Image:
             return len(consts[args[0]])
         if mnem in ("li", "la"):
             return 8
+        if mnem == "dla":
+            return 24
         return 4
 
     def _eval(self, expr, consts, default=None):
@@ -334,6 +336,22 @@ def branch_offset(target, addr):
     return delta >> 2
 
 
+def dla(rd, value):
+    """LLVM's expansion of `dla` for a symbol under the n64 ABI without $at (MipsAsmParser,
+    non-sym32): six instructions building %highest/%higher/%hi/%lo of the sign-extended
+    address. nemu64-test's hazard tests use `dla` inside `.set noat` blocks, so the six-slot
+    length is part of the timing they observe."""
+    v = value & 0xFFFFFFFF
+    v = v - (1 << 32) if v & 0x80000000 else v
+    lo = v & 0xFFFF
+    hi = ((v + 0x8000) >> 16) & 0xFFFF
+    higher = ((v + 0x80008000) >> 32) & 0xFFFF
+    highest = ((v + 0x800080008000) >> 48) & 0xFFFF
+    return [i_type(OP["lui"], 0, rd, highest), i_type(OP["daddiu"], rd, rd, higher),
+            r_type(0, rd, rd, 16, FUNCT["dsll"]), i_type(OP["daddiu"], rd, rd, hi),
+            r_type(0, rd, rd, 16, FUNCT["dsll"]), i_type(OP["daddiu"], rd, rd, lo)]
+
+
 def encode(mnem, args, addr, ev):
     """Returns the list of instruction words for one statement."""
     a = args
@@ -345,6 +363,8 @@ def encode(mnem, args, addr, ev):
         v = ev(a[1]) & 0xFFFFFFFF
         rt = reg(a[0])
         return [i_type(OP["lui"], 0, rt, v >> 16), i_type(OP["ori"], rt, rt, v & 0xFFFF)]
+    if mnem == "dla":
+        return dla(reg(a[0]), ev(a[1]))
     if mnem == "b":
         return [i_type(OP["beq"], 0, 0, branch_offset(ev(a[0]), addr))]
     if mnem in ("beqz", "bnez", "beqzl", "bnezl"):

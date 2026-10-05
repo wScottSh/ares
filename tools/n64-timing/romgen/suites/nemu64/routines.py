@@ -9,7 +9,7 @@ observes; the surrounding Rust (loops, comparisons) becomes plain runtime code.
 COMMON = r"""
 # Shared by tests that expect an exception (nemu64-test exception_handler::expect_exception).
 # expect_begin: a0 = instructions to skip on the exception. expect_end: a0 = result pointer,
-# writes {count, cause, status, epc, vector, badvaddr} (low 32 bits) and clears the record.
+# writes {count, cause, status, epc, vector, badvaddr} (low 32 bits) and fcsr and clears the record.
 expect_begin:
     la $t0, DATA_BASE
     sw $zero, D_SEEN($t0)
@@ -32,10 +32,25 @@ expect_end:
     sw $t1, 16($a0)
     lw $t1, D_EXC_BADVADDR + 4($t0)
     sw $t1, 20($a0)
+    lw $t1, D_EXC_FCSR($t0)
+    sw $t1, 24($a0)
     sw $zero, D_EXC_CAUSE($t0)
     sw $zero, D_SEEN($t0)
     jr $ra
     sw $zero, D_STREAK($t0)
+
+# Copies expect_end's seven words at $t0 to res[0..6] at $a1.
+copy_exception_record:
+    addiu $t2, $zero, 7
+cer_loop:
+    lw $t1, 0($t0)
+    sw $t1, 0($a1)
+    addiu $t0, $t0, 4
+    addiu $t2, $t2, -1
+    bnez $t2, cer_loop
+    addiu $a1, $a1, 4
+    jr $ra
+    addiu $a1, $a1, -28
 
 # cop0::clear_tlb: every entry gets EntryHi.ASID = 1 so nothing matches.
 step_clear_tlb:
