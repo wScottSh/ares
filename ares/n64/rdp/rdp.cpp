@@ -9,6 +9,7 @@ namespace ares::Nintendo64 {
 
 RDP rdp;
 #include "engine.cpp"
+#include "timed.cpp"
 #include "io.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
@@ -26,20 +27,20 @@ auto RDP::unload() -> void {
 
 auto RDP::crash(const char *reason) -> void {
   debug(unusual, "[RDP] software triggered a hardware bug; RDP crashed and will stop responding. Reason: ", reason);
-  command.crashed = 1;
-  //guard against asynchronous reporting of crash state. We want the RDP to report that it's busy forever
-  command.pipeBusy = 1;
-  command.bufferBusy = 1;
+  dpc.crashed = 1;
 }
 
 auto RDP::power(bool reset) -> void {
   Thread::reset();
   engine.unload();
   engine.load();
-  command = {};
+  dpc = {};
+  fetch = {};
+  executor = {};
   io.bist = {};
   io.test = {};
   if(!reset) mapIdentityWarned = 0;
+  timeline.attach(Timing::ActorId::RDP, this);
 }
 
 }

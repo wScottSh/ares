@@ -1,20 +1,6 @@
 //cen64-jgemu pixel engine (engine/), synchronous on the emulation thread.
-//Each DPC_END write renders the whole command range into rdram.ram and
-//rdram.hidden before returning, and Sync_Full raises the DP interrupt
-//through syncFull().
-
-auto RDP::syncFull() -> void {
-  if(!command.crashed) {
-    mi.raise(MI::IRQ::DP);
-    command.bufferBusy = 0;
-    command.pipeBusy = 0;
-  }
-  command.startGclk = 0;
-}
-
-static auto engineInterrupt(void*) -> void {
-  rdp.syncFull();
-}
+//RDP::dispatch (timed.cpp) feeds it one command at a time; each dispatch
+//leaves its pixels in rdram.ram and rdram.hidden before returning.
 
 static auto engineLog(int level, const char* format, ...) -> void {
   char buffer[512];
@@ -27,8 +13,7 @@ static auto engineLog(int level, const char* format, ...) -> void {
 }
 
 auto RDP::Engine::load() -> void {
-  if(rdp_render_init((u32*)rdram.ram.data, rdram.ram.size, rdram.hidden.data,
-                     (u32*)rsp.dmem.data, regs, engineInterrupt, nullptr)) {
+  if(rdp_render_init((u32*)rdram.ram.data, rdram.ram.size, rdram.hidden.data, (u32*)rsp.dmem.data)) {
     debug(unusual, "[RDP engine] init failed; no pixels will be drawn");
     return;
   }
@@ -39,38 +24,6 @@ auto RDP::Engine::load() -> void {
 auto RDP::Engine::unload() -> void {
   if(loaded) rdp_render_destroy();
   loaded = false;
-}
-
-//DPC_STATUS bits the engine reads and may change (n64brew RDP registers).
-namespace EngineStatus {
-  enum : u32 { Source = 1 << 0, Freeze = 1 << 1, Flush = 1 << 2, Ready = 1 << 7, StartValid = 1 << 10 };
-}
-
-auto RDP::Engine::render() -> void {
-  if(!loaded) return;
-  auto& command = rdp.command;
-  regs[RDP_DPC_START_REG]   = command.start;
-  regs[RDP_DPC_END_REG]     = command.end;
-  regs[RDP_DPC_CURRENT_REG] = command.current;
-  regs[RDP_DPC_STATUS_REG]  = (command.source     ? EngineStatus::Source     : 0)
-                            | (command.freeze     ? EngineStatus::Freeze     : 0)
-                            | (command.flush      ? EngineStatus::Flush      : 0)
-                            | (command.ready      ? EngineStatus::Ready      : 0)
-                            | (command.startValid ? EngineStatus::StartValid : 0);
-
-  auto start = std::chrono::steady_clock::now();
-  rdp_process_list();
-  renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
-  renderCalls++;
-
-  u32 status = regs[RDP_DPC_STATUS_REG];
-  command.current    = regs[RDP_DPC_CURRENT_REG];
-  command.source     = (bool)(status & EngineStatus::Source);
-  command.freeze     = (bool)(status & EngineStatus::Freeze);
-  command.flush      = (bool)(status & EngineStatus::Flush);
-  command.ready      = (bool)(status & EngineStatus::Ready);
-  command.startValid = (bool)(status & EngineStatus::StartValid);
-  if(rdp_render_crashed()) rdp.crash("pixel engine pipeline crash");
 }
 
 auto RDP::Engine::serialize(serializer& s) -> void {

@@ -236,6 +236,8 @@ ares_add_sources(
     rdp/io.cpp
     rdp/rdp.hpp
     rdp/serialization.cpp
+    rdp/timed.cpp
+    rdp/timed.hpp
     rdp/engine/cen64_compat.h
     rdp/engine/rdp.h
     rdp/engine/rdp_blend.h
@@ -349,7 +351,7 @@ set(
 target_sources(ares PRIVATE ${_rdp_engine_sources})
 set_source_files_properties(
   ${_rdp_engine_sources}
-  PROPERTIES COMPILE_DEFINITIONS "RDP_WQ_THREADS=1;RDP_DP_TIMED=0"
+  PROPERTIES COMPILE_DEFINITIONS "RDP_WQ_THREADS=1"
 )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)

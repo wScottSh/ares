@@ -9,6 +9,7 @@ pending:no-corpus	pending	-	-	gate	no corpus in the program measures this behavi
 det	det	tools/n64-timing/determinism.sh	every mm scene	equal	two runs byte-identical, stats and trace_hash (plan T2)
 stepcap	stepcap	tools/n64-timing/determinism.sh --step-cap	every mm scene and nemu64 ROM	equal	step-capped run equals the normal run byte for byte (plan T5)
 unit:timeline	unit	n64-timing-tests	timeline	pass	scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5)
+unit:dpc-regs	unit	n64-timing-dpc-regs	dpc-regs	pass	DPC register transitions without a timeline: n64-systemtest tests/rdp START/END masking, START_VALID, status sequencing; n64brew and MiSTer START/END double buffering, DMA_BUSY, counters (plan T12)
 gen	gen	tools/n64-timing/behaviors.py --check	-	pass	this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3)
 mm:file-select	mm	tools/n64-timing/mmbench	file-select	report	Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench)
 mm:south-clock-town	mm	tools/n64-timing/mmbench	south-clock-town	report	Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench)
@@ -71,3 +72,5 @@ noise:rect-1016	noise	rect-1016	-	pass	romgen 1016-px rect ROM against dataset A
 pidma:logs	pidma	rasky_n64_pi_dma_test/pi_dma_test.z64	-	self	ROM self-check within 10%; harness replays the 64 golden logs within 3% (plan T8)
 unit:ri-cost-table	unit	n64-timing-tests	ri-cost-table	pass	read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes (rdram-bus-arbitration.md)
 unit:ri-split	unit	n64-timing-tests	ri-split	pass	n64brew RDRAM_Interface, 1-16 octbytes per request
+rdpstat:dpc-sequencing	rdpstat	dpc	-	self	rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12)
+rdpstat:xbus	rdpstat	systemtest	RDP STATUS: Run from DMEM (xbus)	self	n64-systemtest tests/rdp run_from_dmem, three DMEM placements

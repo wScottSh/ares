@@ -51,9 +51,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Singleton renderer context.
 static struct {
     rdp_t *rdp;
-    uint32_t *dp_regs;
-    void (*dp_interrupt)(void *);
-    void *opaque;
     int fence_range_check;  /* See rdp_render_set_fence_range_check in
                                rdp.h. Not touched by init or destroy. */
 } s_ctx = { .fence_range_check = 1 };
@@ -80,21 +77,6 @@ void rdp_render_set_log(void (*log)(int level, const char *fmt, ...))
 uint64_t rdp_render_pixel_count(void)
 {
     return s_ctx.rdp != NULL ? s_ctx.rdp->m_pixels : 0;
-}
-
-// dp_full_sync callback, installed on the renderer.
-static void rdp_dp_full_sync(void *opaque)
-{
-    (void)opaque;
-
-    /* Async: the interrupt fires at the same emulated instant; the
-     * drain is deferred to the observation fences. */
-    if (s_ctx.rdp != NULL &&
-        !atomic_load_explicit(&s_ctx.rdp->m_async_on, memory_order_relaxed))
-        poly_manager_wait(&s_ctx.rdp->m_pool);
-
-    if (s_ctx.dp_interrupt != NULL)
-        s_ctx.dp_interrupt(s_ctx.opaque);
 }
 
 /* Emulator-facing fences (see rdp_core.h). Rendering is always
@@ -198,16 +180,15 @@ void rdp_render_quiesce(void)
 }
 
 int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
-    uint32_t *dmem, uint32_t *dp_regs,
-    void (*dp_interrupt)(void *opaque), void *opaque)
+    uint32_t *dmem)
 {
     rdp_t *rdp;
 
-    if (!rdram || !hidden || !dmem || !dp_regs || rdram_size < 4u)
+    if (!rdram || !hidden || !dmem || rdram_size < 4u)
         return 1;
 
-    // In order: construct the renderer, build internal state, wire the
-    // full-sync callback, initialize the blender and texture pipe
+    // In order: construct the renderer, build internal state,
+    // initialize the blender and texture pipe
     // against the live RDP, then allocate the span aux buffer.
     rdp = (rdp_t *)malloc(sizeof(rdp_t));
     if (rdp == NULL)
@@ -228,9 +209,6 @@ int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
         return 1;
     }
 
-    rdp->m_dp_full_sync = rdp_dp_full_sync;
-    rdp->m_dp_full_sync_opaque = NULL;
-
     rdp_blender_init(&rdp->m_blender);
     rdp_texpipe_init(&rdp->m_tex_pipe, rdp);
 
@@ -243,17 +221,11 @@ int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
 
     s_ctx.rdp = rdp;
     s_hidden_plane = rdp->m_hidden_bits;
-    /* ares port: synchronous. Every command list drains before the
-     * DPC_END write returns and Sync_Full drains before the DP
-     * interrupt, so RDRAM is settled whenever the CPU or RSP runs and
-     * no fence is needed. RDP_WQ_THREADS=1 keeps the span work on the
-     * emulation thread (rdp_wqueue.c). */
+    /* ares port: synchronous. The host settles the renderer after every
+     * dispatch (rdp_render_engine_step), so RDRAM is current whenever
+     * another device runs and no fence is needed. RDP_WQ_THREADS=1 keeps
+     * the span work on the emulation thread (rdp_wqueue.c). */
     atomic_store(&rdp->m_async_on, 0);
-    s_ctx.dp_regs = dp_regs;
-    s_ctx.dp_interrupt = dp_interrupt;
-    s_ctx.opaque = opaque;
-
-    rdp->m_engine_drive = RDP_DP_TIMED != 0;
 
     return 0;
 }
@@ -264,23 +236,16 @@ void rdp_render_set_fence_range_check(int on)
 }
 
 /* ---- Timed DPC engine glue ----------------------------------------------
- * Thin pass-throughs for the DPC engine in rdp/interface.c. CONTRACT:
- * callers hold dp_lock (the engine event handler and the DPC write
- * handlers do), matching every other producer-side entry. */
-
-int rdp_render_engine_active(void)
-{
-    return s_ctx.rdp != NULL && s_ctx.rdp->m_engine_drive;
-}
+ * Thin pass-throughs for the host's DPC front end (ares rdp/timed.cpp). */
 
 unsigned rdp_render_engine_need(void)
 {
-    return rdp_engine_need(s_ctx.rdp);
+    return s_ctx.rdp != NULL ? rdp_engine_need(s_ctx.rdp) : 1;
 }
 
-unsigned rdp_render_engine_room(void)
+unsigned rdp_render_engine_buffered(void)
 {
-    return rdp_engine_room(s_ctx.rdp);
+    return s_ctx.rdp != NULL ? s_ctx.rdp->m_cmd_ptr - s_ctx.rdp->m_cmd_cur : 0;
 }
 
 /* Crashed-pipe query for the DPC status contract; safe on either
@@ -292,19 +257,37 @@ int rdp_render_crashed(void)
 
 void rdp_render_engine_feed(uint32_t address, unsigned nwords, uint32_t xbus)
 {
-    rdp_engine_feed(s_ctx.rdp, address, nwords, xbus);
+    if (s_ctx.rdp != NULL)
+        rdp_engine_feed(s_ctx.rdp, address, nwords, xbus);
 }
 
-int rdp_render_engine_step(uint32_t *cycles, unsigned *cls)
+/* Steps one command, then every following buffered command a held hazard
+ * primitive's window still collects, so the hold resolves inside this
+ * call; works[] receives one entry per command (at most `capacity`).
+ * Then settles the renderer: no held primitive and no queued span
+ * outlives the call, so emulated time never passes with renderer work
+ * in flight and saving needs no mutation. Returns the command count, 0
+ * when starved, -1 when the pipeline is crashed. */
+int rdp_render_engine_step(rdp_engine_work *works, unsigned capacity)
 {
-    return rdp_engine_step(s_ctx.rdp, cycles, cls);
-}
+    rdp_t *rdp = s_ctx.rdp;
+    unsigned count = 0;
+    int r;
 
-/* Raises MI_INTR_DP; the engine calls this when a Sync_Full retires. */
-void rdp_render_engine_full_sync(void)
-{
-    if (s_ctx.dp_interrupt != NULL)
-        s_ctx.dp_interrupt(s_ctx.opaque);
+    if (rdp == NULL || capacity == 0)
+        return 0;
+
+    r = rdp_engine_step(rdp, &works[count]);
+    if (r <= 0)
+        return r;
+    count++;
+    while (count < capacity && rdp_engine_hold_open(rdp)) {
+        if (rdp_engine_step(rdp, &works[count]) <= 0)
+            break;
+        count++;
+    }
+    rdp_engine_settle(rdp);
+    return (int)count;
 }
 
 void rdp_render_destroy(void)
@@ -316,52 +299,11 @@ void rdp_render_destroy(void)
 
     s_hidden_plane = NULL;
     s_ctx.rdp = NULL;
-    s_ctx.dp_regs = NULL;
-    s_ctx.dp_interrupt = NULL;
-    s_ctx.opaque = NULL;
 }
 
 uint8_t *rdp_hidden_plane(void)
 {
     return s_hidden_plane;
-}
-
-void rdp_process_list(void)
-{
-    rdp_t *rdp = s_ctx.rdp;
-    uint32_t *regs = s_ctx.dp_regs;
-    uint32_t status_in, status_out, cleared, set;
-
-    if (!rdp || !regs)
-        return;
-
-    // Mirror the host-visible registers into the renderer.
-    status_in = regs[RDP_DPC_STATUS_REG];
-    rdp->m_start = regs[RDP_DPC_START_REG];
-    rdp->m_current = regs[RDP_DPC_CURRENT_REG];
-    rdp->m_end = regs[RDP_DPC_END_REG];
-    rdp->m_status = status_in;
-
-    rdp_process_command_list(rdp);
-
-    // Reflect renderer state back to the host per the DPC register
-    // spec (n64brew RDP registers): DP_START and DP_END are 24-bit
-    // RDRAM addresses; DP_CURRENT reports the address of the last
-    // command word consumed.
-    regs[RDP_DPC_START_REG] &= 0x00ffffff;
-    regs[RDP_DPC_END_REG] &= 0x00ffffff;
-    regs[RDP_DPC_CURRENT_REG] = rdp->m_current;
-
-    // STATUS: apply only the delta the renderer made (in-place set/clear
-    // of just the bits it changed). A blind store of m_status would clobber
-    // any DPC_STATUS write the CPU (VR4300 thread) performed via MMIO
-    // while this list was processing on the RCP thread -- e.g.
-    // libultra's osDpSetStatus XBUS/FREEZE clears at gfx task load,
-    // exactly the microcode-handoff window where OoT misbehaves.
-    status_out = rdp->m_status;
-    cleared = status_in & ~status_out;
-    set = status_out & ~status_in;
-    regs[RDP_DPC_STATUS_REG] = (regs[RDP_DPC_STATUS_REG] & ~cleared) | set;
 }
 
 uint32_t rdp_render_color_image(void)
@@ -383,7 +325,8 @@ uint8_t *rdp_render_tmem(void)
  * the import). Differences: whole structs travel as blocks, so the scissor
  * fractions upstream drops survive; the hidden plane is ares' and travels
  * with RDRAM; only the live prefix of the command accumulator travels; the
- * ares pixel counter is included. */
+ * ares pixel counter is included. Hazard holds and queued spans never
+ * outlive rdp_render_engine_step, so neither needs saving. */
 void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
 {
     rdp_t *rdp = s_ctx.rdp;
@@ -416,7 +359,6 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
     RDP_STATE(m_span_base);
     RDP_STATE(m_aux_buf_ptr);
     RDP_STATE(m_pipeline_crashed);
-    RDP_STATE(m_occ_cycles);
     RDP_STATE(m_primitive_counter);
     RDP_STATE(m_pixels);
     RDP_STATE(m_rect_stale);

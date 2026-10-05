@@ -1,12 +1,16 @@
 //Reality Display Processor
 
-struct RDP : Thread, Memory::RCP<RDP> {
+#include <n64/rdp/timed.hpp>
+
+struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
   Node::Object node;
+
+  RDP() { Thread::actor = Timing::ActorId::RDP; }
 
   struct Debugger {
     //debugger.cpp
     auto load(Node::Object) -> void;
-    auto commands() -> void;
+    auto command(u64 word) -> void;
     auto ioDPC(bool mode, u32 address, u32 data) -> void;
     auto ioDPS(bool mode, u32 address, u32 data) -> void;
 
@@ -26,19 +30,23 @@ struct RDP : Thread, Memory::RCP<RDP> {
   //io.cpp
   auto readWord(u32 address, Thread& thread) -> u32;
   auto writeWord(u32 address, u32 data, Thread& thread) -> void;
-  auto flushCommands() -> void;
+
+  //timed.cpp: a timeline actor; command fetch, dispatch and SYNC_FULL retire
+  auto readiness() const -> Timing::Readiness override;
+  auto run(Clock limit) -> void override;
+  auto kick(Clock at) -> void;
+  auto step(Clock at) -> void;
+  auto startFetch(Clock at) -> void;
+  auto dispatch(Clock at) -> void;
+  auto dispatchable() const -> bool;
 
   //serialization.cpp
   auto serialize(serializer&) -> void;
-
-  //engine.cpp
-  auto syncFull() -> void;
 
   //cen64-jgemu pixel engine (engine/): the RDP's rasterizer and its state
   struct Engine {
     auto load() -> void;
     auto unload() -> void;
-    auto render() -> void;
     auto serialize(serializer&) -> void;
     auto dpsArm() -> void;
     auto dpsTake(u32 words[32]) -> bool;
@@ -48,29 +56,27 @@ struct RDP : Thread, Memory::RCP<RDP> {
     auto tmem() -> u8*;
 
     bool loaded = false;
-    u32  regs[8] = {};
-    //host time spent inside render(); measurement only, never fed back into emulation
+    //host time spent inside dispatch; measurement only, never fed back into emulation
     u64  renderNanoseconds = 0;
     u64  renderCalls = 0;
   } engine;
 
-  struct Command {
-    n24 start;
-    n24 end;
-    n24 current;
-    Clock clockOrigin;  //DPC_CLOCK counts RCP clocks since this time
-    n24 bufferBusy;
-    n24 pipeBusy;
-    n24 tmemBusy;
-    n1  source;  //0 = RDRAM, 1 = DMEM
-    n1  freeze;
-    n1  crashed;
-    n1  flush;
-    n1  startValid;
-    n1  endValid;
-    n1  startGclk;
-    n1  ready = 1;
-  } command;
+  RDPTimed::Dpc dpc;
+
+  //The command DMA request in flight; its words land at `arrival`.
+  struct Fetch {
+    u32   dwords = 0;
+    Clock arrival;
+  } fetch;
+
+  //The command processor: busy with one dispatch until `until`, or idle and
+  //free to dispatch from `until` on.
+  struct Executor {
+    bool  busy = false;
+    bool  load = false;
+    bool  syncFull = false;
+    Clock until;
+  } executor;
 
   struct IO : Memory::RCP<IO> {
     RDP& self;
