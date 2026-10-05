@@ -30,11 +30,13 @@ DEFAULT_IPL3 = os.path.join(os.environ.get("N64_TIMING_HOME", os.path.expanduser
 
 
 def suite_sets(name):
+    module = f"romgen.suites.{name}.sets"
     try:
-        sets = importlib.import_module(f"romgen.suites.{name}.sets")
-    except ModuleNotFoundError:
+        return importlib.import_module(module).SETS
+    except ModuleNotFoundError as e:
+        if e.name not in (module, f"romgen.suites.{name}"):
+            raise
         raise SystemExit(f"unknown suite {name}")
-    return sets.SETS
 
 
 def runtime_text(extra_asm):

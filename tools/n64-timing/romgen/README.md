@@ -31,6 +31,7 @@ tools/n64-timing/run-thar0.sh
 | `suites/thar0/` | Port of Thar0/RDP-Timing-Tests with hardware expectations and a comparator. See [suites/thar0/README.md](suites/thar0/README.md). |
 | `suites/nemu64/` | Ported `run()` logic per feature set (`timing.py`, `cycle.py`, `cop0hazard.py`), routines, value descriptions, and the root-cause classifier |
 | `suites/bench/` | Microbenchmark ROMs for the timing-core plan (`--suite bench`). They print raw measurements; `expected.tsv` holds the cited hardware values. See [suites/bench/README.md](suites/bench/README.md). |
+| `suites/rdpstat/` | RDP command-sequencing ROMs ported from n64-systemtest and repeater64. See [suites/rdpstat/README.md](suites/rdpstat/README.md) |
 | `report.py` | Joins a ROM's `@<test>.<value>` records with its `.tests.tsv` listing |
 
 The ROM decides pass or fail by itself and prints nemu64-test's output format. The host side only parses output.
