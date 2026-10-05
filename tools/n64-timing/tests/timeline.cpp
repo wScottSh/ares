@@ -92,8 +92,7 @@ static auto dump() -> std::string {
   return s;
 }
 
-//nall supplies the process entry point and calls this; a nonzero exit reports failures
-auto nall::main(Arguments) -> void {
+static auto testTimeline() -> u32 {
   //Ordering invariant: every step and event before the target runs in (time, rank)
   //order, and nothing at or after the target runs. Defect: a scan that picks the
   //first runnable actor instead of the earliest.
@@ -278,6 +277,19 @@ auto nall::main(Arguments) -> void {
     CHECK(sorted() && steps.size() == 4, "an actor's wake must end its run: %s", dump().c_str());
   }
 
-  if(failures) { std::printf("timeline: %u failure(s)\n", failures); std::exit(1); }
-  std::printf("timeline: ok\n");
+  if(failures) std::printf("timeline: %u failure(s)\n", failures);
+  else std::printf("timeline: ok\n");
+  return failures;
+}
+
+auto testRi() -> u32;  //ri.cpp
+
+//nall supplies the process entry point and calls this. An argument names one
+//test (the checks.tsv selector); none runs all. A nonzero exit reports failures.
+auto nall::main(Arguments arguments) -> void {
+  const bool all = !arguments;
+  u32 failed = 0;
+  if(all || arguments.find("timeline")) failed += testTimeline();
+  if(all || arguments.find("ri-cost-table")) failed += testRi();
+  if(failed) std::exit(1);
 }

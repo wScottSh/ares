@@ -99,8 +99,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 
 | Behavior | Value | Basis | Reference | Checks | Note |
 |---|---|---|---|---|---|
-| `sysad.rdram-write-period` | 12 rclk | derived | n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 12.25 rclk per SD (vr4300-wb.md); the SysAD drain is on the SClock grid, and refresh (1.3%, rdram-bus-arbitration.md B12) and VI fetch (plan T11) contention make up the rest | `bench:mi-memset-uncached` | drain period of one uncached RDRAM write: request to EOK; the path after the wire is this minus the modeled wire time |
-| `sysad.rdram-block-write-period` | 20 rclk | derived | n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md) less the modeled fill, the two store issues and the refresh share; on the SClock grid | `bench:mi-memset-cached` `bench:dirty-miss-isolated` | drain period of one D-cache line writeback |
+| `sysad.rdram-write-period` | 12 rclk | derived | n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12); on the SClock grid, which gives 18.28 pclk, the rest is VI fetch contention (plan T11) | `bench:mi-memset-uncached` | drain period of one uncached RDRAM write, request to EOK at row hit |
+| `sysad.rdram-block-write-period` | 12 rclk | derived | n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh; the nearest SClock-grid period gives 71.0 pclk, the rest is VI fetch contention (plan T11) | `bench:mi-memset-cached` `bench:dirty-miss-isolated` | drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period |
 | `sysad.register-write` | 5 rclk | model-choice | no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases | pending (no-corpus) | a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining |
 
 ### sp
@@ -301,5 +301,5 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `noise:c` | noise | dataset-c | - | pass | Thar0/RDP-Noise dataset C (Unlicense) |
 | `noise:rect-1016` | noise | rect-1016 | - | pass | romgen 1016-px rect ROM against dataset A |
 | `pidma:logs` | pidma | rasky_n64_pi_dma_test/pi_dma_test.z64 | - | self | ROM self-check within 10%; harness replays the 64 golden logs within 3% (plan T8) |
-| `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes (rdram-bus-arbitration.md) |
+| `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6) |
 | `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request |

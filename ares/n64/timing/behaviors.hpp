@@ -67,7 +67,7 @@ namespace Behavior {
   constexpr Clock CpuRcpRegisterRead = {176};  //22 pclk
   constexpr Clock CpuPifRamRead = {23688};  //1974 rclk
   constexpr Clock SysadRdramWritePeriod = {144};  //12 rclk
-  constexpr Clock SysadRdramBlockWritePeriod = {240};  //20 rclk
+  constexpr Clock SysadRdramBlockWritePeriod = {144};  //12 rclk
   constexpr Clock SysadRegisterWrite = {60};  //5 rclk
   constexpr s64 SpDmaBurst = 128;  //128 B
   constexpr Ratio SpDmaRateCheck = {13, 2};  //6.5 B/rclk
@@ -157,8 +157,8 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.wb-release", Basis::Vendor, "slot", "rule", "NEC 'has a space' (s.4.9) chosen over R4300i datasheet 'emptied'; burst shape only", "bench:wb-fifth-store", "conflict recorded; no public hardware value"},
   {"cpu.rcp-register-read", Basis::Measured, "22", "pclk", "n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value)", "bench:rcp-reg-read", ""},
   {"cpu.pif-ram-read", Basis::Measured, "1974", "rclk", "n64-systembench PIF RAM read (cited value)", "bench:pif-ram-read", ""},
-  {"sysad.rdram-write-period", Basis::Derived, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 12.25 rclk per SD (vr4300-wb.md); the SysAD drain is on the SClock grid, and refresh (1.3%, rdram-bus-arbitration.md B12) and VI fetch (plan T11) contention make up the rest", "bench:mi-memset-uncached", "drain period of one uncached RDRAM write: request to EOK; the path after the wire is this minus the modeled wire time"},
-  {"sysad.rdram-block-write-period", Basis::Derived, "20", "rclk", "n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md) less the modeled fill, the two store issues and the refresh share; on the SClock grid", "bench:mi-memset-cached bench:dirty-miss-isolated", "drain period of one D-cache line writeback"},
+  {"sysad.rdram-write-period", Basis::Derived, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12); on the SClock grid, which gives 18.28 pclk, the rest is VI fetch contention (plan T11)", "bench:mi-memset-uncached", "drain period of one uncached RDRAM write, request to EOK at row hit"},
+  {"sysad.rdram-block-write-period", Basis::Derived, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh; the nearest SClock-grid period gives 71.0 pclk, the rest is VI fetch contention (plan T11)", "bench:mi-memset-cached bench:dirty-miss-isolated", "drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period"},
   {"sysad.register-write", Basis::ModelChoice, "5", "rclk", "no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases", "pending:no-corpus", "a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining"},
   {"cpu.random-rule", Basis::Vendor, "decrement-per-pclk", "rule", "NEC UM ch.5; nemu64-test Random (decrement), Random (masking)", "nemu64:timing/random", ""},
   {"sp.dma-burst", Basis::ModelChoice, "128", "B", "inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md)", "bench:sp-dma-sweep", ""},
