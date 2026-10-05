@@ -24,7 +24,7 @@ auto MI::raise(IRQ source) -> void {
   case IRQ::SP: irq.sp.line = 1; break;
   case IRQ::SI: irq.si.line = 1; break;
   case IRQ::AI: irq.ai.line = 1; break;
-  case IRQ::VI: irq.vi.line = 1; break;
+  case IRQ::VI: irq.vi.line = 1; if(auto f = dplog.file()) fprintf(f, "V %lld\n", (long long)dplog.time(vi)); break;
   case IRQ::PI: irq.pi.line = 1; break;
   case IRQ::DP: irq.dp.line = 1; break;
   }

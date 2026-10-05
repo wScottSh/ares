@@ -75,6 +75,20 @@ namespace ares::Nintendo64 {
     s64 clock;
   };
 
+  //research instrumentation (wScottSh/ares#21): ARES_DPLOG=<path> logs DPC/SP task/VI events.
+  //Times are absolute CPU-thread clocks: base (accumulated at CPU::synchronize) + thread.clock.
+  struct DpLog {
+    FILE* f = nullptr;
+    s64 base = 0;
+    bool tried = false;
+    auto file() -> FILE* {
+      if(!tried) { tried = true; if(auto p = getenv("ARES_DPLOG")) f = fopen(p, "w"); }
+      return f;
+    }
+    auto time(const Thread& t) const -> s64 { return base + t.clock; }
+  };
+  inline DpLog dplog;
+
   struct Queue : priority_queue<u32[512]> {
     enum : u32 {
       PI_DMA_Read,

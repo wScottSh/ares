@@ -52,6 +52,7 @@ auto RSP::BNE(cr32& rs, cr32& rt, s16 imm) -> void {
 }
 
 auto RSP::BREAK() -> void {
+  if(auto f = dplog.file()) fprintf(f, "H %lld sig=%x pc=%03x\n", (long long)dplog.time(rsp), (u32)(status.signal[0] | status.signal[1] << 1 | status.signal[2] << 2), (u32)ipu.pc);
   status.halted = 1;
   status.broken = 1;
   if(status.interruptOnBreak) mi.raise(MI::IRQ::SP);

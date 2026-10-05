@@ -119,6 +119,12 @@ auto RSP::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
 
   if(address == 4) {
     //SP_STATUS
+    if(auto f = dplog.file()) {
+      if(data.bit(0) && !data.bit(1) && status.halted)
+        fprintf(f, "T %lld type=%x flags=%x ob=%08x obend=%08x dl=%08x %s\n", (long long)dplog.time(thread),
+          dmem.read<Word>(0xfc0), dmem.read<Word>(0xfc4), dmem.read<Word>(0xfe8), dmem.read<Word>(0xfec), dmem.read<Word>(0xff0), &thread == &cpu ? "cpu" : "rsp");
+      if(data.bit(10)) fprintf(f, "Y %lld\n", (long long)dplog.time(thread));
+    }
     if(data.bit( 0) && !data.bit( 1)) status.halted = 0;
     if(data.bit( 1) && !data.bit( 0)) status.halted = 1;
     if(data.bit( 2)) status.broken = 0;

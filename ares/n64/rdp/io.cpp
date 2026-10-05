@@ -71,12 +71,14 @@ auto RDP::writeWord(u32 address, u32 data_, Thread& thread) -> void {
 
   if(address == 0) {
     //DPC_START
+    if(auto f = dplog.file()) fprintf(f, "S %lld %06x sv=%d cur=%06x end=%06x %s\n", (long long)dplog.time(thread), (u32)data.bit(0,23), (int)command.startValid, (u32)command.current, (u32)command.end, &thread == &cpu ? "cpu" : "rsp");
     if(!command.startValid) command.start = data.bit(0,23) & ~7;
     command.startValid = 1;
   }
 
   if(address == 1) {
     //DPC_END
+    if(auto f = dplog.file()) fprintf(f, "E %lld %06x sv=%d start=%06x cur=%06x %s\n", (long long)dplog.time(thread), (u32)data.bit(0,23), (int)command.startValid, (u32)command.start, (u32)command.current, &thread == &cpu ? "cpu" : "rsp");
     command.end = data.bit(0,23) & ~7;
     if(command.startValid) {
       command.current = command.start;

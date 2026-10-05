@@ -615,6 +615,7 @@ auto RDP::syncTile() -> void {
 
 //0x29
 auto RDP::syncFull() -> void {
+  if(auto f = dplog.file()) fprintf(f, "F %lld cur=%06x\n", (long long)dplog.time(rsp), (u32)command.current);
   if(!command.crashed) {
     mi.raise(MI::IRQ::DP);
     command.bufferBusy = 0;

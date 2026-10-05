@@ -84,6 +84,7 @@ auto CPU::synchronize() -> void {
   auto clocks = Thread::clock;
   auto counted = countClock;
   Thread::clock = 0;
+  dplog.base += clocks;
   countClock = 0;
   jitClockTarget = 0;
 
