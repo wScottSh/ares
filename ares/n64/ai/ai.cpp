@@ -25,20 +25,24 @@ auto AI::unload() -> void {
 }
 
 auto AI::sampleEvent() -> void {
-  sample();
-  stream->frame(dac.left, dac.right);
+  if(!sample()) stream->frame(dac.left, dac.right);
   Thread::clock = dac.vclk.advance(dac.vclksPerSample);
   timeline.schedule({Thread::clock, (u32)EventKind::AI_Sample});
 }
 
-auto AI::sample() -> void {
+//The DAC has no sample RAM: the AI reads ai.fetch-bytes (two stereo samples)
+//from RDRAM per request (n64brew Audio_Interface; US 6,166,748), as an RI bus
+//client. The registers advance at the sample times as before; the pair's two
+//output frames go to the host stream when its read lands.
+//Returns whether the sample came from DMA (its frame is emitted at the grant).
+auto AI::sample() -> bool {
   bool active = false;
 
   if(io.dmaCount && io.dmaLength[0] && io.dmaEnable) {
     io.dmaAddress[0].bit(13,23) += io.dmaAddressCarry;
-    auto data = rdram.ram.read<Word>(io.dmaAddress[0], RBusDevice::AI_DMA);
-    dac.left  = (s16)(data >> 16) / 32768.0;
-    dac.right = (s16)(data >>  0) / 32768.0;
+    if(io.dmaLength[0] % Timing::Behavior::AiFetchBytes == 0) {
+      ri.post({(u32)io.dmaAddress[0], (u8)Timing::Behavior::AiFetchBytes, RiBus::Direction::Read, RiBus::Requester::AiDma, 0}, Thread::clock);
+    }
 
     io.dmaAddress[0].bit(0,12) += 4;
     io.dmaAddressCarry = io.dmaAddress[0].bit(0,12) == 0;
@@ -61,6 +65,19 @@ auto AI::sample() -> void {
     if(fabs(dac.left)  < 1e-7) dac.left  = 0.0;
     if(fabs(dac.right) < 1e-7) dac.right = 0.0;
   }
+  return active;
+}
+
+auto AI::Fetch::buffer(const RiBus::Burst&) -> void* {
+  return bytes;
+}
+
+auto AI::Fetch::granted(const RiBus::Grant& g) -> void {
+  for(u32 i = 0; i < g.burst.bytes; i += 4) {
+    ai.dac.left  = (s16)(bytes[i + 0] << 8 | bytes[i + 1]) / 32768.0;
+    ai.dac.right = (s16)(bytes[i + 2] << 8 | bytes[i + 3]) / 32768.0;
+    ai.stream->frame(ai.dac.left, ai.dac.right);
+  }
 }
 
 auto AI::updateDecay() -> void {
@@ -78,6 +95,7 @@ auto AI::power(bool reset) -> void {
   dac.vclksPerSample = system.videoFrequency() / dac.frequency;
   dac.vclk = {system.vclkPeriod()};
   updateDecay();
+  ri.attach(RiBus::Requester::AiDma, &fetch);
   timeline.schedule({Thread::clock, (u32)EventKind::AI_Sample});
 }
 

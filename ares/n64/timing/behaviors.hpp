@@ -34,7 +34,7 @@ namespace Behavior {
   constexpr s64 RiRankVi = 1;  //1 rank
   constexpr s64 RiRankOther = 2;  //2 rank
   constexpr Clock RiOverheadRead = {54};  //4.5 rclk
-  constexpr Clock RiOverheadWrite = {20};  //1.7 rclk; 20 units, rounded from 20.4
+  constexpr Clock RiOverheadWrite = {12};  //1 rclk
   constexpr Clock RiOverheadRdp = {20};  //20 units
   constexpr Clock RiRequestLatency = {1};  //1 units
   constexpr Clock CpuUncachedReadTotal = {256};  //32 pclk
@@ -82,6 +82,7 @@ namespace Behavior {
   constexpr Ratio SpDmaRateCheck = {13, 2};  //6.5 B/rclk
   constexpr Clock RspSlot = {12};  //1 rclk
   constexpr Clock PiPageSetup = {180};  //15 rclk
+  constexpr Clock PiHalfwordBias = {24};  //2 rclk
   constexpr s64 PiBlockBytes = 128;  //128 B
   constexpr Clock PiBlockWriteback = {336};  //28 rclk
   constexpr Clock PiIoBusy = {1608};  //134 rclk
@@ -136,8 +137,8 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"ri.rank.vi", Basis::ModelChoice, "1", "rank", "inference: VI is the only hard real-time client (B4)", "nemu64:timing/load-from-uncached-vi-on-same-bank", ""},
   {"ri.rank.other", Basis::ModelChoice, "2", "rank", "none published (B4): all other clients first-come first-served", "nemu64:timing/load-miss-vi-on", ""},
   {"ri.overhead-read", Basis::Fit, "4.5", "rclk", "hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10)", "bench:sp-dma-sweep", "verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated"},
-  {"ri.overhead-write", Basis::Fit, "1.7", "rclk", "n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10)", "bench:mi-memset-rspdma", "verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA"},
-  {"ri.overhead-rdp", Basis::ModelChoice, "20", "units", "assumed equal to ri.overhead-write (the 1.7 rclk fit, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured", "thar0:imrd-1cycle", "calibration #16"},
+  {"ri.overhead-write", Basis::Fit, "1", "rclk", "n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B; the RI decides on rclk edges, so a 128 B write repeats every 17 wire + 1 gap + ceil(overhead) rclk: 1 gives 19, the 1.7 of the unquantized fit gives 20 (B10)", "bench:mi-memset-rspdma", "verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA"},
+  {"ri.overhead-rdp", Basis::ModelChoice, "20", "units", "assumed equal to the unquantized ri.overhead-write fit (1.7 rclk, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured", "thar0:imrd-1cycle", "calibration #16"},
   {"ri.request-latency", Basis::ModelChoice, "1", "units", "none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does", "det stepcap", ""},
   {"cpu.uncached-read-total", Basis::Measured, "32", "pclk", "nemu64-test cache.rs:288-382 median, VI off", "nemu64:timing/load-from-uncached-vi-off", "sysad.fixed-path is derived from this minus modeled wire"},
   {"cpu.uncached-read-dword-total", Basis::Measured, "37", "pclk", "n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's)", "bench:uncached-sizes", ""},
@@ -187,6 +188,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"sp.dma-rate-check", Basis::Measured, "6.5", "B/rclk", "n64brew MI page RSP DMA memset 2.58 ms/MiB; hcs64 5.55 conflicts (direction unstated)", "bench:sp-dma-sweep", "the bench reports both directions"},
   {"rsp.slot", Basis::Wiki, "1", "rclk", "clocks.md: the RSP runs on the RCP clock (n64brew Clock_Timing; SDK pro-man ch.3 RCP 62.5 MHz); one pipeline slot, an issue or a bubble, per clock", "nemu64:rsp_timing/sll", "RSP::Pipeline charges it per issued pair and per stall bubble (ADR 0001 keeps the RSP pipeline as the RSP cost model)"},
   {"pi.page-setup", Basis::Wiki, "15", "rclk", "n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md)", "pidma:logs bench:pi-dma-sizes", ""},
+  {"pi.halfword-bias", Basis::Wiki, "2", "rclk", "n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md)", "pidma:logs bench:pi-dma-sizes", ""},
   {"pi.block-bytes", Basis::Wiki, "128", "B", "n64brew PI; rasky n64_pi_dma_test", "pidma:logs", ""},
   {"pi.block-writeback", Basis::Derived, "28", "rclk", "dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part", "pidma:logs bench:pi-dma-sizes", ""},
   {"pi.io-busy", Basis::Measured, "134", "rclk", "n64-systembench PI I/O W (cited value)", "bench:pi-io-write", ""},
@@ -230,21 +232,15 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
   {"legacy.pi.write-busy", Basis::Legacy, "200", "pclk", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
-  {"legacy.pi.dma-page-setup", Basis::Legacy, "14", "rclk", "ares/n64/pi/dma.cpp:103", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup)"},
-  {"legacy.pi.dma-bytes-per-pulse", Basis::Legacy, "2", "B", "ares/n64/pi/dma.cpp:104", "pidma:logs", "replaced by T8: PiDma; one PWD + RLS pulse per halfword"},
-  {"legacy.pi.dma-buffer-writeback", Basis::Legacy, "28", "rclk", "ares/n64/pi/dma.cpp:105", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma block writeback through the RI (pi.block-writeback)"},
-  {"legacy.pi.dma-partial-byte", Basis::Legacy, "1", "rclk", "ares/n64/pi/dma.cpp:106", "pidma:logs", "replaced by T8: PiDma partial block"},
-  {"legacy.si.bus-write", Basis::Legacy, "2150", "rclk", "ares/n64/si/io.cpp:66", "pending:no-corpus", "replaced by T8: SiDma"},
-  {"legacy.si.dma-write64", Basis::Legacy, "4065", "rclk", "ares/n64/si/io.cpp:103", "bench:si-dma", "replaced by T8: SiDma (si.write64)"},
-  {"legacy.si.dma-read-base", Basis::Legacy, "13600", "rclk", "ares/n64/pif/hle.cpp:203", "bench:si-dma", "replaced by T8: SiDma (si.read64-base)"},
-  {"legacy.si.dma-read-controller", Basis::Legacy, "22000", "rclk", "ares/n64/pif/hle.cpp:228", "bench:si-dma", "replaced by T8: SiDma; per channel with a device"},
-  {"legacy.si.dma-read-empty-port", Basis::Legacy, "18000", "rclk", "ares/n64/pif/hle.cpp:230", "bench:si-dma", "replaced by T8: SiDma; per channel without a device"},
-  {"legacy.si.dma-read-accessory", Basis::Legacy, "20000", "rclk", "ares/n64/pif/hle.cpp:234", "bench:si-dma", "replaced by T8: SiDma; per cartridge channel"},
-  {"legacy.si.dma-read-short-command", Basis::Legacy, "1420", "rclk", "ares/n64/pif/hle.cpp:240", "bench:si-dma", "replaced by T8: SiDma; per end, skip, reset or padding byte"},
+  {"legacy.si.bus-write", Basis::Legacy, "2150", "rclk", "ares/n64/si/io.cpp:66", "pending:no-corpus", "no plan unit: the SI I/O write busy; T8 left it, no hardware reference"},
+  {"legacy.si.dma-read-base", Basis::Legacy, "13600", "rclk", "ares/n64/pif/hle.cpp:203", "bench:si-dma", "no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming; si.read64-base is the same value); no per-command hardware reference"},
+  {"legacy.si.dma-read-controller", Basis::Legacy, "22000", "rclk", "ares/n64/pif/hle.cpp:228", "bench:si-dma", "no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel with a device"},
+  {"legacy.si.dma-read-empty-port", Basis::Legacy, "18000", "rclk", "ares/n64/pif/hle.cpp:230", "bench:si-dma", "no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel without a device"},
+  {"legacy.si.dma-read-accessory", Basis::Legacy, "20000", "rclk", "ares/n64/pif/hle.cpp:234", "bench:si-dma", "no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per cartridge channel"},
+  {"legacy.si.dma-read-short-command", Basis::Legacy, "1420", "rclk", "ares/n64/pif/hle.cpp:240", "bench:si-dma", "no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per end, skip, reset or padding byte"},
   {"legacy.pif.step-quantum", Basis::Legacy, "40960", "pclk", "ares/n64/pif/hle.cpp:266", "stepcap", "no plan unit: the PIF HLE boot-handshake poll period, a timeline event from T5; the CIC handshake has no timing reference"},
   {"legacy.pif.boot-timeout", Basis::Legacy, "6", "s", "ares/n64/pif/hle.cpp:360", "pending:no-corpus", "no plan unit: CIC boot handshake timeout"},
-  {"legacy.rsp.dma-bytes-per-rclk", Basis::Legacy, "8", "B", "ares/n64/rsp/dma.cpp:12", "bench:sp-dma-sweep", "replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst)"},
-  {"legacy.ai.power-on-rate", Basis::Legacy, "44100", "Hz", "ares/n64/ai/ai.cpp:75", "pending:no-corpus", "no plan unit: the DAC rate before the first AI_DACRATE write"},
+  {"legacy.ai.power-on-rate", Basis::Legacy, "44100", "Hz", "ares/n64/ai/ai.cpp:92", "pending:no-corpus", "no plan unit: the DAC rate before the first AI_DACRATE write"},
   {"legacy.cart.eeprom-write", Basis::Legacy, "6", "ms", "ares/n64/cartridge/joybus.cpp:48", "pending:no-corpus", "no plan unit: EEPROM write busy time"},
   {"legacy.cart.rtc-tick", Basis::Legacy, "1", "s", "ares/n64/cartridge/rtc.cpp:42", "pending:no-corpus", "no plan unit: cartridge RTC one-second tick"},
   {"legacy.cart.flash-mx-sector-erase", Basis::Legacy, "85", "ms", "ares/n64/cartridge/flash.cpp:4", "pending:no-corpus", "no plan unit: Macronix flash sector erase"},

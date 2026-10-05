@@ -53,6 +53,25 @@ struct Grant {
   bool  rowMiss;
 };
 
+//A hardware client of the RI. ri/bus.cpp calls it at each grant; the channel
+//model here never does.
+struct Client {
+  //The buffer for `burst`, asked for at grant time. Reads fill it, writes drain
+  //it. CPU SysAD bursts use the VR4300 word layout; a DMA burst is `bytes`
+  //bytes in bus order (byte i is RDRAM address + i).
+  virtual auto buffer(const Burst&) -> void* = 0;
+  //The bytes have moved. A client may post its next burst from here.
+  virtual auto granted(const Grant&) -> void = 0;
+};
+
+//Bytes in the first burst of a transfer of `bytes` at `address`: at most
+//ri.max-burst, and never across a 2 KiB row (B2, B6).
+constexpr auto split(u32 address, u32 bytes) -> u32 {
+  u32 row = 0x800 - (address & 0x7ff);
+  u32 n = bytes < row ? bytes : row;
+  return n < (u32)Timing::Behavior::RiMaxBurst ? n : (u32)Timing::Behavior::RiMaxBurst;
+}
+
 struct Bank {
   u16  row;
   bool valid;
@@ -105,7 +124,7 @@ constexpr auto trailer(Requester requester, Direction direction) -> Clock {
 }
 
 struct Channel {
-  //every client keeps at most one burst in flight today (CPU SysAD, refresh)
+  //every client keeps at most one burst in flight (refresh, SysAD, each DMA engine)
   static constexpr u32 Capacity = 16;
 
   struct Pending {
@@ -119,6 +138,7 @@ struct Channel {
     for(auto& p : pending) p = {};
     for(auto& n : sequences) n = 0;
     free = {};
+    refreshEnd = {};
     for(auto& bank : banks) bank = {};
     for(auto& c : counters) c = {};
     cachedNext = Clock::never();
@@ -138,6 +158,11 @@ struct Channel {
   auto next() const -> Clock { return cachedNext; }
 
   auto empty() const -> bool { return count == 0; }
+
+  auto pendingFor(Requester r) const -> bool {
+    for(u32 i = 0; i < count; i++) if(pending[i].burst.requester == r) return true;
+    return false;
+  }
 
   //Makes the decision at next(): picks the winner among the arrived requests
   //by (rank, arrival, requester, sequence), charges its wire time for the
@@ -164,6 +189,7 @@ struct Channel {
       for(auto& bank : banks) dirty |= bank.dirty, bank.dirty = false;
       g.dataEnd = d + (dirty ? Timing::Behavior::RiRefreshDirty : Timing::Behavior::RiRefreshClean);
       free = g.dataEnd;
+      refreshEnd = g.dataEnd;
     } else {
       auto& bank = banks[bankOf(b.address)];
       const u16 row = rowOf(b.address);
@@ -206,6 +232,7 @@ struct Channel {
       s(bank.dirty);
     }
     s(free.units);
+    s(refreshEnd.units);
     for(auto& n : sequences) s(n);
     for(auto& c : counters) {
       s(c.bursts);
@@ -222,6 +249,7 @@ struct Channel {
   u32      count = 0;
   Bank     banks[8] = {};
   Clock    free;  //the channel takes its next request packet from here
+  Clock    refreshEnd;  //the last granted refresh releases the channel here
   u32      sequences[(u32)Requester::Count] = {};  //per requester: its posts arrive in its own order
   Counters counters[(u32)Requester::Count] = {};
 

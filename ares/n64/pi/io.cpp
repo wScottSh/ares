@@ -1,4 +1,9 @@
-auto PI::ioRead(u32 address) -> u32 {
+//ARES_PILOG=<file> logs each DMA start and end and each PI_STATUS read with
+//its time in Clock units, for tools/n64-timing/pidma-replay.py. Host-side
+//only; it never changes emulation.
+static FILE* piLog = [] { auto path = getenv("ARES_PILOG"); return path ? fopen(path, "w") : (FILE*)nullptr; }();
+
+auto PI::ioRead(u32 address, Thread& thread) -> u32 {
   address = (address & 0x3f) >> 2;
   n32 data;
 
@@ -28,6 +33,7 @@ auto PI::ioRead(u32 address) -> u32 {
     data.bit(1) = io.ioBusy;
     data.bit(2) = io.error;
     data.bit(3) = io.interrupt;
+    if(piLog) fprintf(piLog, "S %u %lld\n", (u32)data.bit(0,1), (long long)thread.clock.units);
   }
 
   if(address == 5) {
@@ -82,7 +88,7 @@ auto PI::ioRead(u32 address) -> u32 {
   return data;
 }
 
-auto PI::ioWrite(u32 address, u32 data_) -> void {
+auto PI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
   address = (address & 0x3f) >> 2;
   n32 data = data_;
 
@@ -107,8 +113,8 @@ auto PI::ioWrite(u32 address, u32 data_) -> void {
     io.readLength = n24(data);
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
-    scheduleAfter(EventKind::PI_DMA_Read, dmaDuration(true));
-    dmaRead();
+    if(piLog) fprintf(piLog, "L R %u %06x %08x %lld\n", (u32)io.readLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
+    dmaStart(false, thread.clock);
   }
 
   if(address == 3) {
@@ -116,8 +122,8 @@ auto PI::ioWrite(u32 address, u32 data_) -> void {
     io.writeLength = n24(data);
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
-    scheduleAfter(EventKind::PI_DMA_Write, dmaDuration(false));
-    dmaWrite();
+    if(piLog) fprintf(piLog, "L W %u %06x %08x %lld\n", (u32)io.writeLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
+    dmaStart(true, thread.clock);
   }
 
   if(address == 4) {
@@ -125,6 +131,7 @@ auto PI::ioWrite(u32 address, u32 data_) -> void {
     if(data.bit(0)) {
       io.dmaBusy = 0;
       io.error = 0;
+      dma.phase = DMA::Phase::Idle;
       cancelEvent(EventKind::PI_DMA_Read);
       cancelEvent(EventKind::PI_DMA_Write);
     }

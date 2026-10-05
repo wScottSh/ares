@@ -29,23 +29,17 @@ auto RSP::unload() -> void {
   node.reset();
 }
 
+//SP DMA is the RI's client, not a step of this actor: a halted RSP is parked
+//even while its DMA runs. A running RSP never steps past an undecided burst,
+//because the Bus actor's decision time is a contender like any other.
 auto RSP::readiness() const -> Timing::Readiness {
-  if(dma.busy.any()) {
-    if(status.halted || dma.landing < Thread::clock) return Timing::Readiness::runnable(dma.landing);
-    return Timing::Readiness::runnable(Thread::clock);
-  }
   if(!status.halted) return Timing::Readiness::runnable(Thread::clock);
   return Timing::Readiness::parked();
 }
 
 auto RSP::run(Clock limit) -> void {
   while(true) {
-    if(dma.busy.any() && (status.halted || dma.landing <= Thread::clock)) {
-      if(Thread::clock < dma.landing) Thread::clock = dma.landing;
-      dmaTransferStep();
-    } else {
-      instruction();
-    }
+    instruction();
     auto next = readiness();
     if(next.kind != Timing::Readiness::Kind::Runnable || next.at >= timeline.limit(limit)) return;
     timeline.record(next.at, Timing::ActorId::RSP);  //one trace record per step, however the steps are batched
@@ -110,6 +104,7 @@ auto RSP::power(bool reset) -> void {
   pipeline = {};
   profile = {};
   dma = {};
+  ri.attach(RiBus::Requester::SpDma, &dma);
   status.semaphore = 0;
   status.halted = 1;
   status.broken = 0;

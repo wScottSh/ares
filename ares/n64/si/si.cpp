@@ -20,6 +20,8 @@ auto SI::unload() -> void {
 
 auto SI::power(bool reset) -> void {
   io = {};
+  dma = {};
+  ri.attach(RiBus::Requester::SiDma, &dma);
 }
 
 }

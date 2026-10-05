@@ -52,6 +52,7 @@ namespace ares::Nintendo64 {
   using Timing::pclk;
   using Timing::rclk;
   #include <n64/timing/events.hpp>
+  #include <n64/ri/bus.hpp>
 
   struct Thread {
     auto reset() -> void {

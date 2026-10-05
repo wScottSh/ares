@@ -285,18 +285,14 @@ struct RDRAM : Memory::RCP<RDRAM> {
 private:
   //RDRAM data has one owner among hardware clients: the RI, which moves each
   //burst's bytes at its grant (ADR 0001 Decision 2). A device that reads or
-  //writes it directly fails to compile. MI keeps its debugger path and its
-  //repeat and EBus modes; Loader is the host's view. The DMA engines (AI, PI,
-  //PIF for SI, RSP), VI scanout and the RDP keep direct access until they
-  //become bus clients (plan T8, T11, T13).
+  //writes it directly fails to compile (unit:rdram-private). MI keeps its
+  //debugger path and its repeat and EBus modes; Loader is the host's view. VI
+  //scanout and the RDP keep direct access until they become bus clients
+  //(plan T11, T13).
   Writable ram{*this};
   friend struct RI;
   friend struct MI;
   friend struct Loader;
-  friend struct AI;
-  friend struct PI;
-  friend struct PIF;
-  friend struct RSP;
   friend struct VI;
   friend struct RDP;
 };

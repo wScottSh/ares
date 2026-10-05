@@ -595,6 +595,15 @@ auto nall::main(Arguments arguments) -> void {
     (unsigned long long)cpuBus.bursts, (unsigned long long)refresh.bursts, (unsigned long long)cpuBus.rowMisses,
     (unsigned long long)cpuBus.bytesRead, (unsigned long long)cpuBus.bytesWritten,
     (unsigned long long)(cpuBus.wait.units / N64::Timing::UnitsPerRclk), (unsigned long long)(refresh.busy.units / N64::Timing::UnitsPerRclk));
+  //the DMA engines as bus clients (plan T8): grants, bytes both ways, RCP clocks waited
+  std::fprintf(stderr, "n64-run: ri_dma");
+  for(auto [name, requester] : {std::pair{"sp", N64::RiBus::Requester::SpDma}, {"pi", N64::RiBus::Requester::PiDma},
+                                {"si", N64::RiBus::Requester::SiDma}, {"ai", N64::RiBus::Requester::AiDma}}) {
+    auto& c = counters[(u32)requester];
+    std::fprintf(stderr, " grants_%s=%llu %s_bytes=%llu %s_wait_rclk=%llu", name, (unsigned long long)c.bursts,
+      name, (unsigned long long)(c.bytesRead + c.bytesWritten), name, (unsigned long long)(c.wait.units / N64::Timing::UnitsPerRclk));
+  }
+  std::fprintf(stderr, "\n");
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);

@@ -9,12 +9,12 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | measured | a hardware measurement: a test ROM result or a console capture | 39 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 16 |
 | datasheet | a component datasheet | 8 |
-| wiki | a community reference: n64brew, or a test suite author's notes | 14 |
+| wiki | a community reference: n64brew, or a test suite author's notes | 15 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 7 |
 | model-choice | no published value; the reference states why the model chose this one | 15 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 32 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 26 |
 
 ## Behaviors
 
@@ -54,8 +54,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `ri.rank.vi` | 1 rank | model-choice | inference: VI is the only hard real-time client (B4) | `nemu64:timing/load-from-uncached-vi-on-same-bank` |  |
 | `ri.rank.other` | 2 rank | model-choice | none published (B4): all other clients first-come first-served | `nemu64:timing/load-miss-vi-on` |  |
 | `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | **fit only, no independent check:** `bench:sp-dma-sweep` (fit from `bench:sp-dma-sweep`) | verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated |
-| `ri.overhead-write` | 1.7 rclk (20 units, rounded from 20.4) | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
-| `ri.overhead-rdp` | 20 units | model-choice | assumed equal to ri.overhead-write (the 1.7 rclk fit, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
+| `ri.overhead-write` | 1 rclk | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B; the RI decides on rclk edges, so a 128 B write repeats every 17 wire + 1 gap + ceil(overhead) rclk: 1 gives 19, the 1.7 of the unquantized fit gives 20 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
+| `ri.overhead-rdp` | 20 units | model-choice | assumed equal to the unquantized ri.overhead-write fit (1.7 rclk, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
 | `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` |  |
 
 ### cpu
@@ -130,6 +130,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | Behavior | Value | Basis | Reference | Checks | Note |
 |---|---|---|---|---|---|
 | `pi.page-setup` | 15 rclk | wiki | n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` |  |
+| `pi.halfword-bias` | 2 rclk | wiki | n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` |  |
 | `pi.block-bytes` | 128 B | wiki | n64brew PI; rasky n64_pi_dma_test | `pidma:logs` |  |
 | `pi.block-writeback` | 28 rclk | derived | dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part | `pidma:logs` `bench:pi-dma-sizes` |  |
 | `pi.io-busy` | 134 rclk | measured | n64-systembench PI I/O W (cited value) | `bench:pi-io-write` |  |
@@ -200,21 +201,15 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/sysad.cpp:262 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
 | `legacy.pi.write-busy` | 200 pclk | ares/n64/pi/bus.hpp:77 | `bench:pi-io-write` | replaced by T8: PI I/O busy (pi.io-busy) |
-| `legacy.pi.dma-page-setup` | 14 rclk | ares/n64/pi/dma.cpp:103 | `pidma:logs` `bench:pi-dma-sizes` | replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup) |
-| `legacy.pi.dma-bytes-per-pulse` | 2 B | ares/n64/pi/dma.cpp:104 | `pidma:logs` | replaced by T8: PiDma; one PWD + RLS pulse per halfword |
-| `legacy.pi.dma-buffer-writeback` | 28 rclk | ares/n64/pi/dma.cpp:105 | `pidma:logs` `bench:pi-dma-sizes` | replaced by T8: PiDma block writeback through the RI (pi.block-writeback) |
-| `legacy.pi.dma-partial-byte` | 1 rclk | ares/n64/pi/dma.cpp:106 | `pidma:logs` | replaced by T8: PiDma partial block |
-| `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:66 | pending (no-corpus) | replaced by T8: SiDma |
-| `legacy.si.dma-write64` | 4065 rclk | ares/n64/si/io.cpp:103 | `bench:si-dma` | replaced by T8: SiDma (si.write64) |
-| `legacy.si.dma-read-base` | 13600 rclk | ares/n64/pif/hle.cpp:203 | `bench:si-dma` | replaced by T8: SiDma (si.read64-base) |
-| `legacy.si.dma-read-controller` | 22000 rclk | ares/n64/pif/hle.cpp:228 | `bench:si-dma` | replaced by T8: SiDma; per channel with a device |
-| `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma` | replaced by T8: SiDma; per channel without a device |
-| `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma` | replaced by T8: SiDma; per cartridge channel |
-| `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma` | replaced by T8: SiDma; per end, skip, reset or padding byte |
+| `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:66 | pending (no-corpus) | no plan unit: the SI I/O write busy; T8 left it, no hardware reference |
+| `legacy.si.dma-read-base` | 13600 rclk | ares/n64/pif/hle.cpp:203 | `bench:si-dma` | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming; si.read64-base is the same value); no per-command hardware reference |
+| `legacy.si.dma-read-controller` | 22000 rclk | ares/n64/pif/hle.cpp:228 | `bench:si-dma` | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel with a device |
+| `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma` | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel without a device |
+| `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma` | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per cartridge channel |
+| `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma` | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per end, skip, reset or padding byte |
 | `legacy.pif.step-quantum` | 40960 pclk | ares/n64/pif/hle.cpp:266 | `stepcap` | no plan unit: the PIF HLE boot-handshake poll period, a timeline event from T5; the CIC handshake has no timing reference |
 | `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:360 | pending (no-corpus) | no plan unit: CIC boot handshake timeout |
-| `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:12 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
-| `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:75 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
+| `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:92 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
 | `legacy.cart.eeprom-write` | 6 ms | ares/n64/cartridge/joybus.cpp:48 | pending (no-corpus) | no plan unit: EEPROM write busy time |
 | `legacy.cart.rtc-tick` | 1 s | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |
 | `legacy.cart.flash-mx-sector-erase` | 85 ms | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash sector erase |
@@ -300,8 +295,9 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `noise:b` | noise | dataset-b | - | pass | Thar0/RDP-Noise dataset B (Unlicense) |
 | `noise:c` | noise | dataset-c | - | pass | Thar0/RDP-Noise dataset C (Unlicense) |
 | `noise:rect-1016` | noise | rect-1016 | - | pass | romgen 1016-px rect ROM against dataset A |
-| `pidma:logs` | pidma | rasky_n64_pi_dma_test/pi_dma_test.z64 | - | self | ROM self-check within 10%; harness replays the 64 golden logs within 3% (plan T8) |
+| `pidma:logs` | pidma | rasky_n64_pi_dma_test/pi_dma_test.z64 | - | self | ROM self-check within 10%; tools/n64-timing/pidma-replay.py rebuilds the ROM's COUNT measurement for every point from ARES_PILOG and checks sizes 8-382 within 3% of the 64 golden logs' min..max (plan T8) |
 | `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6) |
-| `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request |
+| `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request; a DMA burst never crosses a 2 KiB row (plan T8) |
+| `unit:rdram-private` | unit | n64-timing-rdram-device | rdram-private | pass | ADR 0001 Decision 2: a device-side read of rdram.ram fails to compile on the access check, a Loader read compiles (tests/rdram-private.cmake, plan T8) |
 | `rdpstat:dpc-sequencing` | rdpstat | dpc | - | self | rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12) |
 | `rdpstat:xbus` | rdpstat | systemtest | RDP STATUS: Run from DMEM (xbus) | self | n64-systemtest tests/rdp run_from_dmem, three DMEM placements |

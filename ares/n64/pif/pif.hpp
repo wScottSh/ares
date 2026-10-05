@@ -61,8 +61,8 @@ struct PIF : Thread, Memory::SI<PIF> {
   auto writeInt(u32 address, u32 data) -> void;
   auto readWord(u32 address) -> u32;
   auto writeWord(u32 address, u32 data) -> void;
-  auto dmaRead(u32 address, u32 ramAddress) -> void;
-  auto dmaWrite(u32 address, u32 ramAddress) -> void;
+  auto dmaRead(u32 address, u8* bytes) -> void;
+  auto dmaWrite(u32 address, const u8* bytes) -> void;
 
   //serialization.cpp
   auto serialize(serializer&) -> void;

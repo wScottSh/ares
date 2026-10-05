@@ -21,10 +21,6 @@ ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 
 ares/n64/cpu/memory.cpp	vaddrAlignedError	step(pclk(1));	legacy.cpu.address-error	
 ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
 ares/n64/pi/bus.hpp	writeWord	scheduleAfter(EventKind::PI_BUS_Write, pclk(200));	legacy.pi.write-busy	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += (14 + bsd.latency + 1) * pbusPages;	legacy.pi.dma-page-setup	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += (bsd.pulseWidth + 1 + bsd.releaseDuration + 1) * len / 2;	legacy.pi.dma-bytes-per-pulse	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += numBuffers * 28;	legacy.pi.dma-buffer-writeback	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += partialBytes * 1;	legacy.pi.dma-partial-byte	
 ares/n64/pif/hle.cpp	estimateTiming	u32 cycles = 13600;	legacy.si.dma-read-base	
 ares/n64/pif/hle.cpp	estimateTiming	cycles += 22000;	legacy.si.dma-read-controller	
 ares/n64/pif/hle.cpp	estimateTiming	cycles += 18000;	legacy.si.dma-read-empty-port	
@@ -36,10 +32,7 @@ ares/n64/rdram/rdram.cpp	power	chip.delay = 0x0000'0023;  //WriteDelay=4, WriteB
 ares/n64/rdram/rdram.cpp	power	chip.writeDelay = 4;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	writeRegister	chip.delay = data & 0x3838'1838;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	writeRegister	chip.writeDelay = chip.delay >> 3 & 7;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
-ares/n64/rsp/dma.cpp	dmaTransferStart	dmaQueue(rclk((dma.current.length+8) / 8), thread);	legacy.rsp.dma-bytes-per-rclk	
-ares/n64/rsp/dma.cpp	dmaTransferStep	dmaQueue(rclk((dma.current.length+8) / 8), *this);	legacy.rsp.dma-bytes-per-rclk	
 ares/n64/si/io.cpp	writeWord	scheduleAfter(EventKind::SI_BUS_Write, rclk(2150));	legacy.si.bus-write	
-ares/n64/si/io.cpp	ioWrite	scheduleAfter(EventKind::SI_DMA_Write, rclk(4065));	legacy.si.dma-write64	
 ares/n64/system/system.cpp	load	information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};	legacy.clock.vclk-pal	
 ares/n64/vi/vi.cpp	line	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
 ares/n64/vi/vi.cpp	line	step(0x800);	-	host liveness while the VI is disabled: the idle VI posts a line event every 0x800 VCLKs so the frame loop returns; it charges nothing and no register sees it

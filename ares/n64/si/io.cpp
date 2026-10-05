@@ -55,7 +55,7 @@ auto SI::ioRead(u32 address) -> u32 {
 }
 
 auto SI::writeWord(u32 address, u32 data, Thread& thread) -> void {
-  if(address <= 0x048f'ffff) return ioWrite(address, data);
+  if(address <= 0x048f'ffff) return ioWrite(address, data, thread);
 
   if(io.ioBusy) return;
   io.ioBusy = 1;
@@ -67,7 +67,7 @@ auto SI::writeWord(u32 address, u32 data, Thread& thread) -> void {
   return pif.write<Word>(address, data);
 }
 
-auto SI::ioWrite(u32 address, u32 data_) -> void {
+auto SI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
   address = (address & 0x1f) >> 2;
   n32 data = data_;
 
@@ -83,6 +83,8 @@ auto SI::ioWrite(u32 address, u32 data_) -> void {
     io.dmaState = 1;
     io.pchState = 4;
     int cycles = pif.estimateTiming();
+    dma.toRdram = 1;
+    dma.phase = DMA::Phase::Joybus;
     scheduleAfter(EventKind::SI_DMA_Read, rclk(cycles));
   }
 
@@ -100,7 +102,10 @@ auto SI::ioWrite(u32 address, u32 data_) -> void {
     io.dmaBusy = 1;
     io.dmaState = 4;
     io.pchState = 1;
-    scheduleAfter(EventKind::SI_DMA_Write, rclk(4065));
+    dma.toRdram = 0;
+    dma.offset = 0;
+    dmaPost(thread.clock);
+    scheduleAfter(EventKind::SI_DMA_Write, Timing::Behavior::SiWrite64);
   }
 
   if(address == 5) {

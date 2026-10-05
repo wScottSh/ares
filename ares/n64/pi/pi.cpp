@@ -27,6 +27,8 @@ auto PI::power(bool reset) -> void {
   bsd2 = {};
   busDevice = -1;
   busTiming = {};
+  dma = {};
+  ri.attach(RiBus::Requester::PiDma, &dma);
 }
 
 }

@@ -257,9 +257,7 @@ struct RSP : Thread, Memory::RCP<RSP>, Timing::Actor {
   } pipeline;
 
   //dma.cpp
-  auto dmaQueue(Clock clocks, Thread& thread) -> void;
   auto dmaTransferStart(Thread& thread) -> void;
-  auto dmaTransferStep() -> void;
 
   //io.cpp
   auto readWord(u32 address, Thread& thread) -> u32;
@@ -270,7 +268,7 @@ struct RSP : Thread, Memory::RCP<RSP>, Timing::Actor {
   //serialization.cpp
   auto serialize(serializer&) -> void;
 
-  struct DMA {
+  struct DMA : RiBus::Client {
     struct Regs {    
       n1  pbusRegion;
       n12 pbusAddress;
@@ -291,7 +289,17 @@ struct RSP : Thread, Memory::RCP<RSP>, Timing::Actor {
       auto any() const -> n1 { return read | write; }
     } busy, full;
 
-    Clock landing;  //absolute time the current transfer's bytes arrive
+    u32   rowLeft = 0;  //bytes of the current row not yet granted
+    Clock done;         //the last granted burst's final data beat
+    u8    staging[128];  //one burst's bytes in bus order, filled and drained at its grant
+
+    //dma.cpp
+    auto begin(Clock at) -> void;
+    auto post(Clock at) -> void;
+    auto busyAt(Clock at) const -> bool;
+    auto copy(u32 bytes, bool toMemory) -> void;
+    auto buffer(const RiBus::Burst&) -> void* override;
+    auto granted(const RiBus::Grant&) -> void override;
   } dma;
 
   struct Status : Memory::RCP<Status> {
