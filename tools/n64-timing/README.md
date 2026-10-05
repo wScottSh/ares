@@ -151,7 +151,7 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 
 ## Behavior table, spec and checks
 
-`ares/n64/timing/behaviors.tsv` is the one source for every timing constant. Each row has an id, a value, a unit, a basis, a reference, the checks that decide it, and a note. `checks.tsv` defines every check id: its runner, target, selector, expectation and source.
+`ares/n64/timing/behaviors.tsv` is the one source for every timing constant. Each row has an id, a value, a unit, a basis, a reference, the checks that decide it, the checks a fit was solved from (`fit-from`), and a note. `checks.tsv` defines every check id: its runner, target, selector, expectation and source.
 
 ```sh
 python tools/n64-timing/behaviors.py              # writes ares/n64/timing/behaviors.hpp and docs/spec/n64-timing.md
@@ -166,13 +166,15 @@ python tools/n64-timing/behaviors.py --results nemu64=$N64_TIMING_HOME/results/n
 - a row has no value, no reference, or no check;
 - a check id is not defined in `checks.tsv`;
 - a time value is not a whole number of 750 MHz units and the basis is not `fit`;
+- a `fit` row has an empty `fit-from`, or every check in its verify column is in its `fit-from`, reports only, or is pending, and its note does not start with `verify-is-fit: <reason>`;
+- a row's note says `verify-is-fit` but another check decides it, or a row that is not `fit` has a `fit-from`;
 - code names `Timing::Behavior::X` for a row with no numeric value, or for no row;
 - `behaviors.hpp` or `docs/spec/n64-timing.md` differs from the generated output;
 - `lint-literals.py` finds a timing literal that the allowlist does not pin to a row.
 
 To add or change a constant, edit its row and run `behaviors.py`. Code reads the value as `Timing::Behavior::<Name>`, in 750 MHz units.
 
-A row with basis `legacy` is a cost that today's core still charges. Its reference is the code site. `literal-allowlist.tsv` pins the literal at that site to the row, and the row's value must appear on the line. The note names the plan unit that replaces the cost. That unit deletes the allowlist entries and the row, so the allowlist only shrinks. A row with basis `model-choice` has no published value, and its reference states the reason for the choice.
+A row with basis `legacy` is a cost that today's core still charges. Its reference is the code site. `literal-allowlist.tsv` pins the literal at that site to the row, and the row's value must appear on the line. The note names the plan unit that replaces the cost. That unit deletes the allowlist entries and the row, so the allowlist only shrinks. A row with basis `model-choice` has no published value, and its reference states the reason for the choice. A row with basis `fit` is solved from data that some checks also assert, so a pass on those checks verifies the arithmetic, not the model. Its `fit-from` column names those checks. When no other check decides the row (a check whose expectation is only a report does not), its note starts with `verify-is-fit: <reason>`, and the spec labels it **fit only, no independent check**.
 
 A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `file:<path>` to the suite's expected-value file, and its selector names the file's key column. When that file exists, each id under the prefix that the file defines resolves with no row of its own. Each explicit row whose expect is `suite` must then find its target and selector in the file. A `pending:<gate>` check names a corpus that the program cannot run yet. The spec prints it as pending, never as verified.
 
