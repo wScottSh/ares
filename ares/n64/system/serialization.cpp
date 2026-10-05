@@ -1,4 +1,4 @@
-static const string SerializerVersion = "v153.6-sysad";
+static const string SerializerVersion = "v153.7-pipeline";
 
 auto System::serialize(bool synchronize) -> serializer {
   serializer s;

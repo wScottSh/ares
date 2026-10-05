@@ -56,6 +56,15 @@ namespace Behavior {
   constexpr Clock CpuFpuDivD = {464};  //58 pclk
   constexpr Clock CpuFpuTrivial = {16};  //2 pclk
   constexpr Clock CpuFpuForward = {8};  //1 pclk
+  constexpr Clock CpuIssue = {8};  //1 pclk
+  constexpr Clock CpuMult = {40};  //5 pclk
+  constexpr Clock CpuDmult = {64};  //8 pclk
+  constexpr Clock CpuDiv = {296};  //37 pclk
+  constexpr Clock CpuDdiv = {552};  //69 pclk
+  constexpr Clock CpuFpuSqrtS = {232};  //29 pclk
+  constexpr Clock CpuFpuSqrtD = {464};  //58 pclk
+  constexpr Clock CpuFpuConvert = {40};  //5 pclk
+  constexpr Clock CpuFpuCvtSD = {16};  //2 pclk
   constexpr Clock CpuLikelyNullified = {8};  //1 pclk
   constexpr Clock CpuMtc0SlowRegs = {16};  //2 pclk
   constexpr Clock CpuCacheIndexOp = {40};  //5 pclk
@@ -149,6 +158,15 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.fpu-div-d", Basis::Measured, "58", "pclk", "nemu64-test COP1 tables", "nemu64:timing/cop1instructions64", ""},
   {"cpu.fpu-trivial", Basis::Measured, "2", "pclk", "nemu64-test COP1 value tables (operand 0, -0, Inf, qNaN)", "nemu64:timing/cop1instructions32", ""},
   {"cpu.fpu-forward", Basis::Measured, "1", "pclk", "nemu64-test COP1RegisterDependency", "nemu64:timing/cop1-register-dependency", ""},
+  {"cpu.issue", Basis::Measured, "1", "pclk", "nemu64-test PreciseMeasureJustNOPs: N NOPs cost N", "nemu64:timing/just-nops", ""},
+  {"cpu.mult", Basis::Measured, "5", "pclk", "nemu64-test SingleInstructionCPUTiming MULT/MULTU; HiLoInterlockTiming: the pipeline stalls for the full duration", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.dmult", Basis::Measured, "8", "pclk", "nemu64-test SingleInstructionCPUTiming DMULT/DMULTU; HiLoInterlockTiming", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.div", Basis::Measured, "37", "pclk", "nemu64-test SingleInstructionCPUTiming DIV/DIVU; HiLoInterlockTiming", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.ddiv", Basis::Measured, "69", "pclk", "nemu64-test SingleInstructionCPUTiming DDIV/DDIVU; HiLoInterlockTiming", "nemu64:timing/mult-div-interlock", ""},
+  {"cpu.fpu-sqrt-s", Basis::Measured, "29", "pclk", "nemu64-test COP1 tables (SQRT.S 123, 16, 4, 1)", "nemu64:timing/cop1instructions32", ""},
+  {"cpu.fpu-sqrt-d", Basis::Measured, "58", "pclk", "nemu64-test COP1 tables (SQRT.D 123, 16, 4, 1)", "nemu64:timing/cop1instructions64", ""},
+  {"cpu.fpu-convert", Basis::Measured, "5", "pclk", "nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", ""},
+  {"cpu.fpu-cvt-s-d", Basis::Measured, "2", "pclk", "nemu64-test COP1 tables (CVT.S.D)", "nemu64:timing/cop1instructions64", ""},
   {"cpu.likely-nullified", Basis::Measured, "1", "pclk", "nemu64-test Likely branch (C8)", "nemu64:timing/likely-branch", ""},
   {"cpu.mtc0-slow-regs", Basis::Measured, "2", "pclk", "nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5)", "nemu64:timing/individual-instructions", ""},
   {"cpu.cache-index-op", Basis::Measured, "5", "pclk", "nemu64-test CACHE DataIndexLoadTag (C10)", "nemu64:timing/cache", ""},
@@ -204,26 +222,12 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.noise-reset", Basis::Measured, "all-ones", "rule", "Thar0 data reproduction (rdp-noise.md)", "noise:a", ""},
   {"rdp.noise-pixel-offset", Basis::ModelChoice, "0", "rclk", "rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured", "noise:rect-1016", "calibration #16"},
   {"legacy.clock.vclk-pal", Basis::Legacy, "49656530", "Hz", "ares/n64/system/system.cpp:88", "pending:no-corpus", "no plan unit: PAL is not the target console"},
-  {"legacy.cpu.instruction", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:148", "nemu64:timing/just-nops", "replaced by T7a: Pipeline::issue"},
-  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:96", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
-  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:104", "pending:no-corpus", "replaced by T7b: exception stage costs"},
-  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:109", "pending:no-corpus", "replaced by T6: SysAD port"},
+  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:97", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
+  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:105", "pending:no-corpus", "replaced by T7b: exception stage costs"},
+  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:110", "pending:no-corpus", "replaced by T6: SysAD port"},
   {"legacy.cpu.address-error", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:202", "nemu64:timing/exceptions", "replaced by T7b: exception stage costs (cpu.exc-ex)"},
   {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
   {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
-  {"legacy.cpu.mult", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:640", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.dmult", Basis::Legacy, "8", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:349", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.div", Basis::Legacy, "37", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:315", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.ddiv", Basis::Legacy, "69", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:289", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.fpu-add", Basis::Legacy, "3", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:470", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming (cpu.fpu-add)"},
-  {"legacy.cpu.fpu-mul-s", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:875", "nemu64:timing/cop1instructions32", "replaced by T7a: OpTiming (cpu.fpu-mul-s)"},
-  {"legacy.cpu.fpu-mul-d", Basis::Legacy, "8", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:885", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming (cpu.fpu-mul-d)"},
-  {"legacy.cpu.fpu-div-s", Basis::Legacy, "29", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:810", "nemu64:timing/cop1instructions32", "replaced by T7a: OpTiming (cpu.fpu-div-s)"},
-  {"legacy.cpu.fpu-div-d", Basis::Legacy, "58", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:820", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming (cpu.fpu-div-d)"},
-  {"legacy.cpu.fpu-sqrt-s", Basis::Legacy, "29", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:953", "nemu64:timing/cop1instructions32", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.fpu-sqrt-d", Basis::Legacy, "58", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:963", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming"},
-  {"legacy.cpu.fpu-convert", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:489", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming; CVT, ROUND, TRUNC, CEIL and FLOOR except CVT.S.D"},
-  {"legacy.cpu.fpu-cvt-s-d", Basis::Legacy, "2", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:706", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
   {"legacy.pi.write-busy", Basis::Legacy, "200", "pclk", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
   {"legacy.pi.dma-page-setup", Basis::Legacy, "14", "rclk", "ares/n64/pi/dma.cpp:103", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup)"},

@@ -1,10 +1,7 @@
 auto CPU::serialize(serializer& s) -> void {
   Thread::serialize(s);
 
-  s(pipeline.pc);
-  s(pipeline.nextpc);
-  s(pipeline.state);
-  s(pipeline.nstate);
+  pipeline.serialize(s);
 
   s(context.endian);
   s(context.physMask);

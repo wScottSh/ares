@@ -17,6 +17,7 @@ CPU cpu;
 #include "interpreter-scc.cpp"
 #include "interpreter-fpu.cpp"
 #include "interpreter-cop2.cpp"
+#include "pipeline.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
 #include "disassembler.cpp"
@@ -117,9 +118,11 @@ auto CPU::instruction() -> void {
   if (!data) return;
   instructionIndex++;
   pipeline.begin();
+  auto issued = pipeline.issue(*data);
   instructionPrologue(ipu.pc, *data);
   decoderEXECUTE(*data);
   instructionEpilogue();
+  pipeline.retire(issued);
   pipeline.end();
 }
 
@@ -147,6 +150,7 @@ auto CPU::power(bool reset) -> void {
   ipu.lo.u64 = 0;
   ipu.hi.u64 = 0;
   ipu.r[29].u64 = 0xffff'ffff'a400'1ff0ull;  //stack pointer
+  pipeline.power();
   pipeline.setPc(0xffff'ffff'bfc0'0000ull);
   scc = {};
   scc.wired.randomEpoch = instructionIndex;

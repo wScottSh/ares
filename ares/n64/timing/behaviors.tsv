@@ -43,6 +43,15 @@ cpu.fpu-div-s	29	pclk	measured	nemu64-test COP1 tables	nemu64:timing/cop1instruc
 cpu.fpu-div-d	58	pclk	measured	nemu64-test COP1 tables	nemu64:timing/cop1instructions64		
 cpu.fpu-trivial	2	pclk	measured	nemu64-test COP1 value tables (operand 0, -0, Inf, qNaN)	nemu64:timing/cop1instructions32		
 cpu.fpu-forward	1	pclk	measured	nemu64-test COP1RegisterDependency	nemu64:timing/cop1-register-dependency		
+cpu.issue	1	pclk	measured	nemu64-test PreciseMeasureJustNOPs: N NOPs cost N	nemu64:timing/just-nops		
+cpu.mult	5	pclk	measured	nemu64-test SingleInstructionCPUTiming MULT/MULTU; HiLoInterlockTiming: the pipeline stalls for the full duration	nemu64:timing/mult-div-interlock		
+cpu.dmult	8	pclk	measured	nemu64-test SingleInstructionCPUTiming DMULT/DMULTU; HiLoInterlockTiming	nemu64:timing/mult-div-interlock		
+cpu.div	37	pclk	measured	nemu64-test SingleInstructionCPUTiming DIV/DIVU; HiLoInterlockTiming	nemu64:timing/mult-div-interlock		
+cpu.ddiv	69	pclk	measured	nemu64-test SingleInstructionCPUTiming DDIV/DDIVU; HiLoInterlockTiming	nemu64:timing/mult-div-interlock		
+cpu.fpu-sqrt-s	29	pclk	measured	nemu64-test COP1 tables (SQRT.S 123, 16, 4, 1)	nemu64:timing/cop1instructions32		
+cpu.fpu-sqrt-d	58	pclk	measured	nemu64-test COP1 tables (SQRT.D 123, 16, 4, 1)	nemu64:timing/cop1instructions64		
+cpu.fpu-convert	5	pclk	measured	nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L	nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64		
+cpu.fpu-cvt-s-d	2	pclk	measured	nemu64-test COP1 tables (CVT.S.D)	nemu64:timing/cop1instructions64		
 cpu.likely-nullified	1	pclk	measured	nemu64-test Likely branch (C8)	nemu64:timing/likely-branch		
 cpu.mtc0-slow-regs	2	pclk	measured	nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5)	nemu64:timing/individual-instructions		
 cpu.cache-index-op	5	pclk	measured	nemu64-test CACHE DataIndexLoadTag (C10)	nemu64:timing/cache		
@@ -98,26 +107,12 @@ rdp.noise-step	every-rclk	rule	measured	Thar0 RDP-Noise dumps re-solved (rdp-noi
 rdp.noise-reset	all-ones	rule	measured	Thar0 data reproduction (rdp-noise.md)	noise:a		
 rdp.noise-pixel-offset	0	rclk	model-choice	rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured	noise:rect-1016		calibration #16
 legacy.clock.vclk-pal	49656530	Hz	legacy	ares/n64/system/system.cpp:88	pending:no-corpus		no plan unit: PAL is not the target console
-legacy.cpu.instruction	1	pclk	legacy	ares/n64/cpu/memory.cpp:148	nemu64:timing/just-nops		replaced by T7a: Pipeline::issue
-legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:96	nemu64:cop0hazard/softwareinterrupt		replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
-legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:104	pending:no-corpus		replaced by T7b: exception stage costs
-legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:109	pending:no-corpus		replaced by T6: SysAD port
+legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:97	nemu64:cop0hazard/softwareinterrupt		replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
+legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:105	pending:no-corpus		replaced by T7b: exception stage costs
+legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:110	pending:no-corpus		replaced by T6: SysAD port
 legacy.cpu.address-error	1	pclk	legacy	ares/n64/cpu/memory.cpp:202	nemu64:timing/exceptions		replaced by T7b: exception stage costs (cpu.exc-ex)
 legacy.cpu.icache-fill	48	pclk	legacy	ares/n64/cpu/sysad.hpp:60	bench:ifill-isolated		replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)
 legacy.cpu.icache-writeback	48	pclk	legacy	ares/n64/cpu/sysad.cpp:262	pending:no-corpus		replaced by T7d: I-cache CACHE ops through SysAD
-legacy.cpu.mult	5	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:640	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.dmult	8	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:349	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.div	37	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:315	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.ddiv	69	pclk	legacy	ares/n64/cpu/interpreter-ipu.cpp:289	nemu64:timing/mult-div-interlock		replaced by T7a: OpTiming
-legacy.cpu.fpu-add	3	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:470	nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64		replaced by T7a: OpTiming (cpu.fpu-add)
-legacy.cpu.fpu-mul-s	5	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:875	nemu64:timing/cop1instructions32		replaced by T7a: OpTiming (cpu.fpu-mul-s)
-legacy.cpu.fpu-mul-d	8	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:885	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming (cpu.fpu-mul-d)
-legacy.cpu.fpu-div-s	29	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:810	nemu64:timing/cop1instructions32		replaced by T7a: OpTiming (cpu.fpu-div-s)
-legacy.cpu.fpu-div-d	58	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:820	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming (cpu.fpu-div-d)
-legacy.cpu.fpu-sqrt-s	29	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:953	nemu64:timing/cop1instructions32		replaced by T7a: OpTiming
-legacy.cpu.fpu-sqrt-d	58	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:963	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming
-legacy.cpu.fpu-convert	5	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:489	nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64		replaced by T7a: OpTiming; CVT, ROUND, TRUNC, CEIL and FLOOR except CVT.S.D
-legacy.cpu.fpu-cvt-s-d	2	pclk	legacy	ares/n64/cpu/interpreter-fpu.cpp:706	nemu64:timing/cop1instructions64		replaced by T7a: OpTiming
 legacy.pi.cart-read	250	pclk	legacy	ares/n64/pi/bus.hpp:63	pending:no-corpus		replaced by T8: PI bus timing from the BSD registers
 legacy.pi.write-busy	200	pclk	legacy	ares/n64/pi/bus.hpp:77	bench:pi-io-write		replaced by T8: PI I/O busy (pi.io-busy)
 legacy.pi.dma-page-setup	14	rclk	legacy	ares/n64/pi/dma.cpp:103	pidma:logs bench:pi-dma-sizes		replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup)
