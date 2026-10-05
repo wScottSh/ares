@@ -28,7 +28,7 @@ The script configures `-DARES_CORES=n64`, `RelWithDebInfo`, and Ninja on first u
 ```sh
 n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
             [--cpu interpreter|recompiler] [--rdp none|vulkan]
-            [--stats FILE] [--controllers N]
+            [--stats FILE] [--controllers N] [--script FILE]
 ```
 
 | Option | Meaning |
@@ -40,6 +40,7 @@ n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
 | `--rdp` | `none` (default) or `vulkan`. See [RDP](#rdp). |
 | `--stats FILE` | Writes one TSV line per VI field. See [Per-field stats](#per-field-stats). |
 | `--controllers N` | Number of gamepads connected at power-on (default 1). |
+| `--script FILE` | Runs an input script. See [Input scripts](#input-scripts). |
 
 The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) and deterministic entropy on.
 
@@ -47,7 +48,8 @@ Output:
 
 - stdout carries only guest output: ISViewer text and emux `XLOG`/`XHEXDUMP` text.
 - stderr carries core debug notices, the emux exit message, and one final line: `n64-run: stop=<reason> frames=N emulated_s=X wall_s=Y rdp=<mode>`.
-- The exit code is 0 for `emux-exit` or `frame-limit`, 2 for `emulated-time-limit`, 3 for `wall-time-limit`, and 1 for a load or usage error.
+- With a script, stderr also carries one `n64-run: mark NAME frame=N` or `n64-run: peek NAME frame=N VALUE` line per `mark` or `peek` step.
+- The exit code is 0 for `emux-exit`, `script-stop`, or `frame-limit`, 2 for `emulated-time-limit`, 3 for `wall-time-limit`, and 1 for a load or usage error.
 
 The runner checks the stop conditions between VI fields. A ROM that requests an emux exit therefore runs to the end of the current field.
 
@@ -60,6 +62,28 @@ The runner checks the stop conditions between VI fields. A ROM that requests an 
 | `fb_hash` | FNV-1a 64 of the displayed image. With `--rdp none`, the hash covers the RDRAM pixels that the VI samples, using the same walk as `VI::refresh`. With `--rdp vulkan`, it covers paraLLEl-RDP's VI scanout. |
 | `cpu_cycles` | Cumulative VR4300 PClock cycles (`cpu.profile.cpuCycles`, the value emux `XPROFREAD 0x0000` returns). |
 | `rsp_busy_clocks` | Cumulative non-halted RSP time, in the core's scheduler clocks (2 per PClock). |
+| `dpc_start`, `dpc_end` | `DPC_START` and `DPC_END` at the end of the field. |
+| `cimg`, `zimg` | The address of the last `SET_COLOR_IMAGE` and `SET_MASK_IMAGE` (Z buffer) command the core parsed. Only `--rdp none` parses commands, so both are 0 with `--rdp vulkan`. |
+
+### Input scripts
+
+An input script is a text file with one step per line. `#` starts a comment. The runner executes steps after each VI field until a step has to wait, so a step's effect is visible to the game from the next field. Frame numbers in the log count completed fields, so `mark window frame=N` means the window starts with stats row `N`.
+
+| Step | Effect |
+|---|---|
+| `wait N` | Waits N fields. |
+| `until ADDR W OP VALUE` | Waits until the guest value at `ADDR` compares true. `OP` is `==`, `!=`, `>=`, or `<`. |
+| `input [BUTTON...] [x=X] [y=Y]` | Sets controller 1 until the next `input`. Buttons use the gamepad's names: `A B Z Start L R Up Down Left Right C-Up C-Down C-Left C-Right`. `x` and `y` are ares axis values from -32768 to 32767, where `y` < 0 is up. `input` alone releases everything. |
+| `poke ADDR W VALUE` | Writes a guest value. |
+| `copy SRC DST LEN` | Copies LEN guest bytes. |
+| `peek NAME ADDR W` | Logs a guest value as `n64-run: peek NAME frame=N 0x...`. |
+| `mark NAME` | Logs `n64-run: mark NAME frame=N`. |
+| `shot FILE` | With `--rdp vulkan`, writes the next field's scanout to FILE as a binary PPM. |
+| `stop` | Ends the run with `stop=script-stop`. |
+
+`W` is `b`, `h`, or `w` (1, 2, or 4 bytes). Numbers are decimal or `0x` hex. `ADDR` is a KSEG0 or KSEG1 RDRAM address, and `[EXPR]` loads the word at `EXPR`, so `[[0x801E3FB0]+0x1CCC]+0x24` follows two pointers. A read sees a dirty data-cache line the way a CPU load would, and a write to a cached line goes into the line. Neither touches bus or cache timing state. A step that cannot resolve its address waits (`until`), logs `unreadable` (`peek`), or logs `poke-failed`/`copy-failed`.
+
+`tools/n64-timing/mmbench` uses scripts to run the Majora's Mask bench.
 
 ### RDP
 
