@@ -1,87 +1,93 @@
 <img src="https://github.com/ares-emulator/ares/blob/master/ares/ares/resource/logo@2x.png" width="350"/>
 
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://github.com/higan-emu/ares/blob/master/LICENSE)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
-**ares** is a multi-system emulator that began development on October 14th, 2004.
-It is a descendant of [higan](https://github.com/higan-emu/higan) and [bsnes](https://github.com/bsnes-emu/bsnes/), and focuses on accuracy and preservation.
+This is a fork of [ares](https://github.com/ares-emulator/ares) for doing performance work on Nintendo 64 software without a console or a window.
+You run a ROM through a headless runner and get per-frame timing that matches real hardware, the same on every run.
+That lets you measure a change to a game, such as a decomp mod, the way you would measure any other program: script it, run it, and diff the numbers.
 
-It's worth noting that ares takes some uncommon design approaches that essentially trade speed for code clarity. We avoid state machines and bitmasks (when possible). Most cores end up being half the amount of code, but slower. The code is clearer and less spaghettified, especially for systems with lots of processors. C bitfields being non-portable incurs a speedhit. Windows also has a speedhit over Linux due to its ABI needing more instructions to switch contexts.
+For general emulation, use [upstream ares](https://github.com/ares-emulator/ares).
+This fork changes the N64 core only. The other cores and the desktop UI are inherited from upstream and are not maintained here.
 
-Official Releases
------------------
+Goal
+----
 
-Official releases are available from
-[the ares website](https://ares-emu.net).
+The target is an N64 timing model in which every behavior that can move a game's frame time is modeled from cited hardware references, and each behavior has a check.
+The concrete acceptance target is Majora's Mask.
+A 600-frame bench run must be bit-deterministic and finish in 2 minutes or less, and the file-select scenes must reproduce the slowdown measured on a real console.
 
-Nightly Builds
---------------
+The design rules are:
 
-Automated, untested builds of ares are available for Windows and macOS as a [pre-release](https://github.com/ares-emulator/ares/releases/tag/nightly). 
-Only the latest nightly build is kept.
+* Accuracy is the only goal. The timing model is always on, with no toggle.
+* Runs are bit-deterministic. The core reads no host clock, uses no GPU thread, and takes no host entropy.
+* The interpreters are the timing reference. The fork has no CPU or RSP recompiler.
+* The target console is an NTSC retail NUS-001 with the Expansion Pak.
 
-Building ares
--------------
+The roadmap is [issue #1](https://github.com/wScottSh/ares/issues/1).
+The architecture is [ADR 0001](docs/adr/0001-timing-core.md), and the build sequence is the [timing-core plan](docs/design/timing-core/plan.md).
+The hardware research behind each decision is in [docs/research](docs/research/README.md).
 
-ares supports building on Windows, macOS, and various Linux/BSD distributions. See build instructions for:
+Status
+------
 
-* [Windows](https://github.com/ares-emulator/ares/wiki/Build-Instructions-For-Windows)
-* [macOS](https://github.com/ares-emulator/ares/wiki/Build-Instructions-For-macOS)
-* [Linux](https://github.com/ares-emulator/ares/wiki/Build-Instructions-For-Linux)
-* [BSD](https://github.com/ares-emulator/ares/wiki/Build-Instructions-For-BSD)
+Available on `master` today:
 
-Command-line options
---------------------
+* `n64-run`, a headless runner. It stops after N frames or N emulated seconds, writes one TSV row of stats per VI field, dumps frames as PPM, and runs input scripts that can wait on, read, and write guest memory, and save and load state.
+* Deterministic output. Each stats row carries a hash of every fired event and the full machine state, and `determinism.sh` fails unless two runs are byte-identical.
+* One RDP. The cen64-jgemu pixel engine renders on the emulation thread. paraLLEl and Vulkan are removed.
+* Absolute clocks. Core timing uses one 750 MHz time base, the least common multiple of the console's clocks.
+* Verification corpora. The nemu64-test timing suite, snapper64 tests, and Thar0's RDP timing tests run against the core.
+* `mmbench`, a scripted Majora's Mask bench with an acceptance check for the file-select slowdown.
 
-When started from the command-line, ares accepts a few options.
+In progress:
 
+* A discrete-event timeline that replaces the CPU's fixed-order device sync ([PR #49](https://github.com/wScottSh/ares/pull/49)).
+* RDRAM arbitration, so that the CPU, RSP, RDP, DMA engines, and VI scanout contend for the bus in true time order.
+* A VR4300 pipeline model and an RDP timing model.
+
+Until this work lands, frame times from `n64-run` are deterministic but not yet hardware-accurate.
+
+Quick start
+-----------
+
+The scripts target Windows with MSYS2 clang64 and Git Bash.
+For the prerequisites, see [tools/n64-timing/README.md](tools/n64-timing/README.md).
+
+Build the runner. The script prints the path of the `n64-run` binary.
+
+```sh
+tools/n64-timing/build.sh
 ```
-Usage: ./ares [options] game(s)
 
-  --help                 Displays available options and exit
-  --version              Displays the version string of the application
-  --terminal             Create new terminal window (Windows only)
-  --fullscreen           Start in full screen mode
-  --pseudofullscreen     Start in pseudo full screen mode
-  --kiosk                Start in minimal UI mode (implies --no-file-prompt)
-  --system system        Specify the system name
-  --shader shader        Specify a slang shader to load (requires OpenGL or Metal)
-  --setting name=value   Specify a value for a setting
-  --dump-all-settings    Show a list of all existing settings and exit
-  --no-file-prompt       Do not prompt to load (optional) additional roms (eg: 64DD)
-  --settings-file path   Specify a settings file override (settings.bml)
-  --save-state slot      Specify a save state slot to load (1-9)
+Run a ROM for 600 fields and write per-field stats:
+
+```sh
+n64-run game.z64 --frames 600 --stats stats.tsv
 ```
 
-The --system option is useful when the system type cannot be auto-detected.
---fullscreen will only have an effect if a game is also passed in argument.
+Check that two runs are identical:
 
-Example:
-`ares --system MSX examples.rom --fullscreen`
+```sh
+tools/n64-timing/determinism.sh game.z64 600
+```
 
-Specifying multiple games allows for multi-cart support.  For example, to load
-the Super GameBoy BIOS and a game in one command (to avoid a file prompt), you 
-can do:
+For the runner's options, stats columns, input scripts, and exit codes, see [tools/n64-timing/README.md](tools/n64-timing/README.md).
+For the Majora's Mask bench, see [tools/n64-timing/mmbench/README.md](tools/n64-timing/mmbench/README.md).
+No ROMs are included in this repository.
 
-`ares "Super GameBoy.sfc" "Super Mario Land.gb"`
+Layout
+------
 
-The --no-file-prompt option is useful if you wish to launch a game from CLI
-without being prompted to load additional roms. For example, some Nintendo 64 
-games optionally support 64DD expansion disks, so this option can be used to
-suppress the "64DD Disk" file dialog, and assume any secondary content is 
-disconnected.
+* __ares/n64__: the N64 core. `timing/` holds the clocks and the trace hash, and `rdp/engine/` holds the pixel engine.
+* __tools/n64-run__: the headless runner.
+* __tools/n64-timing__: build, run, determinism, and corpus scripts, and the ROM generator for test suites.
+* __docs/adr__, __docs/design__, __docs/research__: decisions, plans, and the research that backs them.
 
-High-level Components
----------------------
+The rest of the tree (`desktop-ui`, `hiro`, `ruby`, `mia`, `nall`, `libco`, and the other cores) is upstream ares.
 
-* __ares__:       emulator cores and component implementations
-* __desktop-ui__: main GUI implementation for this project
-* __hiro__:       cross-platform GUI toolkit that utilizes native APIs on supported platforms
-* __nall__:       Near's alternative to the C++ standard library
-* __ruby__:       interface between a hiro application and platform-specific APIs for emulator video, audio, and input
-* __mia__:        internal ROM database and ROM/image loader
-* __libco__:      cooperative multithreading library
+Credits
+-------
 
-Contributing
-------------
-
-Please join our discord to chat with other ares developers: https://discord.com/invite/gz2quhk2kv
+ares is a multi-system emulator that began development on October 14th, 2004, and descends from [higan](https://github.com/higan-emu/higan) and [bsnes](https://github.com/bsnes-emu/bsnes/).
+All credit for the emulator this fork builds on goes to the ares developers.
+The RDP pixel engine is ported from the cen64 jgemu fork by Ryan Holtz and Rupert Carmichael, under BSD-3-Clause. See `ares/n64/rdp/engine/README.md`.
