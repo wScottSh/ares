@@ -7,10 +7,8 @@ VI vi;
 #include "debugger.cpp"
 #include "serialization.cpp"
 
-auto VI::step(u32 clocks) -> void {
-  auto scaled = (u64)clocks * system.frequency() + clockFraction;
-  Thread::clock += Clock{(s64)(scaled / system.videoFrequency()) * 4};
-  clockFraction = scaled % system.videoFrequency();
+auto VI::step(u32 vclks) -> void {
+  Thread::clock = vclk.advance(vclks);
 }
 
 auto VI::load(Node::Object parent) -> void {
@@ -230,7 +228,7 @@ auto VI::power(bool reset) -> void {
   screen->power();
   io = {};
   refreshed = false;
-  clockFraction = 0;
+  vclk = {system.vclkPeriod()};
 
   #if defined(VULKAN)
   gpuOutputValid = false;

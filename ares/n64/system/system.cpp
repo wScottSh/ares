@@ -89,7 +89,7 @@ auto System::load(Node::System& root, string name) -> bool {
     information.name = "Arcade";
     information.model = Model::Aleck64;
     information.region = Region::NTSC;
-    information.videoFrequency = 48'681'818;
+    information.vclkPeriod = Timing::Behavior::ClockVclk;
     system.expansionPak = true; //Aleck 64 has the 8MB as standard
   } else {
     information.dd = name.find("64DD") ? true : false;
@@ -97,11 +97,11 @@ auto System::load(Node::System& root, string name) -> bool {
 
   if (name.find("NTSC")) {
     information.region = Region::NTSC;
-    information.videoFrequency = 48'681'818;
+    information.vclkPeriod = Timing::Behavior::ClockVclk;
   }
   if (name.find("PAL")) {
     information.region = Region::PAL;
-    information.videoFrequency = 49'656'530;
+    information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};
   }
 
   node = std::make_shared<Core::System>(information.name);

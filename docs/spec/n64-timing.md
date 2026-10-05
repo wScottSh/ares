@@ -14,7 +14,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 2 |
 | model-choice | no published value; the reference states why the model chose this one | 11 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 56 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 55 |
 
 ## Behaviors
 
@@ -169,10 +169,9 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 | Behavior | Value | Code site | Checks | Note |
 |---|---|---|---|---|
-| `legacy.clock.pclk` | 93750000 Hz | ares/n64/system/system.hpp:37 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: Timing::Clock counts 750 MHz units (clock.unit) |
-| `legacy.clock.vclk-ntsc` | 48681818 Hz | ares/n64/system/system.cpp:92 | `mm:south-clock-town` | replaced by T4: VclkAccumulator at the exact rational period (clock.vclk) |
+| `legacy.clock.pclk` | 93750000 Hz | ares/n64/system/system.hpp:40 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: Timing::Clock counts 750 MHz units (clock.unit) |
 | `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:104 | pending (no-corpus) | no plan unit: PAL is not the target console |
-| `legacy.clock.units-per-tick` | 4 units | ares/n64/vi/vi.cpp:12 | `mm:south-clock-town` | replaced by T4: VI and AI keep 187.5 MHz tick arithmetic until they move to VclkAccumulator |
+| `legacy.clock.units-per-tick` | 4 units | ares/n64/ai/ai.cpp:78 | `mm:south-clock-town` | replaced by T4: VI and AI keep 187.5 MHz tick arithmetic until they move to VclkAccumulator |
 | `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:158 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
 | `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:117 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
 | `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:125 | pending (no-corpus) | replaced by T7b: exception stage costs |
@@ -216,7 +215,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:20 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
 | `legacy.rdp.step-quantum` | 1 s | ares/n64/rdp/rdp.cpp:30 | `stepcap` | replaced by T5: the RDP steps as a timeline actor |
 | `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:76 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
-| `legacy.vi.inactive-line` | 2048 vclk | ares/n64/vi/vi.cpp:133 | `stepcap` | replaced by T5: the VI posts no events while disabled |
+| `legacy.vi.inactive-line` | 2048 vclk | ares/n64/vi/vi.cpp:131 | `stepcap` | replaced by T5: the VI posts no events while disabled |
 | `legacy.cart.eeprom-write` | 6 ms | ares/n64/cartridge/joybus.cpp:48 | pending (no-corpus) | no plan unit: EEPROM write busy time |
 | `legacy.cart.rtc-tick` | 1 s | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |
 | `legacy.cart.flash-mx-sector-erase` | 85 ms | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash sector erase |

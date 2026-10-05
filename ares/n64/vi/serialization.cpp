@@ -33,6 +33,7 @@ auto VI::serialize(serializer& s) -> void {
   s(io.field);
   s(io.leapCounter);
 
-  s(clockFraction);
+  s(vclk.origin.units);
+  s(vclk.vclks);
   s(inactiveCounter);
 }

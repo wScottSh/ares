@@ -95,10 +95,7 @@ ares/n64/rsp/rsp.cpp	main	profile.cycles += pclk(64).units;	legacy.rsp.halted-qu
 ares/n64/rsp/rsp.cpp	main	profile.haltedCycles += pclk(64).units;	legacy.rsp.halted-quantum	
 ares/n64/si/io.cpp	writeWord	cpu.queueInsert(Queue::SI_BUS_Write, rclk(2150));	legacy.si.bus-write	
 ares/n64/si/io.cpp	ioWrite	cpu.queueInsert(Queue::SI_DMA_Write, rclk(4065));	legacy.si.dma-write64	
-ares/n64/system/system.cpp	load	information.videoFrequency = 48'681'818;	legacy.clock.vclk-ntsc	
-ares/n64/system/system.cpp	load	information.videoFrequency = 49'656'530;	legacy.clock.vclk-pal	
+ares/n64/system/system.cpp	load	information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};	legacy.clock.vclk-pal	
 ares/n64/system/system.hpp	serialize	u32 frequency = 93'750'000 * 2;	legacy.clock.pclk	
-ares/n64/system/system.hpp	serialize	u32 videoFrequency = 48'681'818;	legacy.clock.vclk-ntsc	
 ares/n64/vi/vi.cpp	main	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
 ares/n64/vi/vi.cpp	main	step(0x800);	legacy.vi.inactive-line	
-ares/n64/vi/vi.cpp	step	Thread::clock += Clock{(s64)(scaled / system.videoFrequency()) * 4};	legacy.clock.units-per-tick	
