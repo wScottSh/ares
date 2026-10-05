@@ -111,11 +111,13 @@ Runs the ROM twice and fails unless every output file is byte-identical, `trace_
 ## nemu64-test corpus
 
 ```sh
-tools/n64-timing/build-nemu64.sh                 # ROMs -> $N64_TIMING_HOME/roms/nemu64-{timing,cycle,cop0hazard}.z64
+python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
 tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 ```
 
-`build-nemu64.sh` builds nemu64-test at commit `9a8b9f7` in `rust:1-bookworm`, using the toolchain from the repository's `rust-toolchain.toml` (`nightly-2026-07-16`) and `nust64 0.4.1`. It runs `cargo run --release --no-default-features --features <set>`. Docker volumes named `n64timing-*` cache the Rust toolchain and the build trees.
+`romgen/build.py` generates the three ROMs from the in-repo Python port of nemu64-test, with no external toolchain. See [romgen/README.md](romgen/README.md).
+
+`build-nemu64.sh` is the alternative that builds the original Rust ROMs. It builds nemu64-test at commit `9a8b9f7` in `rust:1-bookworm`, using the toolchain from the repository's `rust-toolchain.toml` (`nightly-2026-07-16`) and `nust64 0.4.1`. It runs `cargo run --release --no-default-features --features <set>`. Docker volumes named `n64timing-*` cache the Rust toolchain and the build trees.
 
 `run-nemu64.sh` writes these files under `$N64_TIMING_HOME/results/nemu64/<set>/`:
 
@@ -125,6 +127,8 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 - `tests.tsv` lists each test with its number of failed values and pass or fail.
 - `failures.txt` lists every failure message.
 - `summary.txt` holds the ROM's own category totals, such as `Timing: Failed X of Y tests`.
+- `values.tsv` (romgen ROMs only) has one row per test value: result, measured cycles, and expected cycles.
+- `categories.tsv` (romgen timing ROM only) assigns each failed value to a root-cause category.
 
 `results/nemu64/summary.txt` concatenates the set summaries.
 
