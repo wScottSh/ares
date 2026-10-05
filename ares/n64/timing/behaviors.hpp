@@ -73,6 +73,7 @@ namespace Behavior {
   constexpr Ratio SpDmaRateCheck = {13, 2};  //6.5 B/rclk
   constexpr Clock RspSlot = {12};  //1 rclk
   constexpr Clock PiPageSetup = {180};  //15 rclk
+  constexpr Clock PiHalfwordBias = {24};  //2 rclk
   constexpr s64 PiBlockBytes = 128;  //128 B
   constexpr Clock PiBlockWriteback = {336};  //28 rclk
   constexpr Clock PiIoBusy = {1608};  //134 rclk
@@ -169,6 +170,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"sp.dma-rate-check", Basis::Measured, "6.5", "B/rclk", "n64brew MI page RSP DMA memset 2.58 ms/MiB; hcs64 5.55 conflicts (direction unstated)", "bench:sp-dma-sweep", "the bench reports both directions"},
   {"rsp.slot", Basis::Wiki, "1", "rclk", "clocks.md: the RSP runs on the RCP clock (n64brew Clock_Timing; SDK pro-man ch.3 RCP 62.5 MHz); one pipeline slot, an issue or a bubble, per clock", "nemu64:rsp_timing/sll", "RSP::Pipeline charges it per issued pair and per stall bubble (ADR 0001 keeps the RSP pipeline as the RSP cost model)"},
   {"pi.page-setup", Basis::Wiki, "15", "rclk", "n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md)", "pidma:logs bench:pi-dma-sizes", ""},
+  {"pi.halfword-bias", Basis::Wiki, "2", "rclk", "n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md)", "pidma:logs bench:pi-dma-sizes", ""},
   {"pi.block-bytes", Basis::Wiki, "128", "B", "n64brew PI; rasky n64_pi_dma_test", "pidma:logs", ""},
   {"pi.block-writeback", Basis::Derived, "28", "rclk", "dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part", "pidma:logs bench:pi-dma-sizes", ""},
   {"pi.io-busy", Basis::Measured, "134", "rclk", "n64-systembench PI I/O W (cited value)", "bench:pi-io-write", ""},
@@ -226,10 +228,6 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"legacy.cpu.fpu-cvt-s-d", Basis::Legacy, "2", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:706", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
   {"legacy.pi.write-busy", Basis::Legacy, "200", "pclk", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
-  {"legacy.pi.dma-page-setup", Basis::Legacy, "14", "rclk", "ares/n64/pi/dma.cpp:103", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup)"},
-  {"legacy.pi.dma-bytes-per-pulse", Basis::Legacy, "2", "B", "ares/n64/pi/dma.cpp:104", "pidma:logs", "replaced by T8: PiDma; one PWD + RLS pulse per halfword"},
-  {"legacy.pi.dma-buffer-writeback", Basis::Legacy, "28", "rclk", "ares/n64/pi/dma.cpp:105", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma block writeback through the RI (pi.block-writeback)"},
-  {"legacy.pi.dma-partial-byte", Basis::Legacy, "1", "rclk", "ares/n64/pi/dma.cpp:106", "pidma:logs", "replaced by T8: PiDma partial block"},
   {"legacy.si.bus-write", Basis::Legacy, "2150", "rclk", "ares/n64/si/io.cpp:66", "pending:no-corpus", "replaced by T8: SiDma"},
   {"legacy.si.dma-write64", Basis::Legacy, "4065", "rclk", "ares/n64/si/io.cpp:103", "bench:si-dma", "replaced by T8: SiDma (si.write64)"},
   {"legacy.si.dma-read-base", Basis::Legacy, "13600", "rclk", "ares/n64/pif/hle.cpp:203", "bench:si-dma", "replaced by T8: SiDma (si.read64-base)"},

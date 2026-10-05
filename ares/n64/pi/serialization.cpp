@@ -24,4 +24,17 @@ auto PI::serialize(serializer& s) -> void {
   s(busTiming.latency);
   s(busTiming.pulseWidth);
   s(busTiming.releaseDuration);
+
+  s((u8&)dma.phase);
+  s(dma.toRdram);
+  s(dma.firstBlock);
+  s(dma.addressSelected);
+  s(dma.length);
+  s(dma.maxBlockSize);
+  s(dma.offset);
+  s(dma.address);
+  s(dma.bytes);
+  s(dma.lastLen);
+  s(dma.misalign);
+  s(dma.block);
 }

@@ -114,8 +114,7 @@ auto PI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
     if(piLog) fprintf(piLog, "L R %u %06x %08x %lld\n", (u32)io.readLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
-    scheduleAfter(EventKind::PI_DMA_Read, dmaDuration(true));
-    dmaRead();
+    dmaStart(false, thread.clock);
   }
 
   if(address == 3) {
@@ -124,8 +123,7 @@ auto PI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
     if(piLog) fprintf(piLog, "L W %u %06x %08x %lld\n", (u32)io.writeLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
-    scheduleAfter(EventKind::PI_DMA_Write, dmaDuration(false));
-    dmaWrite();
+    dmaStart(true, thread.clock);
   }
 
   if(address == 4) {
@@ -133,6 +131,7 @@ auto PI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     if(data.bit(0)) {
       io.dmaBusy = 0;
       io.error = 0;
+      dma.phase = DMA::Phase::Idle;
       cancelEvent(EventKind::PI_DMA_Read);
       cancelEvent(EventKind::PI_DMA_Write);
     }

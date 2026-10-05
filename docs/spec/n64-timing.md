@@ -9,12 +9,12 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | measured | a hardware measurement: a test ROM result or a console capture | 30 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 16 |
 | datasheet | a component datasheet | 8 |
-| wiki | a community reference: n64brew, or a test suite author's notes | 14 |
+| wiki | a community reference: n64brew, or a test suite author's notes | 15 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 7 |
 | model-choice | no published value; the reference states why the model chose this one | 15 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 45 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 41 |
 
 ## Behaviors
 
@@ -121,6 +121,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | Behavior | Value | Basis | Reference | Checks | Note |
 |---|---|---|---|---|---|
 | `pi.page-setup` | 15 rclk | wiki | n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` |  |
+| `pi.halfword-bias` | 2 rclk | wiki | n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` |  |
 | `pi.block-bytes` | 128 B | wiki | n64brew PI; rasky n64_pi_dma_test | `pidma:logs` |  |
 | `pi.block-writeback` | 28 rclk | derived | dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part | `pidma:logs` `bench:pi-dma-sizes` |  |
 | `pi.io-busy` | 134 rclk | measured | n64-systembench PI I/O W (cited value) | `bench:pi-io-write` |  |
@@ -205,10 +206,6 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.cpu.fpu-cvt-s-d` | 2 pclk | ares/n64/cpu/interpreter-fpu.cpp:706 | `nemu64:timing/cop1instructions64` | replaced by T7a: OpTiming |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
 | `legacy.pi.write-busy` | 200 pclk | ares/n64/pi/bus.hpp:77 | `bench:pi-io-write` | replaced by T8: PI I/O busy (pi.io-busy) |
-| `legacy.pi.dma-page-setup` | 14 rclk | ares/n64/pi/dma.cpp:103 | `pidma:logs` `bench:pi-dma-sizes` | replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup) |
-| `legacy.pi.dma-bytes-per-pulse` | 2 B | ares/n64/pi/dma.cpp:104 | `pidma:logs` | replaced by T8: PiDma; one PWD + RLS pulse per halfword |
-| `legacy.pi.dma-buffer-writeback` | 28 rclk | ares/n64/pi/dma.cpp:105 | `pidma:logs` `bench:pi-dma-sizes` | replaced by T8: PiDma block writeback through the RI (pi.block-writeback) |
-| `legacy.pi.dma-partial-byte` | 1 rclk | ares/n64/pi/dma.cpp:106 | `pidma:logs` | replaced by T8: PiDma partial block |
 | `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:66 | pending (no-corpus) | replaced by T8: SiDma |
 | `legacy.si.dma-write64` | 4065 rclk | ares/n64/si/io.cpp:103 | `bench:si-dma` | replaced by T8: SiDma (si.write64) |
 | `legacy.si.dma-read-base` | 13600 rclk | ares/n64/pif/hle.cpp:203 | `bench:si-dma` | replaced by T8: SiDma (si.read64-base) |

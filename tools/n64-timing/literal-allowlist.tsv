@@ -65,10 +65,6 @@ ares/n64/cpu/memory.cpp	fetch	step(pclk(1));	legacy.cpu.instruction
 ares/n64/cpu/memory.cpp	vaddrAlignedError	step(pclk(1));	legacy.cpu.address-error	
 ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
 ares/n64/pi/bus.hpp	writeWord	scheduleAfter(EventKind::PI_BUS_Write, pclk(200));	legacy.pi.write-busy	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += (14 + bsd.latency + 1) * pbusPages;	legacy.pi.dma-page-setup	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += (bsd.pulseWidth + 1 + bsd.releaseDuration + 1) * len / 2;	legacy.pi.dma-bytes-per-pulse	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += numBuffers * 28;	legacy.pi.dma-buffer-writeback	
-ares/n64/pi/dma.cpp	dmaDuration	cycles += partialBytes * 1;	legacy.pi.dma-partial-byte	
 ares/n64/pif/hle.cpp	estimateTiming	u32 cycles = 13600;	legacy.si.dma-read-base	
 ares/n64/pif/hle.cpp	estimateTiming	cycles += 22000;	legacy.si.dma-read-controller	
 ares/n64/pif/hle.cpp	estimateTiming	cycles += 18000;	legacy.si.dma-read-empty-port	

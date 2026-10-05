@@ -57,7 +57,7 @@ inline auto PI::readWord(u32 address, Thread& thread) -> u32 {
 
   if(unlikely(io.ioBusy)) {
     debug(unusual, "[PI::readWord] PI read to 0x", hex(address, 8L), " will not behave as expected because PI writing is in progress");
-    { auto remaining = writeForceFinish(thread.clock); thread.step(remaining + remaining); }
+    thread.step(writeForceFinish(thread.clock));
     return io.busLatch;
   }
   thread.step(pclk(250));
