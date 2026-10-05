@@ -10,7 +10,8 @@ This script recovers every measurement from the run's PI log instead:
   ticks = floor((idle PI_STATUS read + READ) / 16) - floor((PI_WR_LEN write + WRITE) / 16)
 in Clock units (16 per COUNT tick). READ and WRITE are the ROM's own code paths from
 those PI events to its two COUNT reads; --calibrate finds the shifts that reproduce
-every "Found:" value the ROM printed in the same run.
+every "Found:" value the ROM printed in the same run, or the least worst-case error
+in ticks when none reproduces all of them.
 
 Log record (data/pidma_ram<off>_rom0.log, 1040 B per size 1..383): 512 B buffer,
 u16 min ticks, u16 max ticks, u32 post dram, u32 post cart, u32 post len (big
@@ -109,14 +110,16 @@ def main():
 
     if a.calibrate:
         printed = found(a.stdout)
-        fits = []
+        error = {}
         for read in range(-UNITS_PER_TICK * 64, UNITS_PER_TICK * 64):
             for write in range(UNITS_PER_TICK):
-                if all(rom_mean(meas[k], (read, write)) == v for k, v in printed.items()):
-                    fits.append((read, write))
+                error[read, write] = max(abs(rom_mean(meas[k], (read, write)) - v) for k, v in printed.items())
+        best = min(error.values())
+        fits = sorted(k for k, e in error.items() if e == best)
         print(f"printed values: {printed}")
-        print(f"{len(fits)} offsets (read, write) reproduce every printed value: {fits}")
-        return 0 if fits else 1
+        print(f"best worst-case error {best} tick(s), {len(fits)} offsets (read, write), "
+              f"read {min(f[0] for f in fits)}..{max(f[0] for f in fits)}: {fits}")
+        return 0 if best == 0 else 1
 
     offset = tuple(map(int, a.offset.split(",")))
     lo_s, hi_s = map(int, a.sizes.split("-"))
