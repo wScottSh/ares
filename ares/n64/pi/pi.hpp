@@ -54,8 +54,8 @@ struct PI : Memory::RCP<PI> {
   auto dmaDuration(bool read) -> Clock;
 
   //io.cpp
-  auto ioRead(u32 address) -> u32;
-  auto ioWrite(u32 address, u32 data) -> void;
+  auto ioRead(u32 address, Thread& thread) -> u32;
+  auto ioWrite(u32 address, u32 data, Thread& thread) -> void;
 
   //bus.hpp
   auto attach(PIDevice& device, u32 priority) -> void;

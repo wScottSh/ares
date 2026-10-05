@@ -53,7 +53,7 @@ inline auto PI::busWriteHalf(u16 data) -> void {
 }
 
 inline auto PI::readWord(u32 address, Thread& thread) -> u32 {
-  if(address <= 0x046f'ffff) return ioRead(address);
+  if(address <= 0x046f'ffff) return ioRead(address, thread);
 
   if(unlikely(io.ioBusy)) {
     debug(unusual, "[PI::readWord] PI read to 0x", hex(address, 8L), " will not behave as expected because PI writing is in progress");
@@ -69,7 +69,7 @@ inline auto PI::readWord(u32 address, Thread& thread) -> u32 {
 }
 
 inline auto PI::writeWord(u32 address, u32 data, Thread& thread) -> void {
-  if(address <= 0x046f'ffff) return ioWrite(address, data);
+  if(address <= 0x046f'ffff) return ioWrite(address, data, thread);
 
   if(io.ioBusy) return;
   io.ioBusy = 1;
