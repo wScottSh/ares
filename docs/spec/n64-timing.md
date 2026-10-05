@@ -180,9 +180,9 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 |---|---|---|---|---|
 | `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:88 | pending (no-corpus) | no plan unit: PAL is not the target console |
 | `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:148 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
-| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:97 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
-| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:105 | pending (no-corpus) | replaced by T7b: exception stage costs |
-| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:110 | pending (no-corpus) | replaced by T6: SysAD port |
+| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:96 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
+| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:104 | pending (no-corpus) | replaced by T7b: exception stage costs |
+| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:109 | pending (no-corpus) | replaced by T6: SysAD port |
 | `legacy.cpu.address-error` | 1 pclk | ares/n64/cpu/memory.cpp:202 | `nemu64:timing/exceptions` | replaced by T7b: exception stage costs (cpu.exc-ex) |
 | `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/sysad.hpp:60 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
 | `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/sysad.cpp:262 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |

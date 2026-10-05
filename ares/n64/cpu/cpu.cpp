@@ -82,7 +82,6 @@ auto CPU::compareMatch() -> void {
   flushCount();
   setInterruptPending(Interrupt::Timer, 1);
   scheduleCompare();
-  sysad.power();
 }
 
 auto CPU::setInterruptPending(u32 bit, bool value) -> void {

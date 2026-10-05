@@ -95,9 +95,9 @@ rdp.noise-reset	all-ones	rule	measured	Thar0 data reproduction (rdp-noise.md)	no
 rdp.noise-pixel-offset	0	rclk	model-choice	rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured	noise:rect-1016	calibration #16
 legacy.clock.vclk-pal	49656530	Hz	legacy	ares/n64/system/system.cpp:88	pending:no-corpus	no plan unit: PAL is not the target console
 legacy.cpu.instruction	1	pclk	legacy	ares/n64/cpu/memory.cpp:148	nemu64:timing/just-nops	replaced by T7a: Pipeline::issue
-legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:97	nemu64:cop0hazard/softwareinterrupt	replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
-legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:105	pending:no-corpus	replaced by T7b: exception stage costs
-legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:110	pending:no-corpus	replaced by T6: SysAD port
+legacy.cpu.interrupt-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:96	nemu64:cop0hazard/softwareinterrupt	replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)
+legacy.cpu.nmi-entry	1	pclk	legacy	ares/n64/cpu/cpu.cpp:104	pending:no-corpus	replaced by T7b: exception stage costs
+legacy.cpu.sysad-frozen-step	1	pclk	legacy	ares/n64/cpu/cpu.cpp:109	pending:no-corpus	replaced by T6: SysAD port
 legacy.cpu.address-error	1	pclk	legacy	ares/n64/cpu/memory.cpp:202	nemu64:timing/exceptions	replaced by T7b: exception stage costs (cpu.exc-ex)
 legacy.cpu.icache-fill	48	pclk	legacy	ares/n64/cpu/sysad.hpp:60	bench:ifill-isolated	replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)
 legacy.cpu.icache-writeback	48	pclk	legacy	ares/n64/cpu/sysad.cpp:262	pending:no-corpus	replaced by T7d: I-cache CACHE ops through SysAD
