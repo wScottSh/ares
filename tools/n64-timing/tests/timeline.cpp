@@ -28,19 +28,21 @@ static auto rank(ActorId id) -> u32 { return (u32)id; }
 
 //An actor that steps at a fixed list of times. A step is logged with its start
 //time. `nestAt` makes the step at that time call catchUp on its own behalf, the
-//way the RSP does before a DPC access.
+//way the RSP does before a DPC access, at `nestTarget` when set (an access late
+//in a long step) and at the step's own time otherwise. A Parked or Blocked one
+//still reports its next time, so only the kind keeps it from being stepped.
 struct Scripted : Actor {
   ActorId id;
   Readiness::Kind kind = Readiness::Kind::Runnable;
   std::vector<s64> times;
   u32 next = 0;
   s64 nestAt = -1;
+  s64 nestTarget = -1;
   u32 runs = 0;
 
   auto readiness() const -> Readiness override {
-    if(kind != Readiness::Kind::Runnable) return {kind, Clock::never()};
     if(next >= times.size()) return Readiness::parked();
-    return Readiness::runnable({times[next]});
+    return {kind, Clock{times[next]}};
   }
 
   auto run(Clock limit) -> void override {
@@ -48,7 +50,7 @@ struct Scripted : Actor {
     do {
       s64 at = times[next++];
       steps.push_back({at, id, 0});
-      if(at == nestAt) timeline.catchUp({at}, id);
+      if(at == nestAt) timeline.catchUp({nestTarget >= 0 ? nestTarget : at}, id);
     } while(next < times.size() && Clock{times[next]} < limit);
   }
 };
@@ -148,6 +150,19 @@ auto nall::main(Arguments) -> void {
     CHECK(before, "a step at 55 or 60 ran before the RSP's step at 50 finished: %s", dump().c_str());
     CHECK(timeline.maxDepth == 2, "nested depth should be 2, got %u", timeline.maxDepth);
     CHECK(steps.size() == 9, "expected 9 steps, got %zu: %s", steps.size(), dump().c_str());
+  }
+
+  //The floor is the earliest time on the stack, not the nested caller's target:
+  //the RSP's step at 50 reaching for 58 must not run the RDP at 56 past the
+  //CPU, which is still at 55. Defect: a floor taken from the target alone.
+  {
+    reset();
+    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {50}; rsp.nestAt = 50; rsp.nestTarget = 58;
+    Scripted rdp{}; rdp.id = ActorId::RDP; rdp.times = {56};
+    timeline.attach(ActorId::RSP, &rsp);
+    timeline.attach(ActorId::RDP, &rdp);
+    timeline.catchUp({55}, ActorId::CPU);
+    CHECK(rdp.runs == 0, "the RDP at 56 ran past the CPU at 55: %s", dump().c_str());
   }
 
   //Parked and Blocked actors are never stepped, whatever their time. Defect: the
