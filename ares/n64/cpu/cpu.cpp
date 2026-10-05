@@ -40,14 +40,14 @@ auto CPU::main() -> void {
   vi.refreshed = false;
   queue.remove(Queue::GDB_Poll);
   if(GDB::server.hasClient()) {
-    queueInsert(Queue::GDB_Poll, (93750000*2)/60/240);
+    queueInsert(Queue::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});
   }
 }
 
 auto CPU::gdbPoll() -> void {
   if(GDB::server.hasClient()) {
     GDB::server.updateLoop();
-    queueInsert(Queue::GDB_Poll, (93750000*2)/60/240);
+    queueInsert(Queue::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});
   }
 }
 
@@ -66,7 +66,7 @@ auto CPU::stepCount(u64 clocks) -> void {
 
 auto CPU::flushCount() -> void {
   auto clocks = pendingCount();
-  countClock += clocks << 1;
+  countClock += pclk(clocks);
   stepCount(clocks);
 }
 
@@ -119,7 +119,7 @@ auto CPU::instruction() -> void {
   if(auto interrupts = scc.cause.interruptPending & scc.status.interruptMask) {
     if(scc.status.interruptEnable && !scc.status.exceptionLevel && !scc.status.errorLevel) {
       debugger.interrupt(scc.cause.interruptPending);
-      step(1 * 2);
+      step(pclk(1));
       exception.interrupt();
       return;
     }
@@ -127,12 +127,12 @@ auto CPU::instruction() -> void {
 
   if (scc.nmiPending) {
     debugger.nmi();
-    step(1 * 2);
+    step(pclk(1));
     exception.nmi();
     return;
   }
   if (scc.sysadFrozen) {
-    step(1 * 2);
+    step(pclk(1));
     return;
   }
 

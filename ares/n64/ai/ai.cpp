@@ -25,7 +25,7 @@ auto AI::unload() -> void {
 }
 
 auto AI::main() -> void {
-  while(Thread::clock < 0) {
+  while(Thread::clock < cpu.clock) {
     sample();
     stream->frame(dac.left, dac.right);
     step(dac.period);

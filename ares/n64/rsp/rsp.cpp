@@ -30,13 +30,13 @@ auto RSP::unload() -> void {
 }
 
 auto RSP::main() -> void {
-  while(Thread::clock < 0) {
+  while(Thread::clock < cpu.clock) {
     auto clock = Thread::clock;
 
     if(status.halted) {
-      step(128);
-      profile.cycles += 128;
-      profile.haltedCycles += 128;
+      step(pclk(64));
+      profile.cycles += pclk(64).units;
+      profile.haltedCycles += pclk(64).units;
     } else {
       instruction();
     }

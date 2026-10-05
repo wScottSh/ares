@@ -67,6 +67,7 @@ namespace Behavior {
   constexpr Clock CpuPifRamRead = {23688};  //1974 rclk
   constexpr s64 SpDmaBurst = 128;  //128 B
   constexpr Ratio SpDmaRateCheck = {13, 2};  //6.5 B/rclk
+  constexpr Clock RspSlot = {12};  //1 rclk
   constexpr Clock PiPageSetup = {180};  //15 rclk
   constexpr s64 PiBlockBytes = 128;  //128 B
   constexpr Clock PiBlockWriteback = {336};  //28 rclk
@@ -154,6 +155,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.random-rule", Basis::Vendor, "decrement-per-pclk", "rule", "NEC UM ch.5; nemu64-test Random (decrement), Random (masking)", "nemu64:timing/random", ""},
   {"sp.dma-burst", Basis::ModelChoice, "128", "B", "inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md)", "bench:sp-dma-sweep", ""},
   {"sp.dma-rate-check", Basis::Measured, "6.5", "B/rclk", "n64brew MI page RSP DMA memset 2.58 ms/MiB; hcs64 5.55 conflicts (direction unstated)", "bench:sp-dma-sweep", "the bench reports both directions"},
+  {"rsp.slot", Basis::Wiki, "1", "rclk", "clocks.md: the RSP runs on the RCP clock (n64brew Clock_Timing; SDK pro-man ch.3 RCP 62.5 MHz); one pipeline slot, an issue or a bubble, per clock", "nemu64:rsp_timing/sll", "RSP::Pipeline charges it per issued pair and per stall bubble (ADR 0001 keeps the RSP pipeline as the RSP cost model)"},
   {"pi.page-setup", Basis::Wiki, "15", "rclk", "n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md)", "pidma:logs bench:pi-dma-sizes", ""},
   {"pi.block-bytes", Basis::Wiki, "128", "B", "n64brew PI; rasky n64_pi_dma_test", "pidma:logs", ""},
   {"pi.block-writeback", Basis::Derived, "28", "rclk", "dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part", "pidma:logs bench:pi-dma-sizes", ""},
@@ -186,11 +188,6 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.noise-reset", Basis::Measured, "all-ones", "rule", "Thar0 data reproduction (rdp-noise.md)", "noise:a", ""},
   {"rdp.noise-pixel-offset", Basis::ModelChoice, "0", "rclk", "rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured", "noise:rect-1016", "calibration #16"},
   {"legacy.clock.pclk", Basis::Legacy, "93750000", "Hz", "ares/n64/system/system.hpp:37", "nemu64:rsp_timing/clock-cpu-vs-rdp", "replaced by T4: Timing::Clock counts 750 MHz units (clock.unit)"},
-  {"legacy.clock.ticks-per-pclk", Basis::Legacy, "2", "tick/pclk", "ares/n64/cpu/cpu.cpp:122", "nemu64:rsp_timing/clock-cpu-vs-rdp", "replaced by T4: step(n * 2) becomes pclk(n)"},
-  {"legacy.clock.ticks-per-pclk-shift", Basis::Legacy, "1", "bit", "ares/n64/cpu/cpu.cpp:69", "nemu64:rsp_timing/clock-cpu-vs-rdp", "replaced by T4: COUNT bookkeeping shifts PClocks into ticks"},
-  {"legacy.clock.ticks-per-rclk", Basis::Legacy, "3", "tick/rclk", "ares/n64/pi/dma.cpp:107", "nemu64:rsp_timing/clock-cpu-vs-rdp", "replaced by T4: RCP * 3 becomes rclk(n)"},
-  {"legacy.clock.ticks-per-ms", Basis::Legacy, "187500", "tick/ms", "ares/n64/cartridge/flash.cpp:1", "pending:no-corpus", "replaced by T4: cartridge save timings are written in ms of 187.5 MHz ticks"},
-  {"legacy.clock.ticks-per-s", Basis::Legacy, "187500000", "tick/s", "ares/n64/pif/hle.cpp:353", "pending:no-corpus", "replaced by T4: second-scale timeouts are written in 187.5 MHz ticks"},
   {"legacy.clock.vclk-ntsc", Basis::Legacy, "48681818", "Hz", "ares/n64/system/system.cpp:92", "mm:south-clock-town", "replaced by T4: VclkAccumulator at the exact rational period (clock.vclk)"},
   {"legacy.clock.vclk-pal", Basis::Legacy, "49656530", "Hz", "ares/n64/system/system.cpp:104", "pending:no-corpus", "no plan unit: PAL is not the target console"},
   {"legacy.cpu.instruction", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:158", "nemu64:timing/just-nops", "replaced by T7a: Pipeline::issue"},
@@ -218,7 +215,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"legacy.cpu.fpu-convert", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:489", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming; CVT, ROUND, TRUNC, CEIL and FLOOR except CVT.S.D"},
   {"legacy.cpu.fpu-cvt-s-d", Basis::Legacy, "2", "pclk", "ares/n64/cpu/interpreter-fpu.cpp:706", "nemu64:timing/cop1instructions64", "replaced by T7a: OpTiming"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
-  {"legacy.pi.write-busy", Basis::Legacy, "400", "tick", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
+  {"legacy.pi.write-busy", Basis::Legacy, "200", "pclk", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
   {"legacy.pi.dma-page-setup", Basis::Legacy, "14", "rclk", "ares/n64/pi/dma.cpp:103", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup)"},
   {"legacy.pi.dma-bytes-per-pulse", Basis::Legacy, "2", "B", "ares/n64/pi/dma.cpp:104", "pidma:logs", "replaced by T8: PiDma; one PWD + RLS pulse per halfword"},
   {"legacy.pi.dma-buffer-writeback", Basis::Legacy, "28", "rclk", "ares/n64/pi/dma.cpp:105", "pidma:logs bench:pi-dma-sizes", "replaced by T8: PiDma block writeback through the RI (pi.block-writeback)"},
@@ -230,22 +227,21 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"legacy.si.dma-read-empty-port", Basis::Legacy, "18000", "rclk", "ares/n64/pif/hle.cpp:230", "bench:si-dma", "replaced by T8: SiDma; per channel without a device"},
   {"legacy.si.dma-read-accessory", Basis::Legacy, "20000", "rclk", "ares/n64/pif/hle.cpp:234", "bench:si-dma", "replaced by T8: SiDma; per cartridge channel"},
   {"legacy.si.dma-read-short-command", Basis::Legacy, "1420", "rclk", "ares/n64/pif/hle.cpp:240", "bench:si-dma", "replaced by T8: SiDma; per end, skip, reset or padding byte"},
-  {"legacy.pif.step-quantum", Basis::Legacy, "81920", "tick", "ares/n64/pif/hle.cpp:263", "stepcap", "replaced by T5: PIF events on the Timeline"},
+  {"legacy.pif.step-quantum", Basis::Legacy, "40960", "pclk", "ares/n64/pif/hle.cpp:263", "stepcap", "replaced by T5: PIF events on the Timeline"},
   {"legacy.pif.boot-timeout", Basis::Legacy, "6", "s", "ares/n64/pif/hle.cpp:353", "pending:no-corpus", "no plan unit: CIC boot handshake timeout"},
-  {"legacy.rsp.issue", Basis::Legacy, "3", "tick", "ares/n64/rsp/rsp.hpp:207", "nemu64:rsp_timing/sll", "replaced by T4: rclk(1); ADR 0001 keeps the RSP pipeline as the RSP cost model"},
-  {"legacy.rsp.stall", Basis::Legacy, "3", "tick", "ares/n64/rsp/rsp.hpp:214", "nemu64:rsp_timing/sll", "replaced by T4: rclk(1) per bubble; ADR 0001 keeps the RSP pipeline"},
-  {"legacy.rsp.halted-quantum", Basis::Legacy, "128", "tick", "ares/n64/rsp/rsp.cpp:37", "stepcap", "replaced by T5: a halted RSP is Parked and costs nothing"},
+  {"legacy.rsp.halted-quantum", Basis::Legacy, "64", "pclk", "ares/n64/rsp/rsp.cpp:37", "stepcap", "replaced by T5: a halted RSP is Parked and costs nothing"},
   {"legacy.rsp.dma-bytes-per-rclk", Basis::Legacy, "8", "B", "ares/n64/rsp/dma.cpp:20", "bench:sp-dma-sweep", "replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst)"},
+  {"legacy.rdp.step-quantum", Basis::Legacy, "1", "s", "ares/n64/rdp/rdp.cpp:30", "stepcap", "replaced by T5: the RDP steps as a timeline actor"},
   {"legacy.ai.power-on-rate", Basis::Legacy, "44100", "Hz", "ares/n64/ai/ai.cpp:76", "pending:no-corpus", "no plan unit: the DAC rate before the first AI_DACRATE write"},
   {"legacy.vi.inactive-line", Basis::Legacy, "2048", "vclk", "ares/n64/vi/vi.cpp:133", "stepcap", "replaced by T5: the VI posts no events while disabled"},
   {"legacy.cart.eeprom-write", Basis::Legacy, "6", "ms", "ares/n64/cartridge/joybus.cpp:48", "pending:no-corpus", "no plan unit: EEPROM write busy time"},
-  {"legacy.cart.rtc-tick", Basis::Legacy, "187500000", "tick", "ares/n64/cartridge/rtc.cpp:42", "pending:no-corpus", "no plan unit: cartridge RTC one-second tick"},
+  {"legacy.cart.rtc-tick", Basis::Legacy, "1", "s", "ares/n64/cartridge/rtc.cpp:42", "pending:no-corpus", "no plan unit: cartridge RTC one-second tick"},
   {"legacy.cart.flash-mx-sector-erase", Basis::Legacy, "85", "ms", "ares/n64/cartridge/flash.cpp:4", "pending:no-corpus", "no plan unit: Macronix flash sector erase"},
   {"legacy.cart.flash-mx-chip-erase", Basis::Legacy, "85", "ms", "ares/n64/cartridge/flash.cpp:4", "pending:no-corpus", "no plan unit: Macronix flash chip erase"},
   {"legacy.cart.flash-mx-program", Basis::Legacy, "3500", "us", "ares/n64/cartridge/flash.cpp:4", "pending:no-corpus", "no plan unit: Macronix flash page program"},
-  {"legacy.cart.flash-mn63-sector-erase", Basis::Legacy, "280", "ms", "ares/n64/cartridge/flash.cpp:10", "pending:no-corpus", "no plan unit: Matsushita flash sector erase"},
-  {"legacy.cart.flash-mn63-chip-erase", Basis::Legacy, "300", "ms", "ares/n64/cartridge/flash.cpp:10", "pending:no-corpus", "no plan unit: Matsushita flash chip erase"},
-  {"legacy.cart.flash-mn63-program", Basis::Legacy, "300", "us", "ares/n64/cartridge/flash.cpp:10", "pending:no-corpus", "no plan unit: Matsushita flash page program"},
+  {"legacy.cart.flash-mn63-sector-erase", Basis::Legacy, "280", "ms", "ares/n64/cartridge/flash.cpp:9", "pending:no-corpus", "no plan unit: Matsushita flash sector erase"},
+  {"legacy.cart.flash-mn63-chip-erase", Basis::Legacy, "300", "ms", "ares/n64/cartridge/flash.cpp:9", "pending:no-corpus", "no plan unit: Matsushita flash chip erase"},
+  {"legacy.cart.flash-mn63-program", Basis::Legacy, "300", "us", "ares/n64/cartridge/flash.cpp:9", "pending:no-corpus", "no plan unit: Matsushita flash page program"},
 };
 
 }

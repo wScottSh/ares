@@ -65,7 +65,7 @@ auto PI::dmaFinished() -> void {
   mi.raise(MI::IRQ::PI);
 }
 
-auto PI::dmaDuration(bool read) -> u32 {
+auto PI::dmaDuration(bool read) -> Clock {
   auto len = read ? io.readLength : io.writeLength;
   len = (len | 1) + 1;
 
@@ -104,5 +104,5 @@ auto PI::dmaDuration(bool read) -> u32 {
   cycles += (bsd.pulseWidth + 1 + bsd.releaseDuration + 1) * len / 2;
   cycles += numBuffers * 28;
   cycles += partialBytes * 1;
-  return cycles * 3;
+  return rclk(cycles);
 }

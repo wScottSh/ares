@@ -204,14 +204,14 @@ struct RSP : Thread, Memory::RCP<RSP> {
       previous[1] = previous[0];
       previous[0] = current;
       current = {};
-      clocks += 3;
+      clocks += Timing::Behavior::RspSlot;
     }
 
     auto stall() -> void {
       previous[2] = previous[1];
       previous[1] = previous[0];
       previous[0] = {};
-      clocks += 3;
+      clocks += Timing::Behavior::RspSlot;
       ++stallCount;
     }
 

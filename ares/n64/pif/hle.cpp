@@ -260,9 +260,9 @@ auto PIF::challenge() -> void {
 }
 
 auto PIF::mainHLE() -> void {
-  constexpr u32 clocks = 10240 * 8;
+  constexpr Clock clocks = pclk(10240 * 4);
   step(clocks);
-  if(intram.bootTimeout > 0) intram.bootTimeout -= clocks;
+  if(intram.bootTimeout > 0) intram.bootTimeout -= clocks.units;
 
   if(likely(state == Run)) {
     //cicCompare()
@@ -350,7 +350,7 @@ auto PIF::mainHLE() -> void {
     }
     for (auto i: range(6)) intram.cpuChecksum[i] = 0;
     state = WaitTerminateBoot;
-    intram.bootTimeout = 6 * 187500000;  //6 seconds
+    intram.bootTimeout = Timing::seconds(6).units;  //6 seconds
     return;
   }
 

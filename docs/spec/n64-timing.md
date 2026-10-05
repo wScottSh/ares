@@ -9,12 +9,12 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | measured | a hardware measurement: a test ROM result or a console capture | 31 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 16 |
 | datasheet | a component datasheet | 8 |
-| wiki | a community reference: n64brew, or a test suite author's notes | 13 |
+| wiki | a community reference: n64brew, or a test suite author's notes | 14 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 2 |
 | model-choice | no published value; the reference states why the model chose this one | 11 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 61 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 55 |
 
 ## Behaviors
 
@@ -101,6 +101,12 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `sp.dma-burst` | 128 B | model-choice | inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md) | `bench:sp-dma-sweep` |  |
 | `sp.dma-rate-check` | 6.5 B/rclk | measured | n64brew MI page RSP DMA memset 2.58 ms/MiB; hcs64 5.55 conflicts (direction unstated) | `bench:sp-dma-sweep` | the bench reports both directions |
 
+### rsp
+
+| Behavior | Value | Basis | Reference | Checks | Note |
+|---|---|---|---|---|---|
+| `rsp.slot` | 1 rclk | wiki | clocks.md: the RSP runs on the RCP clock (n64brew Clock_Timing; SDK pro-man ch.3 RCP 62.5 MHz); one pipeline slot, an issue or a bubble, per clock | `nemu64:rsp_timing/sll` | RSP::Pipeline charges it per issued pair and per stall bubble (ADR 0001 keeps the RSP pipeline as the RSP cost model) |
+
 ### pi
 
 | Behavior | Value | Basis | Reference | Checks | Note |
@@ -164,11 +170,6 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | Behavior | Value | Code site | Checks | Note |
 |---|---|---|---|---|
 | `legacy.clock.pclk` | 93750000 Hz | ares/n64/system/system.hpp:37 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: Timing::Clock counts 750 MHz units (clock.unit) |
-| `legacy.clock.ticks-per-pclk` | 2 tick/pclk | ares/n64/cpu/cpu.cpp:122 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: step(n * 2) becomes pclk(n) |
-| `legacy.clock.ticks-per-pclk-shift` | 1 bit | ares/n64/cpu/cpu.cpp:69 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: COUNT bookkeeping shifts PClocks into ticks |
-| `legacy.clock.ticks-per-rclk` | 3 tick/rclk | ares/n64/pi/dma.cpp:107 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: RCP * 3 becomes rclk(n) |
-| `legacy.clock.ticks-per-ms` | 187500 tick/ms | ares/n64/cartridge/flash.cpp:1 | pending (no-corpus) | replaced by T4: cartridge save timings are written in ms of 187.5 MHz ticks |
-| `legacy.clock.ticks-per-s` | 187500000 tick/s | ares/n64/pif/hle.cpp:353 | pending (no-corpus) | replaced by T4: second-scale timeouts are written in 187.5 MHz ticks |
 | `legacy.clock.vclk-ntsc` | 48681818 Hz | ares/n64/system/system.cpp:92 | `mm:south-clock-town` | replaced by T4: VclkAccumulator at the exact rational period (clock.vclk) |
 | `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:104 | pending (no-corpus) | no plan unit: PAL is not the target console |
 | `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:158 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
@@ -196,7 +197,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.cpu.fpu-convert` | 5 pclk | ares/n64/cpu/interpreter-fpu.cpp:489 | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` | replaced by T7a: OpTiming; CVT, ROUND, TRUNC, CEIL and FLOOR except CVT.S.D |
 | `legacy.cpu.fpu-cvt-s-d` | 2 pclk | ares/n64/cpu/interpreter-fpu.cpp:706 | `nemu64:timing/cop1instructions64` | replaced by T7a: OpTiming |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
-| `legacy.pi.write-busy` | 400 tick | ares/n64/pi/bus.hpp:77 | `bench:pi-io-write` | replaced by T8: PI I/O busy (pi.io-busy) |
+| `legacy.pi.write-busy` | 200 pclk | ares/n64/pi/bus.hpp:77 | `bench:pi-io-write` | replaced by T8: PI I/O busy (pi.io-busy) |
 | `legacy.pi.dma-page-setup` | 14 rclk | ares/n64/pi/dma.cpp:103 | `pidma:logs` `bench:pi-dma-sizes` | replaced by T8: PiDma per page, 14 + BSD LAT + 1 (pi.page-setup) |
 | `legacy.pi.dma-bytes-per-pulse` | 2 B | ares/n64/pi/dma.cpp:104 | `pidma:logs` | replaced by T8: PiDma; one PWD + RLS pulse per halfword |
 | `legacy.pi.dma-buffer-writeback` | 28 rclk | ares/n64/pi/dma.cpp:105 | `pidma:logs` `bench:pi-dma-sizes` | replaced by T8: PiDma block writeback through the RI (pi.block-writeback) |
@@ -208,22 +209,21 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma` | replaced by T8: SiDma; per channel without a device |
 | `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma` | replaced by T8: SiDma; per cartridge channel |
 | `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma` | replaced by T8: SiDma; per end, skip, reset or padding byte |
-| `legacy.pif.step-quantum` | 81920 tick | ares/n64/pif/hle.cpp:263 | `stepcap` | replaced by T5: PIF events on the Timeline |
+| `legacy.pif.step-quantum` | 40960 pclk | ares/n64/pif/hle.cpp:263 | `stepcap` | replaced by T5: PIF events on the Timeline |
 | `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:353 | pending (no-corpus) | no plan unit: CIC boot handshake timeout |
-| `legacy.rsp.issue` | 3 tick | ares/n64/rsp/rsp.hpp:207 | `nemu64:rsp_timing/sll` | replaced by T4: rclk(1); ADR 0001 keeps the RSP pipeline as the RSP cost model |
-| `legacy.rsp.stall` | 3 tick | ares/n64/rsp/rsp.hpp:214 | `nemu64:rsp_timing/sll` | replaced by T4: rclk(1) per bubble; ADR 0001 keeps the RSP pipeline |
-| `legacy.rsp.halted-quantum` | 128 tick | ares/n64/rsp/rsp.cpp:37 | `stepcap` | replaced by T5: a halted RSP is Parked and costs nothing |
+| `legacy.rsp.halted-quantum` | 64 pclk | ares/n64/rsp/rsp.cpp:37 | `stepcap` | replaced by T5: a halted RSP is Parked and costs nothing |
 | `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:20 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
+| `legacy.rdp.step-quantum` | 1 s | ares/n64/rdp/rdp.cpp:30 | `stepcap` | replaced by T5: the RDP steps as a timeline actor |
 | `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:76 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
 | `legacy.vi.inactive-line` | 2048 vclk | ares/n64/vi/vi.cpp:133 | `stepcap` | replaced by T5: the VI posts no events while disabled |
 | `legacy.cart.eeprom-write` | 6 ms | ares/n64/cartridge/joybus.cpp:48 | pending (no-corpus) | no plan unit: EEPROM write busy time |
-| `legacy.cart.rtc-tick` | 187500000 tick | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |
+| `legacy.cart.rtc-tick` | 1 s | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |
 | `legacy.cart.flash-mx-sector-erase` | 85 ms | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash sector erase |
 | `legacy.cart.flash-mx-chip-erase` | 85 ms | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash chip erase |
 | `legacy.cart.flash-mx-program` | 3500 us | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash page program |
-| `legacy.cart.flash-mn63-sector-erase` | 280 ms | ares/n64/cartridge/flash.cpp:10 | pending (no-corpus) | no plan unit: Matsushita flash sector erase |
-| `legacy.cart.flash-mn63-chip-erase` | 300 ms | ares/n64/cartridge/flash.cpp:10 | pending (no-corpus) | no plan unit: Matsushita flash chip erase |
-| `legacy.cart.flash-mn63-program` | 300 us | ares/n64/cartridge/flash.cpp:10 | pending (no-corpus) | no plan unit: Matsushita flash page program |
+| `legacy.cart.flash-mn63-sector-erase` | 280 ms | ares/n64/cartridge/flash.cpp:9 | pending (no-corpus) | no plan unit: Matsushita flash sector erase |
+| `legacy.cart.flash-mn63-chip-erase` | 300 ms | ares/n64/cartridge/flash.cpp:9 | pending (no-corpus) | no plan unit: Matsushita flash chip erase |
+| `legacy.cart.flash-mn63-program` | 300 us | ares/n64/cartridge/flash.cpp:9 | pending (no-corpus) | no plan unit: Matsushita flash page program |
 
 ## Checks
 

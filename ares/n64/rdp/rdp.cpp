@@ -27,10 +27,10 @@ auto RDP::crash(const char *reason) -> void {
 }
 
 auto RDP::main() -> void {
-  const u32 clocks = system.frequency();
-  while(Thread::clock < 0) {
-    step(clocks);
-    command.clock += clocks / 3;
+  constexpr Clock quantum = Timing::seconds(1);
+  while(Thread::clock < cpu.clock) {
+    step(quantum);
+    command.clock += quantum.units / Timing::UnitsPerRclk;
   }
 }
 

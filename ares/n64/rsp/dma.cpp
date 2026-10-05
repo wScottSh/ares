@@ -17,7 +17,7 @@ auto RSP::dmaTransferStart(Thread& thread) -> void {
     dma.current = dma.pending;
     dma.busy    = dma.full;
     dma.full    = {0,0};
-    dmaQueue((dma.current.length+8) / 8 * 3, thread);
+    dmaQueue(rclk((dma.current.length+8) / 8), thread);
   }
 }
 
@@ -59,7 +59,7 @@ auto RSP::dmaTransferStep() -> void {
   if(dma.current.count) {
     dma.current.count -= 1;
     dma.current.dramAddress += dma.current.skip;
-    dmaQueue((dma.current.length+8) / 8 * 3, *this);
+    dmaQueue(rclk((dma.current.length+8) / 8), *this);
   } else {
     dma.busy = {0,0};
     dma.current.length = 0xFF8;

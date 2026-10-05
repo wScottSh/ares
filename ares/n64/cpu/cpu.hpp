@@ -186,7 +186,7 @@ struct CPU : Thread {
       }
 
       auto fill(u32 paddr, CPU& cpu) -> void {
-        cpu.step(48 * 2);
+        cpu.step(pclk(48));
         const u32 tag = paddr & ~0x0000'0fffu;
         tagKey = tag;
         setValid(true);
@@ -194,7 +194,7 @@ struct CPU : Thread {
       }
 
       auto writeBack(CPU& cpu) -> void {
-        cpu.step(48 * 2);
+        cpu.step(pclk(48));
         const u32 tag = tagKey & ~0x0000'0fffu;
         cpu.busWriteBurst<ICache>(tag | index, words);
       }

@@ -75,7 +75,7 @@ auto VI::unload() -> void {
 }
 
 auto VI::main() -> void {
-  while(Thread::clock < 0) {
+  while(Thread::clock < cpu.clock) {
     if(active()) {
       ++io.vcounter;
       int halfline = io.vcounter << 1 | io.field;
