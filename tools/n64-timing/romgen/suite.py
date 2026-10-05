@@ -21,6 +21,12 @@ class Step:
     res: int = 0
 
 
+def checkpoint(checks):
+    """A step that runs `checks` where it stands. The first failure ends the value, the way a
+    Rust `?` returns before the rest of the test runs (and before its side effects)."""
+    return Step("step_checks", [len(checks), *checks], 0)
+
+
 @dataclass
 class Value:
     desc: str
@@ -88,9 +94,15 @@ class Suite:
                                f"{c.d & 0xFFFFFFFF}, {s(c.msg)}")
                 for si, st in enumerate(v.steps):
                     out.append(f"t{ti}v{vi}s{si}_params:")
-                    if st.params:
-                        out.append("    .word " + ", ".join(
-                            p if isinstance(p, str) else str(p & 0xFFFFFFFF) for p in st.params))
+                    words = []
+                    for p in st.params:
+                        if isinstance(p, Check):
+                            words += [str(p.op), str(p.a), str(p.b & 0xFFFFFFFF),
+                                      str(p.c & 0xFFFFFFFF), str(p.d & 0xFFFFFFFF), s(p.msg)]
+                        else:
+                            words.append(p if isinstance(p, str) else str(p & 0xFFFFFFFF))
+                    if words:
+                        out.append("    .word " + ", ".join(words))
         out.append(".align 4")
         for label, words in self.blobs.items():
             out.append(f"{label}:")

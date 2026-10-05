@@ -7,7 +7,7 @@ from fractions import Fraction
 
 from ...nemu import (Assembler, GPR, ExceptionTimingMode, FCSR, FCSRFlags, Status,
                      _round_to_ieee)
-from ...suite import Check, Step, Test, Value
+from ...suite import Check, Step, Test, Value, checkpoint
 from ... import runtime as rt
 from . import tables
 from .describe import describe
@@ -136,16 +136,14 @@ def port_repeated_mfc0(suite):
 
 
 def port_half_cycle(suite):
-    steps, checks = [], []
-    for k, count_value in enumerate([0, 100, 0x1234, 0x8000000, 0xFFFFFFFC, 0xFFFFFFFF]):
-        r = 4 * k
-        steps.append(Step("step_half_cycle", [count_value], r))
-        checks += [
-            Check(rt.CHK_EQ_REL, r + 1, r, 1, msg="2nd - 1st readback"),
-            Check(rt.CHK_EQ_REL, r + 2, r + 1, 0, msg="3rd - 2nd readback"),
-            Check(rt.CHK_EQ_REL, r + 3, r + 2, 1, msg="4th - 3rd readback"),
-        ]
-    return [Value("", steps, checks)]
+    steps = []
+    for count_value in [0, 100, 0x1234, 0x8000000, 0xFFFFFFFC, 0xFFFFFFFF]:
+        steps += [Step("step_half_cycle", [count_value], 0), checkpoint([
+            Check(rt.CHK_EQ_REL, 1, 0, 1, msg="2nd - 1st readback"),
+            Check(rt.CHK_EQ_REL, 2, 1, 0, msg="3rd - 2nd readback"),
+            Check(rt.CHK_EQ_REL, 3, 2, 1, msg="4th - 3rd readback"),
+        ])]
+    return [Value("", steps, [])]
 
 
 def port_cache_size(suite):
@@ -277,9 +275,10 @@ def port_count_overflow(suite):
     ])]
 
 
-def preset_cop2_step(res):
-    return (Step("step_preset_cop2", [], res),
-            Check(rt.CHK_EQ_HEX, res, 1, msg="Failed to preset Cause.copindex to 2"))
+def preset_cop2_steps(res):
+    """cop0::preset_cause_to_copindex2; a failure returns before the test body runs."""
+    return [Step("step_preset_cop2", [], res),
+            checkpoint([Check(rt.CHK_EQ_HEX, res, 1, msg="Failed to preset Cause.copindex to 2")])]
 
 
 def port_compare_signalling2(suite):
@@ -289,12 +288,11 @@ def port_compare_signalling2(suite):
     ops = {0: (set_compare, nop, nop), 1: (set_compare, branch, nop), 2: (branch, set_compare, nop)}
     out = []
     for offset, mode in ((2000, 0), (500, 0), (100, 0), (50, 0), (4, 0), (4, 1), (4, 2)):
-        preset, preset_check = preset_cop2_step(10)
         step = Step("step_compare_signalling", [offset, *ops[mode]], 0)
-        checks = [preset_check,
-                  Check(rt.CHK_GE_REL, 2, 1, msg="COUNT must be >= the target compare value"),
+        checks = [Check(rt.CHK_GE_REL, 2, 1, msg="COUNT must be >= the target compare value"),
                   eq(0, (offset - 2) // 3, "Loop iterations")]
-        out.append(Value(describe((offset, mode), "(u32, u32)"), [preset, step], checks,
+        out.append(Value(describe((offset, mode), "(u32, u32)"), preset_cop2_steps(10) + [step],
+                         checks,
                          describe((offset, mode), "(u32, u32)")))
     return out
 

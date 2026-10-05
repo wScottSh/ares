@@ -3,9 +3,9 @@
 Test order follows src/tests/testlist.rs. The instruction sequences between the CP0 writes
 and reads are the Rust inline asm's; `dla` keeps LLVM's six-instruction expansion.
 """
-from ...suite import Check, Step, Test, Value
+from ...suite import Check, Step, Test, Value, checkpoint
 from ... import runtime as rt
-from .timing import eq, preset_cop2_step
+from .timing import eq, preset_cop2_steps
 
 SW1 = 0x100   # Cause.interrupt_sw1 / Status.interrupt_mask_sw1 (bit 8)
 IE = 0x1
@@ -21,17 +21,17 @@ def random_read_early():
 
 
 def count_hazards():
-    steps, checks = [], []
-    for k, count_value in enumerate([0, 100, 0x1234, 0x8000000, 0xFFFFFFFC, 0xFFFFFFFF]):
-        r = 4 * k
-        steps.append(Step("step_count_hazards", [count_value], r))
-        checks += [
-            eq(r, count_value, "First readback"),
-            eq(r + 1, count_value, "Second readback"),
-            eq(r + 2, count_value, "Third readback"),
-            eq(r + 3, (count_value + 1) & 0xFFFFFFFF, "Fourth readback"),
-        ]
-    return [Value("", steps, checks)]
+    """Checks run after each COUNT value, as in the Rust loop: a failure at 0 stops the test
+    before the 0xFFFFFFFx writes carry COUNT past Compare and raise IP7 for later tests."""
+    steps = []
+    for count_value in [0, 100, 0x1234, 0x8000000, 0xFFFFFFFC, 0xFFFFFFFF]:
+        steps += [Step("step_count_hazards", [count_value], 0), checkpoint([
+            eq(0, count_value, "First readback"),
+            eq(1, count_value, "Second readback"),
+            eq(2, count_value, "Third readback"),
+            eq(3, (count_value + 1) & 0xFFFFFFFF, "Fourth readback"),
+        ])]
+    return [Value("", steps, [])]
 
 
 # res layout of the interrupt routines: expect_end's {count, cause, status, epc, vector,
@@ -48,25 +48,22 @@ def interrupt_checks(cause, status):
 
 def sw1_enabled_hazard():
     """exception_instructions test_sw_interrupt(DEFAULT|IM1|IE, SW1, DEFAULT, 0, hazard=true)."""
-    preset, preset_check = preset_cop2_step(20)
     status_before = rt.STATUS_DEFAULT | SW1 | IE
     step = Step("step_sw_interrupt", [status_before, SW1, rt.STATUS_DEFAULT], 0)
-    return [Value("", [preset, step],
-                  [preset_check] + interrupt_checks(SW1, 0x24000003 | (SW1 & 0x300)))]
+    return [Value("", preset_cop2_steps(20) + [step],
+                  interrupt_checks(SW1, 0x24000003 | (SW1 & 0x300)))]
 
 
 def sw1_enable_disable_instantly():
-    preset, preset_check = preset_cop2_step(20)
     step = Step("step_sw_enable_disable_instantly", [rt.STATUS_DEFAULT | SW1 | IE, SW1, 0], 0)
-    return [Value("", [preset, step], [preset_check])]
+    return [Value("", preset_cop2_steps(20) + [step], [])]
 
 
 def sw1_enable_disable_after_nop():
-    preset, preset_check = preset_cop2_step(20)
     step = Step("step_sw_enable_disable_after_nop", [rt.STATUS_DEFAULT | SW1 | IE, SW1, 0], 0)
     checks = interrupt_checks(SW1, 0x24000103)
     checks[-1] = Check(rt.CHK_EQ_REL, 3, 7, 0, msg="ExceptPC points to wrong instruction")
-    return [Value("", [preset, step], [preset_check] + checks)]
+    return [Value("", preset_cop2_steps(20) + [step], checks)]
 
 
 def build(suite):

@@ -8,7 +8,7 @@ from ...nemu import Assembler, CacheOp, GPR
 from ...suite import Check, Step, Test, Value
 from ... import runtime as rt
 from .describe import describe
-from .timing import eq, preset_cop2_step
+from .timing import eq, preset_cop2_steps
 
 SMC_SIG = "(bool, usize, usize)"
 
@@ -71,9 +71,7 @@ FCSR_OVERFLOW_ENABLED_AND_CAUSED = (1 << 9) | (1 << 14)
 
 
 def ctc1_fire(routine, copindex, status):
-    preset, preset_check = preset_cop2_step(20)
     checks = [
-        preset_check,
         Check(rt.CHK_EQ_HEX, 0, 1, msg="Expected exception FPE: exceptions seen"),
         eq(4, 0x80000180, "Exception Vector"),
         eq(8, 0x80000000, "ExceptPC"),
@@ -83,7 +81,7 @@ def ctc1_fire(routine, copindex, status):
         eq(6, FCSR_OVERFLOW_ENABLED_AND_CAUSED, "FCSR"),
     ]
     step = Step(routine, [status, FCSR_OVERFLOW_ENABLED_AND_CAUSED], 0)
-    return [Value("", [preset, step], checks)]
+    return [Value("", preset_cop2_steps(20) + [step], checks)]
 
 
 def branch_result(routine, expected, msg, ra_offset=None):

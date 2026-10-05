@@ -50,6 +50,7 @@ D_VALUE = 0x04C
 D_TI = 0x050
 D_VI = 0x054
 D_EXC_FCSR = 0x058
+D_ABORT = 0x05C        # set by step_checks when a mid-value check fails
 D_DECBUF = 0x060        # 32 bytes
 D_SAVE = 0x1600         # callee-saved registers during a measurement
 D_EXC_SAVE = 0x100      # registers the exception handler uses, 16 x 8
@@ -504,6 +505,8 @@ run_value:
     sw $s0, 0($t0)
     jal set_default_state
     nop
+    la $t0, DATA_BASE
+    sw $zero, D_ABORT($t0)
     lw $s1, 4($s0)
     lw $s2, 8($s0)
 rv_step:
@@ -516,9 +519,18 @@ rv_step:
     la $t0, DATA_BASE + D_RES
     jalr $t9
     addu $a1, $a1, $t0
+    la $t0, DATA_BASE
+    lw $t0, D_ABORT($t0)
+    bnez $t0, rv_aborted
     addiu $s2, $s2, 12
     b rv_step
     addiu $s1, $s1, -1
+rv_aborted:
+    jal set_default_state
+    nop
+    la $s4, DATA_BASE
+    b rv_fail
+    addiu $v0, $zero, 1
 rv_steps_done:
     jal set_default_state
     nop
@@ -668,6 +680,34 @@ pr_test_prefix:
     ld $ra, 0($sp)
     jr $ra
     addiu $sp, $sp, 16
+
+# A step that runs checks in the middle of a value. a0 = {count, check records...}. The first
+# failure prints its line and sets D_ABORT, which ends the value as failed.
+step_checks:
+    addiu $sp, $sp, -32
+    sd $ra, 0($sp)
+    sd $s0, 8($sp)
+    sd $s1, 16($sp)
+    lw $s1, 0($a0)
+    addiu $s0, $a0, 4
+sc_loop:
+    beqz $s1, sc_done
+    nop
+    jal run_check
+    move $a0, $s0
+    bnez $v0, sc_fail
+    addiu $s0, $s0, 24
+    b sc_loop
+    addiu $s1, $s1, -1
+sc_fail:
+    la $t0, DATA_BASE
+    sw $v0, D_ABORT($t0)
+sc_done:
+    ld $ra, 0($sp)
+    ld $s0, 8($sp)
+    ld $s1, 16($sp)
+    jr $ra
+    addiu $sp, $sp, 32
 
 # a0 = check record. Returns v0 = 0 on pass; on failure prints the failure line, v0 = 1.
 run_check:
