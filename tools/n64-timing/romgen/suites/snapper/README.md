@@ -16,12 +16,12 @@ Run these from the repository root.
 ```sh
 tools/n64-timing/romgen/suites/snapper/fetch.sh
 python tools/n64-timing/romgen/build.py --suite snapper --out $N64_TIMING_HOME/roms
-N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/snapper/run.sh --rdp vulkan
+N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/snapper/run.sh
 ```
 
 - `fetch.sh` clones snapper64 into `$N64_TIMING_HOME/corpora/snapper64`, runs `git lfs pull` for the 7094 `assets/*.test.7z` archives (4.3 MB), and extracts them into `$N64_TIMING_HOME/corpora/snapper64-decoded/` (688 MB). It uses `7z` when present and otherwise `tar.exe` (bsdtar, which reads 7z). It runs nothing from the clone. A rerun skips the work already done.
 - `build.py --suite snapper` writes the four ROMs. `--define DUMP=1` makes every record carry a full hex dump. Without it, only the span-buffer and R/W records carry one.
-- `run.sh` writes `$N64_TIMING_HOME/results/snapper-<rdp>/<set>/` with `stdout.txt`, `stderr.txt`, `records.tsv` and `compare.txt`, and appends each set's lines to `summary.txt`. `SNAPPER_ROMS` and `SNAPPER_RESULTS` override the ROM and result directories.
+- `run.sh` writes `$N64_TIMING_HOME/results/snapper/<set>/` with `stdout.txt`, `stderr.txt`, `records.tsv` and `compare.txt`, and appends each set's lines to `summary.txt`. `SNAPPER_ROMS` and `SNAPPER_RESULTS` override the ROM and result directories.
 - `compare.py SET STDOUT OUT_DIR` compares one set. It first checks the dumps the set reads against the digest pinned in `REFERENCE_DIGEST`, and stops if they differ. If the dumps are missing, it prints `pending:snapper-lfs`.
 
 ## Output format
