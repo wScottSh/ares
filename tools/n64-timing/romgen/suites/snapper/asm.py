@@ -43,6 +43,9 @@ se_loop:
     nop
     jal pr_hex
     move $a0, $s1
+    la $a0, str_snap_nl
+    jal pr_str
+    nop
     jal pr_flush
     nop
     lw $t0, 12($s0)

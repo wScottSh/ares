@@ -31,7 +31,8 @@ class SetDef:
         case_list, lists = self._built
         parts = [routines.ASM, asm.ASM, "\n".join([
             f"str_snap: .asciiz {runtime.asm_string('@snap ')}",
-            f"str_snap_sep: .asciiz {runtime.asm_string(' ')}"])]
+            f"str_snap_sep: .asciiz {runtime.asm_string(' ')}",
+            f"str_snap_nl: .asciiz {runtime.asm_string(chr(10))}"])]
         parts += [lst.asm() for lst in lists]
         parts.append("\n".join(f"{name_label(rec)}: .asciiz {runtime.asm_string(rec.id)}"
                                for c in case_list for rec in c.records))
