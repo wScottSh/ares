@@ -52,6 +52,10 @@ endif()
 
 add_subdirectory(tools/sourcery)
 
+if(n64 IN_LIST ARES_CORES)
+  add_subdirectory(tools/n64-run)
+endif()
+
 message_configuration()
 
 add_subdirectory(.github)

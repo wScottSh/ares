@@ -8,6 +8,10 @@ namespace ares::Nintendo64 {
 
 Vulkan vulkan;
 
+//Hidden RDRAM bits live in paraLLEl-RDP's buffer when it runs. Without it, RDRAM writes
+//still update the bits, so they need host storage. 0x03 matches paraLLEl's clear value.
+static std::vector<u8> softwareHiddenRdram;
+
 struct LoggingInterface : Util::LoggingInterface {
   auto log(const char* tag, const char* fmt, va_list va) -> bool {
     char buffer[8192];
@@ -68,6 +72,11 @@ auto Vulkan::load(Node::Object) -> bool {
   } else {
     platform->status("Vulkan Disabled: No RDP rendering support");
     rdram.hidden.data = nullptr;
+  }
+
+  if(!rdram.hidden.data) {
+    softwareHiddenRdram.assign(rdram.ram.size / 2, 0x03);
+    rdram.hidden.data = softwareHiddenRdram.data();
   }
 
   return true;
