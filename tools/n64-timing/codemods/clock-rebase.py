@@ -31,7 +31,7 @@ from pathlib import Path
 SCAN_ROOT = "ares/n64"
 ALLOWLIST = "tools/n64-timing/literal-allowlist.tsv"
 TABLE = "ares/n64/timing/behaviors.tsv"
-SKIP = ("ares/n64/timing/behaviors.hpp", "ares/n64/timing/clock.hpp", "ares/n64/vulkan/parallel-rdp/")
+SKIP = ("ares/n64/timing/behaviors.hpp", "ares/n64/timing/clock.hpp")
 
 #(file regex, pattern, replacement); applied in order to every line of every matching file.
 RULES = [

@@ -54,6 +54,8 @@ HAND_CHECKED = [
     ("mfc2 $zero, 0", 0, 0x48000000, "16 MFCz z=2"),
     ("xlog $t0, $zero, 0", 0, 0x42800025, "emux XLOG (src/emux.rs encode_xlog)"),
     ("xioctl 1", 0, 0x4200006C, "emux XIOCTL exit (src/emux.rs encode_xioctl)"),
+    ("xhexdump $t0, $t1", 0, 0x42848027,
+     "emux XHEXDUMP (ares cpu/interpreter.cpp XRDn = OP>>20, XRTn = OP>>15, funct 0x27)"),
 ]
 
 # Pseudo-instructions that expand to several words.
