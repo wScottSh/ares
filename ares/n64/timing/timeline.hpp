@@ -53,7 +53,8 @@ struct Readiness {
 //while its next step starts before `limit`. A step's interactions are stamped
 //with its start time, which is the `at` the actor reported. `limit` was the
 //next contender when run() began, so a run that schedules an event or wakes an
-//actor earlier than `limit` must return after that step.
+//actor earlier than `limit` must return after that step: it compares its next
+//step with timeline.limit(limit), not with `limit`.
 struct Actor {
   virtual auto readiness() const -> Readiness = 0;
   virtual auto run(Clock limit) -> void = 0;
@@ -108,9 +109,15 @@ struct Timeline {
   auto wake(ActorId id) -> void {
     if(auto actor = actors[(u8)id]) {
       auto r = actor->readiness();
-      if(r.kind == Readiness::Kind::Runnable && r.at < cachedHorizon) cachedHorizon = r.at;
+      if(r.kind != Readiness::Kind::Runnable) return;
+      if(r.at < cachedHorizon) cachedHorizon = r.at;
+      if(r.at < woken) woken = r.at;
     }
   }
+
+  //The limit a running actor or the event loop must stop at: its own, or
+  //earlier if something it did woke an actor that must run first.
+  auto limit(Clock limit) const -> Clock { return woken < limit ? woken : limit; }
 
   auto schedule(Event event) -> void {
     //every kind has one pending event in practice; a full heap means a device reposts without cancelling
@@ -240,8 +247,11 @@ private:
       onStack |= 1u << (u8)best;
       stackTime[(u8)best] = at;
       fold(at, best, best == ActorId::Events ? events[0].kind : 0);
+      const Clock wokenOutside = woken;
+      woken = Clock::never();
       if(best == ActorId::Events) fireEvents(limit);
       else actors[(u8)best]->run(limit);
+      woken = wokenOutside;
       onStack &= ~(1u << (u8)best);
     }
 
@@ -249,6 +259,7 @@ private:
     if(!nested) onStack &= ~callerBit;
     stackTime[(u8)caller] = saved;
     if(depth > 0) return;
+    woken = Clock::never();
     //the CPU is never attached, so with only the CPU on the stack the last scan saw every actor
     if(caller == ActorId::CPU && !stepCap) cachedHorizon = at;
     else refreshHorizon();
@@ -271,7 +282,7 @@ private:
       firing = true;
       firingAt = event.at;
       fire(event);
-    } while(count && events[0].at < limit);
+    } while(count && events[0].at < this->limit(limit));
     firing = wasFiring;
     firingAt = wasFiringAt;
   }
@@ -288,6 +299,7 @@ private:
   u32     count = 0;
   bool    firing = false;
   Clock   firingAt;
+  Clock   woken = Clock::never();  //earliest wake inside the current step
 };
 
 }

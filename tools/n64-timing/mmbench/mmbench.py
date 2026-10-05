@@ -179,11 +179,13 @@ def f32_bits(value):
 
 def rotate_to_options_and_back(n):
     # Each mark is the first field in which one rotation game frame's update is visible, so the
-    # gap to the next mark is that game frame's length in fields.
+    # gap to the next mark is that game frame's length in fields. Two game frames can update in
+    # one field when the game catches up after a long frame, so each wait is for the value or a
+    # later one (windowRot only grows, as a positive float its bits do too; the box x only falls).
     steps = ["input A"]
     for k, rot in enumerate(ROTATION_STEPS):
-        steps += [f"until {FS_WINDOW_ROT} w == 0x{f32_bits(rot):08X}", f"mark rot{n}.{k}"]
-    steps += [f"until {FS_NAME_ENTRY_BOX_X} h == {OPTIONS_BOX_FIRST_X}", f"mark rot{n}.{len(ROTATION_STEPS)}",
+        steps += [f"until {FS_WINDOW_ROT} w >= 0x{f32_bits(rot):08X}", f"mark rot{n}.{k}"]
+    steps += [f"until {FS_NAME_ENTRY_BOX_X} h < {OPTIONS_BOX_FIRST_X + 1}", f"mark rot{n}.{len(ROTATION_STEPS)}",
               "input", f"until {FS_PAD_BUTTONS} h == 0", f"until {FS_CONFIG_MODE} h == {CM_OPTIONS_MENU}"]
     return steps + press("B", f"until {FS_CONFIG_MODE} h != {CM_OPTIONS_MENU}") + [
         f"until {FS_CONFIG_MODE} h == {CM_MAIN_MENU}"]

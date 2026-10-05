@@ -227,15 +227,14 @@ inline auto cost(const Work& w) -> Cost {
   return {RdpSetter};
 }
 
-//The command DMA's next request: a whole burst once the FIFO has room for
-//one, else the rest of the transfer once it fits; 0 while it must wait.
+//The command DMA's next request: up to one burst, no more than the FIFO has
+//room for. Waiting for room for a whole burst would deadlock: a FIFO of 30
+//dwords can hold a partial 22-dword triangle with less than a burst free.
 inline auto fetchDwords(const Dpc& dpc, u32 fifoDwords) -> u32 {
-  if(!dpc.dmaBusy()) return 0;
-  const u32 remaining = (u32)(dpc.end - dpc.current) / sizeof(u64);
-  const u32 burst = Timing::Behavior::RdpCmdFetchBurst / sizeof(u64);
-  const u32 want = remaining < burst ? remaining : burst;
-  const u32 room = Timing::Behavior::RdpCmdFifoDwords - fifoDwords;
-  return want <= room ? want : 0;
+  if(!dpc.dmaBusy() || fifoDwords >= Timing::Behavior::RdpCmdFifoDwords) return 0;
+  u32 dwords = (u32)(dpc.end - dpc.current) / sizeof(u64);
+  dwords = min(dwords, (u32)(Timing::Behavior::RdpCmdFetchBurst / sizeof(u64)));
+  return min(dwords, (u32)(Timing::Behavior::RdpCmdFifoDwords - fifoDwords));
 }
 
 //How long a command fetch of `dwords` takes from request to the words being

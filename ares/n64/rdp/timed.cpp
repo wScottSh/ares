@@ -34,7 +34,7 @@ auto RDP::run(Clock limit) -> void {
     Thread::clock = next.at;
     step(next.at);
     next = readiness();
-    if(next.kind != Timing::Readiness::Kind::Runnable || next.at >= limit) return;
+    if(next.kind != Timing::Readiness::Kind::Runnable || next.at >= timeline.limit(limit)) return;
   }
 }
 
