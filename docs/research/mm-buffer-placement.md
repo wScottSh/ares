@@ -1,6 +1,6 @@
 # MM framebuffer, Z buffer and DMA-target bank placement
 
-Ticket: wScottSh/ares#23 (map #1). Prerequisite: #4 [rdram-bus-arbitration.md](https://github.com/wScottSh/ares/blob/research/rdram-bus-arbitration/docs/research/rdram-bus-arbitration.md) (bank and row model). Target: NTSC MM US 1.0 (`n64-us`), Expansion Pak (8 MiB).
+Ticket: wScottSh/ares#23 (map #1). Prerequisite: #4 [rdram-bus-arbitration.md](rdram-bus-arbitration.md) (bank and row model). Target: NTSC MM US 1.0 (`n64-us`), Expansion Pak (8 MiB).
 
 Source: zeldaret/mm `56fa21dd0031a17cfc9e355f609542617598a265` (US 1.0 is the matched version). All `file:line` references below are at that commit. Retail symbol addresses come from `tools/disasm/n64-us/variables.txt`, which the matching build reproduces.
 

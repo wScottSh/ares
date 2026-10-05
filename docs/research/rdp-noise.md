@@ -1,6 +1,6 @@
 # RDP noise generators: stepping, reset state, sharing, and MM usage
 
-Ticket: wScottSh/ares#18. Map: #1. Follows #12 ([rdp-pixel-timing-coupling.md](https://github.com/wScottSh/ares/blob/research/rdp-pixel-timing-coupling/docs/research/rdp-pixel-timing-coupling.md)).
+Ticket: wScottSh/ares#18. Map: #1. Follows #12 ([rdp-pixel-timing-coupling.md](rdp-pixel-timing-coupling.md)).
 Target: NTSC NUS-001 + Expansion Pak. MM refs are to mm-decomp-60fps @ 56fa21dd0 (US retail ROM for binary scans).
 
 Tags: **[hw-data]** derived here from Thar0's console dumps; **[source]** read in code; **[doc]** SDK/n64brew text; **[inference]** reasoning, not measured.

@@ -2,7 +2,7 @@
 
 Research for wScottSh/ares#20 (map: #1). Research date: 2026-10-04. Target: NTSC retail NUS-001 + Expansion Pak.
 
-Builds on #3 ([rdp-memory-traffic.md](https://github.com/wScottSh/ares/blob/research/rdp-memory-traffic/docs/research/rdp-memory-traffic.md)), which covers which othermode bits cause reads and writes, the GCLK stall, and the 288 B size. This doc does not repeat those points.
+Builds on #3 ([rdp-memory-traffic.md](rdp-memory-traffic.md)), which covers which othermode bits cause reads and writes, the GCLK stall, and the 288 B size. This doc does not repeat those points.
 
 Tags:
 
@@ -181,4 +181,4 @@ Best model [inference]: L_rd = wire (4.5 clk on a hit, 10 on a clean miss, 12 on
 - cen64 jgemu fork `2f8d7bc`: `src/rdp/rdp_core.h` (`rdp_dps_model_t`), `src/rdp/rdp_core.c:144-170` (hazard), `2877-3150` (DPS stream), `5346-5362` (span law), `src/rdp/interface.c:359-410`. https://gitlab.com/jgemu/cen64
 - N64_MiSTer `5725381`: `rtl/RDP.vhd:620-790, 1114-1205`; `rtl/RDP_raster.vhd:700-760`; `rtl/RDP_FBread.vhd:62`. https://github.com/MiSTer-devel/N64_MiSTer
 - libultra `rcp.h` (DPS register comments), via HackerSM64 `include/n64/PR/rcp.h:363-377`.
-- Map siblings: #3 [rdp-memory-traffic.md](https://github.com/wScottSh/ares/blob/research/rdp-memory-traffic/docs/research/rdp-memory-traffic.md); #4 [rdram-bus-arbitration.md](https://github.com/wScottSh/ares/blob/research/rdram-bus-arbitration/docs/research/rdram-bus-arbitration.md); #2 [rdp-command-timing.md](https://github.com/wScottSh/ares/blob/research/rdp-command-timing/docs/research/rdp-command-timing.md); #17 (write granularity), #19 (1-primitive cost).
+- Map siblings: #3 [rdp-memory-traffic.md](rdp-memory-traffic.md); #4 [rdram-bus-arbitration.md](rdram-bus-arbitration.md); #2 [rdp-command-timing.md](rdp-command-timing.md); #17 (write granularity), #19 (1-primitive cost).

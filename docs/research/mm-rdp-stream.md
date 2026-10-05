@@ -1,6 +1,6 @@
 # MM RDP command stream per frame
 
-Ticket: wScottSh/ares#21 (map #1). Prerequisite: #8, [rsp-rdp-fifo.md](https://github.com/wScottSh/ares/blob/research/rsp-rdp-fifo/docs/research/rsp-rdp-fifo.md) (ring protocol, stalls B–D). Target: NTSC MM US (`n64-us`), F3DZEX2.NoN fifo 2.08I.
+Ticket: wScottSh/ares#21 (map #1). Prerequisite: #8, [rsp-rdp-fifo.md](rsp-rdp-fifo.md) (ring protocol, stalls B–D). Target: NTSC MM US (`n64-us`), F3DZEX2.NoN fifo 2.08I.
 
 ## TL;DR
 

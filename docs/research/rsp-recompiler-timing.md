@@ -1,6 +1,6 @@
 # RSP recompiler timing divergence
 
-Ticket: [#28](https://github.com/wScottSh/ares/issues/28), map [#1](https://github.com/wScottSh/ares/issues/1), follow-up to [#10](https://github.com/wScottSh/ares/blob/research/recompiler-parity/docs/research/recompiler-parity.md).
+Ticket: [#28](https://github.com/wScottSh/ares/issues/28), map [#1](https://github.com/wScottSh/ares/issues/1), follow-up to [#10](recompiler-parity.md).
 Code base: `origin/feat/harness` at `c8592d16a`. The RSP sources there are unchanged from master `59158c28a`, so every `file:line` below holds for both.
 
 ## Answer
