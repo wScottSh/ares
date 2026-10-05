@@ -38,6 +38,8 @@ struct Scripted : Actor {
   u32 next = 0;
   s64 nestAt = -1;
   s64 nestTarget = -1;
+  s64 wakeAt = -1;            //the step at this time makes `wakes` runnable, the way a DPC_END write wakes the RDP
+  struct Scripted* wakes = nullptr;
   u32 runs = 0;
 
   auto readiness() const -> Readiness override {
@@ -51,25 +53,21 @@ struct Scripted : Actor {
       s64 at = times[next++];
       steps.push_back({at, id, 0});
       if(at == nestAt) timeline.catchUp({nestTarget >= 0 ? nestTarget : at}, id);
-      if(at == wakeAt && woken) woken->kind = Readiness::Kind::Runnable, timeline.wake(woken->id);
-      if(next >= times.size() || timeline.ends(Clock{times[next]}, limit)) break;
+      if(at == wakeAt) wakes->kind = Readiness::Kind::Runnable, timeline.wake(wakes->id);
+      if(next >= times.size() || Clock{times[next]} >= timeline.limit(limit)) break;
       timeline.record(Clock{times[next]}, id);
     } while(true);
   }
-
-  //makes `woken` runnable at its own next time during the step at `wakeAt`
-  Scripted* woken = nullptr;
-  s64 wakeAt = -1;
 };
 
-static Scripted* wokenByEvent = nullptr;
+static Scripted* wakeByEvent = nullptr;
 
 static auto fired(const Timeline::Event& event) -> void {
   steps.push_back({event.at.units, ActorId::Events, event.kind});
   //an event that posts another one: the RTC tick reposting itself from its own time
   if(event.kind == 7) timeline.schedule({timeline.now({-1}) + Clock{5}, 8});
-  //an event that makes an actor runnable: a VI HSYNC posting a refresh to the bus
-  if(event.kind == 99) wokenByEvent->kind = Readiness::Kind::Runnable, timeline.wake(wokenByEvent->id);
+  //an event whose handler makes an actor runnable before the next event
+  if(event.kind == 11 && wakeByEvent) wakeByEvent->kind = Readiness::Kind::Runnable, timeline.wake(wakeByEvent->id);
 }
 
 static auto reset() -> void {
@@ -254,29 +252,33 @@ static auto testTimeline() -> u32 {
     CHECK(steps.size() == 2 && timeline.horizon() == Clock{0}, "stepCap keeps the horizon at 0 after a step");
   }
 
-  //Wakes inside a step end the step: an event handler or an actor run that
-  //makes another actor runnable before the next contender must not run past
-  //it. Defect: fireEvents or run() looping on the limit computed before the
-  //handler ran, which fires the event at 15 before the woken bus at 12.
+  //A step that wakes another actor ends the run: the RSP's DPC_END write at 10
+  //makes the RDP runnable at 15, so the RSP's step at 20 must wait for it.
+  //Defect: a run that keeps stepping to the limit it was given.
   {
     reset();
-    Scripted bus{}; bus.id = ActorId::Bus; bus.kind = Readiness::Kind::Parked; bus.times = {12};
-    timeline.attach(ActorId::Bus, &bus);
-    wokenByEvent = &bus;
-    timeline.schedule({{10}, 99});
-    timeline.schedule({{15}, 1});
-    timeline.catchUp({100}, ActorId::CPU);
-    CHECK(sorted() && steps.size() == 3, "an event's wake must stop the event batch: %s", dump().c_str());
-
-    reset();
-    Scripted bus2{}; bus2.id = ActorId::Bus; bus2.kind = Readiness::Kind::Parked; bus2.times = {12};
-    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {10, 20};
-    rsp.woken = &bus2; rsp.wakeAt = 10;
-    timeline.attach(ActorId::Bus, &bus2);
+    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {10, 20, 30};
+    Scripted rdp{}; rdp.id = ActorId::RDP; rdp.times = {15}; rdp.kind = Readiness::Kind::Parked;
+    rsp.wakeAt = 10; rsp.wakes = &rdp;
     timeline.attach(ActorId::RSP, &rsp);
-    timeline.schedule({{50}, 1});
+    timeline.attach(ActorId::RDP, &rdp);
     timeline.catchUp({100}, ActorId::CPU);
-    CHECK(sorted() && steps.size() == 4, "an actor's wake must end its run: %s", dump().c_str());
+    CHECK(sorted() && steps.size() == 4, "a woken actor must run before the waker's later steps: %s", dump().c_str());
+  }
+
+  //The same for an event handler: the RDP woken at 15 by the event at 10 runs
+  //before the event at 20. Defect: fireEvents keeps the limit it computed
+  //before the handler ran (verify-49).
+  {
+    reset();
+    Scripted rdp{}; rdp.id = ActorId::RDP; rdp.times = {15}; rdp.kind = Readiness::Kind::Parked;
+    wakeByEvent = &rdp;
+    timeline.attach(ActorId::RDP, &rdp);
+    timeline.schedule({{10}, 11});
+    timeline.schedule({{20}, 12});
+    timeline.catchUp({100}, ActorId::CPU);
+    CHECK(sorted() && steps.size() == 3, "an actor woken by an event must run before the next event: %s", dump().c_str());
+    wakeByEvent = nullptr;
   }
 
   //The trace does not depend on how events were batched: one catchUp past

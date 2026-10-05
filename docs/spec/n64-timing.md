@@ -2,18 +2,18 @@
 
 # N64 timing spec
 
-This is the timing model's specification (map [#1](https://github.com/wScottSh/ares/issues/1)). Each row is one behavior: its value, the basis of that value, the reference it comes from, and the checks that decide it. There is no unverified status. A behavior is built from its reference, or it is a model choice whose reference states the reason. A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. Per-check results come from `behaviors.py --results` (plan T17).
+This is the timing model's specification (map [#1](https://github.com/wScottSh/ares/issues/1)). Each row is one behavior: its value, the basis of that value, the reference it comes from, and the checks that decide it. There is no unverified status. A behavior is built from its reference, or it is a model choice whose reference states the reason. A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. A fit row names the checks its value was solved from (fit from). A pass on those verifies the arithmetic, not the model, so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why. Per-check results come from `behaviors.py --results` (plan T17).
 
 | Basis | Meaning | Rows |
 |---|---|---|
-| measured | a hardware measurement: a test ROM result or a console capture | 31 |
+| measured | a hardware measurement: a test ROM result or a console capture | 30 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 16 |
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 14 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
-| derived | computed from other cited values | 9 |
-| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 2 |
-| model-choice | no published value; the reference states why the model chose this one | 13 |
+| derived | computed from other cited values | 7 |
+| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 7 |
+| model-choice | no published value; the reference states why the model chose this one | 15 |
 | legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 46 |
 
 ## Behaviors
@@ -53,8 +53,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `ri.rank.refresh` | 0 rank | wiki | n64brew: refresh holds off every client (B12) | `bench:uncached-vs-hpos` |  |
 | `ri.rank.vi` | 1 rank | model-choice | inference: VI is the only hard real-time client (B4) | `nemu64:timing/load-from-uncached-vi-on-same-bank` |  |
 | `ri.rank.other` | 2 rank | model-choice | none published (B4): all other clients first-come first-served | `nemu64:timing/load-miss-vi-on` |  |
-| `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | `bench:sp-dma-sweep` | direction of hcs64 run unstated |
-| `ri.overhead-write` | 1.7 rclk (20 units, rounded from 20.4) | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10) | `bench:mi-memset-rspdma` |  |
+| `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | **fit only, no independent check:** `bench:sp-dma-sweep` (fit from `bench:sp-dma-sweep`) | verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated |
+| `ri.overhead-write` | 1.7 rclk (20 units, rounded from 20.4) | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
 | `ri.overhead-rdp` | 20 units | model-choice | assumed equal to ri.overhead-write (the 1.7 rclk fit, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
 | `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` |  |
 
@@ -99,8 +99,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 
 | Behavior | Value | Basis | Reference | Checks | Note |
 |---|---|---|---|---|---|
-| `sysad.rdram-write-period` | 12 rclk | derived | n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12); on the SClock grid, which gives 18.28 pclk, the rest is VI fetch contention (plan T11) | `bench:mi-memset-uncached` | drain period of one uncached RDRAM write, request to EOK at row hit |
-| `sysad.rdram-block-write-period` | 12 rclk | derived | n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh; the nearest SClock-grid period gives 71.0 pclk, the rest is VI fetch contention (plan T11) | `bench:mi-memset-cached` `bench:dirty-miss-isolated` | drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period |
+| `sysad.rdram-write-period` | 12 rclk | fit | n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is VI fetch contention (plan T11) | **fit only, no independent check:** `bench:mi-memset-uncached` (fit from `bench:mi-memset-uncached`) | verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit |
+| `sysad.rdram-block-write-period` | 12 rclk | fit | n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is VI fetch contention (plan T11) | **fit only, no independent check:** `bench:mi-memset-cached` `bench:dirty-miss-isolated` (fit from `bench:mi-memset-cached`) | verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period |
 | `sysad.register-write` | 5 rclk | model-choice | no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases | pending (no-corpus) | a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining |
 
 ### sp
@@ -152,11 +152,15 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 |---|---|---|---|---|---|
 | `rdp.cmd-fifo-dwords` | 30 dwords | wiki | n64-systemtest rdp/mod.rs:21-23 author note: CURRENT reaches START+240 while frozen | `rdpstat:current-prefetch` | no test asserts it; MiSTer uses 64; calibration #16 |
 | `rdp.cmd-fetch-burst` | 128 B | model-choice | RI maximum; MiSTer fetches <= 22 words | `rdpstat:current-prefetch` | calibration #16 |
+| `rdp.xbus-fetch-rate` | 8 B/rclk | model-choice | cen64 jgemu interface.c fetches commands 64 bits per clock (rdp-command-timing.md, Command fetch row); the X bus is private to the RSP and RDP, so no RI traffic | `rdpstat:xbus` | no hardware measurement |
 | `rdp.sync-pipe` | 50 rclk | wiki | n64brew Commands (Tharo rev 5366) | `bench:rdp-sync-sweep` |  |
 | `rdp.sync-tile` | 33 rclk | wiki | n64brew Commands | `bench:rdp-sync-sweep` |  |
 | `rdp.sync-load` | 25 rclk | wiki | n64brew Commands | `bench:rdp-sync-sweep` |  |
+| `rdp.sync-full` | 50 rclk | model-choice | n64brew Commands: Sync Full waits for every staged pipeline and memory operation, no fixed count; until the memory interface (plan T13) exists the drain is the Sync Pipe stall, as cen64 jgemu charges it (rdp-command-timing.md s.3.5) | `bench:rdp-sync-sweep` | cancels in the Thar0 baseline subtraction; the DP interrupt is raised when it retires |
 | `rdp.setter` | 1 rclk | wiki | n64brew Pipeline; conflicts with reverted cen64 SETTER 2.68 incl. fetch (jgemu-dpc-probe.md) | `bench:rdp-setter-sweep` | conflict recorded |
-| `rdp.primitive-base` | 14 rclk | measured | cen64 jgemu rdp_core.c:5346-5362 (RECTH h=1 vs h=2); methodology doubted (jgemu-dpc-probe.md) | `thar0:alpha-fail-1cycle` `bench:rdp-rectn` | includes the 2-word fetch; Thar0 all-fail data fits 240 x 324 + 12 |
+| `rdp.primitive-base` | 12 rclk | fit | Thar0 RDP-Timing-Tests sample_results.txt alpha all-fail rect: 1-cycle 77,772 = 240 x 324 + 12, 2-cycle 155,052 = 240 x 646 + 12 (hardware-corpora.md); cen64 jgemu rdp_core.c:5346-5362 RECTH 14 includes the 2-word fetch at 1 clk per word (MiSTer RDP_command.vhd), which the DPC front end charges as command fetch | **fit only, no independent check:** `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle` `bench:rdp-rectn` (fit from `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle`) | verify-is-fit: the Thar0 alpha all-fail checks are the fit's data; the only non-circular content is that the 1-cycle and 2-cycle solves agree. Thar0 92/93 (FB + ZB separate) are the same compute-only rectangle, the other 96 configs need memory time (T13), and bench:rdp-rectn (cen64 RECTN, another rectangle size) is reported, not asserted. One rectangle size, so the per-primitive and per-line split is inferred; no triangle setup reference exists, triangles use this value |
+| `rdp.span-dead-pixels` | 2 px | fit | Thar0 alpha all-fail per-line clocks 324 (1-cycle) and 646 (2-cycle) for 320 px solve to (320 + 2) x clocks-per-pixel + rdp.span-line-gap (hardware-corpora.md); n64brew Pipeline: a dead cycle at the end of every line | **fit only, no independent check:** `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle` (fit from `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle`) | verify-is-fit: the Thar0 alpha all-fail checks are the fit's data; the only non-circular content is that the 1-cycle and 2-cycle solves agree. Thar0 92/93 (FB + ZB separate) are the same compute-only rectangle, the other 96 configs need memory time (T13), and bench:rdp-rectn (cen64 RECTN, another rectangle size) is reported, not asserted. Pixel slots the pipeline cycles per span without output; 1- and 2-cycle only. The n64brew Pipeline citation supports the existence of a dead cycle per line (1 slot), not the fitted magnitude of 2 |
+| `rdp.span-line-gap` | 2 rclk | fit | Thar0 alpha all-fail per-line fit (see rdp.span-dead-pixels); MiSTer RDP_raster.vhd LINEIDLE + PREPARELINE = 2 clk per line | **fit only, no independent check:** `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle` (fit from `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle`) | verify-is-fit: the Thar0 alpha all-fail checks are the fit's data; the only non-circular content is that the 1-cycle and 2-cycle solves agree. Thar0 92/93 (FB + ZB separate) are the same compute-only rectangle, the other 96 configs need memory time (T13), and bench:rdp-rectn (cen64 RECTN, another rectangle size) is reported, not asserted. Applied to fill and copy spans too, as cen64 applied its span terms (same-silicon assumption) |
 | `rdp.span-1cycle` | 1 px/rclk | vendor | SDK Table 12-1; cen64 129/128 slope | `thar0:alpha-fail-1cycle` |  |
 | `rdp.span-2cycle` | 0.5 px/rclk | vendor | SDK Table 12-1 | `thar0:alpha-fail-2cycle` |  |
 | `rdp.fill-copy-rate` | 8 B/rclk | vendor | SDK 12.1.4/12.1.5 | `thar0:fill-mode` |  |
@@ -241,6 +245,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `det` | det | tools/n64-timing/determinism.sh | every mm scene | equal | two runs byte-identical, stats and trace_hash (plan T2) |
 | `stepcap` | stepcap | tools/n64-timing/determinism.sh --step-cap | every mm scene and nemu64 ROM | equal | step-capped run equals the normal run byte for byte (plan T5) |
 | `unit:timeline` | unit | n64-timing-tests | timeline | pass | scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5) |
+| `unit:dpc-regs` | unit | n64-timing-dpc-regs | dpc-regs | pass | DPC register transitions without a timeline: n64-systemtest tests/rdp START/END masking, START_VALID, status sequencing; n64brew and MiSTer START/END double buffering, DMA_BUSY, counters (plan T12) |
 | `gen` | gen | tools/n64-timing/behaviors.py --check | - | pass | this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3) |
 | `mm:file-select` | mm | tools/n64-timing/mmbench | file-select | report | Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench) |
 | `mm:south-clock-town` | mm | tools/n64-timing/mmbench | south-clock-town | report | Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench) |
@@ -303,3 +308,5 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `pidma:logs` | pidma | rasky_n64_pi_dma_test/pi_dma_test.z64 | - | self | ROM self-check within 10%; harness replays the 64 golden logs within 3% (plan T8) |
 | `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6) |
 | `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request |
+| `rdpstat:dpc-sequencing` | rdpstat | dpc | - | self | rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12) |
+| `rdpstat:xbus` | rdpstat | systemtest | RDP STATUS: Run from DMEM (xbus) | self | n64-systemtest tests/rdp run_from_dmem, three DMEM placements |

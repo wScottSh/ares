@@ -1,21 +1,30 @@
 auto RDP::serialize(serializer& s) -> void {
   Thread::serialize(s);
 
-  s(command.start);
-  s(command.end);
-  s(command.current);
-  s(command.clockOrigin.units);
-  s(command.bufferBusy);
-  s(command.pipeBusy);
-  s(command.tmemBusy);
-  s(command.source);
-  s(command.freeze);
-  s(command.flush);
-  s(command.startValid);
-  s(command.endValid);
-  s(command.startGclk);
-  s(command.ready);
-  s(command.crashed);
+  s(dpc.start);
+  s(dpc.end);
+  s(dpc.current);
+  s(dpc.endNext);
+  s(dpc.startValid);
+  s(dpc.endValid);
+  s(dpc.xbus);
+  s(dpc.freeze);
+  s(dpc.flush);
+  s(dpc.pipeBusy);
+  s(dpc.startGclk);
+  s(dpc.crashed);
+  s(dpc.clockOrigin.units);
+  for(auto counter : {&dpc.cmd, &dpc.pipe, &dpc.tmem}) {
+    s(counter->since.units);
+    s(counter->units);
+    s(counter->on);
+  }
+  s(fetch.dwords);
+  s(fetch.arrival.units);
+  s(executor.busy);
+  s(executor.load);
+  s(executor.syncFull);
+  s(executor.until.units);
 
   engine.serialize(s);
 

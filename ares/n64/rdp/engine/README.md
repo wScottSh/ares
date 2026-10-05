@@ -8,10 +8,11 @@ every file, `LICENSE.cen64` and `LICENSES.cen64` are the fork's license
 files, and the top-level `LICENSE` carries the block.
 
 The engine is the N64 core's only rasterizer. It runs on the emulation
-thread and renders a whole command range inside the `DPC_END` write
-(`RDP::Engine::render` in `../engine.cpp`). Build flags:
-`RDP_WQ_THREADS=1` (no worker threads; the span queue drains on the
-caller) and `RDP_DP_TIMED=0` (ares owns the DPC front end). `RDP::power`
+thread. The DPC front end (`../timed.cpp`) feeds it command words as the
+command DMA lands them and steps one command per dispatch
+(`rdp_render_engine_step`), which leaves the command's pixels in RDRAM
+before returning. Build flag: `RDP_WQ_THREADS=1` (no worker threads; the
+span queue drains on the caller). `RDP::power`
 attaches it to `rdram.ram`, `rdram.hidden` (owned by `RDRAM`) and
 `rsp.dmem`.
 
@@ -45,23 +46,27 @@ against it shows every change. In summary:
   doubleword load; the renderer is single-threaded here).
 - `rdp_z_store` and the fill-rect stale-read restore use the accessor
   macros instead of casting `m_rdram`.
-- `rdp.c`: `rdp_render_init` takes the RDRAM size and hidden plane;
-  `m_async_on` is 0 (synchronous: each list and each Sync_Full drain
-  before returning, so no fence is needed); `cen64_log` is defined here
+- `rdp.c`: `rdp_render_init` takes the RDRAM size and hidden plane and
+  no register block or interrupt callback; `m_async_on` is 0
+  (synchronous: every dispatch settles before returning, so no fence is
+  needed); `cen64_log` is defined here
   with `rdp_render_set_log`; `rdp_render_pixel_count` exposes the pixel
   counter added in `rdp_occ_accumulate`.
-- `rdp.h`: `RDP_DP_TIMED` defaults to 0; `enum cen64_loglevel` lives here.
+- `rdp.h`: `enum cen64_loglevel` lives here.
+- Timed dispatch (plan T12): `rdp_engine_step` reports each command's
+  work (`rdp_engine_work`: pixels, 64-bit words and spans walked, TMEM
+  load bytes) instead of the fork's cycle law, which moved to
+  `../timed.hpp` as behavior rows. `rdp_render_engine_step` resolves an
+  unsynced-write hazard hold with the following commands already in the
+  FIFO (`rdp_engine_hold_open`) and then settles (`rdp_engine_settle`), so
+  no held primitive or queued span crosses emulated time. The untimed
+  at-END walk (`rdp_process_list`, `rdp_process_command_list`) is
+  deleted.
 - Save states: `rdp_render_serialize` (`rdp.c`) visits the renderer state
-  that outlives a command list, after the field list of the fork's
+  that outlives a command, after the field list of the fork's
   `src/device/state.c` `ss_render`; `../serialization.cpp` calls it.
   `rdp_render_color_image` and `rdp_render_mask_image` expose the last
   image addresses.
-- `rdp_process_command_list` publishes both held hazard primitives before
-  the drain, on the end-of-list path and on the trailing-partial-command
-  path. The fork published the 1-/2-cycle one after the drain at list end
-  and neither at a partial command, which left queued spans or a held
-  primitive across calls. Over the four Majora's Mask bench scenes the
-  stats, `fb_hash` included, are identical either way.
 
 ## RDRAM touch sites (for the timing-core memory interface, plan unit T13)
 

@@ -433,17 +433,9 @@ struct rdp_t
     uint32_t          m_cmd_ptr;
     uint32_t          m_cmd_cur;
 
-    /* Timed DPC engine support. m_engine_drive: the emulator's DPC
-     * engine owns command dispatch -- Sync_Full must NOT invoke the
-     * interrupt callback from the handler (the engine raises it at the
-     * command's retire time); the golden/tool paths through
-     * rdp_process_command_list leave this false and keep the
-     * legacy at-dispatch callback. m_occ_cycles accumulates the
-     * command-processor occupancy (GCLK cycles, n64brew RDP/Pipeline)
-     * of the primitive(s) the current command enqueued; zeroed by
-     * rdp_engine_step before dispatch. */
-    bool              m_engine_drive;
-    uint32_t          m_occ_cycles;
+    /* What the command rdp_engine_step is dispatching asks of the
+     * pipeline (rdp.h); zeroed before each dispatch. */
+    rdp_engine_work   m_work;
 
     rdp_tile_t      m_tiles[8];
 
@@ -456,10 +448,6 @@ struct rdp_t
     uint32_t*         m_rdram;
     uint32_t*         m_dmem;
 
-    // Installed by the glue: raises the DP interrupt when a Sync_Full
-    // command completes.
-    void            (*m_dp_full_sync)(void *opaque);
-    void*             m_dp_full_sync_opaque;
 
     combine_modes_t m_combine;
     bool            m_pipe_clean;
@@ -525,20 +513,18 @@ void        rdp_async_fence_all(rdp_t *rdp);
 
 int         rdp_init_internal_state(rdp_t *rdp);
 
-void        rdp_process_command_list(rdp_t *rdp);
 
-/* Timed DPC engine entry points (see rdp_core.c). The engine in
- * rdp/interface.c feeds fetched command words as emulated time passes
- * and steps one command at a time, receiving each command's documented
- * occupancy in GCLK cycles. These never touch DPC_CURRENT or
- * DPC_STATUS, which the engine owns. */
+/* Timed DPC engine entry points (see rdp_core.c). The host (ares
+ * rdp/timed.cpp) feeds fetched command words as emulated time passes and
+ * steps one command at a time, receiving each command's work. These never
+ * touch the DPC registers, which the host owns. */
 unsigned    rdp_engine_need(rdp_t *rdp);
-unsigned    rdp_engine_room(rdp_t *rdp);
 int         rdp_crashed(rdp_t *rdp);
 void        rdp_engine_feed(rdp_t *rdp, uint32_t address,
                 unsigned nwords, uint32_t xbus);
-int         rdp_engine_step(rdp_t *rdp, uint32_t *cycles,
-                unsigned *cls);
+int         rdp_engine_step(rdp_t *rdp, rdp_engine_work *work);
+int         rdp_engine_hold_open(rdp_t *rdp);
+void        rdp_engine_settle(rdp_t *rdp);
 
 // YUV conversion factors, from Set Convert.
 static inline void rdp_set_yuv_factors(rdp_t *rdp, rgbaint_t k02, rgbaint_t k13, rgbaint_t k4, rgbaint_t k5) { rdp->m_k02 = k02; rdp->m_k13 = k13; rdp->m_k4 = k4; rdp->m_k5 = k5; }

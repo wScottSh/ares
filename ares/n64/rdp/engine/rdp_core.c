@@ -3891,12 +3891,7 @@ static void rdp_cmd_sync_full(rdp_t *rdp, uint64_t *cmd_buf)
     if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
         rdp_pipeline_drain(rdp);
 
-    /* Under the timed DPC engine the interrupt is raised by the engine
-     * when this command RETIRES (after its drain occupancy), matching
-     * the documented behavior; the at-dispatch callback below is the
-     * legacy instantaneous path, kept for the tool/golden harness. */
-    if (!rdp->m_engine_drive && rdp->m_dp_full_sync != NULL)
-        rdp->m_dp_full_sync(rdp->m_dp_full_sync_opaque);
+    /* The host raises the DP interrupt when this command retires. */
 }
 static void rdp_cmd_set_key_gb(rdp_t *rdp, uint64_t *cmd_buf)
 {
@@ -4829,15 +4824,12 @@ static void rdp_dispatch_one(rdp_t *rdp, uint64_t *curr_cmd_buf,
 
 /* ---- Timed DPC engine entry points -------------------------------------
  *
- * The emulator-side DPC engine (rdp/interface.c) fetches command words
- * from RDRAM/DMEM as emulated time passes and dispatches them one at a
- * time, charging each command its documented command-processor
- * occupancy (n64brew RDP/Pipeline). The engine owns DPC_CURRENT and
- * DPC_STATUS; nothing here touches them.
- *
- * Word flow reuses the legacy accumulator (m_cmd_data/m_cmd_ptr/
- * m_cmd_cur) so partial commands, compaction and the crash gate behave
- * identically to the at-END walk. */
+ * The host's DPC front end (ares rdp/timed.cpp) fetches command words as
+ * emulated time passes and dispatches them one at a time, timing each
+ * from the work it reports. The host owns DPC_CURRENT and DPC_STATUS;
+ * nothing here touches them. Words wait in the accumulator
+ * (m_cmd_data/m_cmd_ptr/m_cmd_cur), whose live part is the host's command
+ * FIFO. */
 
 /* Words still required before the next buffered command is complete.
  * 0 means a command is ready to step; when the buffer is empty, 1 word
@@ -4855,15 +4847,6 @@ unsigned rdp_engine_need(rdp_t *rdp)
     cmd_words = s_rdp_command_length[cmd] >> 3;
 
     return (buffered >= cmd_words) ? 0 : (cmd_words - buffered);
-}
-
-/* Free 64-bit-word capacity in the command accumulator (counting the
- * compaction feed performs), so the engine's prefetch can never
- * overflow it. Execution frees room at every retire, so a room-capped
- * fetch always resumes. */
-unsigned rdp_engine_room(rdp_t *rdp)
-{
-    return CMD_DATA_WORDS - (rdp->m_cmd_ptr - rdp->m_cmd_cur);
 }
 
 int rdp_crashed(rdp_t *rdp)
@@ -4897,74 +4880,40 @@ void rdp_engine_feed(rdp_t *rdp, uint32_t address, unsigned nwords,
     }
 }
 
-/* Command-processor occupancy, in GCLK (RCP) cycles, of the command
- * classes that do not enqueue spans (n64brew RDP/Pipeline +
- * RDP/Commands):
- *   - attribute setters and No Operation stall the pipe for 1 cycle;
- *   - Sync Load / Tile / Pipe insert fixed waits of 25 / 33 / 50;
- *   - Sync Full waits for all staged pipeline and memory operations:
- *     with prior primitive occupancy already serialized ahead of it,
- *     the residue is the full-pipe drain, for which the documented
- *     figure is the Sync Pipe wait (50);
- *   - TMEM loads stream 64 bits per cycle through the loading
- *     pipeline; texel count and size give the cycle count.
- * Primitives report through m_occ_cycles (see rdp_occ_accumulate). */
-static uint32_t rdp_engine_fixed_cycles(rdp_t *rdp, uint8_t cmd,
+/* Bytes a TMEM load moves (texel count by the texture image size; 4bpp
+ * packs two texels per byte, TLUT entries are 16-bit); 0 for any other
+ * command. */
+static uint32_t rdp_engine_load_bytes(rdp_t *rdp, uint8_t cmd,
     const uint64_t *cmd_buf)
 {
-    switch (cmd) {
-        case 0x26: return 25;   /* Sync Load */
-        case 0x28: return 33;   /* Sync Tile */
-        case 0x27: return 50;   /* Sync Pipe */
-        case 0x29: return 50;   /* Sync Full: full-pipe drain */
+    const uint64_t w1 = cmd_buf[0];
+    const int32_t sl = (int32_t)((w1 >> 44) & 0xfff);
+    const int32_t tl = (int32_t)((w1 >> 32) & 0xfff);
+    const int32_t sh = (int32_t)((w1 >> 12) & 0xfff);
+    const int32_t th = (int32_t)((w1 >>  0) & 0xfff);
+    int64_t texels;
 
-        case 0x30:              /* Load TLUT  */
-        case 0x33:              /* Load Block */
-        case 0x34: {            /* Load Tile  */
-            const uint64_t w1 = cmd_buf[0];
-            const int32_t sl = (int32_t)((w1 >> 44) & 0xfff);
-            const int32_t tl = (int32_t)((w1 >> 32) & 0xfff);
-            const int32_t sh = (int32_t)((w1 >> 12) & 0xfff);
-            const int32_t th = (int32_t)((w1 >>  0) & 0xfff);
-            int64_t texels;
-            uint64_t bytes;
+    if (cmd != 0x30 && cmd != 0x33 && cmd != 0x34)
+        return 0;
 
-            if (cmd == 0x33)    /* Load Block: th is dxt, one texel run */
-                texels = (int64_t)(sh - sl) + 1;
-            else
-                texels = ((int64_t)((sh >> 2) - (sl >> 2)) + 1) *
-                         ((int64_t)((th >> 2) - (tl >> 2)) + 1);
+    if (cmd == 0x33)    /* Load Block: th is dxt, one texel run */
+        texels = (int64_t)(sh - sl) + 1;
+    else
+        texels = ((int64_t)((sh >> 2) - (sl >> 2)) + 1) *
+                 ((int64_t)((th >> 2) - (tl >> 2)) + 1);
 
-            if (texels < 0)
-                texels = 0;
+    if (texels < 0)
+        texels = 0;
 
-            /* Texture image texel size selects bytes per texel
-             * (4bpp packs two per byte). TLUT entries are 16-bit. */
-            bytes = (cmd == 0x30)
-                ? (uint64_t)texels * 2
-                : ((uint64_t)texels << rdp->m_misc_state.m_ti_size) >> 1;
-
-            return (uint32_t)((bytes + 7) / 8) + 1;
-        }
-
-        /* Span-walked primitives: per-primitive cost (incl. fetch) is
-         * carried by the measured span law in rdp_occ_accumulate;
-         * charging fetch here too would double-count. */
-        case 0x08: case 0x09: case 0x0a: case 0x0b:
-        case 0x0c: case 0x0d: case 0x0e: case 0x0f:
-        case 0x24: case 0x25: case 0x36:
-            return 0;
-
-        default:   return 1;    /* setters, NOP */
-    }
+    return (uint32_t)((cmd == 0x30)
+        ? (uint64_t)texels * 2
+        : ((uint64_t)texels << rdp->m_misc_state.m_ti_size) >> 1);
 }
 
-/* Executes one complete buffered command. Returns 1 and fills *cycles
- * (occupancy) and *cls (0 normal, 1 TMEM load, 2 Sync Full) on
+/* Executes one complete buffered command. Returns 1 and fills *work on
  * dispatch; returns 0 if no complete command is buffered; returns -1
- * if the pipeline is crashed (buffered words are discarded, matching
- * the legacy walk's crash gate). */
-int rdp_engine_step(rdp_t *rdp, uint32_t *cycles, unsigned *cls)
+ * if the pipeline is crashed (buffered words are discarded). */
+int rdp_engine_step(rdp_t *rdp, rdp_engine_work *work)
 {
     uint64_t *curr_cmd_buf;
     unsigned cmd_words;
@@ -4984,8 +4933,12 @@ int rdp_engine_step(rdp_t *rdp, uint32_t *cycles, unsigned *cls)
     cmd = (curr_cmd_buf[0] >> 56) & 0x3f;
     cmd_words = s_rdp_command_length[cmd] >> 3;
 
-    rdp->m_occ_cycles = 0;
+    memset(&rdp->m_work, 0, sizeof(rdp->m_work));
+    rdp->m_work.word = curr_cmd_buf[0];
+    rdp->m_work.command = cmd;
+    rdp->m_work.cycle_type = rdp->m_other_modes.cycle_type;
     rdp_dispatch_one(rdp, curr_cmd_buf, cmd);
+    rdp->m_work.load_bytes = rdp_engine_load_bytes(rdp, cmd, curr_cmd_buf);
     rdp->m_cmd_cur += cmd_words;
 
     if (rdp->m_cmd_cur == rdp->m_cmd_ptr || rdp->m_pipeline_crashed) {
@@ -4996,18 +4949,39 @@ int rdp_engine_step(rdp_t *rdp, uint32_t *cycles, unsigned *cls)
         rdp_fill_haz_publish(rdp);
     }
 
-    *cycles = rdp_engine_fixed_cycles(rdp, cmd, curr_cmd_buf) +
-        rdp->m_occ_cycles;
-    *cls = (cmd == 0x29) ? 2 :
-           (cmd == 0x30 || cmd == 0x33 || cmd == 0x34) ? 1 : 0;
+    *work = rdp->m_work;
 
     return 1;
 }
 
+/* Whether a held hazard primitive's window is still open for the next
+ * buffered command: a 1-/2-cycle hold collects Set Env Color, a FILL hold
+ * collects the commands rdp_fill_haz_cost does not fence on. False when
+ * nothing is held or the next command is not buffered whole. */
+int rdp_engine_hold_open(rdp_t *rdp)
+{
+    uint8_t cmd;
+
+    if (rdp_engine_need(rdp) != 0)
+        return 0;
+
+    cmd = (rdp->m_cmd_data[rdp->m_cmd_cur] >> 56) & 0x3f;
+    if (rdp->m_haz.active)
+        return cmd == 0x3b;
+    if (rdp->m_fill_haz.active)
+        return rdp_fill_haz_cost(cmd) >= 0;
+    return 0;
+}
+
+/* Publishes any held hazard primitive and runs every queued span, so the
+ * pixels are in RDRAM and no renderer work outlives the call. */
+void rdp_engine_settle(rdp_t *rdp)
+{
+    rdp_pipeline_drain(rdp);
+}
+
 /* Executes exactly one complete command already sitting in curr_cmd_buf,
- * with the pre/post hazard hooks. Shared by the untimed at-END walk
- * (rdp_process_command_list) and the timed DPC engine
- * (rdp_engine_step). */
+ * with the pre/post hazard hooks (rdp_engine_step). */
 static void rdp_dispatch_one(rdp_t *rdp, uint64_t *curr_cmd_buf, uint8_t cmd)
 {
     rdp_haz_pre(rdp, (int32_t)cmd);
@@ -5066,129 +5040,6 @@ static void rdp_dispatch_one(rdp_t *rdp, uint64_t *curr_cmd_buf, uint8_t cmd)
     rdp_haz_post_all(rdp, (int32_t)cmd);
 }
 
-void rdp_process_command_list(rdp_t *rdp)
-{
-    // Command stream handling: all data between
-    // DPC_CURRENT and DPC_END is copied into a persistent accumulator
-    // and DPC_CURRENT advances to DPC_END immediately, on every path.
-    // A trailing partial command stays in the accumulator until the next
-    // DPC_END write completes it.
-    //
-    // This is not just tidiness: the F3DEX2/F3DZEX "fifo" microcodes
-    // flow-control the fifo by polling DPC_CURRENT. Parking CURRENT at
-    // an incomplete command (as upstream MAME does) makes the RSP spin
-    // forever once its write pointer wraps toward the stalled CURRENT,
-    // which hangs the game (e.g. Ocarina of Time past the N64 logo).
-    // Compare 8-byte-aligned pointers and, if END has not advanced past
-    // CURRENT, return WITHOUT modifying CURRENT. Games write END=0 (or
-    // END<=CURRENT) as a no-op/flush; clobbering CURRENT here (e.g. to END)
-    // corrupts the next list's base address and sends the RDP off to
-    // process RDRAM from 0 as a command stream.
-    const unsigned current_al = rdp->m_current & ~7;
-    const unsigned end_al = rdp->m_end & ~7;
-
-    rdp->m_status &= ~DP_STATUS_FREEZE;
-
-    if (end_al <= current_al)
-        return;
-
-    int32_t length = end_al - current_al;
-
-    unsigned remaining = (uint32_t)(length) >> 3;    // 64-bit words
-    unsigned src = current_al;
-
-    while (remaining)
-    {
-        // Chunk the copy so a huge list cannot overflow the
-        // accumulator; the inner loop drains between chunks.
-        unsigned toload = remaining > (CMD_DATA_WORDS - rdp->m_cmd_ptr) ? (CMD_DATA_WORDS - rdp->m_cmd_ptr) : remaining;
-
-        for (uint32_t i = 0; i < toload; i++)
-        {
-            rdp->m_cmd_data[rdp->m_cmd_ptr++] = rdp_read_data(rdp, src & 0x1fffffff);
-            src += 8;
-        }
-
-        remaining -= toload;
-
-        while (rdp->m_cmd_cur < rdp->m_cmd_ptr && !rdp->m_pipeline_crashed)
-        {
-            uint64_t* curr_cmd_buf = &rdp->m_cmd_data[rdp->m_cmd_cur];
-            const uint8_t cmd = (curr_cmd_buf[0] >> 56) & 0x3f;
-            const unsigned cmd_words = s_rdp_command_length[cmd] >> 3;
-
-            if ((rdp->m_cmd_ptr - rdp->m_cmd_cur) < cmd_words)
-            {
-                if (!remaining)
-                {
-                    // Partial command: keep it buffered for the
-                    // next DPC_END write. CURRENT still advances.
-                    rdp->m_current = rdp->m_end & 0xffffff;
-                    /* ares port: the stream has run dry here as well,
-                     * so the held hazard primitives publish as at the
-                     * end of a list (below). */
-                    rdp_fill_haz_publish(rdp);
-                    rdp_haz_publish(rdp);
-                    /* Commands already executed in this call may have
-                     * queued primitives; the caller (frontend or test
-                     * tool) may read RDRAM once we return. Async mode
-                     * defers that guarantee to the observation fences. */
-                    if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
-                        rdp_pipeline_drain(rdp);
-                    return;
-                }
-
-                // More input available: compact the pending words to
-                // the buffer start and keep loading. (Do not rewind
-                // the source pointer: pending words may have been
-                // buffered by a previous call from a different
-                // address region.)
-                const unsigned pending = rdp->m_cmd_ptr - rdp->m_cmd_cur;
-                memmove(&rdp->m_cmd_data[0], &rdp->m_cmd_data[rdp->m_cmd_cur], pending * sizeof(uint64_t));
-                rdp->m_cmd_cur = 0;
-                rdp->m_cmd_ptr = pending;
-                break;
-            }
-
-            rdp_dispatch_one(rdp, curr_cmd_buf, cmd);
-            rdp->m_cmd_cur += cmd_words;
-        }
-
-        // All buffered complete commands consumed (or the pipeline is
-        // crashed, in which case the buffered data is discarded because
-        // a crash gates further execution, then the buffer is reset). A
-        // compacted partial (cur == 0, ptr == pending) is preserved.
-        if (rdp->m_cmd_cur == rdp->m_cmd_ptr || rdp->m_pipeline_crashed)
-        {
-            rdp->m_cmd_ptr = 0;
-            rdp->m_cmd_cur = 0;
-        }
-    }
-
-    rdp->m_current = rdp->m_end & 0xffffff;
-
-    /* End of the command list: the frontend (and every test tool) reads
-     * RDRAM after this returns, so all queued work must be complete --
-     * in synchronous mode. This per-kick drain is the dominant
-     * serialization in load-heavy scenes (tens of thousands of DP kicks
-     * per second, each parking the emulated thread as worker 0); async
-     * mode defers the guarantee to the observation fences and keeps the
-     * emulated thread emulating. */
-    /* The command stream has run dry, so the pixel pipeline drains and no
-     * later write can reach the held primitive. Ahead of the drain, so the
-     * published spans are queued before it flushes them. */
-    rdp_fill_haz_publish(rdp);
-    /* ares port: published ahead of the drain too, so RDRAM is settled
-     * and no queued span outlives the call; rdp_render_serialize relies
-     * on that. */
-    rdp_haz_publish(rdp);
-
-    if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
-        rdp_pipeline_drain(rdp);
-
-    rdp->m_status |= DP_STATUS_CBUF_READY;
-}
-
 /*****************************************************************************/
 
 int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t rdram_size,
@@ -5211,10 +5062,7 @@ int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t rdram_size,
     rdp->m_aux_buf = NULL;
     rdp->m_pipe_clean = true;
 
-
-    /* Timed DPC engine: off until the glue enables it (rdp_render_init). */
-    rdp->m_engine_drive = false;
-    rdp->m_occ_cycles = 0;
+    memset(&rdp->m_work, 0, sizeof(rdp->m_work));
 
     rdp->m_start = 0;
     rdp->m_end = 0;
@@ -5265,17 +5113,12 @@ int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t rdram_size,
 
     return 0;
 }
-/* Command-processor occupancy of an enqueued primitive, in GCLK cycles
- * (n64brew RDP/Pipeline): 1-cycle mode retires one pixel per cycle,
- * 2-cycle mode takes two cycles per pixel, and the fill/copy pipelines
- * move 64 bits per cycle (16/8/4/2 pixels at 4/8/16/32bpp, per line).
- * Every span line adds one dead cycle ("there is 1 dead cycle at the
- * end of every line in a primitive"). The pixel set mirrors the
- * clipping poly_manager_render_extents applies, so the count matches
- * what is actually enqueued. RDRAM stall time (the GCLK gating in
- * DPC_STATUS) is deliberately NOT modelled -- it is a function of bus
- * contention with every other RDRAM master; these are the documented
- * net pipeline rates. */
+/* The work a primitive asks of the pipeline: its clipped spans, their pixel
+ * widths and, in fill and copy mode, the 64-bit words they cover (16/8/4/2
+ * pixels per word at 4/8/16/32bpp). The pixel set mirrors the clipping
+ * poly_manager_render_extents applies, so the count matches what is
+ * actually enqueued. The host's timing model turns the work into clocks
+ * (ares rdp/timed.hpp). */
 static void rdp_occ_accumulate(rdp_t *rdp, const poly_rect *clip,
     int32_t startscan, int32_t numlines, const extent_t *spans, bool flip)
 {
@@ -5283,7 +5126,6 @@ static void rdp_occ_accumulate(rdp_t *rdp, const poly_rect *clip,
     const int32_t v3 = rdp_min32(startscan + numlines, clip->max_y + 1);
     const int32_t cyc_type = rdp->m_other_modes.cycle_type;
     const int32_t px_per_qword = 16 >> (rdp->m_misc_state.m_fb_size & 3);
-    uint32_t cycles = 0, lines = 0;
     int32_t scan;
 
     for (scan = v1; scan < v3; scan++) {
@@ -5317,34 +5159,12 @@ static void rdp_occ_accumulate(rdp_t *rdp, const poly_rect *clip,
             continue;
 
         rdp->m_pixels += (uint64_t)w;
-        switch (cyc_type) {
-            case CYCLE_TYPE_1:  cycles += (uint32_t)w;     break;
-            case CYCLE_TYPE_2:  cycles += (uint32_t)w * 2; break;
-            default:            /* fill / copy: 64 bits per cycle */
-                cycles += ((uint32_t)w + px_per_qword - 1) / px_per_qword;
-                break;
-        }
-
-        lines += 1;
+        rdp->m_work.pixels += (uint32_t)w;
+        if (cyc_type == CYCLE_TYPE_COPY || cyc_type == CYCLE_TYPE_FILL)
+            rdp->m_work.words += ((uint32_t)w + px_per_qword - 1) / px_per_qword;
+        rdp->m_work.lines += 1;
     }
 
-    /* Hardware-measured span law (dpc_probe on real console, VI
-     * blanked, min-of-8): primitive cost = 14 + sum over spans of
-     * (pixel_cycles * 129/128 + 12).
-     *   - 129/128 per pixel-cycle: RECTW slope 74580/73728 across
-     *     w=128..320; makes RECTN 320x6 (2021.4 measured / 2021
-     *     predicted) and the 320x240 DUTY primitive (80287 measured /
-     *     80294 predicted) exact.
-     *   - 12 cycles per scanline span: RECTH per-added-span increments
-     *     76.8 = 64px*129/128 + 12, stable across h=1..64; SPAN sweep
-     *     intercept confirms width-independence for w>=16.
-     *   - 14 per primitive (includes the 2-word command fetch):
-     *     first-span vs added-span offset, RECTH h=1 vs h=2.
-     * Measured in 1-cycle mode; the same span machinery walks 2-cycle
-     * and copy/fill spans, so the scanline and primitive terms are
-     * applied to all cycle types as a same-silicon assumption (only
-     * the per-pixel base differs per the documented rates above). */
-    rdp->m_occ_cycles += 14u + cycles + (cycles >> 7) + 12u * lines;
 }
 
 static void rdp_render_spans(rdp_t *rdp, int32_t start, int32_t end, int32_t tilenum, bool flip, extent_t* spans, bool rect, rdp_poly_state* object)

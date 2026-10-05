@@ -47,43 +47,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * No alignment beyond uint32_t is assumed -- doubleword fetch goes
  * through the byte view.
  *
- * Registers. dp_regs is an array of RDP_NUM_DP_REGISTERS words indexed by
- * enum rdp_dp_register and owned by the host. The renderer reads
- * START/CURRENT/END/STATUS, and writes back CURRENT, the two 24-bit
- * masked address registers, and the STATUS bits it changed. It does not
- * model the register block, and never reads or writes CLOCK, BUFBUSY,
- * PIPEBUSY or TMEM.
+ * Registers. The renderer never reads or writes the DPC registers; the
+ * host owns them and feeds command words (rdp_render_engine_feed).
  *
  * Serialization. The renderer owns its span workers and no other threads.
  * No entry point below is internally synchronized: the host must exclude
  * concurrent callers, and must hold whatever lock serializes its command
- * producer across the second fence stage (see below). dp_interrupt is
- * invoked on whichever thread retires Sync_Full. */
+ * producer across the second fence stage (see below). */
 #define RDP_RDRAM_SIZE 0x800000u
 #define RDP_DMEM_SIZE  0x1000u
-
-/* Timed DPC engine. Default on; build with -DRDP_DP_TIMED=0 for the
-   instantaneous at-END walk, which retires a whole command list inside
-   rdp_process_list instead of dispatching against elapsed time. The two
-   paths are an A/B for the hardware validation pass and differ in
-   observable timing, not in pixels. */
-#ifndef RDP_DP_TIMED
-#define RDP_DP_TIMED 0  /* ares port: the DPC front end is ares' (T12 adds time) */
-#endif
-
-// DP register indices, in MMIO address order (0x0410_0000 base, offset >> 2).
-// DP_REGISTER_LIST in rdp/cpu.h must match this ordering.
-enum rdp_dp_register {
-  RDP_DPC_START_REG,
-  RDP_DPC_END_REG,
-  RDP_DPC_CURRENT_REG,
-  RDP_DPC_STATUS_REG,
-  RDP_DPC_CLOCK_REG,
-  RDP_DPC_BUFBUSY_REG,
-  RDP_DPC_PIPEBUSY_REG,
-  RDP_DPC_TMEM_REG,
-  RDP_NUM_DP_REGISTERS,
-};
 
 // Initializes the renderer. The host contract above governs the lifetime,
 // size and serialization requirements on these arguments.
@@ -92,14 +64,9 @@ enum rdp_dp_register {
 //   hidden:       hidden-bit plane, rdram_size / 2 bytes (ares HiddenRAM)
 //   dmem:         RDP_DMEM_SIZE-byte RSP DMEM block (uint32_t view); the
 //                 command source for XBUS transfers
-//   dp_regs:      RDP_NUM_DP_REGISTERS-word DP register array
-//   dp_interrupt: invoked on Sync_Full, after all outstanding render work
-//                 has been flushed to RDRAM
-//   opaque:       passed through to dp_interrupt
 // Returns 0 on success.
 int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
-  uint32_t *dmem, uint32_t *dp_regs,
-  void (*dp_interrupt)(void *opaque), void *opaque);
+  uint32_t *dmem);
 
 // Log sink for the renderer's cen64_log calls. Defaults to stderr.
 enum cen64_loglevel {
@@ -145,21 +112,33 @@ int  rdp_fence_needed(uint32_t addr, uint32_t len);
 void rdp_fence(uint32_t addr, uint32_t len);
 void rdp_fence_all(void);
 
-/* Timed DPC engine glue; the host drives these with its command producer
- * excluded. need = 64-bit words required to complete the next command (0 = a
- * command is ready to step); feed fetches nwords from RDRAM (or DMEM
- * when xbus) into the command accumulator; step dispatches one command
- * and reports its occupancy in GCLK cycles plus its class (0 normal,
- * 1 TMEM load, 2 Sync_Full), returning 1 on dispatch, 0 when starved,
- * -1 when the pipeline is crashed. full_sync invokes dp_interrupt.
- * active reports whether the engine owns dispatch (RDP_DP_TIMED). */
-int      rdp_render_engine_active(void);
+/* What one dispatched command asked of the pipeline. The engine reports
+ * work, not time: the host's timing model turns it into clocks. pixels and
+ * lines are the clipped spans the primitive walked (rdp_occ_accumulate);
+ * words is the 64-bit words those spans cover in fill and copy mode;
+ * load_bytes is what a TMEM load moves. */
+typedef struct rdp_engine_work {
+  uint64_t word;        /* the command's first word */
+  uint32_t command;     /* opcode, 0x00-0x3f */
+  uint32_t cycle_type;  /* other modes cycle type at dispatch: 0 1-cycle, 1 2-cycle, 2 copy, 3 fill */
+  uint32_t pixels;
+  uint32_t words;
+  uint32_t lines;
+  uint32_t load_bytes;
+} rdp_engine_work;
+
+/* Timed DPC engine glue. need = 64-bit words required to complete the next
+ * command (0 = a command is ready to step); buffered = words waiting in the
+ * command accumulator (the host's command FIFO); feed fetches nwords from RDRAM (or DMEM when xbus)
+ * into it; step dispatches the next command plus any commands an unsynced
+ * write hazard draws into it, filling one work entry per command, and
+ * returns the count, 0 when starved, or -1 when the pipeline is crashed
+ * (rdp.c has the contract). */
 unsigned rdp_render_engine_need(void);
-unsigned rdp_render_engine_room(void);
+unsigned rdp_render_engine_buffered(void);
 int      rdp_render_crashed(void);
 void     rdp_render_engine_feed(uint32_t address, unsigned nwords, uint32_t xbus);
-int      rdp_render_engine_step(uint32_t *cycles, unsigned *cls);
-void     rdp_render_engine_full_sync(void);
+int      rdp_render_engine_step(rdp_engine_work *works, unsigned capacity);
 
 /* VI scanout support: copy `n` consecutive entries of the renderer's
  * hidden coverage plane (2 bits per 16-bit framebuffer word) starting at
@@ -194,12 +173,11 @@ struct rdp_t *rdp_render_instance(void);
 void rdp_render_quiesce(void);
 
 /* ares port: save states. Visits every piece of renderer state that
- * outlives a command list (modes, colors, tiles, scissor, TMEM, a
- * trailing partial command, the noise counter, the stale-read and DPS
- * models) in a fixed order, passing each block to io. With loading set,
- * io fills the blocks and TMEM lands in pool slot zero. Both return
- * paths of rdp_process_list publish the held hazard primitives and drain
- * the span queue, so neither holds state between lists. */
+ * outlives a command (modes, colors, tiles, scissor, TMEM, the buffered
+ * command words, the held hazard primitives, the noise counter, the
+ * stale-read and DPS models) in a fixed order, passing each block to io.
+ * With loading set, io fills the blocks and TMEM lands in pool slot zero.
+ * Saving never mutates the renderer. */
 typedef void (*rdp_state_io)(void *ctx, void *data, size_t size);
 void rdp_render_serialize(rdp_state_io io, void *ctx, int loading);
 
@@ -208,9 +186,5 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading);
 uint32_t rdp_render_color_image(void);
 uint32_t rdp_render_mask_image(void);
 uint8_t *rdp_render_tmem(void);
-
-// Processes the command list delimited by DPC_CURRENT_REG..DPC_END_REG,
-// in full at the call. Untimed path; not used when the engine is active.
-void rdp_process_list(void);
 
 #endif

@@ -50,11 +50,12 @@ struct Readiness {
 
 //The contract every stepped actor implements. run(limit) performs one
 //indivisible step (an RSP issue pair, one DMA landing), then may keep going
-//while !timeline.ends(next, limit). A step's interactions are stamped with
-//its start time, which is the `at` the actor reported. `limit` was the next
-//contender when run() began; ends() also stops the run at any event it
-//scheduled or actor it woke, which the run would otherwise pass over. Each
-//step after the first is folded with timeline.record().
+//while its next step starts before `limit`. A step's interactions are stamped
+//with its start time, which is the `at` the actor reported. `limit` was the
+//next contender when run() began, so a run that schedules an event or wakes an
+//actor earlier than `limit` must return after that step: it compares its next
+//step with timeline.limit(limit), not with `limit`.
+//Each step after the first is folded with timeline.record().
 struct Actor {
   virtual auto readiness() const -> Readiness = 0;
   virtual auto run(Clock limit) -> void = 0;
@@ -111,14 +112,13 @@ struct Timeline {
       auto r = actor->readiness();
       if(r.kind != Readiness::Kind::Runnable) return;
       if(r.at < cachedHorizon) cachedHorizon = r.at;
-      if(r.at < wokeAt) wokeAt = r.at;
+      if(r.at < woken) woken = r.at;
     }
   }
 
-  //The Actor::run contract, enforced: a run whose next step starts at `next`
-  //returns when that reaches its `limit`, or reaches an actor its own steps
-  //woke (wake()), so the woken actor's earlier step is not passed over.
-  auto ends(Clock next, Clock limit) const -> bool { return next >= limit || next >= wokeAt; }
+  //The limit a running actor or the event loop must stop at: its own, or
+  //earlier if something it did woke an actor that must run first.
+  auto limit(Clock limit) const -> Clock { return woken < limit ? woken : limit; }
 
   //The earliest time any actor or event other than the CPU acts, ignoring
   //stepCap. The CPU blocked on its own SysAD transaction advances to it.
@@ -162,7 +162,7 @@ struct Timeline {
     events[i] = event;
     count++;
     if(event.at < cachedHorizon) cachedHorizon = event.at;
-    if(event.at < wokeAt) wokeAt = event.at;
+    if(event.at < woken) woken = event.at;
   }
 
   //Removes every pending event of `kind` and returns the latest of their
@@ -280,11 +280,11 @@ private:
       onStack |= 1u << (u8)best;
       stackTime[(u8)best] = at;
       if(best != ActorId::Events) fold(at, best, 0);
-      const Clock wasWokeAt = wokeAt;
-      wokeAt = Clock::never();
+      const Clock wokenOutside = woken;
+      woken = Clock::never();
       if(best == ActorId::Events) fireEvents(limit);
       else actors[(u8)best]->run(limit);
-      if(wasWokeAt < wokeAt) wokeAt = wasWokeAt;
+      if(wokenOutside < woken) woken = wokenOutside;
       onStack &= ~(1u << (u8)best);
     }
 
@@ -292,6 +292,7 @@ private:
     if(!nested) onStack &= ~callerBit;
     stackTime[(u8)caller] = saved;
     if(depth > 0) return;
+    woken = Clock::never();
     //the CPU is never attached, so with only the CPU on the stack the last scan saw every actor
     if(caller == ActorId::CPU && !stepCap) cachedHorizon = at;
     else refreshHorizon();
@@ -317,7 +318,7 @@ private:
       firingAt = event.at;
       fold(event.at, ActorId::Events, event.kind);  //one record per event, so batching never shows in the trace
       fire(event);
-    } while(count && !ends(events[0].at, limit));
+    } while(count && events[0].at < this->limit(limit));
     firing = wasFiring;
     firingAt = wasFiringAt;
   }
@@ -334,7 +335,7 @@ private:
   u32     count = 0;
   bool    firing = false;
   Clock   firingAt;
-  Clock   wokeAt = Clock::never();
+  Clock   woken = Clock::never();  //earliest wake inside the current step
 };
 
 }

@@ -9,8 +9,12 @@ usage: behaviors.py                 write ares/n64/timing/behaviors.hpp and docs
                                     per-behavior check results from harness output
        behaviors.py --self-test     prove each --check failure fires and names its fix
 
-behaviors.tsv columns: id, value, unit, basis, reference, verify, note. Every row
-names a reference and at least one check. A legacy row is a cost today's core
+behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note.
+Every row names a reference and at least one check. A fit row's fit-from names the
+checks whose data its value was solved from; a pass on those verifies the arithmetic,
+not the model, so its verify column needs another check that decides it (not a report
+or a pending gate). A fit row with none starts its note with `verify-is-fit: <reason>`
+and the spec labels it fit only. A legacy row is a cost today's core
 still charges: its reference is the code site, the literal lint pins the literal
 to it, and its note names the plan unit that replaces it. A model-choice row has
 no published value; its reference states the reason for the choice.
@@ -35,7 +39,7 @@ CHECKS = "tools/n64-timing/checks.tsv"
 HEADER = "ares/n64/timing/behaviors.hpp"
 SPEC = "docs/spec/n64-timing.md"
 LINT = "tools/n64-timing/lint-literals.py"
-COLUMNS = ["id", "value", "unit", "basis", "reference", "verify", "note"]
+COLUMNS = ["id", "value", "unit", "basis", "reference", "verify", "fit-from", "note"]
 CHECK_COLUMNS = ["id", "runner", "target", "selector", "expect", "source"]
 
 BASES = {
@@ -62,6 +66,7 @@ RUNNERS = {"nemu64", "bench", "thar0", "snapper", "rdpstat", "noise", "pidma", "
            "mm", "det", "stepcap", "unit", "gen", "pending"}
 BARE_RUNNERS = {"det", "stepcap", "gen"}
 EXPECT = re.compile(r"^(self|suite|report|equal|pass|gate|file:\S+|-?[\d.]+)$")
+VERIFY_IS_FIT = re.compile(r"^verify-is-fit: \S")
 LEGACY_NOTE = re.compile(r"^(replaced by T(?:\d+[a-d]?|-L)|no plan unit): \S")
 ID = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9-]+)+$")
 REFERENCE_SITE = re.compile(r"^(ares/n64/\S+):(\d+)$")
@@ -177,16 +182,33 @@ def load_checks(root, errors):
         prefix = cid.split(":")[0]
         if prefix not in suites:
             errors.append(f"{CHECKS}:{row['line']}: `{cid}` takes its value from a suite, but there is no `{prefix}:*` row")
-        elif prefix in suite_files:
-            key, header, body = suite_files[prefix]
-            wanted = dict(p.split("=", 1) for p in row["selector"].split() if "=" in p)
-            unknown = [c for c in wanted if c not in header]
-            match = [b for b in body if b.get(key) == row["target"] and all(b.get(c) == v for c, v in wanted.items())]
-            if unknown or not match:
-                errors.append(f"{CHECKS}:{row['line']}: `{cid}` selects {key}={row['target']} {row['selector']} "
-                              f"but {suites[prefix]['expect'][5:]} has no such row. Fix the target and selector, "
-                              f"or add the measurement to the suite.")
+        elif prefix in suite_files and not suite_matches(suite_files[prefix], row["target"], row["selector"]):
+            key = suite_files[prefix][0]
+            errors.append(f"{CHECKS}:{row['line']}: `{cid}` selects {key}={row['target']} {row['selector']} "
+                          f"but {suites[prefix]['expect'][5:]} has no such row. Fix the target and selector, "
+                          f"or add the measurement to the suite.")
     return rows, explicit, suites, suite_files
+
+
+def suite_matches(suite_file, target, selector):
+    key, header, body = suite_file
+    wanted = dict(p.split("=", 1) for p in selector.split() if "=" in p)
+    if any(c not in header for c in wanted):
+        return []
+    return [b for b in body if b.get(key) == target and all(b.get(c) == v for c, v in wanted.items())]
+
+
+def decides(cid, explicit, suite_files):
+    """False for a check that cannot fail: a pending gate, or a report with no asserted row."""
+    row = explicit.get(cid)
+    prefix, _, rest = cid.partition(":")
+    if row is None:
+        rows = suite_matches(suite_files[prefix], rest, "-") if prefix in suite_files else []
+    elif row["expect"] == "suite" and prefix in suite_files:
+        rows = suite_matches(suite_files[prefix], row["target"], row["selector"])
+    else:
+        return row is not None and row["expect"] not in ("report", "gate")
+    return any(r.get("kind", "check") != "report" for r in rows)
 
 
 def check_defined(cid, explicit, suite_files):
@@ -259,6 +281,24 @@ def validate(root):
             if not check_defined(cid, explicit, suite_files):
                 errors.append(f"{where}: check `{cid}` is not defined in {CHECKS}. Add a row there "
                               f"(id, runner, target, selector, expect, source), or land the suite file that defines it.")
+        fit_from, flagged = row["fit-from"].split(), bool(VERIFY_IS_FIT.match(row["note"]))
+        for cid in fit_from:
+            if not check_defined(cid, explicit, suite_files):
+                errors.append(f"{where}: fit-from check `{cid}` is not defined in {CHECKS}. Name the check whose data the fit solved.")
+        if basis != "fit" and (fit_from or flagged):
+            errors.append(f"{where}: only a fit row has fit-from or a verify-is-fit note. Clear them, or mark the basis fit.")
+        elif basis == "fit":
+            independent = [c for c in row["verify"].split() if c not in fit_from and decides(c, explicit, suite_files)]
+            if not fit_from:
+                errors.append(f"{where}: fit row `{rid}` has no fit-from. Name the checks whose data the value was solved "
+                              f"from in the fit-from column.")
+            elif not independent and not flagged:
+                errors.append(f"{where}: every check of fit row `{rid}` is its fit data ({row['fit-from']}), a report or a "
+                              f"pending gate, so a pass verifies the arithmetic, not the model. Add a check that decides it "
+                              f"from other data, or start the note with `verify-is-fit: <reason>`; the spec then labels the row fit only.")
+            elif independent and flagged:
+                errors.append(f"{where}: fit row `{rid}` says verify-is-fit, but `{independent[0]}` decides it from other data. "
+                              f"Remove the verify-is-fit note.")
         if basis == "legacy":
             if not LEGACY_NOTE.match(row["note"]):
                 errors.append(f"{where}: a legacy note starts with `replaced by T<unit>: ` or `no plan unit: `")
@@ -335,6 +375,15 @@ def check_cell(cid):
     return f"pending ({cid[8:]})" if cid.startswith("pending:") else f"`{cid}`"
 
 
+def checks_cell(row):
+    text = " ".join(check_cell(c) for c in row["verify"].split())
+    if row["fit-from"]:
+        text += " (fit from " + " ".join(check_cell(c) for c in row["fit-from"].split()) + ")"
+    if VERIFY_IS_FIT.match(row["note"]):
+        text = "**fit only, no independent check:** " + text
+    return text
+
+
 def value_cell(row):
     c = constant(row)
     text = f"{row['value']} {row['unit']}"
@@ -355,6 +404,8 @@ def render_spec(rows, checks):
         "Each row is one behavior: its value, the basis of that value, the reference it comes from, and the checks that decide it. "
         "There is no unverified status. A behavior is built from its reference, or it is a model choice whose reference states the reason. "
         "A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. "
+        "A fit row names the checks its value was solved from (fit from). A pass on those verifies the arithmetic, not the model, "
+        "so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why. "
         "Per-check results come from `behaviors.py --results` (plan T17).",
         "",
         "| Basis | Meaning | Rows |",
@@ -370,7 +421,7 @@ def render_spec(rows, checks):
         out += ["", f"### {group}", "", "| Behavior | Value | Basis | Reference | Checks | Note |", "|---|---|---|---|---|---|"]
         for r in members:
             out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['reference'])} | "
-                       f"{' '.join(check_cell(c) for c in r['verify'].split())} | {cell(r['note'])} |")
+                       f"{checks_cell(r)} | {cell(r['note'])} |")
     out += ["", "## Legacy costs in today's core", "",
             "Each row is a constant that today's core still charges. `tools/n64-timing/literal-allowlist.tsv` pins the literal "
             "at its code site to the row, so the code and this table cannot disagree. The plan unit in the note replaces the cost "
@@ -536,6 +587,14 @@ def self_test(root):
             ("referencing an unknown row", "ares/n64/cpu/memory.cpp", lambda t: t + "\nstatic auto selfTestRule = Timing::Behavior::RiNoSuchRow;\n", "matches no row"),
             ("a model choice without a reason", TABLE, row_field("ri.rank.vi", "reference", ""), "or mark the basis model-choice and state the reason"),
             ("an inexact time value", TABLE, row_field("ri.read-hit", "value", "10.5"), "is not a whole number of 750 MHz units"),
+            ("a fit row without fit-from", TABLE, row_field("rdp.span-line-gap", "fit-from", ""), "has no fit-from. Name the checks"),
+            ("a fit row checked only by its fit data", TABLE, row_field("rdp.span-line-gap", "note", "Applied to fill and copy spans"),
+             "so a pass verifies the arithmetic, not the model. Add a check that decides it"),
+            ("a fit row whose other check only reports", TABLE, row_field("rdp.primitive-base", "note", "One rectangle size"),
+             "so a pass verifies the arithmetic, not the model"),
+            ("verify-is-fit beside an independent check", TABLE,
+             row_field("rdp.span-line-gap", "verify", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle thar0:zcmp"),
+             "but `thar0:zcmp` decides it from other data. Remove the verify-is-fit note"),
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("editing the generated header", HEADER, lambda t: t.replace("= 30;", "= 31;", 1), "ares/n64/timing/behaviors.hpp differs from the generated output"),
             ("a legacy code site moving", "ares/n64/cpu/interpreter-ipu.cpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),

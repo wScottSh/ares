@@ -3,8 +3,8 @@ auto RDP::Debugger::load(Node::Object parent) -> void {
   tracer.io = parent->append<Node::Debugger::Tracer::Notification>("I/O", "RDP");
 }
 
-//Names each command in DPC_CURRENT..DPC_END before the engine runs it.
-auto RDP::Debugger::commands() -> void {
+//Names each command as the command processor dispatches it.
+auto RDP::Debugger::command(u64 word) -> void {
   if(likely(!tracer.command->enabled())) return;
 
   static const string names[64] = {
@@ -28,25 +28,7 @@ auto RDP::Debugger::commands() -> void {
     "Set_Primitive_Color", "Set_Environment_Color", "Set_Combine_Mode", "Set_Texture_Image",
     "Set_Mask_Image", "Set_Color_Image",
   };
-  //command lengths in 64-bit words: edge 4, shade +8, texture +8, depth +2; rectangles 2
-  static const u8 words[64] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 4, 6, 12, 14, 12, 14, 20, 22,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1,  1,  1,  1,  1,  1,
-    1, 1, 1, 1, 2, 2, 1, 1, 1, 1,  1,  1,  1,  1,  1,  1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1,  1,  1,  1,  1,  1,
-  };
-
-  auto& command = rdp.command;
-  auto word = [&](u32 address) -> u32 {
-    if(command.source) return bswap32(((const u32*)rsp.dmem.data)[(address & 0xfff) >> 2]);
-    return ((const u32*)rdram.ram.data)[(address & rdram.ram.size - 1) >> 2];
-  };
-  for(u32 address = command.current & ~7; address < (command.end & ~7);) {
-    u64 op = (u64)word(address) << 32 | word(address + 4);
-    u32 opCode = op >> 56 & 0x3f;
-    tracer.command->notify(string{hex(op, 16L), "  ", names[opCode]});
-    address += words[opCode] * 8;
-  }
+  tracer.command->notify(string{hex(word, 16L), "  ", names[word >> 56 & 0x3f]});
 }
 
 auto RDP::Debugger::ioDPC(bool mode, u32 address, u32 data) -> void {
