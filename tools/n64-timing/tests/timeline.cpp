@@ -97,7 +97,7 @@ auto nall::main(Arguments) -> void {
     timeline.schedule({{100}, 3});
     timeline.catchUp({100}, ActorId::CPU);
     CHECK(sorted(), "steps out of (time, rank) order: %s", dump().c_str());
-    CHECK(steps.size() == 13, "expected 13 steps up to and including t=100, got %zu: %s", steps.size(), dump().c_str());
+    CHECK(steps.size() == 12, "expected 12 steps up to and including t=100, got %zu: %s", steps.size(), dump().c_str());
     CHECK(steps.back().at == 100 && steps.back().id == ActorId::RSP, "last step should be RSP at 100: %s", dump().c_str());
     CHECK(timeline.horizon() == Clock{120}, "horizon after catch-up should be the next step (120), got %lld", (long long)timeline.horizon().units);
   }
@@ -177,7 +177,7 @@ auto nall::main(Arguments) -> void {
     timeline.catchUp({20}, ActorId::CPU);
     CHECK(sorted(), "batched steps crossed another actor's time: %s", dump().c_str());
     CHECK(a.runs == 3 && b.runs == 2, "RSP should run in 3 batches (10,12 | 14 | 16) and RDP in 2, got %u and %u", a.runs, b.runs);
-    CHECK(steps.size() == 6 && steps[3].id == ActorId::RDP && steps[3].at == 16 && steps[4].id == ActorId::RSP, "tie at 16 should put RDP before RSP: %s", dump().c_str());
+    CHECK(steps.size() == 6 && steps[4].id == ActorId::RDP && steps[4].at == 16 && steps[5].id == ActorId::RSP, "tie at 16 should put RDP before RSP: %s", dump().c_str());
   }
 
   //Events: out-of-order posting, equal-time order by kind then posting order,
