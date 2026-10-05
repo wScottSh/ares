@@ -1,0 +1,294 @@
+diff --git a/ares/n64/cartridge/flash.cpp b/ares/n64/cartridge/flash.cpp
+index ad66cb125..f3da53e3f 100644
+--- a/ares/n64/cartridge/flash.cpp
++++ b/ares/n64/cartridge/flash.cpp
+@@ -60,6 +60,7 @@ auto Cartridge::Flash::piAddress(u32 address, PIDeviceTiming) -> bool {
+ }
+ 
+ auto Cartridge::Flash::piReadHalf(PIDeviceTiming) -> maybe<u16> {
++  measureProbe.counter[MeasureProbe::FlashRead]++;
+   if(openBus) return nothing;
+ 
+   if(mode == Mode::Status) {
+diff --git a/ares/n64/cartridge/rtc.cpp b/ares/n64/cartridge/rtc.cpp
+index 9f4ad1f36..61d29e97a 100644
+--- a/ares/n64/cartridge/rtc.cpp
++++ b/ares/n64/cartridge/rtc.cpp
+@@ -8,6 +8,7 @@ auto Cartridge::RTC::load() -> void {
+     ram.load(fp);
+   
+     present = 1;
++    measureProbe.counter[MeasureProbe::RtcHostTime]++;
+     n64 timestamp = ram.read<Dual>(24);
+     if(!~timestamp) {
+       time_t t = time(0);
+diff --git a/ares/n64/controller/gamepad/gamepad.cpp b/ares/n64/controller/gamepad/gamepad.cpp
+index 2da6bdeb8..6c9f8d0a5 100644
+--- a/ares/n64/controller/gamepad/gamepad.cpp
++++ b/ares/n64/controller/gamepad/gamepad.cpp
+@@ -451,6 +451,7 @@ auto Gamepad::getInodeChecksum(u8 bank) -> u8 {
+ //the remaining banks page 0 is unused and the remaining 127 are for game data.
+ auto Gamepad::formatControllerPak() -> void {
+   ram.fill(0x00);
++  measureProbe.counter[MeasureProbe::PakFormat]++;
+ 
+   //page 0 (system area)
+   n6  fieldA = random();
+diff --git a/ares/n64/cpu/interpreter-scc.cpp b/ares/n64/cpu/interpreter-scc.cpp
+index c3d119bf4..106eb51b7 100644
+--- a/ares/n64/cpu/interpreter-scc.cpp
++++ b/ares/n64/cpu/interpreter-scc.cpp
+@@ -267,6 +267,7 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
+ }
+ 
+ auto CPU::getControlRandom() -> u8 {
++  measureProbe.counter[MeasureProbe::Cp0Random]++;
+   if (scc.wired.index > 31) return (n6)random();
+   return random() % (32 - scc.wired.index) + scc.wired.index;
+ }
+diff --git a/ares/n64/n64.hpp b/ares/n64/n64.hpp
+index 33a2a973d..24b7f6574 100644
+--- a/ares/n64/n64.hpp
++++ b/ares/n64/n64.hpp
+@@ -124,6 +124,25 @@ namespace ares::Nintendo64 {
+     NUM_RBUS_DEVICES,
+   };
+ 
++  //measure-27 instrumentation (never delivered)
++  struct MeasureProbe {
++    enum : u32 { RdramCc, Degrade, Cp0Random, SpPcRandom, PakFormat, RtcHostTime,
++                 TargetReadAny, TargetReadPending, GpuCommands, SyncFullWaits, FlashRead, Count };
++    u64 counter[Count] = {};
++    bool pending = false;
++    u32 colorAddress = 0, colorWidth = 320, colorBytes = 0, zAddress = 0, zBytes = 0;
++    auto target(u32 address) const -> bool {
++      return (colorBytes && address - colorAddress < colorBytes) || (zBytes && address - zAddress < zBytes);
++    }
++    auto read(u32 address, RBusDevice device) -> void {
++      if(device == RBusDevice::VI_DMA || device == RBusDevice::DP_DMA || device == RBusDevice::AI_DMA) return;
++      if(!target(address)) return;
++      counter[TargetReadAny]++;
++      if(pending) counter[TargetReadPending]++;
++    }
++  };
++  inline MeasureProbe measureProbe;
++
+   #include <n64/accuracy.hpp>
+   #include <n64/memory/memory.hpp>
+   #include <n64/pi/device.hpp>
+diff --git a/ares/n64/rdram/rdram.cpp b/ares/n64/rdram/rdram.cpp
+index b7268c0e4..97ba9ecff 100644
+--- a/ares/n64/rdram/rdram.cpp
++++ b/ares/n64/rdram/rdram.cpp
+@@ -40,6 +40,7 @@ auto RDRAM::power(bool reset) -> void {
+       chip.writeDelay = 4;
+       chip.deviceID = 0;
+       chip.deviceIDReg = 0;
++      measureProbe.counter[MeasureProbe::RdramCc]++;
+       chip.ccLow = 8 + (random() & 3);
+       chip.ccHigh = 14 + (random() & 3);
+       if(chip.ccHigh <= chip.ccLow) chip.ccHigh = chip.ccLow + 1;
+@@ -197,6 +198,7 @@ auto RDRAM::Writable::degrade(u32 address, u64 value, u32 chipIndex) -> u64 {
+   if(chip.cci >= chip.ccHigh) return value;
+   if(chip.cci <= chip.ccLow) return 0;
+ 
++  measureProbe.counter[MeasureProbe::Degrade]++;
+   u32 span = chip.ccHigh - chip.ccLow;
+   u32 progress = (u32)(chip.cci - chip.ccLow) * 256 / span;
+   u64 result = 0;
+diff --git a/ares/n64/rdram/rdram.hpp b/ares/n64/rdram/rdram.hpp
+index c718ec2e9..80eac7304 100644
+--- a/ares/n64/rdram/rdram.hpp
++++ b/ares/n64/rdram/rdram.hpp
+@@ -54,6 +54,7 @@ struct RDRAM : Memory::RCP<RDRAM> {
+         self.debugger.readWord(address, Size, device);
+         self.profile.metrics[(u32)device].reads += Size;
+       }
++      measureProbe.read(address, device);
+       return Memory::Writable::read<Size>(address);
+     }
+ 
+@@ -180,6 +181,7 @@ struct RDRAM : Memory::RCP<RDRAM> {
+       if(unlikely(system.homebrewMode)) {
+         self.profile.metrics[(u32)device].reads += Size;
+       }
++      measureProbe.read(address, device);
+       value[0] = Memory::Writable::read<Word>(address | 0x00);
+       value[1] = Memory::Writable::read<Word>(address | 0x04);
+       value[2] = Memory::Writable::read<Word>(address | 0x08);
+diff --git a/ares/n64/rsp/io.cpp b/ares/n64/rsp/io.cpp
+index 19bf54735..f28217a15 100644
+--- a/ares/n64/rsp/io.cpp
++++ b/ares/n64/rsp/io.cpp
+@@ -173,6 +173,7 @@ auto RSP::Status::readWord(u32 address, Thread& thread) -> u32 {
+     if(halted) {
+       data.bit(0,11) = self.ipu.pc;
+     } else {
++      measureProbe.counter[MeasureProbe::SpPcRandom]++;
+       data.bit(0,11) = random();
+     }
+   }
+diff --git a/ares/n64/vulkan/vulkan.cpp b/ares/n64/vulkan/vulkan.cpp
+index 20dad2a41..265f5c051 100644
+--- a/ares/n64/vulkan/vulkan.cpp
++++ b/ares/n64/vulkan/vulkan.cpp
+@@ -140,9 +140,24 @@ auto Vulkan::render() -> bool {
+ 
+     if(code >= 8) {
+       implementation->processor->enqueue_command(length * 2, buffer + queueOffset * 2);
++      measureProbe.counter[MeasureProbe::GpuCommands]++;
++      u32 hi = buffer[queueOffset * 2], lo = buffer[queueOffset * 2 + 1] & 0xffffff;
++      if(code == 0x3f) {
++        u32 width = (hi & 0x3ff) + 1, size = hi >> 19 & 3;
++        measureProbe.colorAddress = lo;
++        measureProbe.colorWidth = width;
++        measureProbe.colorBytes = width * (size == 3 ? 4 : size == 2 ? 2 : 1) * 240;
++      } else if(code == 0x3e) {
++        measureProbe.zAddress = lo;
++        measureProbe.zBytes = measureProbe.colorWidth * 2 * 240;
++      } else if(code >= 0x08 && code <= 0x0f || code == 0x24 || code == 0x25 || code == 0x36) {
++        measureProbe.pending = true;
++      }
+     }
+ 
+     if(::RDP::Op(code) == ::RDP::Op::SyncFull) {
++      measureProbe.counter[MeasureProbe::SyncFullWaits]++;
++      measureProbe.pending = false;
+       implementation->processor->wait_for_timeline(implementation->processor->signal_timeline());
+       rdp.syncFull();
+     }
+diff --git a/nall/nall/memory.hpp b/nall/nall/memory.hpp
+index 23c08b1c4..b64075a2b 100644
+--- a/nall/nall/memory.hpp
++++ b/nall/nall/memory.hpp
+@@ -45,12 +45,18 @@ namespace nall::memory {
+ //as this library is used extensively by nall/string, and most strings tend to be small,
+ //this library hand-codes these functions instead. surprisingly, it's a substantial speedup
+ 
++inline auto measureFill(void* p, size_t n) -> void* {
++  static int pattern = [] { auto e = getenv("N64RUN_FILL"); return e ? (int)strtol(e, nullptr, 0) : -1; }();
++  if(p && pattern >= 0) ::memset(p, pattern, n);
++  return p;
++}
++
+ template<typename T, u32 Align> auto allocate(u32 size) -> T* {
+   if constexpr(Align == 0) {
+-    return (T*)malloc(size * sizeof(T));
++    return (T*)measureFill(malloc(size * sizeof(T)), size * sizeof(T));
+   }
+   #if defined(API_WINDOWS)
+-  return (T*)_aligned_malloc(size * sizeof(T), Align);
++  return (T*)measureFill(_aligned_malloc(size * sizeof(T), Align), size * sizeof(T));
+   #elif defined(API_POSIX)
+   T* result = nullptr;
+   posix_memalign((void**)&result, Align, size * sizeof(T));
+diff --git a/tools/n64-run/n64-run.cpp b/tools/n64-run/n64-run.cpp
+index 5875a0037..f2389945c 100644
+--- a/tools/n64-run/n64-run.cpp
++++ b/tools/n64-run/n64-run.cpp
+@@ -17,6 +17,13 @@
+ 
+ namespace N64 = ares::Nintendo64;
+ 
++auto operator new(size_t n) -> void* { void* p = std::malloc(n ? n : 1); if(!p) std::abort(); return nall::memory::measureFill(p, n); }
++auto operator new[](size_t n) -> void* { return ::operator new(n); }
++auto operator delete(void* p) noexcept -> void { std::free(p); }
++auto operator delete[](void* p) noexcept -> void { std::free(p); }
++auto operator delete(void* p, size_t) noexcept -> void { std::free(p); }
++auto operator delete[](void* p, size_t) noexcept -> void { std::free(p); }
++
+ namespace {
+ 
+ enum class CpuMode { Interpreter, Recompiler };
+@@ -51,6 +58,10 @@ struct Options {
+   RdpMode rdp = RdpMode::None;
+   string statsPath;
+   u32 controllers = 1;
++  bool entropy = true;
++  bool runAhead = true;
++  bool stateHash = false;
++  string saveDir;
+ };
+ 
+ //cpu.profile.cpuCycles counts VR4300 PClock cycles (93.75 MHz on NTSC).
+@@ -93,6 +104,10 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
+     else if(arg == "--wall-seconds") options.wallSeconds = value().real();
+     else if(arg == "--stats") options.statsPath = value();
+     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
++    else if(arg == "--entropy") options.entropy = value() != "off";
++    else if(arg == "--no-runahead") options.runAhead = false;
++    else if(arg == "--state-hash") options.stateHash = true;
++    else if(arg == "--save-dir") options.saveDir = value();
+     else if(arg == "--cpu") {
+       auto mode = value();
+       if(mode == "interpreter") options.cpu = CpuMode::Interpreter;
+@@ -244,10 +259,11 @@ auto nall::main(Arguments arguments) -> void {
+   ares::platform = &platform;
+   //Screen and audio stream nodes skip all host-side work while run-ahead is set, so no
+   //host video/audio path runs and no screen thread reads RDRAM concurrently with the core.
+-  ares::setRunAhead(true);
++  ares::setRunAhead(options.runAhead);
+ 
+   //An unused directory keeps mia from loading host save files that sit next to the ROM.
+-  mia::setSaveLocation([] { return string{Path::program(), "n64-run-no-saves/"}; });
++  if(options.saveDir) mia::setSaveLocation([&] { return options.saveDir; });
++  else mia::setSaveLocation([] { return string{Path::program(), "n64-run-no-saves/"}; });
+ 
+   platform.system = mia::System::create("Nintendo 64");
+   if(platform.system->load() != successful) {
+@@ -264,7 +280,7 @@ auto nall::main(Arguments arguments) -> void {
+   N64::option("Quality", "SD");
+   N64::option("Supersampling", "false");
+   N64::option("Homebrew Mode", "true");
+-  N64::option("Deterministic Entropy", "true");
++  N64::option("Deterministic Entropy", options.entropy ? "true" : "false");
+   N64::option("Recompiler", options.cpu == CpuMode::Recompiler ? "true" : "false");
+   N64::option("Expansion Pak", "true");
+ 
+@@ -291,7 +307,7 @@ auto nall::main(Arguments arguments) -> void {
+       std::fprintf(stderr, "n64-run: cannot write %s\n", options.statsPath.data());
+       std::_Exit(1);
+     }
+-    stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks\n");
++    stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks", options.stateHash ? "\trdram_hash\tcpu_hash\tpending_reads" : "", "\n");
+   }
+ 
+   auto wallStart = std::chrono::steady_clock::now();
+@@ -305,13 +321,23 @@ auto nall::main(Arguments arguments) -> void {
+   while(true) {
+     root->run();
+     u64 fbHash = 0;
+-    if(N64::vulkan.enable) fbHash = vulkanScanoutHash();
++    if(N64::vulkan.enable) { if(options.runAhead) fbHash = vulkanScanoutHash(); }
+     else if(stats && N64::vi.active()) fbHash = rdramFramebufferHash();
+     if(N64::vi.active()) {
+       if(stats) {
+         auto s = sample(frames, fbHash);
+         stats.print(s.frame, "\t", hex(s.origin, 6L), "\t", s.width, "\t", s.depth, "\t",
+-                    hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\n");
++                    hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks);
++        if(options.stateHash) {
++          u64 h = 0xcbf29ce484222325ull;
++          auto& ram = N64::rdram.ram;
++          for(u32 a = 0; a < ram.size; a += 8) { h ^= *(u64*)(ram.data + a); h *= 0x100000001b3ull; h ^= h >> 29; }
++          u64 c = 0xcbf29ce484222325ull;
++          for(u32 r : range(32)) { c ^= N64::cpu.ipu.r[r].u64; c *= 0x100000001b3ull; c ^= c >> 29; }
++          c ^= N64::cpu.ipu.pc; c *= 0x100000001b3ull;
++          stats.print("\t", hex(h, 16L), "\t", hex(c, 16L), "\t", N64::measureProbe.counter[N64::MeasureProbe::TargetReadPending]);
++        }
++        stats.print("\n");
+       }
+       frames++;
+     }
+@@ -327,6 +353,11 @@ auto nall::main(Arguments arguments) -> void {
+   std::fflush(stdout);
+   std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f rdp=%s\n",
+     info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed(), N64::vulkan.enable ? "vulkan" : "none");
++  {
++    auto& c = N64::measureProbe.counter;
++    std::fprintf(stderr, "probe: rdram_cc=%llu degrade=%llu cp0_random=%llu sp_pc_random=%llu pak_format=%llu rtc_host_time=%llu target_read_any=%llu target_read_pending=%llu gpu_cmds=%llu syncfull_waits=%llu flash_reads=%llu flash_size=%u flash_word0=%08x\n",
++      c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7],c[8],c[9],c[10],(u32)N64::cartridge.flash.size,N64::cartridge.flash.size ? (u32)N64::cartridge.flash.read<N64::Word>(0) : 0u);
++  }
+   std::fflush(stderr);
+   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
+   std::_Exit(info.exitCode);
