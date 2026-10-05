@@ -159,6 +159,15 @@ A row with basis `legacy` is a cost that today's core still charges. Its referen
 
 A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `file:<path>` to the suite's expected-value file, and its selector names the file's key column. When that file exists, each id under the prefix that the file defines resolves with no row of its own. Each explicit row whose expect is `suite` must then find its target and selector in the file. A `pending:<gate>` check names a corpus that the program cannot run yet. The spec prints it as pending, never as verified.
 
+## Thar0 RDP timing
+
+```sh
+python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms
+tools/n64-timing/run-thar0.sh [--cpu interpreter|recompiler]
+```
+
+`run-thar0.sh` writes `stdout.txt`, `stderr.txt`, `compare.tsv` and `summary.txt` under `$N64_TIMING_HOME/results/thar0-<cpu>/`. See [romgen/suites/thar0/README.md](romgen/suites/thar0/README.md).
+
 ## Self-test without the corpus
 
 `make-emux-smoke-rom.py` builds a ROM that prints one line through emux `XLOG` and then requests an emux exit. It uses libdragon's public-domain `ipl3_compat.z64` as boot code.

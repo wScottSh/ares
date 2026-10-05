@@ -10,6 +10,8 @@ Run these from the repository root.
 python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
 N64_RUN=<path to n64-run.exe> tools/n64-timing/run-nemu64.sh
 python tools/n64-timing/romgen/selftest.py
+python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms
+tools/n64-timing/run-thar0.sh
 ```
 
 - `build.py` writes `nemu64-{timing,cycle,cop0hazard}.z64` and a `<rom>.tests.tsv` listing per ROM. A rebuild from the same sources produces byte-identical files. `--ipl3` overrides the default stub path, `$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z64`.
@@ -21,11 +23,15 @@ python tools/n64-timing/romgen/selftest.py
 | Module | Role |
 |---|---|
 | `mips.py` | VR4300 encoder and two-pass text assembler, with labels, `.word`/`.asciiz`-style directives and the `li`, `la` and `dla` pseudo-instructions |
-| `runtime.py` | On-target runtime: boot, exception vectors, a table-driven test runner, output through emux `XLOG`, and the cycle-measurement harness |
+| `runtime.py` | On-target runtime: boot, exception vectors, a table-driven test runner, output through emux `XLOG`, and the PIF boot-termination write. The cycle-measurement harness lives in `suites/nemu64/measure.py` |
 | `suite.py` | Suite model. A test has values. A value runs steps, which are runtime routines that write raw results into `RES[]`, and then checks over `RES[]`. `checkpoint()` runs checks between steps. |
 | `nemu.py` | Python port of the nemu64-test types the tables use (`Assembler`, `GPR`, `Status`, `FCSR`, float literals) |
 | `import_nemu64.py` | Translates the Rust value tables in `src/tests/timing/mod.rs` into `suites/nemu64/tables.py`. It reads the source as text and never compiles or runs it. |
+| `rcp.py` | The shared RDP command builder, DPC/SP register map and on-target RCP helpers (`rdp_exec` with DPC counter reads, `wait_count`, `io_writes`) |
+| `suites/thar0/` | Port of Thar0/RDP-Timing-Tests with hardware expectations and a comparator. See [suites/thar0/README.md](suites/thar0/README.md). |
 | `suites/nemu64/` | Ported `run()` logic per feature set (`timing.py`, `cycle.py`, `cop0hazard.py`), routines, value descriptions, and the root-cause classifier |
+| `suites/bench/` | Microbenchmark ROMs for the timing-core plan (`--suite bench`). They print raw measurements; `expected.tsv` holds the cited hardware values. See [suites/bench/README.md](suites/bench/README.md). |
+| `suites/rdpstat/` | RDP command-sequencing ROMs ported from n64-systemtest and repeater64. See [suites/rdpstat/README.md](suites/rdpstat/README.md) |
 | `report.py` | Joins a ROM's `@<test>.<value>` records with its `.tests.tsv` listing |
 
 The ROM decides pass or fail by itself and prints nemu64-test's output format. The host side only parses output.
