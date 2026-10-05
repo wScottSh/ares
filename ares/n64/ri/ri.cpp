@@ -4,6 +4,7 @@ namespace ares::Nintendo64 {
 
 RI ri;
 #include "io.cpp"
+#include "bus.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
 
@@ -22,6 +23,8 @@ auto RI::power(bool reset) -> void {
     io = {};
     refreshWarned = 0;
   }
+  channel.reset();
+  timeline.attach(Timing::ActorId::Bus, this);
 }
 
 auto RI::checkRefresh() -> void {

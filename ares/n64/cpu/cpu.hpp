@@ -151,18 +151,6 @@ struct CPU : Thread {
       return line.read(paddr);
     }
 
-    auto coherent(u64 vaddr, u32 paddr) -> bool {
-      auto& line = this->line(vaddr);
-      if(!line.hit(paddr))
-        return true;
-      u32 ram[8];
-      self.busReadBurst<ICache>(paddr & ~0x0000'0fff | line.index, ram);
-      for (int i=0; i<8; i++)
-        if (ram[i] != line.words[i])
-          return false;
-      return true;
-    }
-
     auto power(bool reset) -> void {
       u32 index = 0;
       for(auto& line : lines) {
@@ -186,19 +174,9 @@ struct CPU : Thread {
         return valid() && (tagKey & ~1u) == t;
       }
 
-      auto fill(u32 paddr, CPU& cpu) -> void {
-        cpu.step(pclk(48));
-        const u32 tag = paddr & ~0x0000'0fffu;
-        tagKey = tag;
-        setValid(true);
-        cpu.busReadBurst<ICache>(tag | index, words);
-      }
-
-      auto writeBack(CPU& cpu) -> void {
-        cpu.step(pclk(48));
-        const u32 tag = tagKey & ~0x0000'0fffu;
-        cpu.busWriteBurst<ICache>(tag | index, words);
-      }
+      //sysad.cpp
+      auto fill(u32 paddr, CPU& cpu) -> void;
+      auto writeBack(CPU& cpu) -> void;
 
       auto read(u32 paddr) const -> u32 { return words[paddr >> 2 & 7]; }
 
@@ -328,8 +306,6 @@ struct CPU : Thread {
   auto fetch(PhysAccess access) -> maybe<u32>;
   template<u32 Size> auto busWrite(u32 address, u64 data) -> void;
   template<u32 Size> auto busRead(u32 address) -> u64;
-  template<u32 Size> auto busWriteBurst(u32 address, u32 *data) -> bool;
-  template<u32 Size> auto busReadBurst(u32 address, u32 *data) -> bool;
   template<u32 Size> auto read(PhysAccess access) -> maybe<u64>;
   template<u32 Size> auto write(PhysAccess access, u64 data) -> bool;
   template<u32 Size> auto read(u64 vaddr) -> maybe<u64> {

@@ -46,7 +46,7 @@ The runner always emulates an NTSC console with the Expansion Pak, with homebrew
 Output:
 
 - stdout carries only guest output: ISViewer text and emux `XLOG`/`XHEXDUMP` text.
-- stderr carries core debug notices, the emux exit message, and one final line: `n64-run: stop=<reason> frames=N emulated_s=X wall_s=Y`. A second line follows: `n64-run: rdp_engine render_calls=N render_ms=X pixels=N ns_per_pixel=X`, the host time spent inside the pixel engine and the pixels it rasterized.
+- stderr carries core debug notices, the emux exit message, and one final line: `n64-run: stop=<reason> frames=N emulated_s=X wall_s=Y`. A second line follows: `n64-run: rdp_engine render_calls=N render_ms=X pixels=N ns_per_pixel=X`, the host time spent inside the pixel engine and the pixels it rasterized. A third, `n64-run: ri grants_cpu=N grants_refresh=N cpu_row_misses=N cpu_bytes_read=N cpu_bytes_written=N cpu_wait_rclk=N refresh_busy_rclk=N`, counts the RDRAM channel's grants since power-on: CPU SysAD bursts and refreshes, the CPU bursts that missed their bank's open row, the bytes they moved, the RCP clocks they waited for the channel, and the RCP clocks refresh held it.
 - With a script, stderr also carries one `n64-run: mark NAME frame=N` or `n64-run: peek NAME frame=N VALUE` line per `mark` or `peek` step.
 - The exit code is 0 for `emux-exit`, `script-stop`, or `frame-limit`, 2 for `emulated-time-limit`, 3 for `wall-time-limit`, and 1 for a load or usage error.
 
@@ -123,7 +123,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ### Unit tests
 
-`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` in the build directory, or `ctest` there. `unit:timeline` drives `Timing::Timeline` with scripted actors. It also builds `n64-timing-dpc-regs` (`unit:dpc-regs`), which drives the DPC register block and the RDP cost model in `ares/n64/rdp/timed.hpp` without a timeline.
+`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` in the build directory, or `ctest` there. With no argument it runs every test; an argument names one, as the `checks.tsv` selector does (`timeline`, `ri-cost-table`). `unit:timeline` drives `Timing::Timeline` with scripted actors. `unit:ri-cost-table` drives the RI's channel model (`ares/n64/ri/bus.hpp`) alone: wire costs at row hit and miss, arbitration order and refresh. It also builds `n64-timing-dpc-regs` (`unit:dpc-regs`), which drives the DPC register block and the RDP cost model in `ares/n64/rdp/timed.hpp` without a timeline.
 
 ## nemu64-test corpus
 

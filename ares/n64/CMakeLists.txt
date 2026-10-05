@@ -164,6 +164,8 @@ ares_add_sources(
     cpu/interpreter.cpp
     cpu/memory.cpp
     cpu/serialization.cpp
+    cpu/sysad.cpp
+    cpu/sysad.hpp
     cpu/tlb.cpp
 )
 
@@ -264,6 +266,8 @@ ares_add_sources(
   CORE #
     n64
   INCLUDED #
+    ri/bus.cpp
+    ri/bus.hpp
     ri/debugger.cpp
     ri/io.cpp
     ri/ri.hpp

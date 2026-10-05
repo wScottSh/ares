@@ -15,12 +15,8 @@ ares/n64/cpu/cpu.cpp	gdbPoll	scheduleAfter(EventKind::GDB_Poll, Clock{Timing::Un
 ares/n64/cpu/cpu.cpp	instruction#1	step(pclk(1));	legacy.cpu.interrupt-entry	
 ares/n64/cpu/cpu.cpp	instruction#2	step(pclk(1));	legacy.cpu.nmi-entry	
 ares/n64/cpu/cpu.cpp	instruction#3	step(pclk(1));	legacy.cpu.sysad-frozen-step	
-ares/n64/cpu/cpu.hpp	fill	cpu.step(pclk(48));	legacy.cpu.icache-fill	
-ares/n64/cpu/cpu.hpp	writeBack	cpu.step(pclk(48));	legacy.cpu.icache-writeback	
-ares/n64/cpu/dcache.cpp	fill	cpu.step(pclk(40));	legacy.cpu.dcache-fill	
-ares/n64/cpu/dcache.cpp	writeBack	cpu.step(pclk(40));	legacy.cpu.dcache-writeback	
-ares/n64/cpu/dcache.cpp	read	cpu.step(pclk(1));	legacy.cpu.dcache-hit	
-ares/n64/cpu/dcache.cpp	write	cpu.step(pclk(1));	legacy.cpu.dcache-hit	
+ares/n64/cpu/sysad.hpp	serialize#1	static constexpr Clock IfillStall = pclk(48);	legacy.cpu.icache-fill	
+ares/n64/cpu/sysad.cpp	writeBack	cpu.step(pclk(48));	legacy.cpu.icache-writeback	
 ares/n64/cpu/interpreter-fpu.cpp	FADD_S	step(pclk(3 - 1));	legacy.cpu.fpu-add	
 ares/n64/cpu/interpreter-fpu.cpp	FADD_D	step(pclk(3 - 1));	legacy.cpu.fpu-add	
 ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
@@ -67,7 +63,6 @@ ares/n64/cpu/interpreter-ipu.cpp	MULTU	step(pclk(5 - 1));	legacy.cpu.mult
 ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 - wired : 96 - wired;	-	CP0 Random wrap range (32 TLB entries, Wired), not time; plan T7c owns Random
 ares/n64/cpu/memory.cpp	fetch	step(pclk(1));	legacy.cpu.instruction	
 ares/n64/cpu/memory.cpp	vaddrAlignedError	step(pclk(1));	legacy.cpu.address-error	
-ares/n64/memory/io.hpp	-	const u32 DefaultReadCycles = 20;	legacy.cpu.rcp-read	
 ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
 ares/n64/pi/bus.hpp	writeWord	scheduleAfter(EventKind::PI_BUS_Write, pclk(200));	legacy.pi.write-busy	
 ares/n64/pi/dma.cpp	dmaDuration	cycles += (14 + bsd.latency + 1) * pbusPages;	legacy.pi.dma-page-setup	

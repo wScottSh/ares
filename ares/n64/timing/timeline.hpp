@@ -55,6 +55,7 @@ struct Readiness {
 //next contender when run() began, so a run that schedules an event or wakes an
 //actor earlier than `limit` must return after that step: it compares its next
 //step with timeline.limit(limit), not with `limit`.
+//Each step after the first is folded with timeline.record().
 struct Actor {
   virtual auto readiness() const -> Readiness = 0;
   virtual auto run(Clock limit) -> void = 0;
@@ -119,6 +120,37 @@ struct Timeline {
   //earlier if something it did woke an actor that must run first.
   auto limit(Clock limit) const -> Clock { return woken < limit ? woken : limit; }
 
+  //The earliest time any actor or event other than the CPU acts, ignoring
+  //stepCap. The CPU blocked on its own SysAD transaction advances to it.
+  auto earliest() const -> Clock {
+    Clock h = count ? events[0].at : Clock::never();
+    for(u8 i = 0; i < listedCount; i++) {
+      auto id = listed[i];
+      if(id == ActorId::Events) continue;
+      auto r = actors[(u8)id]->readiness();
+      if(r.kind == Readiness::Kind::Runnable && r.at < h) h = r.at;
+    }
+    return h;
+  }
+
+  //Folds a step advance() did not start: the second and later steps of one
+  //run(), and the CPU deciding its own bus grant when horizon() proves no
+  //other actor can act first. The trace then holds one record per step, the
+  //same however the steps were batched.
+  auto record(Clock at, ActorId id) -> void { fold(at, id, 0); }
+
+  //Runs `f` as if an event handler were running at `t`, so now() is `t`: a
+  //SysAD drain performs the CPU's posted register write at the drain's time.
+  template<typename F> auto actingAt(Clock t, F&& f) -> void {
+    const bool wasFiring = firing;
+    const Clock wasFiringAt = firingAt;
+    firing = true;
+    firingAt = t;
+    f();
+    firing = wasFiring;
+    firingAt = wasFiringAt;
+  }
+
   auto schedule(Event event) -> void {
     //every kind has one pending event in practice; a full heap means a device reposts without cancelling
     if(count == EventCapacity) abort();
@@ -130,6 +162,7 @@ struct Timeline {
     events[i] = event;
     count++;
     if(event.at < cachedHorizon) cachedHorizon = event.at;
+    if(event.at < woken) woken = event.at;
   }
 
   //Removes every pending event of `kind` and returns the latest of their
@@ -246,12 +279,12 @@ private:
       const Clock limit = second < floor ? second : floor;
       onStack |= 1u << (u8)best;
       stackTime[(u8)best] = at;
-      fold(at, best, best == ActorId::Events ? events[0].kind : 0);
+      if(best != ActorId::Events) fold(at, best, 0);
       const Clock wokenOutside = woken;
       woken = Clock::never();
       if(best == ActorId::Events) fireEvents(limit);
       else actors[(u8)best]->run(limit);
-      woken = wokenOutside;
+      if(wokenOutside < woken) woken = wokenOutside;
       onStack &= ~(1u << (u8)best);
     }
 
@@ -272,6 +305,8 @@ private:
     listed[i] = id;
   }
 
+  //A handler that wakes an actor (a VI HSYNC posting a refresh to the bus)
+  //ends the batch, so the woken actor's earlier step is not passed over.
   auto fireEvents(Clock limit) -> void {
     const bool wasFiring = firing;
     const Clock wasFiringAt = firingAt;
@@ -281,6 +316,7 @@ private:
       count--;
       firing = true;
       firingAt = event.at;
+      fold(event.at, ActorId::Events, event.kind);  //one record per event, so batching never shows in the trace
       fire(event);
     } while(count && events[0].at < this->limit(limit));
     firing = wasFiring;

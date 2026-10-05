@@ -54,7 +54,9 @@ struct Scripted : Actor {
       steps.push_back({at, id, 0});
       if(at == nestAt) timeline.catchUp({nestTarget >= 0 ? nestTarget : at}, id);
       if(at == wakeAt) wakes->kind = Readiness::Kind::Runnable, timeline.wake(wakes->id);
-    } while(next < times.size() && Clock{times[next]} < timeline.limit(limit));
+      if(next >= times.size() || Clock{times[next]} >= timeline.limit(limit)) break;
+      timeline.record(Clock{times[next]}, id);
+    } while(true);
   }
 };
 
@@ -90,8 +92,7 @@ static auto dump() -> std::string {
   return s;
 }
 
-//nall supplies the process entry point and calls this; a nonzero exit reports failures
-auto nall::main(Arguments) -> void {
+static auto testTimeline() -> u32 {
   //Ordering invariant: every step and event before the target runs in (time, rank)
   //order, and nothing at or after the target runs. Defect: a scan that picks the
   //first runnable actor instead of the earliest.
@@ -280,6 +281,45 @@ auto nall::main(Arguments) -> void {
     wakeByEvent = nullptr;
   }
 
-  if(failures) { std::printf("timeline: %u failure(s)\n", failures); std::exit(1); }
-  std::printf("timeline: ok\n");
+  //The trace does not depend on how events were batched: one catchUp past
+  //three events and three catchUps to each of them fold the same records.
+  //Defect: one fold per fireEvents batch, which made stepcap compare batch
+  //boundaries instead of steps.
+  {
+    reset();
+    for(s64 t : {10, 20, 30}) timeline.schedule({{t}, 1});
+    timeline.catchUp({100}, ActorId::CPU);
+    const u64 batched = timeline.trace;
+    reset();
+    for(s64 t : {10, 20, 30}) timeline.schedule({{t}, 1});
+    for(s64 t : {10, 20, 30}) timeline.catchUp({t}, ActorId::CPU);
+    CHECK(timeline.trace == batched, "trace differs between one batch and one catchUp per event");
+
+    reset();
+    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {10, 20, 30};
+    timeline.attach(ActorId::RSP, &rsp);
+    timeline.catchUp({100}, ActorId::CPU);
+    const u64 oneRun = timeline.trace;
+    reset();
+    Scripted rsp2{}; rsp2.id = ActorId::RSP; rsp2.times = {10, 20, 30};
+    timeline.attach(ActorId::RSP, &rsp2);
+    for(s64 t : {10, 20, 30}) timeline.catchUp({t}, ActorId::CPU);
+    CHECK(timeline.trace == oneRun, "trace differs between one run of three steps and three runs");
+  }
+
+  if(failures) std::printf("timeline: %u failure(s)\n", failures);
+  else std::printf("timeline: ok\n");
+  return failures;
+}
+
+auto testRi() -> u32;  //ri.cpp
+
+//nall supplies the process entry point and calls this. An argument names one
+//test (the checks.tsv selector); none runs all. A nonzero exit reports failures.
+auto nall::main(Arguments arguments) -> void {
+  const bool all = !arguments;
+  u32 failed = 0;
+  if(all || arguments.find("timeline")) failed += testTimeline();
+  if(all || arguments.find("ri-cost-table")) failed += testRi();
+  if(failed) std::exit(1);
 }

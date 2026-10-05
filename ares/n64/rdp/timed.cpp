@@ -35,6 +35,7 @@ auto RDP::run(Clock limit) -> void {
     step(next.at);
     next = readiness();
     if(next.kind != Timing::Readiness::Kind::Runnable || next.at >= timeline.limit(limit)) return;
+    timeline.record(next.at, Timing::ActorId::RDP);  //one trace record per step, however the steps are batched
   }
 }
 

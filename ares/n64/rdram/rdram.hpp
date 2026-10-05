@@ -198,7 +198,7 @@ struct RDRAM : Memory::RCP<RDRAM> {
       }
     }
 
-  } ram{*this};
+  };
 
   struct Debugger {
     u32 lastReadCacheline    = 0xffff'ffff;
@@ -281,6 +281,29 @@ struct RDRAM : Memory::RCP<RDRAM> {
   Chip chips[4];
   HiddenRAM hidden;
   n1 mapIdentity = 0;
+
+private:
+  //RDRAM data has one owner among hardware clients: the RI, which moves each
+  //burst's bytes at its grant (ADR 0001 Decision 2). A device that reads or
+  //writes it directly fails to compile. MI keeps its debugger path and its
+  //repeat and EBus modes; Loader is the host's view. The DMA engines (AI, PI,
+  //PIF for SI, RSP), VI scanout and the RDP keep direct access until they
+  //become bus clients (plan T8, T11, T13).
+  Writable ram{*this};
+  friend struct RI;
+  friend struct MI;
+  friend struct Loader;
+  friend struct AI;
+  friend struct PI;
+  friend struct PIF;
+  friend struct RSP;
+  friend struct VI;
+  friend struct RDP;
 };
 
 extern RDRAM rdram;
+
+//The host's view of RDRAM: power-on images, the runner's peeks, pokes and frame dumps.
+struct Loader {
+  static auto ram() -> RDRAM::Writable&;
+};

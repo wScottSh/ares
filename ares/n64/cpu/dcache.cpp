@@ -3,19 +3,28 @@ auto CPU::DataCache::Line::hit(u32 paddr) const -> bool {
   return valid() && (tagKey & ~1u) == t;
 }
 
+//A miss with a dirty victim reads the new line first and queues the victim
+//behind it (NEC s.12.5.2-12.5.3, cpu.dirty-miss-order); the pipeline restarts
+//after the fill while the writeback drains.
 auto CPU::DataCache::Line::fill(u32 paddr) -> void {
-  cpu.step(pclk(40));
+  const bool victim = valid() && dirty;
+  u32 old[4];
+  const u32 oldAddress = (tagKey & ~0x0000'0fffu) | index;
+  if(victim) {
+    memory::copy(old, words, sizeof(old));
+    cpu.profile.dcacheWritebacks++;
+  }
   const u32 tag = paddr & ~0x0000'0fffu;
   dirty  = 0;
   tagKey = tag;
   fillPc = cpu.ipu.pc;
-  setValid(cpu.busReadBurst<DCache>(tag | index, words));
+  setValid(sysad.fill<DCache>(tag | index, words));
+  if(victim) sysad.writeback<DCache>(oldAddress, old);
 }
 
 auto CPU::DataCache::Line::writeBack() -> void {
-  cpu.step(pclk(40));
   const u32 tag = tagKey & ~0x0000'0fffu;
-  cpu.busWriteBurst<DCache>(tag | index, words);
+  sysad.writeback<DCache>(tag | index, words);
 }
 
 auto CPU::DataCache::line(u64 vaddr) -> Line& {
@@ -51,14 +60,9 @@ template<u32 Size>
 auto CPU::DataCache::read(u64 vaddr, u32 paddr) -> u64 {
   auto& line = this->line(vaddr);
   if(!line.hit(paddr)) {
-    if(line.valid() && line.dirty) {
-      line.writeBack();
-      self.profile.dcacheWritebacks++;
-    }
     line.fill(paddr);
     self.profile.dcacheMisses++;
   } else {
-    cpu.step(pclk(1));
     self.profile.dcacheHits++;
   }
   return line.read<Size>(paddr);
@@ -71,7 +75,7 @@ auto CPU::DataCache::readDebug(u64 vaddr, u32 paddr) -> u64 {
   auto& line = this->line(vaddr);
   if(!line.hit(paddr)) {
     Thread dummyThread{};
-    return bus.read<Size>(paddr, dummyThread, RBusDevice::ARES_DEBUGGER);
+    return sysad.forward<Size>(paddr, bus.read<Size>(paddr, dummyThread, RBusDevice::ARES_DEBUGGER));
   }
   return line.read<Size>(paddr);
 }
@@ -80,14 +84,9 @@ template<u32 Size>
 auto CPU::DataCache::write(u64 vaddr, u32 paddr, u64 data) -> void {
   auto& line = this->line(vaddr);
   if(!line.hit(paddr)) {
-    if(line.valid() && line.dirty) {
-      line.writeBack();
-      self.profile.dcacheWritebacks++;
-    }
     line.fill(paddr);
     self.profile.dcacheMisses++;
   } else {
-    cpu.step(pclk(1));
     self.profile.dcacheHits++;
   }
   line.write<Size>(paddr, data);

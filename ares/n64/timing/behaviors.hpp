@@ -36,6 +36,7 @@ namespace Behavior {
   constexpr Clock RiOverheadRead = {54};  //4.5 rclk
   constexpr Clock RiOverheadWrite = {20};  //1.7 rclk; 20 units, rounded from 20.4
   constexpr Clock RiOverheadRdp = {20};  //20 units
+  constexpr Clock RiRequestLatency = {1};  //1 units
   constexpr Clock CpuUncachedReadTotal = {256};  //32 pclk
   constexpr Clock CpuUncachedReadDwordTotal = {296};  //37 pclk
   constexpr Clock CpuDfillTotal = {328};  //41 pclk
@@ -65,6 +66,9 @@ namespace Behavior {
   constexpr s64 CpuWbBlockEntries = 2;  //2 entries
   constexpr Clock CpuRcpRegisterRead = {176};  //22 pclk
   constexpr Clock CpuPifRamRead = {23688};  //1974 rclk
+  constexpr Clock SysadRdramWritePeriod = {144};  //12 rclk
+  constexpr Clock SysadRdramBlockWritePeriod = {144};  //12 rclk
+  constexpr Clock SysadRegisterWrite = {60};  //5 rclk
   constexpr s64 SpDmaBurst = 128;  //128 B
   constexpr Ratio SpDmaRateCheck = {13, 2};  //6.5 B/rclk
   constexpr Clock RspSlot = {12};  //1 rclk
@@ -125,6 +129,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"ri.overhead-read", Basis::Fit, "4.5", "rclk", "hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10)", "bench:sp-dma-sweep", "verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated"},
   {"ri.overhead-write", Basis::Fit, "1.7", "rclk", "n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10)", "bench:mi-memset-rspdma", "verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA"},
   {"ri.overhead-rdp", Basis::ModelChoice, "20", "units", "assumed equal to ri.overhead-write (the 1.7 rclk fit, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured", "thar0:imrd-1cycle", "calibration #16"},
+  {"ri.request-latency", Basis::ModelChoice, "1", "units", "none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does", "det stepcap", ""},
   {"cpu.uncached-read-total", Basis::Measured, "32", "pclk", "nemu64-test cache.rs:288-382 median, VI off", "nemu64:timing/load-from-uncached-vi-off", "sysad.fixed-path is derived from this minus modeled wire"},
   {"cpu.uncached-read-dword-total", Basis::Measured, "37", "pclk", "n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's)", "bench:uncached-sizes", ""},
   {"cpu.dfill-total", Basis::Measured, "41", "pclk", "nemu64-test cache.rs:193-286 median, VI off", "nemu64:timing/load-miss-vi-off", ""},
@@ -156,6 +161,9 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.wb-release", Basis::Vendor, "slot", "rule", "NEC 'has a space' (s.4.9) chosen over R4300i datasheet 'emptied'; burst shape only", "bench:wb-fifth-store", "conflict recorded; no public hardware value"},
   {"cpu.rcp-register-read", Basis::Measured, "22", "pclk", "n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value)", "bench:rcp-reg-read", ""},
   {"cpu.pif-ram-read", Basis::Measured, "1974", "rclk", "n64-systembench PIF RAM read (cited value)", "bench:pif-ram-read", ""},
+  {"sysad.rdram-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is VI fetch contention (plan T11)", "bench:mi-memset-uncached", "verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit"},
+  {"sysad.rdram-block-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is VI fetch contention (plan T11)", "bench:mi-memset-cached bench:dirty-miss-isolated", "verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period"},
+  {"sysad.register-write", Basis::ModelChoice, "5", "rclk", "no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases", "pending:no-corpus", "a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining"},
   {"cpu.random-rule", Basis::Vendor, "decrement-per-pclk", "rule", "NEC UM ch.5; nemu64-test Random (decrement), Random (masking)", "nemu64:timing/random", ""},
   {"sp.dma-burst", Basis::ModelChoice, "128", "B", "inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md)", "bench:sp-dma-sweep", ""},
   {"sp.dma-rate-check", Basis::Measured, "6.5", "B/rclk", "n64brew MI page RSP DMA memset 2.58 ms/MiB; hcs64 5.55 conflicts (direction unstated)", "bench:sp-dma-sweep", "the bench reports both directions"},
@@ -196,17 +204,13 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.noise-reset", Basis::Measured, "all-ones", "rule", "Thar0 data reproduction (rdp-noise.md)", "noise:a", ""},
   {"rdp.noise-pixel-offset", Basis::ModelChoice, "0", "rclk", "rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured", "noise:rect-1016", "calibration #16"},
   {"legacy.clock.vclk-pal", Basis::Legacy, "49656530", "Hz", "ares/n64/system/system.cpp:88", "pending:no-corpus", "no plan unit: PAL is not the target console"},
-  {"legacy.cpu.instruction", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:158", "nemu64:timing/just-nops", "replaced by T7a: Pipeline::issue"},
-  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:95", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
-  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:103", "pending:no-corpus", "replaced by T7b: exception stage costs"},
-  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:108", "pending:no-corpus", "replaced by T6: SysAD port"},
-  {"legacy.cpu.address-error", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:212", "nemu64:timing/exceptions", "replaced by T7b: exception stage costs (cpu.exc-ex)"},
-  {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/cpu.hpp:190", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
-  {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/cpu.hpp:198", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
-  {"legacy.cpu.dcache-hit", Basis::Legacy, "1", "pclk", "ares/n64/cpu/dcache.cpp:61", "nemu64:timing/cached-loads-and-store", "replaced by T6: D-hit +1 removed (cpu.dcache-hit folds into the issue cycle)"},
-  {"legacy.cpu.dcache-fill", Basis::Legacy, "40", "pclk", "ares/n64/cpu/dcache.cpp:7", "nemu64:timing/load-miss-vi-off", "replaced by T6: SysAD::fill (cpu.dfill-total)"},
-  {"legacy.cpu.dcache-writeback", Basis::Legacy, "40", "pclk", "ares/n64/cpu/dcache.cpp:16", "bench:dirty-miss-isolated", "replaced by T6: fill-then-writeback (cpu.dirty-miss-order)"},
-  {"legacy.cpu.rcp-read", Basis::Legacy, "20", "pclk", "ares/n64/memory/io.hpp:3", "bench:rcp-reg-read", "replaced by T6: SysAD register read (cpu.rcp-register-read)"},
+  {"legacy.cpu.instruction", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:148", "nemu64:timing/just-nops", "replaced by T7a: Pipeline::issue"},
+  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:96", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
+  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:104", "pending:no-corpus", "replaced by T7b: exception stage costs"},
+  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:109", "pending:no-corpus", "replaced by T6: SysAD port"},
+  {"legacy.cpu.address-error", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:202", "nemu64:timing/exceptions", "replaced by T7b: exception stage costs (cpu.exc-ex)"},
+  {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
+  {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
   {"legacy.cpu.mult", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:640", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
   {"legacy.cpu.dmult", Basis::Legacy, "8", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:349", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
   {"legacy.cpu.div", Basis::Legacy, "37", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:315", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},

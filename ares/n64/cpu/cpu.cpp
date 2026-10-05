@@ -5,6 +5,7 @@ namespace ares::Nintendo64 {
 
 CPU cpu;
 #include "context.cpp"
+#include "sysad.cpp"
 #include "dcache.cpp"
 #include "tlb.cpp"
 #include "memory.cpp"
@@ -156,6 +157,7 @@ auto CPU::power(bool reset) -> void {
   fenv.setRound(float_env::toNearest);
   context.setMode();
   scheduleCompare();
+  sysad.power();
 }
 
 }

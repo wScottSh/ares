@@ -48,6 +48,7 @@ auto RSP::run(Clock limit) -> void {
     }
     auto next = readiness();
     if(next.kind != Timing::Readiness::Kind::Runnable || next.at >= timeline.limit(limit)) return;
+    timeline.record(next.at, Timing::ActorId::RSP);  //one trace record per step, however the steps are batched
   }
 }
 

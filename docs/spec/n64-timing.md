@@ -12,9 +12,9 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | wiki | a community reference: n64brew, or a test suite author's notes | 14 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 7 |
-| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 5 |
-| model-choice | no published value; the reference states why the model chose this one | 13 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 50 |
+| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 7 |
+| model-choice | no published value; the reference states why the model chose this one | 15 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 46 |
 
 ## Behaviors
 
@@ -56,6 +56,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | **fit only, no independent check:** `bench:sp-dma-sweep` (fit from `bench:sp-dma-sweep`) | verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated |
 | `ri.overhead-write` | 1.7 rclk (20 units, rounded from 20.4) | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B minus wire 18 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
 | `ri.overhead-rdp` | 20 units | model-choice | assumed equal to ri.overhead-write (the 1.7 rclk fit, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
+| `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` |  |
 
 ### cpu
 
@@ -93,6 +94,14 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `cpu.rcp-register-read` | 22 pclk | measured | n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value) | `bench:rcp-reg-read` |  |
 | `cpu.pif-ram-read` | 1974 rclk | measured | n64-systembench PIF RAM read (cited value) | `bench:pif-ram-read` |  |
 | `cpu.random-rule` | decrement-per-pclk rule | vendor | NEC UM ch.5; nemu64-test Random (decrement), Random (masking) | `nemu64:timing/random` |  |
+
+### sysad
+
+| Behavior | Value | Basis | Reference | Checks | Note |
+|---|---|---|---|---|---|
+| `sysad.rdram-write-period` | 12 rclk | fit | n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is VI fetch contention (plan T11) | **fit only, no independent check:** `bench:mi-memset-uncached` (fit from `bench:mi-memset-uncached`) | verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit |
+| `sysad.rdram-block-write-period` | 12 rclk | fit | n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is VI fetch contention (plan T11) | **fit only, no independent check:** `bench:mi-memset-cached` `bench:dirty-miss-isolated` (fit from `bench:mi-memset-cached`) | verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period |
+| `sysad.register-write` | 5 rclk | model-choice | no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases | pending (no-corpus) | a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining |
 
 ### sp
 
@@ -174,17 +183,13 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | Behavior | Value | Code site | Checks | Note |
 |---|---|---|---|---|
 | `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:88 | pending (no-corpus) | no plan unit: PAL is not the target console |
-| `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:158 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
-| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:95 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
-| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:103 | pending (no-corpus) | replaced by T7b: exception stage costs |
-| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:108 | pending (no-corpus) | replaced by T6: SysAD port |
-| `legacy.cpu.address-error` | 1 pclk | ares/n64/cpu/memory.cpp:212 | `nemu64:timing/exceptions` | replaced by T7b: exception stage costs (cpu.exc-ex) |
-| `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/cpu.hpp:190 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
-| `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/cpu.hpp:198 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
-| `legacy.cpu.dcache-hit` | 1 pclk | ares/n64/cpu/dcache.cpp:61 | `nemu64:timing/cached-loads-and-store` | replaced by T6: D-hit +1 removed (cpu.dcache-hit folds into the issue cycle) |
-| `legacy.cpu.dcache-fill` | 40 pclk | ares/n64/cpu/dcache.cpp:7 | `nemu64:timing/load-miss-vi-off` | replaced by T6: SysAD::fill (cpu.dfill-total) |
-| `legacy.cpu.dcache-writeback` | 40 pclk | ares/n64/cpu/dcache.cpp:16 | `bench:dirty-miss-isolated` | replaced by T6: fill-then-writeback (cpu.dirty-miss-order) |
-| `legacy.cpu.rcp-read` | 20 pclk | ares/n64/memory/io.hpp:3 | `bench:rcp-reg-read` | replaced by T6: SysAD register read (cpu.rcp-register-read) |
+| `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:148 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
+| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:96 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
+| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:104 | pending (no-corpus) | replaced by T7b: exception stage costs |
+| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:109 | pending (no-corpus) | replaced by T6: SysAD port |
+| `legacy.cpu.address-error` | 1 pclk | ares/n64/cpu/memory.cpp:202 | `nemu64:timing/exceptions` | replaced by T7b: exception stage costs (cpu.exc-ex) |
+| `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/sysad.hpp:60 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
+| `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/sysad.cpp:262 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
 | `legacy.cpu.mult` | 5 pclk | ares/n64/cpu/interpreter-ipu.cpp:640 | `nemu64:timing/mult-div-interlock` | replaced by T7a: OpTiming |
 | `legacy.cpu.dmult` | 8 pclk | ares/n64/cpu/interpreter-ipu.cpp:349 | `nemu64:timing/mult-div-interlock` | replaced by T7a: OpTiming |
 | `legacy.cpu.div` | 37 pclk | ares/n64/cpu/interpreter-ipu.cpp:315 | `nemu64:timing/mult-div-interlock` | replaced by T7a: OpTiming |
@@ -301,7 +306,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `noise:c` | noise | dataset-c | - | pass | Thar0/RDP-Noise dataset C (Unlicense) |
 | `noise:rect-1016` | noise | rect-1016 | - | pass | romgen 1016-px rect ROM against dataset A |
 | `pidma:logs` | pidma | rasky_n64_pi_dma_test/pi_dma_test.z64 | - | self | ROM self-check within 10%; harness replays the 64 golden logs within 3% (plan T8) |
-| `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes (rdram-bus-arbitration.md) |
+| `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6) |
 | `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request |
 | `rdpstat:dpc-sequencing` | rdpstat | dpc | - | self | rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12) |
 | `rdpstat:xbus` | rdpstat | systemtest | RDP STATUS: Run from DMEM (xbus) | self | n64-systemtest tests/rdp run_from_dmem, three DMEM placements |
