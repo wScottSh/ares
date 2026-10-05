@@ -43,10 +43,6 @@ inline auto Bus::readBurst(u32 address, u32 *data, Thread& thread) -> bool {
 template<u32 Size>
 inline auto Bus::write(u32 address, u64 data, Thread& thread, RBusDevice device) -> void {
   static_assert(Size == Byte || Size == Half || Size == Word || Size == Dual);
-  if constexpr(Accuracy::CPU::Recompiler) {
-    cpu.recompiler.invalidateRange(address, Size);
-  }
-
   if(address <= 0x03ff'ffff) return mi.writeRdram<Size>(address, data, device, thread);
   if(address <= 0x0407'ffff) return rsp.write<Size>(address, data, thread);
   if(address <= 0x040b'ffff) return rsp.status.write<Size>(address, data, thread);
@@ -73,10 +69,6 @@ inline auto Bus::writeBurst(u32 address, u32 *data, Thread& thread) -> bool {
   RBusDevice device;
   if constexpr(Size == DCache) device = RBusDevice::VR4300_DCACHE;
   if constexpr(Size == ICache) device = RBusDevice::VR4300_ICACHE;
-
-  if constexpr(Accuracy::CPU::Recompiler) {
-    cpu.recompiler.invalidateRange(address, Size == DCache ? 16 : 32);
-  }
 
   if(address <= 0x03ff'ffff) return mi.writeRdramBurst<Size>(address, data, device, thread), true;
 

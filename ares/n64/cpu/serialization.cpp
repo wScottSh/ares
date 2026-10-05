@@ -131,8 +131,4 @@ auto CPU::serialize(serializer& s) -> void {
   s(fpu.csr.flushSubnormals);
 
   s(cop2.latch);
-
-  if constexpr(Accuracy::CPU::Recompiler) {
-    recompiler.reset();
-  }
 }

@@ -19,10 +19,6 @@ auto PI::dmaWrite() -> void {
   i32 maxBlockSize = 128;
   bool firstBlock = true;
 
-  if constexpr(Accuracy::CPU::Recompiler) {
-    cpu.recompiler.invalidateRange(io.dramAddress, (length + 1) & ~1);
-  }
-
   auto& bsd = bsdForAddress(io.pbusAddress);
   u32 pageMask = (1 << (bsd.pageSize + 2)) - 1;
   bool addressSelected = false;

@@ -117,8 +117,7 @@ struct RSP : Thread, Memory::RCP<RSP> {
 
   auto instruction() -> void;
   auto instructionPrologue(u32 instruction) -> void;
-  auto instructionBranchEpilogue() -> s32;
-  template<bool Recompiled> auto instructionEpilogue(u32 clocks) -> s32;
+  auto instructionEpilogue() -> void;
 
   auto power(bool reset) -> void;
 
@@ -130,9 +129,6 @@ struct RSP : Thread, Memory::RCP<RSP> {
       Vector    = 1 << 3,
       VNopGroup = 1 << 4,  //dual issue conflicts with VNOP
       Bypass    = 1 << 5,
-      UsesDmem  = 1 << 6,
-      MayHalt   = 1 << 7,
-      EndBlock  = 1 << 8,
     };
 
     u32 flags;
@@ -146,9 +142,6 @@ struct RSP : Thread, Memory::RCP<RSP> {
     auto branch() const -> bool { return flags & Branch; }
     auto vector() const -> bool { return flags & Vector; }
     auto bypass() const -> bool { return flags & Bypass; }
-    auto usesDmem() const -> bool { return flags & UsesDmem; }
-    auto mayHalt() const -> bool { return flags & MayHalt; }
-    auto endBlock() const -> bool { return flags & EndBlock; }
   };
 
   static auto canDualIssue(const OpInfo& op0, const OpInfo& op1) -> bool {
@@ -342,7 +335,6 @@ struct RSP : Thread, Memory::RCP<RSP> {
 
   struct Branch {
     enum : u32 {
-      EndBlock  = 1 << 0,
       DelaySlot = 1 << 1,
     };
 
@@ -351,7 +343,7 @@ struct RSP : Thread, Memory::RCP<RSP> {
     auto reset() -> void { setPc(0); }
     auto begin() -> void { nstate = 0; pc = u12(nextpc); nextpc = u12(pc + 4); }
     auto end() -> void { state = nstate; }
-    auto take(u12 address) -> void { nextpc = u12(address); nstate |= DelaySlot | EndBlock; }
+    auto take(u12 address) -> void { nextpc = u12(address); nstate |= DelaySlot; }
 
     u32 pc = 0;
     u32 nextpc = 4;
@@ -603,122 +595,6 @@ struct RSP : Thread, Memory::RCP<RSP> {
   auto interpreterSWC2() -> void;
 
   auto INVALID() -> void;
-
-  //recompiler.cpp
-  struct Recompiler : recompiler::generic {
-    RSP& self;
-    Recompiler(RSP& self) : self(self), generic(allocator) {
-      haltSlowPaths.reserve(256);
-      slowPaths.reserve(256);
-    }
-
-    struct Block {
-      auto execute(RSP& self) -> void {
-        self.pipeline = pipeline;  //must be updated first so instructionEpilog() can handle taken branch
-        ((void (*)(RSP*, IPU*, VU*))code)(&self, &self.ipu, &self.vpu);
-      }
-
-      u8* code;
-      u12 size;
-      Pipeline pipeline;  //state at *end* of block excepting taken branch stall
-    };
-
-    struct BlockHashPair {
-      auto operator==(const BlockHashPair& source) const -> bool { return hashcode == source.hashcode; }
-      auto operator< (const BlockHashPair& source) const -> bool { return hashcode <  source.hashcode; }
-      auto hash() const -> u32 { return hashcode; }
-
-      Block* block;
-      u64 hashcode;
-    };
-
-    struct SlowPath {
-      sljit_jump* enter = nullptr;
-      sljit_label* resume = nullptr;
-      u32 instruction = 0;
-      u32 pc = 0;
-      bool delaySlot = 0;
-      u32 clocks = 0;
-    };
-
-    struct HaltSlowPath {
-      sljit_jump* enter = nullptr;
-      u32 clocks = 0;
-    };
-
-    auto reset() -> void {
-      context.fill();
-      blocks.reset();
-      dirty = 0;
-    }
-
-    auto invalidate(u12 address, u12 size = 1) -> void {
-      dirty |= mask(address, size);
-    }
-
-    auto measure(u12 address) -> u12;
-    auto hash(u12 address, u12 size) -> u64;
-
-    auto block(u12 address) -> Block*;
-
-    auto emit(u12 address, bool callInstructionPrologue) -> Block*;
-    auto emitEXECUTE(u32 instruction, u32 pc, bool delaySlot, bool emitSlowPath, u32 slowPathClocks) -> void;
-    auto emitSPECIAL(u32 instruction, u32 pc, bool delaySlot) -> void;
-    auto emitREGIMM(u32 instruction, u32 pc, bool delaySlot) -> void;
-    auto emitSCC(u32 instruction) -> void;
-    auto emitVU(u32 instruction) -> void;
-    auto emitLWC2(u32 instruction, u32 pc, bool delaySlot, bool emitSlowPath, u32 slowPathClocks) -> void;
-    auto emitSWC2(u32 instruction, u32 pc, bool delaySlot, bool emitSlowPath, u32 slowPathClocks) -> void;
-
-    static auto mask(u12 address, u12 size) -> u64 {
-      //1 bit per 64 bytes
-      u6 s = address >> 6;
-      u6 e = address + size - 1 >> 6;
-      u64 smask = ~0ull << s;
-      u64 emask = ~0ull >> 63 - e;
-      //handle wraparound
-      return s <= e ? smask & emask : smask | emask;
-    }
-
-    bool enabled = false;
-    Pipeline pipeline;
-    bump_allocator allocator;
-    array<Block*[2048]> context;
-    hashset<BlockHashPair> blocks;
-    u64 dirty;
-    u32 slowPathFlushedClocks = 0;
-    struct ConstRegs {
-      u32 mask;
-      array<u32[32]> value;
-
-      auto reset() -> void {
-        mask = 1;
-        for(auto& value : value) value = 0;
-      }
-
-      auto set(u32 index, u32 value) -> void {
-        mask |= 1u << index;
-        this->value[index] = value;
-      }
-
-      auto clear(u32 index) -> void {
-        mask &= ~(1u << index);
-      }
-
-      auto has(u32 index) const -> bool {
-        return mask & (1u << index);
-      }
-
-      auto get(u32 index) const -> u32 {
-        return value[index];
-      }
-
-      auto track(u32 instruction, u32 pc) -> void;
-    } constRegs;
-
-    std::vector<HaltSlowPath> haltSlowPaths;
-    std::vector<SlowPath> slowPaths;
-  } recompiler{*this};
 
   struct Disassembler {
     RSP& self;

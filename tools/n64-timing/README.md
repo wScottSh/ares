@@ -27,7 +27,7 @@ The script configures `-DARES_CORES=n64`, `RelWithDebInfo`, and Ninja on first u
 
 ```sh
 n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
-            [--cpu interpreter|recompiler] [--rdp none|vulkan]
+            [--rdp none|vulkan]
             [--stats FILE] [--controllers N]
 ```
 
@@ -36,12 +36,11 @@ n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
 | `--frames N` | Stop after N VI fields. Boot time before the VI is enabled does not count. |
 | `--emulated-seconds S` | Stop after S seconds of emulated VR4300 time (93.75 MHz PClock). |
 | `--wall-seconds S` | Stop after S seconds of host time. This is a safety net and does not affect emulation. |
-| `--cpu` | `interpreter` (default) or `recompiler`. The option switches the CPU and the RSP together. |
 | `--rdp` | `none` (default) or `vulkan`. See [RDP](#rdp). |
 | `--stats FILE` | Writes one TSV line per VI field. See [Per-field stats](#per-field-stats). |
 | `--controllers N` | Number of gamepads connected at power-on (default 1). |
 
-The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) and deterministic entropy on.
+The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) and deterministic entropy on. The CPU and the RSP always run on their interpreters; the fork has no recompiler.
 
 Output:
 
@@ -83,12 +82,12 @@ One host dependency remains: a cartridge with an RTC seeds it from the host cloc
 
 ```sh
 tools/n64-timing/build-nemu64.sh                 # ROMs -> $N64_TIMING_HOME/roms/nemu64-{timing,cycle,cop0hazard}.z64
-tools/n64-timing/run-nemu64.sh [--cpu interpreter|recompiler] [timing cycle cop0hazard]
+tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 ```
 
 `build-nemu64.sh` builds nemu64-test at commit `9a8b9f7` in `rust:1-bookworm`, using the toolchain from the repository's `rust-toolchain.toml` (`nightly-2026-07-16`) and `nust64 0.4.1`. It runs `cargo run --release --no-default-features --features <set>`. Docker volumes named `n64timing-*` cache the Rust toolchain and the build trees.
 
-`run-nemu64.sh` writes these files under `$N64_TIMING_HOME/results/nemu64-<cpu>/<set>/`:
+`run-nemu64.sh` writes these files under `$N64_TIMING_HOME/results/nemu64/<set>/`:
 
 - `stdout.txt` is the raw guest output.
 - `stderr.txt` holds the stop line and debug notices.
@@ -97,7 +96,7 @@ tools/n64-timing/run-nemu64.sh [--cpu interpreter|recompiler] [timing cycle cop0
 - `failures.txt` lists every failure message.
 - `summary.txt` holds the ROM's own category totals, such as `Timing: Failed X of Y tests`.
 
-`results/nemu64-<cpu>/summary.txt` concatenates the set summaries.
+`results/nemu64/summary.txt` concatenates the set summaries.
 
 ## Self-test without the corpus
 

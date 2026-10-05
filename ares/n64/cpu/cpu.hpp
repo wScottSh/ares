@@ -41,18 +41,14 @@ struct CPU : Thread {
   auto flushCount() -> void;
   auto pendingCount() const -> u64 { return (Thread::clock - countClock) >> 1; }
   auto effectiveCount() const -> u64 { return (scc.count + pendingCount()) & CountMask; }
-  auto forceSynchronize() -> void;
   auto setInterruptPending(u32 bit, bool value) -> void;
-  auto interruptPoll() -> void;
 
   auto gdbPoll() -> void;
   auto queueInsert(u32 event, u32 clocks) -> void;
 
-  auto instruction() -> bool;
+  auto instruction() -> void;
   auto instructionPrologue(u64 address, u32 instruction) -> void;
-  template<bool Recompiled> auto instructionEpilogue() -> void;
-  auto raiseCoprocessor1Exception() -> void;
-  auto icacheFillLine(u64 vaddr, u32 paddr) -> void;
+  auto instructionEpilogue() -> void;
 
   auto power(bool reset) -> void;
 
@@ -64,16 +60,14 @@ struct CPU : Thread {
     u32 nstate = 0;  //next branch state
 
     enum : u32 {
-      EndBlock  = 1 << 0,
       DelaySlot = 1 << 1,
     };
 
     auto inDelaySlot() const -> bool { return state & DelaySlot; }
     auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; }
-    auto branch(u64 address) -> void { nextpc = address; nstate |= DelaySlot | EndBlock; }
+    auto branch(u64 address) -> void { nextpc = address; nstate |= DelaySlot; }
     auto noBranch() -> void { nstate |= DelaySlot; }
-    auto exception() -> void { state |= EndBlock; }
-    auto skip() -> void { pc += 4; nextpc = pc + 4; state |= EndBlock; }
+    auto skip() -> void { pc += 4; nextpc = pc + 4; }
     auto begin() -> void {
       nstate = 0;
       pc = nextpc;
@@ -89,7 +83,6 @@ struct CPU : Thread {
     enum : u32 {
       Branch        = 1 << 0,
       LikelyBranch  = 1 << 1,
-      JitStateKeyMayChange = 1 << 2,
       CountCompareWrite = 1 << 3,
       UnconditionalJump = 1 << 4,
       UnconditionalJumpAndLink = 1 << 5,
@@ -99,7 +92,6 @@ struct CPU : Thread {
 
     auto branch() const -> bool { return flags & Branch; }
     auto likelyBranch() const -> bool { return flags & LikelyBranch; }
-    auto jitStateKeyMayChange() const -> bool { return flags & JitStateKeyMayChange; }
     auto countCompareWrite() const -> bool { return flags & CountCompareWrite; }
     auto unconditionalJump() const -> bool { return flags & UnconditionalJump; }
     auto unconditionalJumpAndLink() const -> bool { return flags & UnconditionalJumpAndLink; }
@@ -147,18 +139,6 @@ struct CPU : Thread {
     struct Line;
     auto line(u64 vaddr) -> Line& { return lines[vaddr >> 5 & 0x1ff]; }
 
-    //call by recompiled blocks to prefetch instructions into the cache
-    auto jitFetch(u64 vaddr, u32 paddr, CPU& cpu) -> void {
-      auto& line = this->line(vaddr);
-      if(!line.hit(paddr)) {
-        self.profile.icacheMisses++;
-        line.fill(paddr, cpu);
-      } else {
-        self.profile.icacheHits++;
-      }
-    }
-
-    //used by the interpreter to fully emulate the instruction cache
     auto fetch(u64 vaddr, u32 paddr, CPU& cpu) -> u32 {
       auto& line = this->line(vaddr);
       if(!line.hit(paddr)) {
@@ -345,15 +325,6 @@ struct CPU : Thread {
   auto devirtualizeDebug(u64 vaddr) -> u64;
 
   auto fetch(PhysAccess access) -> maybe<u32>;
-  auto jitFetch(u64 vaddr, u32 addr) -> void {
-    icache.jitFetch(vaddr, addr, *this);
-  }
-
-  auto jitIcacheFillMiss(u64 vaddr, u32 paddr) -> void {
-    auto& line = icache.line(vaddr);
-    profile.icacheMisses++;
-    line.fill(paddr, *this);
-  }
   template<u32 Size> auto busWrite(u32 address, u64 data) -> void;
   template<u32 Size> auto busRead(u32 address) -> u64;
   template<u32 Size> auto busWriteBurst(u32 address, u32 *data) -> bool;
@@ -972,285 +943,6 @@ struct CPU : Thread {
   auto COP3() -> void;
   auto INVALID() -> void;
 
-  //recompiler.cpp, recompiler-fpu.cpp, recompiler-ipu.cpp
-  struct Recompiler : recompiler::generic {
-    CPU& self;
-    Recompiler(CPU& self) : self(self), generic(allocator) {
-      slowPaths.reserve(128);
-    }
-
-    enum : u32 {
-      SectionSize  = 4_KiB,
-      SectionShift = 12,
-      SectionMask  = SectionSize - 1,
-      SectionLineSize = 32,
-      SectionLineShift = 5,
-      SectionLineCount = SectionSize / SectionLineSize,
-      SectionWords = SectionSize / sizeof(u32),
-      RdramSize    = 8_MiB,
-      RdramMask    = RdramSize - 1,
-      SectionCount = RdramSize / SectionSize,
-    };
-
-    struct StateKey {
-      StateKey() = default;
-      StateKey(u64 data) : data(data) {}
-
-      operator u64() const { return data; }
-
-      auto coprocessor1Enabled() const -> bool { return data.bit(0); }
-      auto setCoprocessor1Enabled(bool value) -> void { data.bit(0) = value; }
-
-      auto floatingPointMode() const -> bool { return data.bit(1); }
-      auto setFloatingPointMode(bool value) -> void { data.bit(1) = value; }
-
-      auto exceptionLevel() const -> bool { return data.bit(2); }
-      auto setExceptionLevel(bool value) -> void { data.bit(2) = value; }
-
-      auto errorLevel() const -> bool { return data.bit(3); }
-      auto setErrorLevel(bool value) -> void { data.bit(3) = value; }
-
-      auto privilegeMode() const -> u32 { return data.bit(4, 5); }
-      auto setPrivilegeMode(u32 value) -> void { data.bit(4, 5) = value; }
-
-      auto userExtendedAddressing() const -> bool { return data.bit(6); }
-      auto setUserExtendedAddressing(bool value) -> void { data.bit(6) = value; }
-
-      auto supervisorExtendedAddressing() const -> bool { return data.bit(7); }
-      auto setSupervisorExtendedAddressing(bool value) -> void { data.bit(7) = value; }
-
-      auto kernelExtendedAddressing() const -> bool { return data.bit(8); }
-      auto setKernelExtendedAddressing(bool value) -> void { data.bit(8) = value; }
-
-      auto reverseEndian() const -> bool { return data.bit(9); }
-      auto setReverseEndian(bool value) -> void { data.bit(9) = value; }
-
-      auto coprocessor0Enabled() const -> bool { return data.bit(10); }
-      auto setCoprocessor0Enabled(bool value) -> void { data.bit(10) = value; }
-
-      auto fpuRoundMode() const -> u32 { return data.bit(11, 12); }
-      auto setFpuRoundMode(u32 value) -> void { data.bit(11, 12) = value; }
-
-      auto fpuFlushSubnormals() const -> bool { return data.bit(13); }
-      auto setFpuFlushSubnormals(bool value) -> void { data.bit(13) = value; }
-
-      auto fpuInexactEnabled() const -> bool { return data.bit(14); }
-      auto setFpuInexactEnabled(bool value) -> void { data.bit(14) = value; }
-
-      auto fpuUnderflowEnabled() const -> bool { return data.bit(15); }
-      auto setFpuUnderflowEnabled(bool value) -> void { data.bit(15) = value; }
-
-      auto fpuOverflowEnabled() const -> bool { return data.bit(16); }
-      auto setFpuOverflowEnabled(bool value) -> void { data.bit(16) = value; }
-
-      auto fpuDivisionByZeroEnabled() const -> bool { return data.bit(17); }
-      auto setFpuDivisionByZeroEnabled(bool value) -> void { data.bit(17) = value; }
-
-      auto fpuInvalidOperationEnabled() const -> bool { return data.bit(18); }
-      auto setFpuInvalidOperationEnabled(bool value) -> void { data.bit(18) = value; }
-
-      auto gpCachedRdram() const -> bool { return data.bit(19); }
-      auto setGpCachedRdram(bool value) -> void { data.bit(19) = value; }
-
-      auto gpCachedRdramOff16() const -> bool { return data.bit(20); }
-      auto setGpCachedRdramOff16(bool value) -> void { data.bit(20) = value; }
-
-      auto gpAligned4() const -> bool { return data.bit(21); }
-      auto setGpAligned4(bool value) -> void { data.bit(21) = value; }
-
-      auto gpAligned8() const -> bool { return data.bit(22); }
-      auto setGpAligned8(bool value) -> void { data.bit(22) = value; }
-
-      auto spAligned4() const -> bool { return data.bit(23); }
-      auto setSpAligned4(bool value) -> void { data.bit(23) = value; }
-
-      auto spAligned8() const -> bool { return data.bit(24); }
-      auto setSpAligned8(bool value) -> void { data.bit(24) = value; }
-
-      auto watchpointsActive() const -> bool { return data.bit(25); }
-      auto setWatchpointsActive(bool value) -> void { data.bit(25) = value; }
-
-      auto rdramMapIdentity() const -> bool { return data.bit(26); }
-      auto setRdramMapIdentity(bool value) -> void { data.bit(26) = value; }
-
-      n64 data = 0;
-    };
-
-    struct Block {
-      auto execute(CPU& self) -> void {
-        self.recompiler.activeBlock = this;
-        ((void (*)(CPU*, r64*, r64*))code)(&self, &self.ipu.r[16], &self.fpu.r[16]);
-      }
-
-      u8* code = nullptr;
-      Block* next = nullptr;
-      u64 stateKey = 0;
-      u64 vaddrPage = 0;
-      u32 startAddress = 0;
-      u32 endAddress = 0;
-      u8* sectionDirty = nullptr;
-    };
-
-    struct Section {
-      Block* blocks[SectionWords];
-      u8 lineBlocks[SectionLineCount];
-    };
-
-    struct SlowPath {
-      std::vector<sljit_jump*> enters;
-      sljit_label* resume = nullptr;
-      u32 instruction = 0;
-      u64 vaddr = 0;
-      u32 deferredCycles = 0;
-      u32 instructionCycles = 0;
-      bool jumpEpilog = false;
-      bool icacheMiss = false;
-      bool runtimePc = false;
-      u32 icachePaddr = 0;
-    };
-
-    enum class EmitPcMode : bool { JitTime, Runtime };
-    enum class EmitExecuteResult : u8 { Linear, MayBranch, MayFault };
-
-    auto reset() -> void {
-      sections.resize(SectionCount);
-      sectionDirty.resize(SectionCount);
-      std::ranges::fill(sections, nullptr);
-      std::ranges::fill(sectionDirty, 0);
-      activeBlock = nullptr;
-    }
-
-    auto isRdramAddress(u32 address) const -> bool {
-      return address < rdram.ram.size;
-    }
-
-    auto rdramAddress(u32 address) const -> u32 {
-      return address & RdramMask;
-    }
-
-    auto sectionIndex(u32 address) const -> u32 {
-      return rdramAddress(address) >> SectionShift;
-    }
-
-    auto sectionOffset(u32 address) const -> u32 {
-      return rdramAddress(address) & SectionMask;
-    }
-
-    auto blockIndex(u32 address) const -> u32 {
-      return sectionOffset(address) >> 2;
-    }
-
-    auto sectionLineIndex(u32 address) const -> u32 {
-      return sectionOffset(address) >> SectionLineShift;
-    }
-
-    auto invalidate(u32 address) -> void {
-      invalidateSection(address);
-    }
-
-    auto invalidateSection(u32 address) -> void {
-      if(!isRdramAddress(address)) return;
-      auto index = sectionIndex(address);
-      auto section = sections[index];
-      if(!section) return;
-      if(!section->lineBlocks[sectionLineIndex(address)]) return;
-      sectionDirty[index] = 1;
-      // If the code is modifying the current block, we need to end it, as we
-      // have recompiled the previous version of the code.
-      if(activeBlock && activeBlock->sectionDirty == &sectionDirty[index]) {
-        self.pipeline.state |= Pipeline::EndBlock;
-      }
-    }
-
-    auto invalidateRange(u32 address, u32 length) -> void {
-      if(!length) return;
-      u64 start = address;
-      u64 end = start + length - 1;
-      if(start >= RdramSize) return;
-      if(end >= RdramSize) end = RdramSize - 1;
-      u32 firstSection = u32(start >> SectionShift);
-      u32 lastSection  = u32(end >> SectionShift);
-      for(u32 sidx = firstSection; sidx <= lastSection; sidx++) {
-        if(sectionDirty[sidx]) {
-          if(activeBlock && activeBlock->sectionDirty == &sectionDirty[sidx]) {
-            self.pipeline.state |= Pipeline::EndBlock;
-          }
-          continue;
-        }
-        auto section = sections[sidx];
-        if(!section) continue;
-        u32 firstLine = 0;
-        u32 lastLine  = SectionLineCount - 1;
-        if(sidx == firstSection) firstLine = u32((start & SectionMask) >> SectionLineShift);
-        if(sidx == lastSection)  lastLine  = u32((end   & SectionMask) >> SectionLineShift);
-        for(u32 line = firstLine; line <= lastLine; line++) {
-          if(section->lineBlocks[line]) {
-            sectionDirty[sidx] = 1;
-            if(activeBlock && activeBlock->sectionDirty == &sectionDirty[sidx]) {
-              self.pipeline.state |= Pipeline::EndBlock;
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    auto computeStateKey() const -> u64;
-    auto reservedInstruction64() const -> bool;
-    auto updateStackPointerStateKey(s16 offset) -> void;
-    auto section(u32 address) -> Section*;
-    auto block(u64 vaddr, u32 address) -> Block*;
-
-    auto flushDeferredCycles() -> void;
-    auto setupPipeline() -> void;
-    auto setupCallf() -> void;
-    auto emitCpuStep(u32 clocks) -> void;
-    auto deferSlowPath(sljit_jump* enter, u32 instruction) -> void;
-    auto deferSlowPath(std::initializer_list<sljit_jump*> enters, u32 instruction) -> void;
-    auto deferSlowPathCacheMiss(sljit_jump* enter, u32 paddr) -> void;
-    auto emit(u64 vaddr, u32 address, u64 stateKey) -> Block*;
-    auto emitZeroClear(u32 n) -> void;
-    enum JitMemoryOpcodeMode : u32 {
-      SignExtend = 1 << 0,
-      Require64  = 1 << 1,
-      Store      = 1 << 2,
-      PartialLeft = 1 << 3,
-      PartialRight = 1 << 4,
-      Floating   = 1 << 5,
-      LinkedConditional = 1 << 6,
-    };
-
-    auto jitMemoryOpcode(u32 instruction, u32 size, u32 mode,
-      const std::function<EmitExecuteResult()>& fallback, bool emitSlowPath) -> EmitExecuteResult;
-    auto emitEXECUTE(u32 instruction, bool emitSlowPath, EmitPcMode pcMode) -> EmitExecuteResult;
-    auto emitSPECIAL(u32 instruction) -> EmitExecuteResult;
-    auto emitREGIMM(u32 instruction, EmitPcMode pcMode) -> EmitExecuteResult;
-    auto emitSCC(u32 instruction, EmitPcMode pcMode) -> EmitExecuteResult;
-    auto emitFPU(u32 instruction, EmitPcMode pcMode) -> EmitExecuteResult;
-    auto emitCOP2(u32 instruction) -> EmitExecuteResult;
-
-    bool enabled = false;
-    bool callInstructionPrologue = false;
-    bool emitSlowPathSection = false;
-    bool emitPipelineSetupDone = false;
-    bool emitCallfSetupDone = false;
-    bool emitCallfEmitted = false;
-    bool emitStateKeyChanged = false;
-    bool emitAllocatorFlushed = false;
-    EmitPcMode emitPcMode = EmitPcMode::JitTime;
-    StateKey emitStateKey = 0;
-    u64 emitVaddr = 0;
-    u32 emitDeferredCycles = 0;
-    u32 emitFpuFastMxcsr = 0;
-    u32 emitFpuSaveMxcsr = 0;
-    Block* activeBlock = nullptr;
-    bump_allocator allocator;
-    std::vector<u32> emitAliasAddresses;
-    std::vector<SlowPath> slowPaths;
-    std::vector<Section*> sections;
-    std::vector<u8> sectionDirty;
-  } recompiler{*this};
-  s64 jitClockTarget = 0;
   s64 countClock = 0;
 
   struct Disassembler {

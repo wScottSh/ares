@@ -36,14 +36,6 @@ auto option(string name, string value) -> bool {
   #endif
   if(name == "Homebrew Mode") system.homebrewMode = value.boolean();
   if(name == "Deterministic Entropy") system.deterministicEntropy = value.boolean();
-  if(name == "Recompiler") {
-    if constexpr(Accuracy::CPU::Recompiler) {
-      cpu.recompiler.enabled = value.boolean();
-    }
-    if constexpr(Accuracy::RSP::Recompiler) {
-      rsp.recompiler.enabled = value.boolean();
-    }
-  }
   if(Model::Nintendo64() && name == "Expansion Pak") system.expansionPak = value.boolean();
   if(Model::Nintendo64() && name == "Controller Pak Banks") {
     if (value == "32KiB (Default)") {
@@ -376,12 +368,6 @@ auto System::initDebugHooks() -> void {
       ++regIdx;
     }
   };
-
-  if constexpr(Accuracy::CPU::Recompiler) {
-    GDB::server.hooks.emuCacheInvalidate = [](u64 address) {
-      cpu.recompiler.invalidateSection((u32)address);
-    };
-  }
 }
 
 auto System::unload() -> void {
@@ -440,9 +426,6 @@ auto System::power(bool reset) -> void {
     }
   }
 
-  if constexpr(Accuracy::CPU::Recompiler || Accuracy::RSP::Recompiler) {
-    ares::Memory::FixedAllocator::get().release();
-  }
   queue.reset();
   cartridge.power(reset);
   rdram.power(reset);

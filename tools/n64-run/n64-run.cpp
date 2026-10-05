@@ -19,8 +19,6 @@ namespace N64 = ares::Nintendo64;
 
 namespace {
 
-enum class CpuMode { Interpreter, Recompiler };
-
 //None: no RDP rasterizer runs; RDRAM holds only what the CPU and RSP write.
 //Vulkan: paraLLEl-RDP on the host GPU, the same renderer the desktop build uses.
 enum class RdpMode { None, Vulkan };
@@ -47,7 +45,6 @@ struct Options {
   u64 frames = 0;
   double emulatedSeconds = 0;
   double wallSeconds = 0;
-  CpuMode cpu = CpuMode::Interpreter;
   RdpMode rdp = RdpMode::None;
   string statsPath;
   u32 controllers = 1;
@@ -72,7 +69,6 @@ auto usage() -> void {
     "  --frames N          stop after N VI fields (0 = no limit)\n"
     "  --emulated-seconds S  stop after S seconds of emulated CPU time (0 = no limit)\n"
     "  --wall-seconds S    stop after S seconds of host wall time (0 = no limit)\n"
-    "  --cpu interpreter|recompiler  CPU and RSP execution mode (default interpreter)\n"
     "  --rdp none|vulkan   RDP rasterizer: none, or paraLLEl-RDP on the host GPU (default none)\n"
     "  --stats FILE        write one TSV line per VI field to FILE\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
@@ -93,12 +89,6 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--wall-seconds") options.wallSeconds = value().real();
     else if(arg == "--stats") options.statsPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
-    else if(arg == "--cpu") {
-      auto mode = value();
-      if(mode == "interpreter") options.cpu = CpuMode::Interpreter;
-      else if(mode == "recompiler") options.cpu = CpuMode::Recompiler;
-      else return nothing;
-    }
     else if(arg == "--rdp") {
       auto mode = value();
       if(mode == "none") options.rdp = RdpMode::None;
@@ -265,7 +255,6 @@ auto nall::main(Arguments arguments) -> void {
   N64::option("Supersampling", "false");
   N64::option("Homebrew Mode", "true");
   N64::option("Deterministic Entropy", "true");
-  N64::option("Recompiler", options.cpu == CpuMode::Recompiler ? "true" : "false");
   N64::option("Expansion Pak", "true");
 
   ares::Node::System root;

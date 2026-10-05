@@ -3,20 +3,11 @@ struct Accuracy {
   static constexpr bool Reference = 0;
 
   struct CPU {
-    static constexpr bool Interpreter = 0 | Reference | !recompiler::generic::supported;
-    static constexpr bool Recompiler = !Interpreter;
-
-    //Maximum number of cycles to run the CPU without synchronization
-    static constexpr s64 JitInterleaving = 2048 * 2;
-
     //exceptions when the CPU accesses unaligned memory addresses
     static constexpr bool AddressErrors = 1 | Reference;
   };
 
   struct RSP {
-    static constexpr bool Interpreter = 0 | Reference | !recompiler::generic::supported;
-    static constexpr bool Recompiler = !Interpreter;
-
     //VU instructions
     static constexpr bool SISD = 0 | Reference | !ARCHITECTURE_SUPPORTS_SSE4_1;
     static constexpr bool SIMD = !SISD;

@@ -164,9 +164,6 @@ ares_add_sources(
     cpu/interpreter-scc.cpp
     cpu/interpreter.cpp
     cpu/memory.cpp
-    cpu/recompiler.cpp
-    cpu/recompiler-fpu.cpp
-    cpu/recompiler-ipu.cpp
     cpu/serialization.cpp
     cpu/tlb.cpp
 )
@@ -275,7 +272,6 @@ ares_add_sources(
     rsp/interpreter-vpu.cpp
     rsp/interpreter.cpp
     rsp/io.cpp
-    rsp/recompiler.cpp
     rsp/rsp.hpp
     rsp/serialization.cpp
 )

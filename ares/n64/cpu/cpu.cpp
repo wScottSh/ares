@@ -16,9 +16,6 @@ CPU cpu;
 #include "interpreter-scc.cpp"
 #include "interpreter-fpu.cpp"
 #include "interpreter-cop2.cpp"
-#include "recompiler.cpp"
-#include "recompiler-fpu.cpp"
-#include "recompiler-ipu.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
 #include "disassembler.cpp"
@@ -36,7 +33,8 @@ auto CPU::unload() -> void {
 
 auto CPU::main() -> void {
   while(!vi.refreshed && GDB::server.reportPC(ipu.pc & 0xFFFFFFFF)) {
-    if(instruction()) synchronize();
+    instruction();
+    synchronize();
   }
 
   vi.refreshed = false;
@@ -54,15 +52,7 @@ auto CPU::gdbPoll() -> void {
 }
 
 auto CPU::queueInsert(u32 event, u32 clocks) -> void {
-  if(!queue.insert(event, clocks)) return;
-  s64 queueDelta = queue.timeToNextEvent();
-  if(queueDelta < 0) queueDelta = 0;
-  s64 queueTarget = Thread::clock + queueDelta;
-  if(queueTarget < jitClockTarget) jitClockTarget = queueTarget;
-}
-
-auto CPU::forceSynchronize() -> void {
-  jitClockTarget = 0;
+  queue.insert(event, clocks);
 }
 
 auto CPU::stepCount(u64 clocks) -> void {
@@ -85,7 +75,6 @@ auto CPU::synchronize() -> void {
   auto counted = countClock;
   Thread::clock = 0;
   countClock = 0;
-  jitClockTarget = 0;
 
    vi.clock -= clocks;
    ai.clock -= clocks;
@@ -122,24 +111,16 @@ auto CPU::synchronize() -> void {
 
 auto CPU::setInterruptPending(u32 bit, bool value) -> void {
   scc.cause.interruptPending.bit(bit) = value;
-  interruptPoll();
 }
 
-auto CPU::interruptPoll() -> void {
-  if(auto interrupts = scc.cause.interruptPending & scc.status.interruptMask) {
-    if(scc.status.interruptEnable && !scc.status.exceptionLevel && !scc.status.errorLevel) {
-      forceSynchronize();
-    }
-  }
-}
 
-auto CPU::instruction() -> bool {
+auto CPU::instruction() -> void {
   if(auto interrupts = scc.cause.interruptPending & scc.status.interruptMask) {
     if(scc.status.interruptEnable && !scc.status.exceptionLevel && !scc.status.errorLevel) {
       debugger.interrupt(scc.cause.interruptPending);
       step(1 * 2);
       exception.interrupt();
-      return true;
+      return;
     }
   }
 
@@ -147,60 +128,31 @@ auto CPU::instruction() -> bool {
     debugger.nmi();
     step(1 * 2);
     exception.nmi();
-    return true;
+    return;
   }
   if (scc.sysadFrozen) {
     step(1 * 2);
-    return true;
+    return;
   }
 
   auto access = devirtualize<Read, Word>(ipu.pc);
-  if(!access) return true;
-
-  if(Accuracy::CPU::Recompiler && recompiler.enabled && access.cache) {
-    if(vaddrAlignedError<Word>(access.vaddr, false)) return true;
-    auto block = recompiler.block(ipu.pc, access.paddr);
-    if(block) {
-      if(Thread::clock >= jitClockTarget) {
-        s64 timerDelta = (s64)scc.compare - (s64)effectiveCount();
-        if(timerDelta < 0) timerDelta = 0;
-        s64 queueDelta = queue.timeToNextEvent();
-        if(queueDelta < 0) queueDelta = 0;
-        s64 capBudget = min<s64>(Accuracy::CPU::JitInterleaving, min(timerDelta, queueDelta));
-        jitClockTarget = Thread::clock + capBudget;
-      }
-      block->execute(*this);
-      return Thread::clock >= jitClockTarget;
-    }
-  }
+  if(!access) return;
 
   auto data = fetch(access);
-  if (!data) return true;
+  if (!data) return;
   pipeline.begin();
   instructionPrologue(ipu.pc, *data);
   decoderEXECUTE(*data);
-  instructionEpilogue<0>();
+  instructionEpilogue();
   pipeline.end();
-  return true;
 }
 
 auto CPU::instructionPrologue(u64 address, u32 instruction) -> void {
   debugger.instruction(address, instruction);
 }
 
-auto CPU::icacheFillLine(u64 vaddr, u32 paddr) -> void {
-  icache.line(vaddr).fill(paddr, *this);
-}
-
-template<bool Recompiled>
 auto CPU::instructionEpilogue() -> void {
-  if constexpr(!Recompiled) {
-    ipu.r[0].u64 = 0;
-  }
-}
-
-auto CPU::raiseCoprocessor1Exception() -> void {
-  exception.coprocessor1();
+  ipu.r[0].u64 = 0;
 }
 
 auto CPU::power(bool reset) -> void {
@@ -226,12 +178,6 @@ auto CPU::power(bool reset) -> void {
   emuxState = {};
   fenv.setRound(float_env::toNearest);
   context.setMode();
-
-  if constexpr(Accuracy::CPU::Recompiler) {
-    auto buffer = ares::Memory::FixedAllocator::get().tryAcquire(63_MiB);
-    recompiler.allocator.resize(63_MiB, bump_allocator::executable, buffer);
-    recompiler.reset();
-  }
 }
 
 }

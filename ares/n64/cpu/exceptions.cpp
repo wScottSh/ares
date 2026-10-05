@@ -27,7 +27,6 @@ auto CPU::Exception::trigger(u32 code, u32 coprocessor, bool tlbMiss) -> void {
   }
 
   self.pipeline.setPc(vectorBase + vectorOffset);
-  self.pipeline.exception();  //todo: only call this between instruction prologue/epilogue
   self.context.setMode();
 }
 
