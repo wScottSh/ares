@@ -26,6 +26,7 @@ python tools/n64-timing/romgen/selftest.py
 | `nemu.py` | Python port of the nemu64-test types the tables use (`Assembler`, `GPR`, `Status`, `FCSR`, float literals) |
 | `import_nemu64.py` | Translates the Rust value tables in `src/tests/timing/mod.rs` into `suites/nemu64/tables.py`. It reads the source as text and never compiles or runs it. |
 | `suites/nemu64/` | Ported `run()` logic per feature set (`timing.py`, `cycle.py`, `cop0hazard.py`), routines, value descriptions, and the root-cause classifier |
+| `suites/bench/` | Microbenchmark ROMs for the timing-core plan (`--suite bench`). They print raw measurements; `expected.tsv` holds the cited hardware values. See [suites/bench/README.md](suites/bench/README.md). |
 | `report.py` | Joins a ROM's `@<test>.<value>` records with its `.tests.tsv` listing |
 
 The ROM decides pass or fail by itself and prints nemu64-test's output format. The host side only parses output.

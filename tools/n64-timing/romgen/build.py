@@ -1,9 +1,10 @@
 """Builds romgen test ROMs.
 
-usage: python tools/n64-timing/romgen/build.py --suite nemu64 --out DIR [--ipl3 IPL3_COMPAT_Z64]
+usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench --out DIR [--ipl3 IPL3_COMPAT_Z64]
 
-Writes one .z64 per set (nemu64-timing.z64, nemu64-cycle.z64, nemu64-cop0hazard.z64) and a
-.tests.tsv next to each listing every value the ROM runs. Output is deterministic: the same
+Writes one .z64 per set of the suite (romgen/suites/<suite>/sets.py), for example
+nemu64-timing.z64 or bench-pi-dma-sizes.z64, and a .tests.tsv next to each listing every value
+the ROM runs. Output is deterministic: the same
 inputs give byte-identical ROMs.
 
 The boot code is libdragon's public-domain ipl3_compat.z64 (the same stub
@@ -11,6 +12,7 @@ make-emux-smoke-rom.py uses). It loads the flat payload at ROM 0x1000 to the ent
 header word 0x8, with the payload size in header word 0x10.
 """
 import argparse
+import importlib
 import os
 import struct
 import sys
@@ -27,9 +29,10 @@ DEFAULT_IPL3 = os.path.join(os.environ.get("N64_TIMING_HOME", os.path.expanduser
 
 
 def suite_sets(name):
-    if name != "nemu64":
+    try:
+        sets = importlib.import_module(f"romgen.suites.{name}.sets")
+    except ModuleNotFoundError:
         raise SystemExit(f"unknown suite {name}")
-    from romgen.suites.nemu64 import sets
     return sets.SETS
 
 
