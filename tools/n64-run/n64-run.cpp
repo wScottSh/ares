@@ -587,6 +587,14 @@ auto nall::main(Arguments arguments) -> void {
     (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
     (unsigned long long)engine.pixels(),
     engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
+  //RI grants per requester since power-on and the channel time they waited and held (plan T6)
+  auto& counters = N64::ri.channel.counters;
+  auto& cpuBus = counters[(u32)N64::RiBus::Requester::CpuSysAD];
+  auto& refresh = counters[(u32)N64::RiBus::Requester::Refresh];
+  std::fprintf(stderr, "n64-run: ri grants_cpu=%llu grants_refresh=%llu cpu_row_misses=%llu cpu_bytes_read=%llu cpu_bytes_written=%llu cpu_wait_rclk=%llu refresh_busy_rclk=%llu\n",
+    (unsigned long long)cpuBus.bursts, (unsigned long long)refresh.bursts, (unsigned long long)cpuBus.rowMisses,
+    (unsigned long long)cpuBus.bytesRead, (unsigned long long)cpuBus.bytesWritten,
+    (unsigned long long)(cpuBus.wait.units / N64::Timing::UnitsPerRclk), (unsigned long long)(refresh.busy.units / N64::Timing::UnitsPerRclk));
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);

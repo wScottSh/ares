@@ -72,10 +72,9 @@ auto SysAD::enqueue(const Entry& entry) -> void {
   entries[(head + count) & 3] = entry;
   count++;
   slotsUsed += entry.slots;
-  if(idle) {
-    update();
-    timeline.wake(Timing::ActorId::SysAD);
-  }
+  if(!idle) return;
+  update();
+  timeline.wake(Timing::ActorId::SysAD);
 }
 
 auto SysAD::pending() -> Entry* {

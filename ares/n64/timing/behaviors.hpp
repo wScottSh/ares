@@ -202,7 +202,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:110", "pending:no-corpus", "replaced by T6: SysAD port"},
   {"legacy.cpu.address-error", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:202", "nemu64:timing/exceptions", "replaced by T7b: exception stage costs (cpu.exc-ex)"},
   {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
-  {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:263", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
+  {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
   {"legacy.cpu.mult", Basis::Legacy, "5", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:640", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
   {"legacy.cpu.dmult", Basis::Legacy, "8", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:349", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
   {"legacy.cpu.div", Basis::Legacy, "37", "pclk", "ares/n64/cpu/interpreter-ipu.cpp:315", "nemu64:timing/mult-div-interlock", "replaced by T7a: OpTiming"},
