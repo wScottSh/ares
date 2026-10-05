@@ -81,9 +81,9 @@ def expression(code, start, inside_call):
     depth = 0
     for i in range(start, len(code)):
         c = code[i]
-        if c == "(":
+        if c in "({":
             depth += 1
-        elif c == ")":
+        elif c in ")}":
             if depth == 0:
                 return code[start:i]
             depth -= 1
