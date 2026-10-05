@@ -26,6 +26,7 @@ auto CPU::Exception::trigger(u32 code, u32 coprocessor, bool tlbMiss) -> void {
     self.scc.cause.coprocessorError = coprocessor;
   }
 
+  self.pipeline.fault();
   self.pipeline.setPc(vectorBase + vectorOffset);
   self.context.setMode();
 }

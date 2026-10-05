@@ -145,7 +145,7 @@ static auto reverseEndianPaddr(u32 paddr) -> u32 {
 }
 
 auto CPU::fetch(PhysAccess access) -> maybe<u32> {
-  step(pclk(1));
+  step(Timing::Behavior::CpuIssue);
   if(!access) return nothing;
   u32 paddr = access.paddr;
   if(context.littleEndian()) paddr = reverseEndianPaddr<Word>(paddr);
