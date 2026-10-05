@@ -66,6 +66,7 @@ The runner checks the stop conditions between VI fields. A ROM that requests an 
 | `rsp_busy_clocks` | Cumulative non-halted RSP time, in the core's scheduler clocks (2 per PClock). |
 | `dpc_start`, `dpc_end` | `DPC_START` and `DPC_END` at the end of the field. |
 | `cimg`, `zimg` | The address of the last `SET_COLOR_IMAGE` and `SET_MASK_IMAGE` (Z buffer) command the core parsed. Only `--rdp none` parses commands, so both are 0 with `--rdp vulkan`. |
+| `rdp_pixels` | Cumulative pixels the software engine rasterized (clipped span widths summed over every primitive). 0 unless `--rdp soft`. Deterministic, so it belongs in the `det` comparison. |
 
 ### Input scripts
 

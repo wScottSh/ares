@@ -51,8 +51,8 @@ Every file except `wall.tsv` is deterministic.
 
 | File | Contents |
 |---|---|
-| `summary.txt`, `summary.tsv` | One row per scene: complete game frames in the window, mean fields per game frame, the distribution of game-frame lengths (1 to 5 fields, and 6 or more), mean RSP busy clocks per field, and two counters read from the game (see below). |
-| `fields.tsv` | One row per window field: `field` (0 to 599), absolute `frame`, `origin`, the per-field deltas of `cpu_cycles` and `rsp_busy_clocks`, `dpc_start`, `dpc_end`, `cimg`, and `zimg`. |
+| `summary.txt`, `summary.tsv` | One row per scene: complete game frames in the window, mean fields per game frame, the distribution of game-frame lengths (1 to 5 fields, and 6 or more), mean RSP busy clocks per field, the pixels the software engine rasterized in the window (`rdp_pixels_window`, 0 unless `--rdp soft`), and two counters read from the game (see below). |
+| `fields.tsv` | One row per window field: `field` (0 to 599), absolute `frame`, `origin`, the per-field deltas of `cpu_cycles` and `rsp_busy_clocks`, `dpc_start`, `dpc_end`, `cimg`, `zimg`, and the per-field delta of `rdp_pixels` (0 unless `--rdp soft`). |
 | `gframes.tsv` | One row per complete game frame: first window field, length in fields, and CPU and RSP clocks over those fields. |
 | `buffer-confirmation.tsv` | The run-time confirmation from `docs/research/mm-buffer-placement.md` (#23), read in the `sct` window: expected and found values with a verdict. |
 | `wall.tsv` | Host wall time, total and per scene. |

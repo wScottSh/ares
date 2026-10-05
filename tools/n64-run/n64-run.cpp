@@ -88,6 +88,7 @@ struct FrameStats {
   u32 dpcEnd;
   u32 colorImage;
   u32 depthImage;
+  u64 rdpPixels;
 };
 
 auto usage() -> void {
@@ -280,6 +281,7 @@ auto sample(u64 frame, u64 fbHash) -> FrameStats {
     (u32)N64::rdp.command.end,
     (u32)N64::rdp.set.color.dramAddress,
     (u32)N64::rdp.set.mask.dramAddress,
+    N64::rdp.engine.pixels(),
   };
 }
 
@@ -560,7 +562,7 @@ auto nall::main(Arguments arguments) -> void {
       std::_Exit(1);
     }
     stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks"
-                "\tdpc_start\tdpc_end\tcimg\tzimg\n");
+                "\tdpc_start\tdpc_end\tcimg\tzimg\trdp_pixels\n");
   }
 
   auto wallStart = std::chrono::steady_clock::now();
@@ -589,7 +591,7 @@ auto nall::main(Arguments arguments) -> void {
         stats.print(s.frame, "\t", hex(s.origin, 6L), "\t", s.width, "\t", s.depth, "\t",
                     hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\t",
                     hex(s.dpcStart, 6L), "\t", hex(s.dpcEnd, 6L), "\t", hex(s.colorImage, 7L), "\t",
-                    hex(s.depthImage, 7L), "\n");
+                    hex(s.depthImage, 7L), "\t", s.rdpPixels, "\n");
       }
       for(auto& dump : options.dumps) {
         if(dump.frame != frames) continue;

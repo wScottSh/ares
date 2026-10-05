@@ -233,6 +233,7 @@ def analyze(name, rows, start):
             "rsp_busy_clocks": int(cur["rsp_busy_clocks"]) - int(prev["rsp_busy_clocks"]),
             "dpc_start": cur["dpc_start"], "dpc_end": cur["dpc_end"],
             "cimg": cur["cimg"], "zimg": cur["zimg"],
+            "rdp_pixels": int(cur.get("rdp_pixels", 0)) - int(prev.get("rdp_pixels", 0)),
         })
     # A game frame spans the fields from one VI origin change to the next. Fields before the
     # first change and after the last one belong to frames that straddle the window edges.
@@ -271,6 +272,7 @@ def summarize(fields, gframes, peeks):
         "gframe_fields_min": min(lengths) if lengths else "",
         "gframe_fields_max": max(lengths) if lengths else "",
         "rsp_busy_clocks_per_field_mean": f"{sum(rsp) / len(rsp):.1f}",
+        "rdp_pixels_window": sum(f["rdp_pixels"] for f in fields),
         "gfx_tasks": delta("gfx_tasks"),
         "game_frames": delta("game_frames"),
     }
