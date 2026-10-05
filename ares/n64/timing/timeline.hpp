@@ -53,7 +53,8 @@ struct Readiness {
 //while !timeline.ends(next, limit). A step's interactions are stamped with
 //its start time, which is the `at` the actor reported. `limit` was the next
 //contender when run() began; ends() also stops the run at any event it
-//scheduled or actor it woke, which the run would otherwise pass over.
+//scheduled or actor it woke, which the run would otherwise pass over. Each
+//step after the first is folded with timeline.record().
 struct Actor {
   virtual auto readiness() const -> Readiness = 0;
   virtual auto run(Clock limit) -> void = 0;
@@ -132,9 +133,10 @@ struct Timeline {
     return h;
   }
 
-  //A step taken outside advance(): the CPU deciding its own bus grant when
-  //horizon() proves no other actor can act first. It folds into the trace
-  //exactly as the same step taken inside advance() would.
+  //Folds a step advance() did not start: the second and later steps of one
+  //run(), and the CPU deciding its own bus grant when horizon() proves no
+  //other actor can act first. The trace then holds one record per step, the
+  //same however the steps were batched.
   auto record(Clock at, ActorId id) -> void { fold(at, id, 0); }
 
   //Runs `f` as if an event handler were running at `t`, so now() is `t`: a

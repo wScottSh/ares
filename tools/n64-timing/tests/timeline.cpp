@@ -52,7 +52,9 @@ struct Scripted : Actor {
       steps.push_back({at, id, 0});
       if(at == nestAt) timeline.catchUp({nestTarget >= 0 ? nestTarget : at}, id);
       if(at == wakeAt && woken) woken->kind = Readiness::Kind::Runnable, timeline.wake(woken->id);
-    } while(next < times.size() && !timeline.ends(Clock{times[next]}, limit));
+      if(next >= times.size() || timeline.ends(Clock{times[next]}, limit)) break;
+      timeline.record(Clock{times[next]}, id);
+    } while(true);
   }
 
   //makes `woken` runnable at its own next time during the step at `wakeAt`
@@ -290,6 +292,17 @@ static auto testTimeline() -> u32 {
     for(s64 t : {10, 20, 30}) timeline.schedule({{t}, 1});
     for(s64 t : {10, 20, 30}) timeline.catchUp({t}, ActorId::CPU);
     CHECK(timeline.trace == batched, "trace differs between one batch and one catchUp per event");
+
+    reset();
+    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {10, 20, 30};
+    timeline.attach(ActorId::RSP, &rsp);
+    timeline.catchUp({100}, ActorId::CPU);
+    const u64 oneRun = timeline.trace;
+    reset();
+    Scripted rsp2{}; rsp2.id = ActorId::RSP; rsp2.times = {10, 20, 30};
+    timeline.attach(ActorId::RSP, &rsp2);
+    for(s64 t : {10, 20, 30}) timeline.catchUp({t}, ActorId::CPU);
+    CHECK(timeline.trace == oneRun, "trace differs between one run of three steps and three runs");
   }
 
   if(failures) std::printf("timeline: %u failure(s)\n", failures);
