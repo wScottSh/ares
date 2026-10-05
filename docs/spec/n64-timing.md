@@ -29,7 +29,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 
 | Behavior | Value | Basis | Reference | Checks | Note |
 |---|---|---|---|---|---|
-| `scheduler.tie-rank` | Bus,Events,SysAD,RDP,RSP,CPU order | model-choice | none: equal-time ordering between independent RCP blocks is unpublished | `det` `stepcap` | convention; cannot be observed by a test ROM except through an exact tie |
+| `scheduler.tie-rank` | Bus,Events,SysAD,RDP,RSP,CPU order | model-choice | none: equal-time ordering between independent RCP blocks is unpublished | `det` `stepcap` `unit:timeline` | convention; cannot be observed by a test ROM except through an exact tie |
 
 ### ri
 

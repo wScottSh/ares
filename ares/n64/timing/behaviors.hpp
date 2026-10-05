@@ -99,7 +99,7 @@ namespace Behavior {
 inline constexpr BehaviorInfo behaviors[] = {
   {"clock.unit", Basis::Derived, "750000000", "Hz", "clocks.md: LCM of RCLK 250, PClock 93.75, RCP 62.5 MHz (X2 x17)", "nemu64:rsp_timing/clock-cpu-vs-rdp", ""},
   {"clock.vclk", Basis::Derived, "5500/357", "units", "clocks.md: VCLK = 315/22 MHz x 17/5 (X1); exact rational", "mm:south-clock-town", "AI and VI share the accumulator; removes the +33 ppm AI truncation"},
-  {"scheduler.tie-rank", Basis::ModelChoice, "Bus,Events,SysAD,RDP,RSP,CPU", "order", "none: equal-time ordering between independent RCP blocks is unpublished", "det stepcap", "convention; cannot be observed by a test ROM except through an exact tie"},
+  {"scheduler.tie-rank", Basis::ModelChoice, "Bus,Events,SysAD,RDP,RSP,CPU", "order", "none: equal-time ordering between independent RCP blocks is unpublished", "det stepcap unit:timeline", "convention; cannot be observed by a test ROM except through an exact tie"},
   {"ri.read-hit", Basis::Datasheet, "10", "tc", "NEC uPD488170L tReadHit (rdram-bus-arbitration.md B8)", "unit:ri-cost-table nemu64:timing/load-from-uncached-vi-off", ""},
   {"ri.write-hit", Basis::Datasheet, "4", "tc", "NEC uPD488170L tWriteHit (B8)", "unit:ri-cost-table bench:mi-memset-uncached", ""},
   {"ri.octbyte", Basis::Datasheet, "4", "tc", "NEC uPD488170L 2 B per tc (B8)", "unit:ri-cost-table bench:sp-dma-sweep", ""},
