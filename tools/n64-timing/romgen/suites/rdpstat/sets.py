@@ -3,7 +3,6 @@ import os
 from dataclasses import dataclass, field
 
 from . import dpc, repeater64, routines, systemtest
-from ..nemu64 import measure
 
 
 @dataclass
@@ -19,8 +18,7 @@ class SetDef:
 
     @property
     def asm(self):
-        # runtime.step_measure links against nemu64's measurement loop templates.
-        parts = [routines.ASM, measure.loop_templates_asm()] + [lst.asm() for lst in self.lists]
+        parts = [routines.ASM] + [lst.asm() for lst in self.lists]
         if self.data:
             parts.append(self.data())
         return parts

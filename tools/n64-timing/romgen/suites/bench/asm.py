@@ -473,12 +473,6 @@ bh_done:
     jr $ra
     addiu $sp, $sp, 64
 
-# The runtime's step_measure (nemu64 cycle harness) names these; the bench suite never runs it.
-measure_loop_plain:
-measure_loop_plain_end:
-measure_loop_pre:
-measure_loop_pre_end:
-
 str_bench_line: .asciiz " line_ticks="
 str_bench_samples: .asciiz " samples="
 str_bench_count: .asciiz " count="

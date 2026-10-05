@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 
 from ... import rcp
-from ..nemu64 import measure
 from . import thar0
 
 
@@ -24,5 +23,4 @@ CONSTS = dict(rcp.CONSTS, RUNS=32, RESULTS=thar0.RESULTS, BASELINE=thar0.BASELIN
 
 SETS = [SetDef("rdp", "thar0-rdp", "Thar0", "(thar0 rdp-timing-tests a81ced93b28d)",
                thar0.build,
-               # the runtime's step_measure links against measure's loop templates
-               [rcp.ASM, thar0.ASM, measure.loop_templates_asm()], CONSTS)]
+               [rcp.ASM, thar0.ASM], CONSTS)]
