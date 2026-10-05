@@ -17,13 +17,15 @@
 
 namespace N64 = ares::Nintendo64;
 
+#include "script.hpp"
+
 namespace {
 
 //None: no RDP rasterizer runs; RDRAM holds only what the CPU and RSP write.
 //Vulkan: paraLLEl-RDP on the host GPU, the same renderer the desktop build uses.
 enum class RdpMode { None, Vulkan };
 
-enum class StopReason { EmuxExit, FrameLimit, EmulatedTimeLimit, WallTimeLimit };
+enum class StopReason { EmuxExit, ScriptStop, FrameLimit, EmulatedTimeLimit, WallTimeLimit };
 
 struct StopInfo {
   const char* name;
@@ -33,6 +35,7 @@ struct StopInfo {
 constexpr auto stopInfo(StopReason reason) -> StopInfo {
   switch(reason) {
   case StopReason::EmuxExit:          return {"emux-exit", 0};
+  case StopReason::ScriptStop:        return {"script-stop", 0};
   case StopReason::FrameLimit:        return {"frame-limit", 0};
   case StopReason::EmulatedTimeLimit: return {"emulated-time-limit", 2};
   case StopReason::WallTimeLimit:     return {"wall-time-limit", 3};
@@ -48,6 +51,7 @@ struct Options {
   RdpMode rdp = RdpMode::None;
   string statsPath;
   u32 controllers = 1;
+  string scriptPath;
 };
 
 //cpu.profile.cpuCycles counts VR4300 PClock cycles (93.75 MHz on NTSC).
@@ -61,6 +65,10 @@ struct FrameStats {
   u64 fbHash;
   s64 cpuCycles;
   s64 rspBusyClocks;
+  u32 dpcStart;
+  u32 dpcEnd;
+  u32 colorImage;
+  u32 depthImage;
 };
 
 auto usage() -> void {
@@ -72,8 +80,9 @@ auto usage() -> void {
     "  --rdp none|vulkan   RDP rasterizer: none, or paraLLEl-RDP on the host GPU (default none)\n"
     "  --stats FILE        write one TSV line per VI field to FILE\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
+    "  --script FILE       run an input script (controller 1 input, memory peeks and pokes)\n"
     "stdout carries ISViewer and emux output only. The stop line goes to stderr.\n"
-    "exit: 0 emux exit or frame limit, 2 emulated-time limit, 3 wall-time limit, 1 error\n");
+    "exit: 0 emux exit, script stop, or frame limit, 2 emulated-time limit, 3 wall-time limit, 1 error\n");
 }
 
 auto parse(const Arguments& arguments) -> maybe<Options> {
@@ -88,6 +97,7 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--emulated-seconds") options.emulatedSeconds = value().real();
     else if(arg == "--wall-seconds") options.wallSeconds = value().real();
     else if(arg == "--stats") options.statsPath = value();
+    else if(arg == "--script") options.scriptPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
     else if(arg == "--rdp") {
       auto mode = value();
@@ -163,7 +173,8 @@ auto rdramFramebufferHash() -> u64 {
 //Hashes paraLLEl-RDP's VI scanout for this field and releases the readback buffer.
 //VI::refresh normally does the release on the screen thread, which run-ahead disables;
 //without it the next field's scanout waits forever.
-auto vulkanScanoutHash() -> u64 {
+//If shotPath is set, also writes the scanout to it as a binary PPM.
+auto vulkanScanoutHash(const string& shotPath) -> u64 {
   if(!N64::vi.gpuOutputValid) return 0;
   N64::vi.gpuOutputValid = false;
   const u8* rgba = nullptr;
@@ -174,6 +185,13 @@ auto vulkanScanoutHash() -> u64 {
   fnv.mix(height);
   if(rgba) {
     for(u32 i : range(width * height)) fnv.mix(memory::readl<4>(rgba + i * 4) & 0xffffff);
+  }
+  if(rgba && shotPath) {
+    if(auto fp = std::fopen(shotPath.data(), "wb")) {
+      std::fprintf(fp, "P6\n%u %u\n255\n", width, height);
+      for(u32 i : range(width * height)) std::fwrite(rgba + i * 4, 1, 3, fp);
+      std::fclose(fp);
+    }
   }
   N64::vulkan.unmapScanoutRead();
   N64::vulkan.endScanout();
@@ -189,8 +207,169 @@ auto sample(u64 frame, u64 fbHash) -> FrameStats {
     fbHash,
     N64::cpu.profile.cpuCycles,
     N64::rsp.profile.cycles - N64::rsp.profile.haltedCycles,
+    (u32)N64::rdp.command.start,
+    (u32)N64::rdp.command.end,
+    (u32)N64::rdp.set.color.dramAddress,
+    (u32)N64::rdp.set.mask.dramAddress,
   };
 }
+
+//Guest memory as a CPU load or store to a KSEG0/KSEG1 RDRAM address sees it: a dirty data
+//cache line holds newer data than RDRAM. Unlike CPU::readDebug, a miss reads RDRAM directly
+//instead of going through the bus, so script accesses never touch bus or cache timing state.
+struct GuestMemory {
+  static auto physical(u32 address) -> maybe<u32> {
+    if(address < 0x8000'0000 || address >= 0xc000'0000) return nothing;
+    u32 paddr = address & 0x1fff'ffff;
+    if(paddr >= N64::rdram.ram.size) return nothing;
+    return paddr;
+  }
+
+  static auto cachedLine(u32 address, u32 paddr) -> N64::CPU::DataCache::Line* {
+    if(address >= 0xa000'0000) return nullptr;
+    auto& line = N64::cpu.dcache.line(address);
+    return line.hit(paddr) ? &line : nullptr;
+  }
+
+  static auto read(u32 address, script::Width width) -> maybe<u32> {
+    auto paddr = physical(address);
+    if(!paddr) return nothing;
+    auto& ram = N64::rdram.ram;
+    auto line = cachedLine(address, *paddr);
+    switch(width) {
+    case script::Width::Byte: return line ? line->bytes[*paddr & 15 ^ 3] : (u32)ram.N64::Memory::Writable::read<N64::Byte>(*paddr);
+    case script::Width::Half: return line ? line->halfs[*paddr >> 1 & 7 ^ 1] : (u32)ram.N64::Memory::Writable::read<N64::Half>(*paddr);
+    case script::Width::Word: return line ? line->words[*paddr >> 2 & 3] : (u32)ram.N64::Memory::Writable::read<N64::Word>(*paddr);
+    }
+    return nothing;
+  }
+
+  static auto write(u32 address, script::Width width, u32 value) -> bool {
+    auto paddr = physical(address);
+    if(!paddr) return false;
+    auto& ram = N64::rdram.ram;
+    if(auto line = cachedLine(address, *paddr)) {
+      switch(width) {
+      case script::Width::Byte: line->bytes[*paddr & 15 ^ 3] = value; break;
+      case script::Width::Half: line->halfs[*paddr >> 1 & 7 ^ 1] = value; break;
+      case script::Width::Word: line->words[*paddr >> 2 & 3] = value; break;
+      }
+      line->dirty |= ((1 << (u32)width) - 1) << (*paddr & 15);
+      return true;
+    }
+    switch(width) {
+    case script::Width::Byte: ram.N64::Memory::Writable::write<N64::Byte>(*paddr, value); break;
+    case script::Width::Half: ram.N64::Memory::Writable::write<N64::Half>(*paddr, value); break;
+    case script::Width::Word: ram.N64::Memory::Writable::write<N64::Word>(*paddr, value); break;
+    }
+    return true;
+  }
+
+  static auto evaluate(const script::Expr& expr) -> maybe<u32> {
+    u32 value = 0;
+    for(auto& term : expr.terms) {
+      switch(term.op) {
+      case script::Expr::Op::Push: value = term.value; break;
+      case script::Expr::Op::Add: value += term.value; break;
+      case script::Expr::Op::Load: {
+        auto loaded = read(value, script::Width::Word);
+        if(!loaded) return nothing;
+        value = *loaded;
+      } break;
+      }
+    }
+    return value;
+  }
+};
+
+//Runs script steps between VI fields until one has to wait for a later field.
+struct ScriptRunner {
+  std::vector<script::Step> steps;
+  u32 next = 0;
+  u64 waitUntil = 0;
+  bool waiting = false;
+  script::Pad pad;
+  string shotPath;
+  bool stopRequested = false;
+
+  auto log(const char* verb, const string& name, u64 frame, const string& detail = "") -> void {
+    std::fprintf(stderr, "n64-run: %s %.*s frame=%llu%s%.*s\n", verb, (int)name.size(), name.data(),
+      (unsigned long long)frame, detail.size() ? " " : "", (int)detail.size(), detail.data());
+  }
+
+  //frame is the number of VI fields completed so far.
+  auto advance(u64 frame) -> void {
+    while(next < steps.size() && !stopRequested) {
+      bool done = std::visit([&](auto& step) { return execute(step, frame); }, steps[next]);
+      if(!done) return;
+      next++;
+      waiting = false;
+    }
+  }
+
+  auto execute(const script::Wait& step, u64 frame) -> bool {
+    if(!waiting) { waiting = true; waitUntil = frame + step.fields; }
+    return frame >= waitUntil;
+  }
+
+  auto execute(const script::Until& step, u64) -> bool {
+    auto address = GuestMemory::evaluate(step.address);
+    if(!address) return false;
+    auto value = GuestMemory::read(*address, step.width);
+    if(!value) return false;
+    switch(step.compare) {
+    case script::Compare::Equal:    return *value == step.value;
+    case script::Compare::NotEqual: return *value != step.value;
+    case script::Compare::AtLeast:  return *value >= step.value;
+    case script::Compare::Below:    return *value <  step.value;
+    }
+    return false;
+  }
+
+  auto execute(const script::Input& step, u64) -> bool {
+    pad = {step.buttons, step.x, step.y};
+    return true;
+  }
+
+  auto execute(const script::Poke& step, u64 frame) -> bool {
+    auto address = GuestMemory::evaluate(step.address);
+    if(!address || !GuestMemory::write(*address, step.width, step.value)) log("poke-failed", "-", frame);
+    return true;
+  }
+
+  auto execute(const script::Copy& step, u64 frame) -> bool {
+    auto source = GuestMemory::evaluate(step.source);
+    auto target = GuestMemory::evaluate(step.target);
+    for(u32 offset = 0; source && target && offset < step.length; offset++) {
+      auto byte = GuestMemory::read(*source + offset, script::Width::Byte);
+      if(!byte || !GuestMemory::write(*target + offset, script::Width::Byte, *byte)) { log("copy-failed", "-", frame); break; }
+    }
+    if(!source || !target) log("copy-failed", "-", frame);
+    return true;
+  }
+
+  auto execute(const script::Peek& step, u64 frame) -> bool {
+    auto address = GuestMemory::evaluate(step.address);
+    auto value = address ? GuestMemory::read(*address, step.width) : maybe<u32>{};
+    log("peek", step.name, frame, value ? string{"0x", hex(*value, 2 * (u32)step.width)} : string{"unreadable"});
+    return true;
+  }
+
+  auto execute(const script::Mark& step, u64 frame) -> bool {
+    log("mark", step.name, frame);
+    return true;
+  }
+
+  auto execute(const script::Shot& step, u64) -> bool {
+    shotPath = step.path;
+    return true;
+  }
+
+  auto execute(const script::Stop&, u64) -> bool {
+    stopRequested = true;
+    return true;
+  }
+};
 
 struct Headless : ares::Platform {
   std::shared_ptr<mia::Pak> system;
@@ -208,6 +387,20 @@ struct Headless : ares::Platform {
     if(event == ares::Event::Shutdown) exitRequested = true;
   }
 
+  //Every connected gamepad reads the script's pad; with no script, nothing is pressed.
+  const script::Pad* pad = nullptr;
+
+  auto input(ares::Node::Input::Input node) -> void override {
+    if(!pad) return;
+    if(auto button = node->cast<ares::Node::Input::Button>()) {
+      auto& held = pad->buttons;
+      button->setValue(std::find(held.begin(), held.end(), node->name()) != held.end());
+    } else if(auto axis = node->cast<ares::Node::Input::Axis>()) {
+      if(node->name() == "X-Axis") axis->setValue(pad->x);
+      if(node->name() == "Y-Axis") axis->setValue(pad->y);
+    }
+  }
+
   auto log(ares::Node::Debugger::Tracer::Tracer node, string_view message) -> void override {
     if(!node->terminal()) return;
     std::fwrite(message.data(), 1, message.size(), output);
@@ -222,7 +415,22 @@ auto nall::main(Arguments arguments) -> void {
   if(!parsed) { usage(); std::_Exit(1); }
   auto options = *parsed;
 
+  ScriptRunner runner;
+  if(options.scriptPath) {
+    if(!file::exists(options.scriptPath)) {
+      std::fprintf(stderr, "n64-run: cannot read script %s\n", options.scriptPath.data());
+      std::_Exit(1);
+    }
+    auto parsedScript = script::parse(string::read(options.scriptPath));
+    if(auto line = std::get_if<u32>(&parsedScript)) {
+      std::fprintf(stderr, "n64-run: %s:%u: invalid script step\n", options.scriptPath.data(), *line);
+      std::_Exit(1);
+    }
+    runner.steps = std::get<std::vector<script::Step>>(parsedScript);
+  }
+
   Headless platform;
+  platform.pad = &runner.pad;
   //The core prints debug notices with print() to stdout. Move fd 1 to stderr so the
   //real stdout carries only ISViewer and emux guest output.
   std::fflush(stdout);
@@ -280,7 +488,8 @@ auto nall::main(Arguments arguments) -> void {
       std::fprintf(stderr, "n64-run: cannot write %s\n", options.statsPath.data());
       std::_Exit(1);
     }
-    stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks\n");
+    stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks"
+                "\tdpc_start\tdpc_end\tcimg\tzimg\n");
   }
 
   auto wallStart = std::chrono::steady_clock::now();
@@ -294,17 +503,24 @@ auto nall::main(Arguments arguments) -> void {
   while(true) {
     root->run();
     u64 fbHash = 0;
-    if(N64::vulkan.enable) fbHash = vulkanScanoutHash();
+    if(N64::vulkan.enable) {
+      fbHash = vulkanScanoutHash(runner.shotPath);
+      runner.shotPath = {};
+    }
     else if(stats && N64::vi.active()) fbHash = rdramFramebufferHash();
     if(N64::vi.active()) {
       if(stats) {
         auto s = sample(frames, fbHash);
         stats.print(s.frame, "\t", hex(s.origin, 6L), "\t", s.width, "\t", s.depth, "\t",
-                    hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\n");
+                    hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\t",
+                    hex(s.dpcStart, 6L), "\t", hex(s.dpcEnd, 6L), "\t", hex(s.colorImage, 7L), "\t",
+                    hex(s.depthImage, 7L), "\n");
       }
       frames++;
+      runner.advance(frames);
     }
     if(platform.exitRequested) { reason = StopReason::EmuxExit; break; }
+    if(runner.stopRequested) { reason = StopReason::ScriptStop; break; }
     if(options.frames && frames >= options.frames) { reason = StopReason::FrameLimit; break; }
     if(options.emulatedSeconds && emulatedElapsed() >= options.emulatedSeconds) { reason = StopReason::EmulatedTimeLimit; break; }
     if(options.wallSeconds && wallElapsed() >= options.wallSeconds) { reason = StopReason::WallTimeLimit; break; }
