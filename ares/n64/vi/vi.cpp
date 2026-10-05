@@ -55,6 +55,10 @@ auto VI::unload() -> void {
 
 auto VI::line() -> void {
   if(active()) {
+    //HSYNC triggers the RDRAM refresh. A blank VI (VI_CTRL type 0, "no data and no sync",
+    //n64brew Video_Interface) sends none: nemu64-test's VI-off uncached loads average
+    //32.54 pclk, which a 52-rclk holdoff every line would raise by about 2.
+    ri.refresh(Thread::clock);
     ++io.vcounter;
     int halfline = io.vcounter << 1 | io.field;
     if(halfline >= io.halfLinesPerField+1) {

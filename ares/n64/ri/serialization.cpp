@@ -9,4 +9,5 @@ auto RI::serialize(serializer& s) -> void {
   s(io.bankStatus);
   s(io.currentLoaded);
   s(refreshWarned);
+  channel.serialize(s);
 }

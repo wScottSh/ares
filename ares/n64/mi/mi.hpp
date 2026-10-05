@@ -41,6 +41,10 @@ struct MI : Memory::RCP<MI> {
   //serialization.cpp
   auto serialize(serializer&) -> void;
 
+  //The next uncached RDRAM write is an MI repeat write (MI_MODE).
+  auto repeating() const -> bool { return io.repeatMode; }
+  auto ebusTest() const -> bool { return io.ebusTestMode; }
+
 private:
   struct Interrupt {
     b1 line = 1;

@@ -1,11 +1,9 @@
 template<typename T>
 struct RCP {  //A device which is part of RCP
-  const u32 DefaultReadCycles = 20;
-  const u32 DefaultWriteCycles = 0;  //not implemented until we implement the CPU write queue
-
   template<u32 Size>
   auto read(u32 address, Thread& thread) -> u64 {
-    thread.step(pclk(DefaultReadCycles));
+    //the whole uncached register read, less the load's own issue cycle; a write's cost is its SysAD drain
+    thread.step(Timing::Behavior::CpuRcpRegisterRead - Timing::Behavior::CpuDcacheHit);
     thread.sync();
     if constexpr(Size == Byte) {
       auto data = ((T*)this)->readWord(address, thread);
@@ -35,7 +33,6 @@ struct RCP {  //A device which is part of RCP
 
   template<u32 Size>
   auto write(u32 address, u64 data, Thread& thread) -> void {
-    thread.step(pclk(DefaultWriteCycles));
     thread.sync();
     if constexpr(Size == Byte) {
       switch(address & 3) {

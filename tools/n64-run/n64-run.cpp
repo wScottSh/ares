@@ -156,7 +156,7 @@ template<typename F> auto walkFramebuffer(F&& pixelAt) -> void {
   if(dx0 >= (s32)hscanStart) dx0 += 8;
   if(dx1 <  (s32)hscanStop)  dx1 -= 7;
 
-  auto& ram = N64::rdram.ram;
+  auto& ram = N64::Loader::ram();
   const u32 bytesPerPixel = io.colorDepth == 2 ? 2 : 4;
   const u32 pitch = io.width;
   u32 y0 = io.ysubpixel + io.yscale * (dy0 - io.vstart);
@@ -238,7 +238,7 @@ struct GuestMemory {
   static auto physical(u32 address) -> maybe<u32> {
     if(address < 0x8000'0000 || address >= 0xc000'0000) return nothing;
     u32 paddr = address & 0x1fff'ffff;
-    if(paddr >= N64::rdram.ram.size) return nothing;
+    if(paddr >= N64::Loader::ram().size) return nothing;
     return paddr;
   }
 
@@ -251,7 +251,7 @@ struct GuestMemory {
   static auto read(u32 address, script::Width width) -> maybe<u32> {
     auto paddr = physical(address);
     if(!paddr) return nothing;
-    auto& ram = N64::rdram.ram;
+    auto& ram = N64::Loader::ram();
     auto line = cachedLine(address, *paddr);
     switch(width) {
     case script::Width::Byte: return line ? line->bytes[*paddr & 15 ^ 3] : (u32)ram.N64::Memory::Writable::read<N64::Byte>(*paddr);
@@ -264,7 +264,7 @@ struct GuestMemory {
   static auto write(u32 address, script::Width width, u32 value) -> bool {
     auto paddr = physical(address);
     if(!paddr) return false;
-    auto& ram = N64::rdram.ram;
+    auto& ram = N64::Loader::ram();
     if(auto line = cachedLine(address, *paddr)) {
       switch(width) {
       case script::Width::Byte: line->bytes[*paddr & 15 ^ 3] = value; break;

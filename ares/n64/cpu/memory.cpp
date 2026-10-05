@@ -128,22 +128,12 @@ auto CPU::devirtualizeDebug(u64 vaddr) -> u64 {
 
 template<u32 Size>
 inline auto CPU::busWrite(u32 address, u64 data) -> void {
-  bus.write<Size>(address, data, *this, RBusDevice::VR4300_UNCACHED);
-}
-
-template<u32 Size>
-inline auto CPU::busWriteBurst(u32 address, u32 *data) -> bool {
-  return bus.writeBurst<Size>(address, data, *this);
+  sysad.store<Size>(address, data);
 }
 
 template<u32 Size>
 inline auto CPU::busRead(u32 address) -> u64 {
-  return bus.read<Size>(address, *this, RBusDevice::VR4300_UNCACHED);
-}
-
-template<u32 Size>
-inline auto CPU::busReadBurst(u32 address, u32 *data) -> bool {
-  return bus.readBurst<Size>(address, data, *this);
+  return sysad.read<Size>(address);
 }
 
 template<u32 Size>
@@ -179,7 +169,7 @@ auto CPU::readDebug(u64 vaddr) -> u64 {
   auto access = devirtualize<Read, Size>(vaddr, false, false);
   if(!access) return 0;
   if(access.cache) return dcache.readDebug<Size>(access.vaddr, access.paddr);
-  return bus.read<Size>(access.paddr, dummyThread, RBusDevice::ARES_DEBUGGER);
+  return sysad.forward<Size>(access.paddr, bus.read<Size>(access.paddr, dummyThread, RBusDevice::ARES_DEBUGGER));
 }
 
 

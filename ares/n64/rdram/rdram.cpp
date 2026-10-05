@@ -3,6 +3,8 @@
 namespace ares::Nintendo64 {
 
 RDRAM rdram;
+
+auto Loader::ram() -> RDRAM::Writable& { return rdram.ram; }
 #include "io.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"

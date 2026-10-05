@@ -1,4 +1,4 @@
-static const string SerializerVersion = "v153.4-timeline";
+static const string SerializerVersion = "v153.5-sysad";
 
 auto System::serialize(bool synchronize) -> serializer {
   serializer s;
@@ -55,6 +55,7 @@ auto System::serialize(serializer& s, bool synchronize) -> void {
   s(ri);
   s(si);
   s(cpu);
+  s(sysad);
   s(rdp);
   s(rsp);
   s(dd);
