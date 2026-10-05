@@ -91,7 +91,9 @@ An input script is a text file with one step per line. `#` starts a comment. The
 
 ### RDP
 
-The core has one rasterizer: the cen64-jgemu pixel engine (`ares/n64/rdp/engine/`) on the emulation thread. Each `DPC_END` write renders its command range into RDRAM before returning, with no worker threads, so the result does not depend on the host. Its state (modes, tiles, TMEM, a trailing partial command) is part of the save state, so `trace_hash` covers it.
+The core has one rasterizer: the cen64-jgemu pixel engine (`ares/n64/rdp/engine/`) on the emulation thread, with no worker threads, so the result does not depend on the host. The DPC front end (`ares/n64/rdp/timed.hpp`, `timed.cpp`) is a timeline actor: a `DPC_END` write starts the command DMA, `DPC_CURRENT` advances as its bursts land in the 30-dword command FIFO, the command processor dispatches one command at a time and stays busy for its compute cost, and `SYNC_FULL` raises the DP interrupt when it retires. Each dispatch renders the command's pixels into RDRAM. The engine state (modes, tiles, TMEM, buffered command words) and the front end's state are part of the save state, so `trace_hash` covers them.
+
+`ARES_DPLOG=FILE n64-run ...` logs every `DPC_START`/`DPC_END`/`DPC_STATUS` write, every `DPC_CURRENT`/`DPC_STATUS` read and every DP interrupt. `python tools/n64-timing/dplog-check.py FILE` reports the RSP's back-pressure from it: the `DPC_CURRENT` and `DPC_STATUS` poll loops that iterated, `DPC_END` writes made while `DPC_CURRENT` trailed, and where each DP interrupt fell.
 
 `tools/n64-timing/state-roundtrip.sh ROM [FRAMES]` checks that: a run that saves and reloads its state at fields 150, 300 and 457 must write the same stats file as a plain run, and a TMEM byte poked at field 30 must change `trace_hash` and no other column of that row.
 
@@ -121,7 +123,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ### Unit tests
 
-`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` in the build directory, or `ctest` there. `unit:timeline` drives `Timing::Timeline` with scripted actors.
+`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` in the build directory, or `ctest` there. `unit:timeline` drives `Timing::Timeline` with scripted actors. It also builds `n64-timing-dpc-regs` (`unit:dpc-regs`), which drives the DPC register block and the RDP cost model in `ares/n64/rdp/timed.hpp` without a timeline.
 
 ## nemu64-test corpus
 
