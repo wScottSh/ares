@@ -58,7 +58,7 @@ def fill_color16(r, g, b, a):
     return c << 16 | c
 
 
-def floor10p2(v):
+def to_10p2(v):
     return int(v * 4)
 
 
@@ -72,10 +72,10 @@ def clear_list():
     return rdp.DisplayList("r64_clear").add(
         rdp.sync_pipe(),
         rdp.color_image(FB, FB_STRIDE_PX),
-        rdp.scissor(0, 0, floor10p2(319), floor10p2(239)),
+        rdp.scissor(0, 0, to_10p2(319), to_10p2(239)),
         rdp.other_modes(rdp.CYCLE_FILL),
         rdp.fill_color(fill_color16(0, 0, 0, 0)),
-        rdp.rect(0, 0, floor10p2(319), floor10p2(239)),
+        rdp.rect(0, 0, to_10p2(319), to_10p2(239)),
         rdp.sync_full(),
     )
 
@@ -86,8 +86,8 @@ def nosync_list(case):
     lst = rdp.DisplayList(f"r64_nosync_{case:02x}").add(
         rdp.sync_pipe(),
         rdp.fill_color(fill_color16(0x22, 0x22, 0x22, 0)),
-        rdp.scissor(*(floor10p2(v) for v in REGION)),
-        rdp.rect(floor10p2(x0), floor10p2(y0), floor10p2(x1), floor10p2(y1)),
+        rdp.scissor(*(to_10p2(v) for v in REGION)),
+        rdp.rect(to_10p2(x0), to_10p2(y0), to_10p2(x1), to_10p2(y1)),
         rdp.sync_pipe(),
         rdp.other_modes(rdp.CYCLE_1, dither_rgb=3, dither_alpha=3),
         rdp.combine(CC_ENV),
@@ -101,8 +101,8 @@ def nosync_list(case):
         for x in range(64):
             lst.add(rdp.sync_pipe(),
                     rdp.env_color(rgba(0xFF, 0xFF, 0xFF, 0xFF)),
-                    rdp.rect(floor10p2(pos_x), floor10p2(pos_y),
-                             floor10p2(pos_x + x + size_x), floor10p2(pos_y + y + size_y)),
+                    rdp.rect(to_10p2(pos_x), to_10p2(pos_y),
+                             to_10p2(pos_x + x + size_x), to_10p2(pos_y + y + size_y)),
                     rdp.env_color(rgba(0xFF, 0, 0, 0xFF)),
                     rdp.env_color(rgba(0, 0xFF, 0, 0xFF)),
                     rdp.env_color(rgba(0, 0, 0xFF, 0xFF)))
@@ -127,7 +127,7 @@ def fill_sync_list():
     lst = rdp.DisplayList("r64_fillsync").add(
         rdp.sync_pipe(),
         rdp.color_image(FB, FB_STRIDE_PX),
-        rdp.scissor(0, 0, floor10p2(319), floor10p2(239)),
+        rdp.scissor(0, 0, to_10p2(319), to_10p2(239)),
         rdp.other_modes(rdp.CYCLE_FILL),
     )
     for x in range(0, 320, 2):
