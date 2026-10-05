@@ -1,115 +1,23 @@
 auto RDP::readWord(u32 address, Thread& thread) -> u32 {
   address = (address & 0x1f) >> 2;
-  n32 data;
-
-  if(address == 0) {
-    //DPC_START
-    data.bit(0,23) = command.start;
+  u32 data = dpc.read(address, thread.clock);
+  if(dpLog && (address == RDPTimed::Current || address == RDPTimed::Status)) {
+    fprintf(dpLog, "R %lld %s %s %06x\n", (long long)thread.clock.units, dpLogActor(thread.actor),
+      address == RDPTimed::Current ? "CURRENT" : "STATUS", data);
   }
-
-  if(address == 1) {
-    //DPC_END
-    data.bit(0,23) = command.end;
-  }
-
-  if(address == 2) {
-    //DPC_CURRENT
-    data.bit(0,23) = command.current;
-  }
-
-  if(address == 3) {
-    //DPC_STATUS
-    data.bit( 0) = command.source;
-    data.bit( 1) = command.freeze || command.crashed;
-    data.bit( 2) = command.flush;
-    data.bit( 3) = command.startGclk;
-    data.bit( 4) = command.tmemBusy > 0;
-    data.bit( 5) = command.pipeBusy > 0;
-    data.bit( 6) = command.bufferBusy > 0;
-    data.bit( 7) = command.ready;
-    data.bit( 8) = 0;  //DMA busy
-    data.bit( 9) = command.endValid;
-    data.bit(10) = command.startValid;
-  }
-
-  if(address == 4) {
-    //DPC_CLOCK
-    data.bit(0,23) = (thread.clock - command.clockOrigin).units / Timing::UnitsPerRclk;
-  }
-
-  if(address == 5) {
-    //DPC_BUSY
-    data.bit(0,23) = command.bufferBusy;
-  }
-
-  if(address == 6) {
-    //DPC_PIPE_BUSY
-    data.bit(0,23) = command.pipeBusy;
-  }
-
-  if(data == 7) {
-    //DPC_TMEM_BUSY
-    data.bit(0,23) = command.tmemBusy;
-  }
-
   debugger.ioDPC(Read, address, data);
   return data;
 }
 
-auto RDP::writeWord(u32 address, u32 data_, Thread& thread) -> void {
+auto RDP::writeWord(u32 address, u32 data, Thread& thread) -> void {
   address = (address & 0x1f) >> 2;
-  n32 data = data_;
-
-  if(address == 0) {
-    //DPC_START
-    if(!command.startValid) command.start = data.bit(0,23) & ~7;
-    command.startValid = 1;
+  if(dpLog && address <= RDPTimed::Status) {
+    fprintf(dpLog, "W %lld %s %s %08x sv=%u ev=%u cur=%06x end=%06x\n", (long long)thread.clock.units,
+      dpLogActor(thread.actor), address == RDPTimed::Start ? "START" : address == RDPTimed::End ? "END" : "STATUS",
+      data, (u32)dpc.startValid, (u32)dpc.endValid, (u32)dpc.current, (u32)dpc.end);
   }
-
-  if(address == 1) {
-    //DPC_END
-    command.end = data.bit(0,23) & ~7;
-    if(command.startValid) {
-      command.current = command.start;
-      command.startValid = 0;
-    }
-    flushCommands();
-  }
-
-  if(address == 2) {
-    //DPC_CURRENT (read-only)
-  }
-
-  if(address == 3) {
-    //DPC_STATUS
-    if(data.bit(0)) command.source = 0;
-    if(data.bit(1)) command.source = 1;
-    if(data.bit(2)) command.freeze = 0, flushCommands();
-    if(data.bit(3)) command.freeze = 1;
-    if(data.bit(4)) command.flush = 0;
-    if(data.bit(5)) command.flush = 1;
-    if(data.bit(6) && !command.crashed) command.tmemBusy = 0;
-    if(data.bit(7) && !command.crashed) command.pipeBusy = 0;
-    if(data.bit(8) && !command.crashed) command.bufferBusy = 0;
-    if(data.bit(9)) command.clockOrigin = thread.clock;
-  }
-
-  if(address == 4) {
-    //DPC_CLOCK (read-only)
-  }
-
-  if(address == 5) {
-    //DPC_BUSY (read-only)
-  }
-
-  if(address == 6) {
-    //DPC_PIPE_BUSY (read-only)
-  }
-
-  if(address == 7) {
-    //DPC_TMEM_BUSY (read-only)
-  }
-
+  dpc.write(address, data, thread.clock);
+  if(address == RDPTimed::End || address == RDPTimed::Status) kick(thread.clock);
   debugger.ioDPC(Write, address, data);
 }
 
@@ -185,21 +93,4 @@ auto RDP::IO::writeWord(u32 address, u32 data_, Thread& thread) -> void {
   }
 
   self.debugger.ioDPS(Write, address, data);
-}
-
-auto RDP::flushCommands() -> void {
-  if(command.freeze || command.crashed) return;
-  command.bufferBusy = 1;
-  command.pipeBusy = 1;
-  command.startGclk = 1;
-  if(command.end > command.current) {
-    if(!mapIdentityWarned && !rdram.mapIdentity) {
-      debug(unusual, "[RDP] started while RDRAM DeviceId map is non-identity");
-      mapIdentityWarned = 1;
-    }
-    debugger.commands();
-    engine.render();
-  }
-  command.bufferBusy = 0;
-  command.ready = 1;
 }

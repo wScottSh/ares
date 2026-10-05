@@ -38,6 +38,8 @@ struct Scripted : Actor {
   u32 next = 0;
   s64 nestAt = -1;
   s64 nestTarget = -1;
+  s64 wakeAt = -1;            //the step at this time makes `wakes` runnable, the way a DPC_END write wakes the RDP
+  struct Scripted* wakes = nullptr;
   u32 runs = 0;
 
   auto readiness() const -> Readiness override {
@@ -51,14 +53,19 @@ struct Scripted : Actor {
       s64 at = times[next++];
       steps.push_back({at, id, 0});
       if(at == nestAt) timeline.catchUp({nestTarget >= 0 ? nestTarget : at}, id);
-    } while(next < times.size() && Clock{times[next]} < limit);
+      if(at == wakeAt) wakes->kind = Readiness::Kind::Runnable, timeline.wake(wakes->id);
+    } while(next < times.size() && Clock{times[next]} < timeline.limit(limit));
   }
 };
+
+static Scripted* wakeByEvent = nullptr;
 
 static auto fired(const Timeline::Event& event) -> void {
   steps.push_back({event.at.units, ActorId::Events, event.kind});
   //an event that posts another one: the RTC tick reposting itself from its own time
   if(event.kind == 7) timeline.schedule({timeline.now({-1}) + Clock{5}, 8});
+  //an event whose handler makes an actor runnable before the next event
+  if(event.kind == 11 && wakeByEvent) wakeByEvent->kind = Readiness::Kind::Runnable, timeline.wake(wakeByEvent->id);
 }
 
 static auto reset() -> void {
@@ -242,6 +249,35 @@ auto nall::main(Arguments) -> void {
     CHECK(steps.size() == 1, "stepCap catchUp below the real horizon steps nothing: %s", dump().c_str());
     timeline.catchUp({90}, ActorId::CPU);
     CHECK(steps.size() == 2 && timeline.horizon() == Clock{0}, "stepCap keeps the horizon at 0 after a step");
+  }
+
+  //A step that wakes another actor ends the run: the RSP's DPC_END write at 10
+  //makes the RDP runnable at 15, so the RSP's step at 20 must wait for it.
+  //Defect: a run that keeps stepping to the limit it was given.
+  {
+    reset();
+    Scripted rsp{}; rsp.id = ActorId::RSP; rsp.times = {10, 20, 30};
+    Scripted rdp{}; rdp.id = ActorId::RDP; rdp.times = {15}; rdp.kind = Readiness::Kind::Parked;
+    rsp.wakeAt = 10; rsp.wakes = &rdp;
+    timeline.attach(ActorId::RSP, &rsp);
+    timeline.attach(ActorId::RDP, &rdp);
+    timeline.catchUp({100}, ActorId::CPU);
+    CHECK(sorted() && steps.size() == 4, "a woken actor must run before the waker's later steps: %s", dump().c_str());
+  }
+
+  //The same for an event handler: the RDP woken at 15 by the event at 10 runs
+  //before the event at 20. Defect: fireEvents keeps the limit it computed
+  //before the handler ran (verify-49).
+  {
+    reset();
+    Scripted rdp{}; rdp.id = ActorId::RDP; rdp.times = {15}; rdp.kind = Readiness::Kind::Parked;
+    wakeByEvent = &rdp;
+    timeline.attach(ActorId::RDP, &rdp);
+    timeline.schedule({{10}, 11});
+    timeline.schedule({{20}, 12});
+    timeline.catchUp({100}, ActorId::CPU);
+    CHECK(sorted() && steps.size() == 3, "an actor woken by an event must run before the next event: %s", dump().c_str());
+    wakeByEvent = nullptr;
   }
 
   if(failures) { std::printf("timeline: %u failure(s)\n", failures); std::exit(1); }

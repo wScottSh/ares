@@ -79,11 +79,15 @@ namespace Behavior {
   constexpr s64 ViBurst = 128;  //128 B
   constexpr s64 RdpCmdFifoDwords = 30;  //30 dwords
   constexpr s64 RdpCmdFetchBurst = 128;  //128 B
+  constexpr s64 RdpXbusFetchRate = 8;  //8 B/rclk
   constexpr Clock RdpSyncPipe = {600};  //50 rclk
   constexpr Clock RdpSyncTile = {396};  //33 rclk
   constexpr Clock RdpSyncLoad = {300};  //25 rclk
+  constexpr Clock RdpSyncFull = {600};  //50 rclk
   constexpr Clock RdpSetter = {12};  //1 rclk
-  constexpr Clock RdpPrimitiveBase = {168};  //14 rclk
+  constexpr Clock RdpPrimitiveBase = {144};  //12 rclk
+  constexpr s64 RdpSpanDeadPixels = 2;  //2 px
+  constexpr Clock RdpSpanLineGap = {24};  //2 rclk
   constexpr s64 RdpSpan1cycle = 1;  //1 px/rclk
   constexpr Ratio RdpSpan2cycle = {1, 2};  //0.5 px/rclk
   constexpr s64 RdpFillCopyRate = 8;  //8 B/rclk
@@ -168,11 +172,15 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"vi.fetch-window", Basis::Wiki, "active-line", "rule", "n64brew VI_H_VIDEO; US 6,166,748 'in synchronism with the line scanning'", "bench:uncached-vs-hpos", ""},
   {"rdp.cmd-fifo-dwords", Basis::Wiki, "30", "dwords", "n64-systemtest rdp/mod.rs:21-23 author note: CURRENT reaches START+240 while frozen", "rdpstat:current-prefetch", "no test asserts it; MiSTer uses 64; calibration #16"},
   {"rdp.cmd-fetch-burst", Basis::ModelChoice, "128", "B", "RI maximum; MiSTer fetches <= 22 words", "rdpstat:current-prefetch", "calibration #16"},
+  {"rdp.xbus-fetch-rate", Basis::ModelChoice, "8", "B/rclk", "cen64 jgemu interface.c fetches commands 64 bits per clock (rdp-command-timing.md, Command fetch row); the X bus is private to the RSP and RDP, so no RI traffic", "rdpstat:xbus", "no hardware measurement"},
   {"rdp.sync-pipe", Basis::Wiki, "50", "rclk", "n64brew Commands (Tharo rev 5366)", "bench:rdp-sync-sweep", ""},
   {"rdp.sync-tile", Basis::Wiki, "33", "rclk", "n64brew Commands", "bench:rdp-sync-sweep", ""},
   {"rdp.sync-load", Basis::Wiki, "25", "rclk", "n64brew Commands", "bench:rdp-sync-sweep", ""},
+  {"rdp.sync-full", Basis::ModelChoice, "50", "rclk", "n64brew Commands: Sync Full waits for every staged pipeline and memory operation, no fixed count; until the memory interface (plan T13) exists the drain is the Sync Pipe stall, as cen64 jgemu charges it (rdp-command-timing.md s.3.5)", "bench:rdp-sync-sweep", "cancels in the Thar0 baseline subtraction; the DP interrupt is raised when it retires"},
   {"rdp.setter", Basis::Wiki, "1", "rclk", "n64brew Pipeline; conflicts with reverted cen64 SETTER 2.68 incl. fetch (jgemu-dpc-probe.md)", "bench:rdp-setter-sweep", "conflict recorded"},
-  {"rdp.primitive-base", Basis::Measured, "14", "rclk", "cen64 jgemu rdp_core.c:5346-5362 (RECTH h=1 vs h=2); methodology doubted (jgemu-dpc-probe.md)", "thar0:alpha-fail-1cycle bench:rdp-rectn", "includes the 2-word fetch; Thar0 all-fail data fits 240 x 324 + 12"},
+  {"rdp.primitive-base", Basis::Fit, "12", "rclk", "Thar0 RDP-Timing-Tests sample_results.txt alpha all-fail rect: 1-cycle 77,772 = 240 x 324 + 12, 2-cycle 155,052 = 240 x 646 + 12 (hardware-corpora.md); cen64 jgemu rdp_core.c:5346-5362 RECTH 14 includes the 2-word fetch at 1 clk per word (MiSTer RDP_command.vhd), which the DPC front end charges as command fetch", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle bench:rdp-rectn", "one rectangle size, so the per-primitive and per-line split is inferred; no triangle setup reference exists, triangles use this value"},
+  {"rdp.span-dead-pixels", Basis::Fit, "2", "px", "Thar0 alpha all-fail per-line clocks 324 (1-cycle) and 646 (2-cycle) for 320 px solve to (320 + 2) x clocks-per-pixel + rdp.span-line-gap (hardware-corpora.md); n64brew Pipeline: a dead cycle at the end of every line", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle", "pixel slots the pipeline cycles per span without output; 1- and 2-cycle only"},
+  {"rdp.span-line-gap", Basis::Fit, "2", "rclk", "Thar0 alpha all-fail per-line fit (see rdp.span-dead-pixels); MiSTer RDP_raster.vhd LINEIDLE + PREPARELINE = 2 clk per line", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle", "applied to fill and copy spans too, as cen64 applied its span terms (same-silicon assumption)"},
   {"rdp.span-1cycle", Basis::Vendor, "1", "px/rclk", "SDK Table 12-1; cen64 129/128 slope", "thar0:alpha-fail-1cycle", ""},
   {"rdp.span-2cycle", Basis::Vendor, "0.5", "px/rclk", "SDK Table 12-1", "thar0:alpha-fail-2cycle", ""},
   {"rdp.fill-copy-rate", Basis::Vendor, "8", "B/rclk", "SDK 12.1.4/12.1.5", "thar0:fill-mode", ""},
