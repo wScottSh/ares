@@ -2,8 +2,9 @@
 # Runs the nemu64-test ROMs through n64-run and writes per-set results.
 #
 # usage: run-nemu64.sh [--cpu interpreter|recompiler] [SET...]
-# SET defaults to "timing cycle cop0hazard". ROMs come from build-nemu64.sh.
+# SET defaults to "timing cycle cop0hazard". ROMs come from romgen/build.py (or build-nemu64.sh).
 # Output: $N64_TIMING_HOME/results/nemu64-<cpu>/<set>/{stdout.txt,stderr.txt,frames.tsv,tests.tsv,failures.txt,summary.txt}
+#         plus values.tsv (and categories.tsv for timing) for romgen-built ROMs
 #         $N64_TIMING_HOME/results/nemu64-<cpu>/summary.txt
 set -euo pipefail
 
@@ -23,7 +24,7 @@ mkdir -p "$results"
 
 for set in $sets; do
   rom="$N64_TIMING_HOME/roms/nemu64-$set.z64"
-  [ -f "$rom" ] || { echo "missing $rom; run build-nemu64.sh first" >&2; exit 1; }
+  [ -f "$rom" ] || { echo "missing $rom; run romgen/build.py first" >&2; exit 1; }
   out="$results/$set"
   mkdir -p "$out"
   start=$(date +%s.%N)
@@ -35,6 +36,9 @@ for set in $sets; do
     echo "== $set ($cpu) exit=$status wall_s=$wall"
     grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
     python "$here/nemu64-results.py" "$out/stdout.txt" "$out"
+    if [ -f "${rom%.z64}.tests.tsv" ]; then
+      PYTHONPATH="$here" python -m romgen.report "${rom%.z64}.tests.tsv" "$out/stdout.txt" "$out"
+    fi
   } | tee "$out/summary.txt" >> "$results/summary.txt"
 done
 cat "$results/summary.txt"
