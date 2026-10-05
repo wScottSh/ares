@@ -1,9 +1,15 @@
 #include <n64/n64.hpp>
+#include <chrono>
+#include <cstdarg>
+extern "C" {
+  #include "engine/rdp.h"
+}
 
 namespace ares::Nintendo64 {
 
 RDP rdp;
 #include "render.cpp"
+#include "engine.cpp"
 #include "io.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
@@ -14,6 +20,7 @@ auto RDP::load(Node::Object parent) -> void {
 }
 
 auto RDP::unload() -> void {
+  engine.unload();
   debugger = {};
   node.reset();
 }
@@ -36,6 +43,7 @@ auto RDP::main() -> void {
 
 auto RDP::power(bool reset) -> void {
   Thread::reset();
+  engine.unload();
   command = {};
   edge = {};
   shade = {};

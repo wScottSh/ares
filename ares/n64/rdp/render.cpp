@@ -53,6 +53,11 @@ auto RDP::render() -> void {
   }
   #endif
 
+  if(engine.enable) {
+    engine.load();
+    if(engine.loaded) return engine.render();
+  }
+
   auto& memory = !command.source ? (Memory::Writable&)rdram.ram : (Memory::Writable&)rsp.dmem;
 
   auto fetch = [&]() -> u64 {
