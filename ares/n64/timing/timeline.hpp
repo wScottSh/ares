@@ -277,7 +277,7 @@ private:
       const Clock limit = second < floor ? second : floor;
       onStack |= 1u << (u8)best;
       stackTime[(u8)best] = at;
-      fold(at, best, best == ActorId::Events ? events[0].kind : 0);
+      if(best != ActorId::Events) fold(at, best, 0);
       const Clock wasWokeAt = wokeAt;
       wokeAt = Clock::never();
       if(best == ActorId::Events) fireEvents(limit);
@@ -313,6 +313,7 @@ private:
       count--;
       firing = true;
       firingAt = event.at;
+      fold(event.at, ActorId::Events, event.kind);  //one record per event, so batching never shows in the trace
       fire(event);
     } while(count && !ends(events[0].at, limit));
     firing = wasFiring;

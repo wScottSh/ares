@@ -277,6 +277,21 @@ static auto testTimeline() -> u32 {
     CHECK(sorted() && steps.size() == 4, "an actor's wake must end its run: %s", dump().c_str());
   }
 
+  //The trace does not depend on how events were batched: one catchUp past
+  //three events and three catchUps to each of them fold the same records.
+  //Defect: one fold per fireEvents batch, which made stepcap compare batch
+  //boundaries instead of steps.
+  {
+    reset();
+    for(s64 t : {10, 20, 30}) timeline.schedule({{t}, 1});
+    timeline.catchUp({100}, ActorId::CPU);
+    const u64 batched = timeline.trace;
+    reset();
+    for(s64 t : {10, 20, 30}) timeline.schedule({{t}, 1});
+    for(s64 t : {10, 20, 30}) timeline.catchUp({t}, ActorId::CPU);
+    CHECK(timeline.trace == batched, "trace differs between one batch and one catchUp per event");
+  }
+
   if(failures) std::printf("timeline: %u failure(s)\n", failures);
   else std::printf("timeline: ok\n");
   return failures;
