@@ -23,7 +23,7 @@ else
   for run in run1 run2; do
     mkdir -p "$out/$run"
     "$exe" "$rom" --frames "$frames" --stats "$out/$run/stats.tsv" > "$out/$run/stdout.txt" 2> "$out/$run/stderr.txt" || true
-    grep -v '^n64-run: stop=' "$out/$run/stderr.txt" > "$out/$run/notices.txt" || true
+    grep -v -e '^n64-run: stop=' -e '^n64-run: rdp_engine ' "$out/$run/stderr.txt" > "$out/$run/notices.txt" || true
     rm "$out/$run/stderr.txt"
   done
 fi
@@ -33,8 +33,8 @@ import csv, sys
 from pathlib import Path
 
 a, b = Path(sys.argv[1]), Path(sys.argv[2])
-# wall.tsv holds host wall time; the stderr stop line is dropped above for the same reason.
-skip = {"wall.tsv"}
+# wall.tsv and rdp.txt hold host time; the stop and rdp_engine stderr lines are dropped above for the same reason.
+skip = {"wall.tsv", "rdp.txt"}
 files = sorted({p.relative_to(r) for r in (a, b) for p in r.rglob("*") if p.is_file() and p.name not in skip})
 if not files:
     sys.exit(f"determinism: FAIL, no output under {a.parent}")
