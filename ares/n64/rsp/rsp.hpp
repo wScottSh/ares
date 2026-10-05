@@ -156,9 +156,9 @@ struct RSP : Thread, Memory::RCP<RSP> {
   struct Pipeline {
     u32 address;
     u32 instruction;
-    u32 clocks;
+    Clock clocks;
 
-    u32 clocksTotal;
+    u64 clocksTotal;
     u32 stallCount;
     u32 dblIssueCount;
 
@@ -189,7 +189,7 @@ struct RSP : Thread, Memory::RCP<RSP> {
     }
 
     auto begin() -> void {
-      clocks = 0;
+      clocks = {};
       stallCount = 0;
       dblIssueCount = 0;
     }
@@ -254,8 +254,8 @@ struct RSP : Thread, Memory::RCP<RSP> {
   } pipeline;
 
   //dma.cpp
-  auto dmaQueue(u32 clocks, Thread& thread) -> void;
-  auto dmaStep(u32 clocks) -> void;
+  auto dmaQueue(Clock clocks, Thread& thread) -> void;
+  auto dmaStep(Clock clocks) -> void;
   auto dmaTransferStart(Thread& thread) -> void;
   auto dmaTransferStep() -> void;
 
@@ -289,7 +289,7 @@ struct RSP : Thread, Memory::RCP<RSP> {
       auto any() -> n1 { return read | write; }
     } busy, full;
 
-    s64 clock;
+    Clock clock;
   } dma;
 
   struct Status : Memory::RCP<Status> {

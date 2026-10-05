@@ -15,7 +15,7 @@ auto AI::serialize(serializer& s) -> void {
 
   s(dac.frequency);
   s(dac.precision);
-  s(dac.period);
+  s(dac.period.units);
   s(dac.left);
   s(dac.right);
   s(dac.decayFactor);

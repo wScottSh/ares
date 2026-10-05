@@ -9,7 +9,7 @@ VI vi;
 
 auto VI::step(u32 clocks) -> void {
   auto scaled = (u64)clocks * system.frequency() + clockFraction;
-  Thread::clock += scaled / system.videoFrequency();
+  Thread::clock += Clock{(s64)(scaled / system.videoFrequency()) * 4};
   clockFraction = scaled % system.videoFrequency();
 }
 

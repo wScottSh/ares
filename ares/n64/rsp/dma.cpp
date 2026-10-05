@@ -1,11 +1,11 @@
-auto RSP::dmaQueue(u32 clocks, Thread& thread) -> void {
+auto RSP::dmaQueue(Clock clocks, Thread& thread) -> void {
   dma.clock = (Thread::clock - thread.clock) - clocks;
 }
 
-auto RSP::dmaStep(u32 clocks) -> void {
+auto RSP::dmaStep(Clock clocks) -> void {
   if(dma.busy.any()) {
     dma.clock += clocks;
-    if(dma.clock >= 0) {
+    if(dma.clock >= Clock{}) {
       dmaTransferStep();
     }
   }

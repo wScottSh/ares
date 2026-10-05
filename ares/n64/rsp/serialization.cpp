@@ -5,7 +5,7 @@ auto RSP::serialize(serializer& s) -> void {
 
   s(pipeline.address);
   s(pipeline.instruction);
-  s(pipeline.clocks);
+  s(pipeline.clocks.units);
   s(pipeline.singleIssue);
   for(auto& p : pipeline.previous) {
     s(p.load);
@@ -23,7 +23,7 @@ auto RSP::serialize(serializer& s) -> void {
   s(dma.busy.write);
   s(dma.full.read);
   s(dma.full.write);
-  s(dma.clock);
+  s(dma.clock.units);
 
   s(status.semaphore);
   s(status.halted);

@@ -55,20 +55,26 @@ namespace ares::Nintendo64 {
 
   inline static auto _DD() -> bool;
 
+  #include <n64/timing/clock.hpp>
+  #include <n64/timing/behaviors.hpp>
+  using Timing::Clock;
+  using Timing::pclk;
+  using Timing::rclk;
+
   struct Thread {
     auto reset() -> void {
-      clock = 0;
+      clock = {};
     }
 
-    auto step(u32 clocks) -> void {
+    auto step(Clock clocks) -> void {
       clock += clocks;
     }
 
     auto serialize(serializer& s) -> void {
-      s(clock);
+      s(clock.units);
     }
 
-    s64 clock;
+    Clock clock;
   };
 
   struct Queue : priority_queue<u32[512]> {
@@ -143,6 +149,5 @@ namespace ares::Nintendo64 {
   #include <n64/memory/bus.hpp>
   #include <n64/mi/bus.hpp>
   #include <n64/pi/bus.hpp>
-  #include <n64/timing/behaviors.hpp>
   #include <n64/timing/verify.hpp>
 }

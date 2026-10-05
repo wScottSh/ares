@@ -56,6 +56,9 @@ struct Options {
 
 //cpu.profile.cpuCycles counts VR4300 PClock cycles (93.75 MHz on NTSC).
 constexpr double CpuCyclesPerSecond = 93'750'000.0;
+//rsp_busy_clocks stays in the core's pre-T4 unit, 187.5 MHz ticks (2 per PClock), so stats files
+//compare across the 750 MHz rebase; the RSP profile counts Timing::Clock units.
+constexpr s64 UnitsPerStatsTick = N64::Timing::UnitsPerPclk / 2;
 
 struct FrameStats {
   u64 frame;
@@ -207,7 +210,7 @@ auto sample(u64 frame, u64 fbHash) -> FrameStats {
     (u32)N64::vi.io.colorDepth,
     fbHash,
     N64::cpu.profile.cpuCycles,
-    N64::rsp.profile.cycles - N64::rsp.profile.haltedCycles,
+    (N64::rsp.profile.cycles - N64::rsp.profile.haltedCycles) / UnitsPerStatsTick,
     (u32)N64::rdp.command.start,
     (u32)N64::rdp.command.end,
     (u32)N64::rdp.set.color.dramAddress,

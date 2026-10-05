@@ -60,7 +60,7 @@ The runner checks the stop conditions between VI fields. A ROM that requests an 
 | `origin`, `width`, `depth` | `VI_ORIGIN`, `VI_WIDTH`, and the `VI_CTRL` pixel type at the end of the field. |
 | `fb_hash` | FNV-1a 64 of the displayed image. With `--rdp none`, the hash covers the RDRAM pixels that the VI samples, using the same walk as `VI::refresh`. With `--rdp vulkan`, it covers paraLLEl-RDP's VI scanout. |
 | `cpu_cycles` | Cumulative VR4300 PClock cycles (`cpu.profile.cpuCycles`, the value emux `XPROFREAD 0x0000` returns). |
-| `rsp_busy_clocks` | Cumulative non-halted RSP time, in the core's scheduler clocks (2 per PClock). |
+| `rsp_busy_clocks` | Cumulative non-halted RSP time, in 187.5 MHz ticks (2 per PClock), the core's clock unit before the 750 MHz rebase, so files stay comparable across it. |
 | `dpc_start`, `dpc_end` | `DPC_START` and `DPC_END` at the end of the field. |
 | `cimg`, `zimg` | The address of the last `SET_COLOR_IMAGE` and `SET_MASK_IMAGE` (Z buffer) command the core parsed. Only `--rdp none` parses commands, so both are 0 with `--rdp vulkan`. |
 | `trace_hash` | `Timing::TraceHash` (`ares/n64/timing/verify.hpp`). A rolling XXH3 hash of every device queue event the core has fired, folded at each row with a hash of the whole serialized machine state (CPU, RSP, RDP, RDRAM, every device). Two runs that diverge anywhere differ in this column from the first field after the divergence on. |

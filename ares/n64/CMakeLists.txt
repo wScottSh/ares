@@ -302,6 +302,7 @@ ares_add_sources(
   INCLUDED #
     timing/behaviors.hpp
     timing/behaviors.tsv
+    timing/clock.hpp
     timing/verify.hpp
 )
 

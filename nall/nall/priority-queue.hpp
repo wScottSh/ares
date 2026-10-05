@@ -25,14 +25,14 @@ struct priority_queue<T[Size]> {
   }
 
   template<typename F>
-  auto step(u32 clocks, const F& callback) -> void {
+  auto step(u64 clocks, const F& callback) -> void {
     clock += clocks;
     while(size && ge(clock, heap[0].clock)) {
       if(auto event = remove()) callback(*event);
     }
   }
 
-  auto insert(const T& event, u32 clock) -> bool {
+  auto insert(const T& event, u64 clock) -> bool {
     if(size >= Size) return false;
 
     u32 child = size++;
@@ -59,7 +59,7 @@ struct priority_queue<T[Size]> {
     bool valid = heap[0].valid;
 
     u32 parent = 0;
-    u32 clock = heap[--size].clock;
+    u64 clock = heap[--size].clock;
 
     while(true) {
       u32 child = (parent << 1) + 1;
@@ -82,8 +82,8 @@ struct priority_queue<T[Size]> {
     return nothing;
   }
 
-  auto remove(const T& event) -> u32 {
-    u32 cycles = 0;
+  auto remove(const T& event) -> u64 {
+    u64 cycles = 0;
     for(u32 i = 0; i < size; i++) {
       if(heap[i].event == event) {
         heap[i].valid = false;
@@ -110,14 +110,14 @@ struct priority_queue<T[Size]> {
 
 private:
   //returns true if x is greater than or equal to y
-  auto ge(u32 x, u32 y) -> bool {
-    return x - y < 0x7fffffff;
+  auto ge(u64 x, u64 y) -> bool {
+    return x - y < 0x7fff'ffff'ffff'ffffull;
   }
 
-  u32 clock = 0;
+  u64 clock = 0;
   u32 size = 0;
   struct Entry {
-    u32  clock;
+    u64  clock;
     T    event;
     bool valid;
   } heap[Size];

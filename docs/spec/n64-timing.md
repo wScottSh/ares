@@ -14,7 +14,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 2 |
 | model-choice | no published value; the reference states why the model chose this one | 11 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 55 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 56 |
 
 ## Behaviors
 
@@ -172,10 +172,11 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.clock.pclk` | 93750000 Hz | ares/n64/system/system.hpp:37 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | replaced by T4: Timing::Clock counts 750 MHz units (clock.unit) |
 | `legacy.clock.vclk-ntsc` | 48681818 Hz | ares/n64/system/system.cpp:92 | `mm:south-clock-town` | replaced by T4: VclkAccumulator at the exact rational period (clock.vclk) |
 | `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:104 | pending (no-corpus) | no plan unit: PAL is not the target console |
+| `legacy.clock.units-per-tick` | 4 units | ares/n64/vi/vi.cpp:12 | `mm:south-clock-town` | replaced by T4: VI and AI keep 187.5 MHz tick arithmetic until they move to VclkAccumulator |
 | `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:158 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
-| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:122 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
-| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:130 | pending (no-corpus) | replaced by T7b: exception stage costs |
-| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:135 | pending (no-corpus) | replaced by T6: SysAD port |
+| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:117 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
+| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:125 | pending (no-corpus) | replaced by T7b: exception stage costs |
+| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:130 | pending (no-corpus) | replaced by T6: SysAD port |
 | `legacy.cpu.address-error` | 1 pclk | ares/n64/cpu/memory.cpp:212 | `nemu64:timing/exceptions` | replaced by T7b: exception stage costs (cpu.exc-ex) |
 | `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/cpu.hpp:189 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
 | `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/cpu.hpp:197 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |

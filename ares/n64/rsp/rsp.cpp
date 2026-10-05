@@ -73,8 +73,8 @@ auto RSP::instruction() -> void {
   instructionEpilogue();
 
   step(pipeline.clocks);
-  profile.cycles += pipeline.clocks;
-  pipeline.clocksTotal += pipeline.clocks;
+  profile.cycles += pipeline.clocks.units;
+  pipeline.clocksTotal += pipeline.clocks.units;
 }
 
 auto RSP::instructionPrologue(u32 instruction) -> void {

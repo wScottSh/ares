@@ -51,8 +51,8 @@ auto CPU::gdbPoll() -> void {
   }
 }
 
-auto CPU::queueInsert(u32 event, u32 clocks) -> void {
-  queue.insert(event, clocks);
+auto CPU::queueInsert(u32 event, Clock delay) -> void {
+  queue.insert(event, delay.units);
 }
 
 auto CPU::stepCount(u64 clocks) -> void {
@@ -71,23 +71,18 @@ auto CPU::flushCount() -> void {
 }
 
 auto CPU::synchronize() -> void {
-  auto clocks = Thread::clock;
-  auto counted = countClock;
-  Thread::clock = 0;
-  countClock = 0;
+  auto clocks = Thread::clock - syncClock;
+  auto counted = countClock - syncClock;
+  syncClock = Thread::clock;
+  countClock = Thread::clock;
 
-   vi.clock -= clocks;
-   ai.clock -= clocks;
-  rsp.clock -= clocks;
-  rdp.clock -= clocks;
-  pif.clock -= clocks;
   vi.main();
   ai.main();
   rsp.main();
   rdp.main();
   pif.main();
 
-  queue.step(clocks, [](u32 event) {
+  queue.step(clocks.units, [](u32 event) {
     traceHash.fold(cpu.pclock(), Timing::ActorId::Events, event, 0);
     switch(event) {
     case Queue::PI_DMA_Read:   return pi.dmaFinished();
@@ -107,7 +102,7 @@ auto CPU::synchronize() -> void {
     }
   });
 
-  stepCount((clocks - counted) >> 1);
+  stepCount((clocks - counted).units / Timing::UnitsPerPclk);
 }
 
 auto CPU::setInterruptPending(u32 bit, bool value) -> void {
@@ -159,6 +154,8 @@ auto CPU::instructionEpilogue() -> void {
 
 auto CPU::power(bool reset) -> void {
   Thread::reset();
+  countClock = {};
+  syncClock = {};
 
   context.endian = Context::Endian::Big;
   context.mode = Context::Mode::Kernel;

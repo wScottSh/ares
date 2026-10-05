@@ -75,7 +75,7 @@ auto AI::power(bool reset) -> void {
   dac.right = 0.0;
   dac.frequency = 44100;
   dac.precision = 16;
-  dac.period = system.frequency() / dac.frequency;
+  dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};
   updateDecay();
 }
 

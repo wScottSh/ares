@@ -1,6 +1,8 @@
 path	function	line	rows	note
 ares/n64/ai/ai.cpp	power	dac.frequency = 44100;	legacy.ai.power-on-rate	
+ares/n64/ai/ai.cpp	power	dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};	legacy.clock.units-per-tick	
 ares/n64/ai/io.cpp	writeWord	dac.frequency = max(1, system.videoFrequency() / (io.dacRate + 1));	-	max(1, ...) keeps the DAC frequency nonzero for the division that follows
+ares/n64/ai/io.cpp	writeWord	dac.period = Clock{(s64)(system.frequency() / dac.frequency) * 4};	legacy.clock.units-per-tick	
 ares/n64/cartridge/flash.cpp	-	{"MX29L0000",   0x00c2, 0x0000, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
 ares/n64/cartridge/flash.cpp	-	{"MX29L0001",   0x00c2, 0x0001, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
 ares/n64/cartridge/flash.cpp	-	{"MX29L1100",   0x00c2, 0x001e, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
@@ -81,6 +83,7 @@ ares/n64/pif/hle.cpp	estimateTiming	cycles += 20000;	legacy.si.dma-read-accessor
 ares/n64/pif/hle.cpp	estimateTiming	cycles += 1420 * short_cmds;	legacy.si.dma-read-short-command	
 ares/n64/pif/hle.cpp	mainHLE	constexpr Clock clocks = pclk(10240 * 4);	legacy.pif.step-quantum	
 ares/n64/pif/hle.cpp	mainHLE	intram.bootTimeout = Timing::seconds(6).units;  //6 seconds	legacy.pif.boot-timeout	
+ares/n64/rdp/rdp.cpp	main	constexpr Clock quantum = Timing::seconds(1);	legacy.rdp.step-quantum	
 ares/n64/rdram/rdram.cpp	power	chip.delay = 0x0000'0023;  //WriteDelay=4, WriteBits=3	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	power	chip.writeDelay = 4;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
 ares/n64/rdram/rdram.cpp	writeRegister	chip.delay = data & 0x3838'1838;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
@@ -98,4 +101,4 @@ ares/n64/system/system.hpp	serialize	u32 frequency = 93'750'000 * 2;	legacy.cloc
 ares/n64/system/system.hpp	serialize	u32 videoFrequency = 48'681'818;	legacy.clock.vclk-ntsc	
 ares/n64/vi/vi.cpp	main	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
 ares/n64/vi/vi.cpp	main	step(0x800);	legacy.vi.inactive-line	
-ares/n64/rdp/rdp.cpp	main	constexpr Clock quantum = Timing::seconds(1);	legacy.rdp.step-quantum	
+ares/n64/vi/vi.cpp	step	Thread::clock += Clock{(s64)(scaled / system.videoFrequency()) * 4};	legacy.clock.units-per-tick	
