@@ -51,7 +51,9 @@ struct Readiness {
 //The contract every stepped actor implements. run(limit) performs one
 //indivisible step (an RSP issue pair, one DMA landing), then may keep going
 //while its next step starts before `limit`. A step's interactions are stamped
-//with its start time, which is the `at` the actor reported.
+//with its start time, which is the `at` the actor reported. `limit` was the
+//next contender when run() began, so a run that schedules an event or wakes an
+//actor earlier than `limit` must return after that step.
 struct Actor {
   virtual auto readiness() const -> Readiness = 0;
   virtual auto run(Clock limit) -> void = 0;
@@ -82,6 +84,7 @@ struct Timeline {
   }
 
   auto attach(ActorId id, Actor* actor) -> void {
+    if(!actors[(u8)id]) enlist(id);
     actors[(u8)id] = actor;
     refreshHorizon();
   }
@@ -158,11 +161,11 @@ struct Timeline {
   auto refreshHorizon() -> void {
     if(stepCap) { cachedHorizon = {}; return; }
     Clock h = count ? events[0].at : Clock::never();
-    for(u8 id = 0; id < (u8)ActorId::Count; id++) {
-      if(auto actor = actors[id]) {
-        auto r = actor->readiness();
-        if(r.kind == Readiness::Kind::Runnable && r.at < h) h = r.at;
-      }
+    for(u8 i = 0; i < listedCount; i++) {
+      auto id = listed[i];
+      if(id == ActorId::Events) continue;
+      auto r = actors[(u8)id]->readiness();
+      if(r.kind == Readiness::Kind::Runnable && r.at < h) h = r.at;
     }
     cachedHorizon = h;
   }
@@ -199,30 +202,34 @@ private:
     const bool nested = onStack & callerBit;
     const Clock saved = stackTime[(u8)caller];
     Clock floor = t;
-    for(u8 id = 0; id < (u8)ActorId::Count; id++) {
-      if((onStack & (1u << id)) && stackTime[id] < floor) floor = stackTime[id];
+    if(onStack) {
+      for(u8 id = 0; id < (u8)ActorId::Count; id++) {
+        if((onStack & (1u << id)) && stackTime[id] < floor) floor = stackTime[id];
+      }
     }
     onStack |= callerBit;
     stackTime[(u8)caller] = t;
     if(++depth > maxDepth) maxDepth = depth;
 
+    Clock at;
     while(true) {
-      //argmin over runnable actors not on the stack of (at, rank); rank is the
-      //iteration order, so a strict compare keeps the lower rank on ties
+      //argmin over runnable actors not on the stack of (at, rank); `listed` is in
+      //rank order, so a strict compare keeps the lower rank on ties
       ActorId best = ActorId::Count;
-      Clock at = Clock::never();
+      at = Clock::never();
       Clock second = Clock::never();
       auto consider = [&](ActorId id, Clock c) {
         if(c < at) { second = at; at = c; best = id; }
         else if(c < second) second = c;
       };
-      for(u8 id = 0; id < (u8)ActorId::Count; id++) {
-        if(onStack & (1u << id)) continue;
-        if(id == (u8)ActorId::Events) {
+      for(u8 i = 0; i < listedCount; i++) {
+        auto id = listed[i];
+        if(onStack & (1u << (u8)id)) continue;
+        if(id == ActorId::Events) {
           if(count) consider(ActorId::Events, events[0].at);
-        } else if(auto actor = actors[id]) {
-          auto r = actor->readiness();
-          if(r.kind == Readiness::Kind::Runnable) consider((ActorId)id, r.at);
+        } else {
+          auto r = actors[(u8)id]->readiness();
+          if(r.kind == Readiness::Kind::Runnable) consider(id, r.at);
         }
       }
       if(best == ActorId::Count || at > floor || (at == floor && best >= caller)) break;
@@ -241,7 +248,17 @@ private:
     depth--;
     if(!nested) onStack &= ~callerBit;
     stackTime[(u8)caller] = saved;
-    if(depth == 0) refreshHorizon();
+    if(depth > 0) return;
+    //the CPU is never attached, so with only the CPU on the stack the last scan saw every actor
+    if(caller == ActorId::CPU && !stepCap) cachedHorizon = at;
+    else refreshHorizon();
+  }
+
+  //keeps `listed` in rank order; the scans walk only the event heap and attached actors
+  auto enlist(ActorId id) -> void {
+    u8 i = listedCount++;
+    while(i > 0 && listed[i - 1] > id) listed[i] = listed[i - 1], i--;
+    listed[i] = id;
   }
 
   auto fireEvents(Clock limit) -> void {
@@ -261,6 +278,8 @@ private:
 
   Handler fire = nullptr;
   Actor*  actors[(u8)ActorId::Count] = {};
+  ActorId listed[(u8)ActorId::Count] = {ActorId::Events};
+  u8      listedCount = 1;
   u8      onStack = 0;  //bitmask of ActorId
   u32     depth = 0;
   Clock   stackTime[(u8)ActorId::Count] = {};
