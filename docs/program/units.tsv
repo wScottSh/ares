@@ -39,6 +39,8 @@ t12	build	landed	feat/t12	52	9c5824b5	C:/Users/Scott/.claude/orchestrate/ares-n6
 verify-52	verify	done				
 fitprov	tools	landed		53		
 verify-51	verify	done				
-t7a	build	running				
-t8	build	running				
-labels-t6	tools	running				
+t7a	build	landed	feat/t7a	56	1326f3f4	
+t8	build	landed	feat/t8	57	808e5f54	
+labels-t6	tools	landed		55		
+verify-56	verify	done				
+verify-57	verify	done				
