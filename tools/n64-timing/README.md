@@ -27,8 +27,8 @@ The script configures `-DARES_CORES=n64`, `RelWithDebInfo`, and Ninja on first u
 
 ```sh
 n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
-            [--cpu interpreter|recompiler] [--rdp none|vulkan]
-            [--stats FILE] [--controllers N]
+            [--cpu interpreter|recompiler] [--rdp none|vulkan|soft]
+            [--stats FILE] [--controllers N] [--dump-frame N FILE]...
 ```
 
 | Option | Meaning |
@@ -37,8 +37,9 @@ n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
 | `--emulated-seconds S` | Stop after S seconds of emulated VR4300 time (93.75 MHz PClock). |
 | `--wall-seconds S` | Stop after S seconds of host time. This is a safety net and does not affect emulation. |
 | `--cpu` | `interpreter` (default) or `recompiler`. The option switches the CPU and the RSP together. |
-| `--rdp` | `none` (default) or `vulkan`. See [RDP](#rdp). |
+| `--rdp` | `none` (default), `vulkan`, or `soft`. See [RDP](#rdp). |
 | `--stats FILE` | Writes one TSV line per VI field. See [Per-field stats](#per-field-stats). |
+| `--dump-frame N FILE` | Writes the RDRAM image the VI samples at field N as a 640x480 binary PPM. Repeatable. See [Frame dumps](#frame-dumps). |
 | `--controllers N` | Number of gamepads connected at power-on (default 1). |
 
 The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) and deterministic entropy on.
@@ -46,7 +47,7 @@ The runner always emulates an NTSC console with the Expansion Pak, with homebrew
 Output:
 
 - stdout carries only guest output: ISViewer text and emux `XLOG`/`XHEXDUMP` text.
-- stderr carries core debug notices, the emux exit message, and one final line: `n64-run: stop=<reason> frames=N emulated_s=X wall_s=Y rdp=<mode>`.
+- stderr carries core debug notices, the emux exit message, and one final line: `n64-run: stop=<reason> frames=N emulated_s=X wall_s=Y rdp=<mode>`. With `--rdp soft` a second line follows: `n64-run: rdp_soft render_calls=N render_ms=X pixels=N ns_per_pixel=X`, the host time spent inside the engine and the pixels it rasterized.
 - The exit code is 0 for `emux-exit` or `frame-limit`, 2 for `emulated-time-limit`, 3 for `wall-time-limit`, and 1 for a load or usage error.
 
 The runner checks the stop conditions between VI fields. A ROM that requests an emux exit therefore runs to the end of the current field.
@@ -57,16 +58,21 @@ The runner checks the stop conditions between VI fields. A ROM that requests an 
 |---|---|
 | `frame` | VI field index, counted from 0 at the first field with the VI enabled. |
 | `origin`, `width`, `depth` | `VI_ORIGIN`, `VI_WIDTH`, and the `VI_CTRL` pixel type at the end of the field. |
-| `fb_hash` | FNV-1a 64 of the displayed image. With `--rdp none`, the hash covers the RDRAM pixels that the VI samples, using the same walk as `VI::refresh`. With `--rdp vulkan`, it covers paraLLEl-RDP's VI scanout. |
+| `fb_hash` | FNV-1a 64 of the displayed image. With `--rdp none` or `--rdp soft`, the hash covers the RDRAM pixels that the VI samples, using the same walk as `VI::refresh`. With `--rdp vulkan`, it covers paraLLEl-RDP's VI scanout. |
 | `cpu_cycles` | Cumulative VR4300 PClock cycles (`cpu.profile.cpuCycles`, the value emux `XPROFREAD 0x0000` returns). |
 | `rsp_busy_clocks` | Cumulative non-halted RSP time, in the core's scheduler clocks (2 per PClock). |
 
 ### RDP
 
-The fork has no software RDP rasterizer. The desktop build draws through paraLLEl-RDP on Vulkan.
-
+- `--rdp soft` runs the cen64-jgemu pixel engine (`ares/n64/rdp/engine/`) on the emulation thread. Each `DPC_END` write renders its command range into RDRAM before returning, with no worker threads, so the result does not depend on the host. `fb_hash` covers the RDRAM pixels.
 - `--rdp none` runs no rasterizer. The core still consumes RDP command lists, but no pixels are drawn, so RDRAM framebuffers hold only CPU and RSP writes. Games that read back rendered pixels see different data than on hardware. `cpu_cycles` and `rsp_busy_clocks` matched `--rdp vulkan` exactly over 600 Majora's Mask fields, so the core's timing does not depend on the renderer today.
 - `--rdp vulkan` uses paraLLEl-RDP on the host GPU, the same renderer as the desktop build. Two consecutive runs produced identical stats files, but the result depends on the host GPU and driver. A Vulkan software device (lavapipe) is not wired up.
+
+### Frame dumps
+
+`--dump-frame N FILE` writes the image the VI would scan out at field N (the `frame` column of the stats file) as a binary PPM (`P6`, 640x480). The pixels come from RDRAM through the same walk as `fb_hash`, in every RDP mode, so a `--rdp vulkan` dump and a `--rdp soft` dump of the same field compare the two rasterizers' RDRAM output, not their VI filters. 5-bit channels are expanded by a shift. Positions the VI does not sample are black. `tools/n64-timing/framediff.py A.ppm B.ppm [--out diff.png]` reports the differing pixels per tile.
+
+With `--rdp vulkan` the RDRAM bytes are paraLLEl-RDP's, which writes them asynchronously and is waited on only at Sync_Full; a dump taken while a frame is still rendering can be partial. Dump twice and compare to confirm a stable reference.
 
 ### Determinism
 

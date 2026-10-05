@@ -23,7 +23,22 @@ enum class CpuMode { Interpreter, Recompiler };
 
 //None: no RDP rasterizer runs; RDRAM holds only what the CPU and RSP write.
 //Vulkan: paraLLEl-RDP on the host GPU, the same renderer the desktop build uses.
-enum class RdpMode { None, Vulkan };
+//Soft: the cen64-jgemu pixel engine on the emulation thread (ares/n64/rdp/engine).
+enum class RdpMode { None, Vulkan, Soft };
+
+constexpr auto rdpModeName(RdpMode mode) -> const char* {
+  switch(mode) {
+  case RdpMode::None:   return "none";
+  case RdpMode::Vulkan: return "vulkan";
+  case RdpMode::Soft:   return "soft";
+  }
+  return "unknown";
+}
+
+struct FrameDump {
+  u64 frame;
+  string path;
+};
 
 enum class StopReason { EmuxExit, FrameLimit, EmulatedTimeLimit, WallTimeLimit };
 
@@ -51,6 +66,7 @@ struct Options {
   RdpMode rdp = RdpMode::None;
   string statsPath;
   u32 controllers = 1;
+  std::vector<FrameDump> dumps;
 };
 
 //cpu.profile.cpuCycles counts VR4300 PClock cycles (93.75 MHz on NTSC).
@@ -73,8 +89,11 @@ auto usage() -> void {
     "  --emulated-seconds S  stop after S seconds of emulated CPU time (0 = no limit)\n"
     "  --wall-seconds S    stop after S seconds of host wall time (0 = no limit)\n"
     "  --cpu interpreter|recompiler  CPU and RSP execution mode (default interpreter)\n"
-    "  --rdp none|vulkan   RDP rasterizer: none, or paraLLEl-RDP on the host GPU (default none)\n"
+    "  --rdp none|vulkan|soft  RDP rasterizer: none, paraLLEl-RDP on the host GPU, or the\n"
+    "                      cen64-jgemu engine on the emulation thread (default none)\n"
     "  --stats FILE        write one TSV line per VI field to FILE\n"
+    "  --dump-frame N FILE write the RDRAM image the VI samples at field N as a P6 PPM\n"
+    "                      (640x480; repeatable)\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
     "stdout carries ISViewer and emux output only. The stop line goes to stderr.\n"
     "exit: 0 emux exit or frame limit, 2 emulated-time limit, 3 wall-time limit, 1 error\n");
@@ -103,7 +122,15 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
       auto mode = value();
       if(mode == "none") options.rdp = RdpMode::None;
       else if(mode == "vulkan") options.rdp = RdpMode::Vulkan;
+      else if(mode == "soft") options.rdp = RdpMode::Soft;
       else return nothing;
+    }
+    else if(arg == "--dump-frame") {
+      FrameDump dump;
+      dump.frame = value().natural();
+      dump.path = value();
+      if(!dump.path) return nothing;
+      options.dumps.push_back(dump);
     }
     else if(arg.beginsWith("--")) return nothing;
     else if(!options.rom) options.rom = arg;
@@ -123,11 +150,11 @@ struct Fnv1a {
   }
 };
 
-//Hashes the RDRAM pixels the VI scans out this field, sampling them the way VI::refresh does.
-auto rdramFramebufferHash() -> u64 {
+//Walks the RDRAM pixels the VI scans out this field, sampling them the way VI::refresh does.
+//The callback receives the output position and the raw 16- or 32-bit pixel.
+template<typename F> auto walkFramebuffer(F&& pixelAt) -> void {
   auto& io = N64::vi.io;
-  Fnv1a fnv;
-  if(io.colorDepth < 2) return 0;
+  if(io.colorDepth < 2) return;
 
   const u32 hscanStart = N64::Region::NTSC() ? 108 : 128;
   const u32 vscanStart = N64::Region::NTSC() ?  34 :  44;
@@ -161,13 +188,45 @@ auto rdramFramebufferHash() -> u64 {
             ? (u32)ram.N64::Memory::Writable::read<N64::Half>(address)
             : (u32)ram.N64::Memory::Writable::read<N64::Word>(address);
         }
-        fnv.mix(pixel);
+        pixelAt(dx - hscanStart, dy - vscanStart, pixel);
         x0 += io.xscale;
       }
     }
     y0 += io.yscale;
   }
-  return fnv.hash;
+}
+
+auto rdramFramebufferHash() -> u64 {
+  Fnv1a fnv;
+  walkFramebuffer([&](u32, u32, u32 pixel) { fnv.mix(pixel); });
+  return N64::vi.io.colorDepth < 2 ? 0 : fnv.hash;
+}
+
+//Writes the sampled image as a 640x480 binary PPM. Unsampled positions stay black.
+//5-bit channels are expanded by shifting, so a 15-bit and a 24-bit source of the same
+//color differ in the low bits.
+auto dumpFramebuffer(const string& path) -> bool {
+  constexpr u32 width = 640, height = 480;
+  std::vector<u8> rgb(width * height * 3, 0);
+  const bool depth16 = N64::vi.io.colorDepth == 2;
+  walkFramebuffer([&](u32 x, u32 y, u32 pixel) {
+    if(x >= width || y >= height) return;
+    u8* out = &rgb[(y * width + x) * 3];
+    if(depth16) {
+      out[0] = (pixel >> 11 & 31) << 3;
+      out[1] = (pixel >>  6 & 31) << 3;
+      out[2] = (pixel >>  1 & 31) << 3;
+    } else {
+      out[0] = pixel >> 24;
+      out[1] = pixel >> 16;
+      out[2] = pixel >>  8;
+    }
+  });
+  file_buffer fp;
+  if(!fp.open(path, file::mode::write)) return false;
+  fp.print("P6\n", width, " ", height, "\n255\n");
+  fp.write({rgb.data(), rgb.size()});
+  return true;
 }
 
 //Hashes paraLLEl-RDP's VI scanout for this field and releases the readback buffer.
@@ -261,6 +320,7 @@ auto nall::main(Arguments arguments) -> void {
   }
 
   N64::option("Enable GPU acceleration", options.rdp == RdpMode::Vulkan ? "true" : "false");
+  N64::option("Software RDP", options.rdp == RdpMode::Soft ? "true" : "false");
   N64::option("Quality", "SD");
   N64::option("Supersampling", "false");
   N64::option("Homebrew Mode", "true");
@@ -313,6 +373,10 @@ auto nall::main(Arguments arguments) -> void {
         stats.print(s.frame, "\t", hex(s.origin, 6L), "\t", s.width, "\t", s.depth, "\t",
                     hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\n");
       }
+      for(auto& dump : options.dumps) {
+        if(dump.frame != frames) continue;
+        if(!dumpFramebuffer(dump.path)) std::fprintf(stderr, "n64-run: cannot write %s\n", dump.path.data());
+      }
       frames++;
     }
     if(platform.exitRequested) { reason = StopReason::EmuxExit; break; }
@@ -326,7 +390,15 @@ auto nall::main(Arguments arguments) -> void {
   std::fflush(platform.output);
   std::fflush(stdout);
   std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f rdp=%s\n",
-    info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed(), N64::vulkan.enable ? "vulkan" : "none");
+    info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed(), rdpModeName(options.rdp));
+  if(options.rdp == RdpMode::Soft) {
+    //host time inside the engine's render calls and the pixels it rasterized (ADR 0001 risk 1)
+    auto& engine = N64::rdp.engine;
+    std::fprintf(stderr, "n64-run: rdp_soft render_calls=%llu render_ms=%.3f pixels=%llu ns_per_pixel=%.2f\n",
+      (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
+      (unsigned long long)engine.pixels(),
+      engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
+  }
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);
