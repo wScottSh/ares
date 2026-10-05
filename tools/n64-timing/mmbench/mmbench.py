@@ -2,7 +2,7 @@
 """Deterministic Majora's Mask (NTSC-U 1.0) frame-timing bench on the headless n64-run.
 
 Each scene is one cold-boot run driven by a generated input script. The script reaches the
-scene, marks the first field of a fixed-length window, and stops the run when the window ends.
+scene, marks the first field of its window, and stops the run when the window ends.
 """
 
 import argparse
@@ -10,6 +10,7 @@ import hashlib
 import math
 import os
 import re
+import struct
 import subprocess
 import time
 from collections import Counter
@@ -41,6 +42,37 @@ GFX_TASKS = GFX_CTX + "+0x2C8"  # gfxCtx->gfxPoolIdx, +1 per gfx task submitted 
 GFX_TASK = GFX_CTX + "+0x88"  # gfxCtx->task.list, the OSTask of the latest gfx task
 
 STICK = 32767
+
+# FileSelectState (ovl_file_choose/z_file_select.h). Graph_ThreadEntry mallocs it as the fourth
+# node of malloc_arena, right after the gfx task output buffer. The address was read at run time
+# by walking the arena list. The routes check the node size and state.gfxCtx before using it.
+FILESEL_STATE = 0x803E6B20
+
+
+def fs(offset):
+    return f"0x{FILESEL_STATE + offset:08X}"
+
+
+FS_GFX_CTX = fs(0x0)
+FS_PAD_BUTTONS = fs(0x14)  # state.input[0].cur.button
+FS_PAD_STICK = fs(0x16)  # state.input[0].cur.stick_x and stick_y
+FS_BUTTON_INDEX = fs(0x24480)
+FS_CONFIG_MODE = fs(0x24486)
+FS_NAME_ENTRY_BOX_X = fs(0x24506)
+FS_WINDOW_ROT = fs(0x2450C)
+FS_KBD_Y = fs(0x2451A)
+FS_NAME_CHAR_COUNT = fs(0x2451C)
+CM_MAIN_MENU = 0x02
+CM_ROTATE_TO_NAME_ENTRY = 0x22
+CM_NAME_ENTRY = 0x24
+CM_MAIN_TO_OPTIONS = 0x27
+CM_OPTIONS_MENU = 0x29
+FS_BTN_MAIN_FILE_1, FS_BTN_MAIN_FILE_2, FS_BTN_MAIN_OPTIONS = 0, 1, 5
+# FileSelect_RotateToOptions adds 50 to windowRot per game frame and clamps at 314, so a rotation
+# is seven game frames. FileSelect_StartOptions then slides the options box from x=120 by -30.
+ROTATION_STEPS = [50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 314.0]
+OPTIONS_BOX_FIRST_X = 90
+ROTATIONS = 8
 
 
 def overlay_loaded(entry):
@@ -103,6 +135,60 @@ def circle(fields, period, step=5):
     return moves
 
 
+def title_to_filesel():
+    # EnMag (z_en_mag.c): a first Start during the title fade-in skips to MAG_STATE_DISPLAY,
+    # which ignores input for 20 game frames; a second Start after that opens file select.
+    # Later in the title, a cutscene flag fades it out, so the presses come early.
+    return scene_settled(0x08) + [f"until {GAME_FRAMES} w >= 10", "input Start", "wait 10", "input",
+                                  f"until {GAME_FRAMES} w >= 60", "input Start", "wait 10", "input",
+                                  f"until 0x{SAVE_GAME_MODE:08X} w == 2",
+                                  overlay_loaded(OVERLAY_FILE_SELECT)]
+
+
+def press(pad, reacted):
+    # Holds the input until the game reacts, then waits until the game has read the release,
+    # so the next press is a new edge however many fields a game frame takes.
+    return [f"input {pad}", reacted, "input", f"until {FS_PAD_BUTTONS} h == 0", f"until {FS_PAD_STICK} h == 0"]
+
+
+def filesel_main_menu():
+    # The arena node size (sizeof(FileSelectState) rounded to 16) fails on a moved FileSelectState,
+    # and GameState_Init sets state.gfxCtx after the bzero.
+    return title_to_filesel() + [f"until {fs(-0xC)} w == 0x24560", f"until {FS_GFX_CTX} w == {GFX_CTX}",
+                                 f"until {FS_CONFIG_MODE} h == {CM_MAIN_MENU}"]
+
+
+def move_cursor(stick_y, button):
+    return press(f"y={stick_y}", f"until {FS_BUTTON_INDEX} h == {button}")
+
+
+def create_file():
+    # FileSelect_DrawNameEntry: A types the letter under the cursor (row 0 column 0, 'A'), Start
+    # moves the cursor to END, and A on END saves the file and rotates back to the main menu.
+    return (press("A", f"until {FS_CONFIG_MODE} h == {CM_ROTATE_TO_NAME_ENTRY}")
+            + [f"until {FS_CONFIG_MODE} h == {CM_NAME_ENTRY}"]
+            + press("A", f"until {FS_NAME_CHAR_COUNT} h == 1")
+            + press("Start", f"until {FS_KBD_Y} h == 5")
+            + press("A", f"until {FS_CONFIG_MODE} h != {CM_NAME_ENTRY}")
+            + [f"until {FS_CONFIG_MODE} h == {CM_MAIN_MENU}"])
+
+
+def f32_bits(value):
+    return struct.unpack(">I", struct.pack(">f", value))[0]
+
+
+def rotate_to_options_and_back(n):
+    # Each mark is the first field in which one rotation game frame's update is visible, so the
+    # gap to the next mark is that game frame's length in fields.
+    steps = ["input A"]
+    for k, rot in enumerate(ROTATION_STEPS):
+        steps += [f"until {FS_WINDOW_ROT} w == 0x{f32_bits(rot):08X}", f"mark rot{n}.{k}"]
+    steps += [f"until {FS_NAME_ENTRY_BOX_X} h == {OPTIONS_BOX_FIRST_X}", f"mark rot{n}.{len(ROTATION_STEPS)}",
+              "input", f"until {FS_PAD_BUTTONS} h == 0", f"until {FS_CONFIG_MODE} h == {CM_OPTIONS_MENU}"]
+    return steps + press("B", f"until {FS_CONFIG_MODE} h != {CM_OPTIONS_MENU}") + [
+        f"until {FS_CONFIG_MODE} h == {CM_MAIN_MENU}"]
+
+
 # #23 run-time confirmation, step 1: pointers read at the start of the South Clock Town window.
 BUFFER_POINTERS = [
     ("gFramebuffers[0]", "0x801FBB80", 0x807DA800),
@@ -132,14 +218,19 @@ def scene_scripts():
     return {
         "title": title_route + ["mark window"] + play_counters("start")
         + [f"wait {WINDOW}"] + play_counters("end") + ["stop"],
-        # EnMag (z_en_mag.c): a first Start during the title fade-in skips to MAG_STATE_DISPLAY,
-        # which ignores input for 20 game frames; a second Start after that opens file select.
-        # Later in the title, a cutscene flag fades it out, so the presses come early.
-        "filesel": title_route + [f"until {GAME_FRAMES} w >= 10", "input Start", "wait 10", "input",
-                                  f"until {GAME_FRAMES} w >= 60", "input Start", "wait 10", "input",
-                                  f"until 0x{SAVE_GAME_MODE:08X} w == 2",
-                                  overlay_loaded(OVERLAY_FILE_SELECT), "mark window"] + counters("start")
+        "filesel": title_to_filesel() + ["mark window"] + counters("start")
         + [f"wait {WINDOW}"] + counters("end") + ["stop"],
+        "filesel-named": filesel_main_menu() + create_file() + move_cursor(STICK, FS_BTN_MAIN_FILE_2)
+        + create_file() + move_cursor(-STICK, FS_BTN_MAIN_FILE_1) + ["mark window"] + counters("start")
+        + [f"wait {WINDOW}"] + counters("end")
+        + [f"peek end.name{i + 1} {fs(0x24414 + 8 * i)} w" for i in range(2)] + ["stop"],
+        "filesel-options": filesel_main_menu() + move_cursor(-STICK, FS_BTN_MAIN_OPTIONS)
+        + press("A", f"until {FS_CONFIG_MODE} h == {CM_MAIN_TO_OPTIONS}")
+        + [f"until {FS_CONFIG_MODE} h == {CM_OPTIONS_MENU}", "mark window"] + counters("start")
+        + [f"wait {WINDOW}"] + counters("end") + ["stop"],
+        "filesel-rotate": filesel_main_menu() + move_cursor(-STICK, FS_BTN_MAIN_OPTIONS) + ["mark window"]
+        + counters("start") + sum((rotate_to_options_and_back(n) for n in range(ROTATIONS)), [])
+        + counters("end") + ["mark end", "stop"],
         "sct": via_map_select(92) + scene_settled(0x6F) + ["mark window"]
         + [f"peek {name} {addr} w" for name, addr, _ in BUFFER_POINTERS]
         + play_counters("start")
@@ -220,9 +311,9 @@ def read_stats(path):
     return [dict(zip(header, l.split("\t"))) for l in lines[1:]]
 
 
-def analyze(name, rows, start):
+def analyze(name, rows, start, end):
     # rows[i] is field i; a field's cost is the counter delta from the previous field.
-    window = range(start, start + WINDOW)
+    window = range(start, end)
     fields = []
     for f in window:
         cur, prev = rows[f], rows[f - 1]
@@ -246,6 +337,19 @@ def analyze(name, rows, start):
             "rsp_busy_clocks": sum(x["rsp_busy_clocks"] for x in span),
         })
     return fields, gframes
+
+
+def rotation_frames(name, marks):
+    # Marks rot<n>.0 to rot<n>.7 open the seven rotation game frames and the first frame after them.
+    rows = []
+    for n in range(ROTATIONS):
+        opens = [marks.get(f"rot{n}.{k}") for k in range(len(ROTATION_STEPS) + 1)]
+        if None in opens:
+            continue
+        for k, (a, b) in enumerate(zip(opens, opens[1:])):
+            rows.append({"scene": name, "rotation": n, "gframe": k, "start_field": a - marks["window"],
+                         "fields": b - a})
+    return rows
 
 
 def write_tsv(path, rows):
@@ -329,21 +433,25 @@ def bench(args, out):
         results = {n: f.result() for n, f in futures.items()}
     total_wall = time.perf_counter() - began
 
-    all_fields, all_gframes, summary, sct = [], [], [], None
+    all_fields, all_gframes, all_rotations, summary, sct = [], [], [], [], None
     for n in names:
         marks, peeks = parse_events(results[n][0])
-        fields, gframes = analyze(n, read_stats(out / n / "stats.tsv"), marks["window"])
+        end = marks.get("end", marks["window"] + WINDOW)
+        fields, gframes = analyze(n, read_stats(out / n / "stats.tsv"), marks["window"], end)
         all_fields += fields
         all_gframes += gframes
         summary.append({"scene": n, "window_start_frame": marks["window"], **summarize(fields, gframes, peeks)})
         if n == "sct":
             sct = (fields, peeks)
+        all_rotations += rotation_frames(n, marks)
 
     write_tsv(out / "fields.tsv", all_fields)
     write_tsv(out / "gframes.tsv", all_gframes)
     write_tsv(out / "summary.tsv", summary)
     if sct:
         write_tsv(out / "buffer-confirmation.tsv", confirm_buffers(*sct))
+    if all_rotations:
+        write_tsv(out / "rotations.tsv", all_rotations)
 
     walls = {"total": total_wall, **{n: results[n][1] for n in names}}
     (out / "wall.tsv").write_text("run\twall_s\n" + "".join(f"{k}\t{v:.3f}\n" for k, v in walls.items()),
@@ -376,7 +484,7 @@ def main():
     p.add_argument("rom")
     p.add_argument("--exe", required=True, help="n64-run binary")
     p.add_argument("--out", type=Path, default=home / "mmbench" / "results" / "latest")
-    p.add_argument("--scenes", default="filesel,sct,field,title")
+    p.add_argument("--scenes", default=",".join(scene_scripts()))
     p.add_argument("--jobs", type=int, default=0, help="parallel runs (default: one per scene)")
     p.add_argument("--shots", action="store_true",
                    help="save start.ppm/end.ppm per scene from the RDRAM image the VI samples (visual check only)")
