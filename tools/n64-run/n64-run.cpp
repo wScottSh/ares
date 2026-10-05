@@ -21,9 +21,10 @@ namespace N64 = ares::Nintendo64;
 
 namespace {
 
-//None: no RDP rasterizer runs; RDRAM holds only what the CPU and RSP write.
-//Vulkan: paraLLEl-RDP on the host GPU, the same renderer the desktop build uses.
-enum class RdpMode { None, Vulkan };
+struct FrameDump {
+  u64 frame;
+  string path;
+};
 
 enum class StopReason { EmuxExit, ScriptStop, FrameLimit, EmulatedTimeLimit, WallTimeLimit };
 
@@ -48,9 +49,9 @@ struct Options {
   u64 frames = 0;
   double emulatedSeconds = 0;
   double wallSeconds = 0;
-  RdpMode rdp = RdpMode::None;
   string statsPath;
   u32 controllers = 1;
+  std::vector<FrameDump> dumps;
   string scriptPath;
 };
 
@@ -72,6 +73,7 @@ struct FrameStats {
   u32 dpcEnd;
   u32 colorImage;
   u32 depthImage;
+  u64 rdpPixels;
   u64 traceHash;
 };
 
@@ -81,8 +83,9 @@ auto usage() -> void {
     "  --frames N          stop after N VI fields (0 = no limit)\n"
     "  --emulated-seconds S  stop after S seconds of emulated CPU time (0 = no limit)\n"
     "  --wall-seconds S    stop after S seconds of host wall time (0 = no limit)\n"
-    "  --rdp none|vulkan   RDP rasterizer: none, or paraLLEl-RDP on the host GPU (default none)\n"
     "  --stats FILE        write one TSV line per VI field to FILE\n"
+    "  --dump-frame N FILE write the RDRAM image the VI samples at field N as a P6 PPM\n"
+    "                      (640x480; repeatable)\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
     "  --script FILE       run an input script (controller 1 input, memory peeks and pokes)\n"
     "stdout carries ISViewer and emux output only. The stop line goes to stderr.\n"
@@ -103,11 +106,12 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--stats") options.statsPath = value();
     else if(arg == "--script") options.scriptPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
-    else if(arg == "--rdp") {
-      auto mode = value();
-      if(mode == "none") options.rdp = RdpMode::None;
-      else if(mode == "vulkan") options.rdp = RdpMode::Vulkan;
-      else return nothing;
+    else if(arg == "--dump-frame") {
+      FrameDump dump;
+      dump.frame = value().natural();
+      dump.path = value();
+      if(!dump.path) return nothing;
+      options.dumps.push_back(dump);
     }
     else if(arg.beginsWith("--")) return nothing;
     else if(!options.rom) options.rom = arg;
@@ -127,11 +131,11 @@ struct Fnv1a {
   }
 };
 
-//Hashes the RDRAM pixels the VI scans out this field, sampling them the way VI::refresh does.
-auto rdramFramebufferHash() -> u64 {
+//Walks the RDRAM pixels the VI scans out this field, sampling them the way VI::refresh does.
+//The callback receives the output position and the raw 16- or 32-bit pixel.
+template<typename F> auto walkFramebuffer(F&& pixelAt) -> void {
   auto& io = N64::vi.io;
-  Fnv1a fnv;
-  if(io.colorDepth < 2) return 0;
+  if(io.colorDepth < 2) return;
 
   const u32 hscanStart = N64::Region::NTSC() ? 108 : 128;
   const u32 vscanStart = N64::Region::NTSC() ?  34 :  44;
@@ -165,41 +169,45 @@ auto rdramFramebufferHash() -> u64 {
             ? (u32)ram.N64::Memory::Writable::read<N64::Half>(address)
             : (u32)ram.N64::Memory::Writable::read<N64::Word>(address);
         }
-        fnv.mix(pixel);
+        pixelAt(dx - hscanStart, dy - vscanStart, pixel);
         x0 += io.xscale;
       }
     }
     y0 += io.yscale;
   }
-  return fnv.hash;
 }
 
-//Hashes paraLLEl-RDP's VI scanout for this field and releases the readback buffer.
-//VI::refresh normally does the release on the screen thread, which run-ahead disables;
-//without it the next field's scanout waits forever.
-//If shotPath is set, also writes the scanout to it as a binary PPM.
-auto vulkanScanoutHash(const string& shotPath) -> u64 {
-  if(!N64::vi.gpuOutputValid) return 0;
-  N64::vi.gpuOutputValid = false;
-  const u8* rgba = nullptr;
-  u32 width = 0, height = 0;
-  N64::vulkan.mapScanoutRead(rgba, width, height);
+auto rdramFramebufferHash() -> u64 {
   Fnv1a fnv;
-  fnv.mix(width);
-  fnv.mix(height);
-  if(rgba) {
-    for(u32 i : range(width * height)) fnv.mix(memory::readl<4>(rgba + i * 4) & 0xffffff);
-  }
-  if(rgba && shotPath) {
-    if(auto fp = std::fopen(shotPath.data(), "wb")) {
-      std::fprintf(fp, "P6\n%u %u\n255\n", width, height);
-      for(u32 i : range(width * height)) std::fwrite(rgba + i * 4, 1, 3, fp);
-      std::fclose(fp);
+  walkFramebuffer([&](u32, u32, u32 pixel) { fnv.mix(pixel); });
+  return N64::vi.io.colorDepth < 2 ? 0 : fnv.hash;
+}
+
+//Writes the sampled image as a 640x480 binary PPM. Unsampled positions stay black.
+//5-bit channels are expanded by shifting, so a 15-bit and a 24-bit source of the same
+//color differ in the low bits.
+auto dumpFramebuffer(const string& path) -> bool {
+  constexpr u32 width = 640, height = 480;
+  std::vector<u8> rgb(width * height * 3, 0);
+  const bool depth16 = N64::vi.io.colorDepth == 2;
+  walkFramebuffer([&](u32 x, u32 y, u32 pixel) {
+    if(x >= width || y >= height) return;
+    u8* out = &rgb[(y * width + x) * 3];
+    if(depth16) {
+      out[0] = (pixel >> 11 & 31) << 3;
+      out[1] = (pixel >>  6 & 31) << 3;
+      out[2] = (pixel >>  1 & 31) << 3;
+    } else {
+      out[0] = pixel >> 24;
+      out[1] = pixel >> 16;
+      out[2] = pixel >>  8;
     }
-  }
-  N64::vulkan.unmapScanoutRead();
-  N64::vulkan.endScanout();
-  return fnv.hash;
+  });
+  file_buffer fp;
+  if(!fp.open(path, file::mode::write)) return false;
+  fp.print("P6\n", width, " ", height, "\n255\n");
+  fp.write({rgb.data(), rgb.size()});
+  return true;
 }
 
 auto sample(u64 frame, u64 fbHash) -> FrameStats {
@@ -213,8 +221,9 @@ auto sample(u64 frame, u64 fbHash) -> FrameStats {
     (N64::rsp.profile.cycles - N64::rsp.profile.haltedCycles) / UnitsPerStatsTick,
     (u32)N64::rdp.command.start,
     (u32)N64::rdp.command.end,
-    (u32)N64::rdp.set.color.dramAddress,
-    (u32)N64::rdp.set.mask.dramAddress,
+    N64::rdp.engine.colorImage(),
+    N64::rdp.engine.maskImage(),
+    N64::rdp.engine.pixels(),
     N64::traceHash.fieldBoundary(),
   };
 }
@@ -296,6 +305,7 @@ struct ScriptRunner {
   script::Pad pad;
   string shotPath;
   bool stopRequested = false;
+  ares::Node::System* root = nullptr;
 
   auto log(const char* verb, const string& name, u64 frame, const string& detail = "") -> void {
     std::fprintf(stderr, "n64-run: %s %.*s frame=%llu%s%.*s\n", verb, (int)name.size(), name.data(),
@@ -370,6 +380,31 @@ struct ScriptRunner {
     return true;
   }
 
+  auto execute(const script::SaveState& step, u64 frame) -> bool {
+    auto state = (*root)->serialize(true);
+    if(!file::write(step.path, {state.data(), state.size()})) log("save-state-failed", "-", frame);
+    return true;
+  }
+
+  //The trace hash chain and the RSP profile belong to the run, not to the machine (the load
+  //powers the core, which resets the profile), so they carry across the load: a
+  //save-then-load round trip then compares column for column with a plain run.
+  auto execute(const script::LoadState& step, u64 frame) -> bool {
+    auto data = file::read(step.path);
+    serializer state{data.data(), (u32)data.size()};
+    auto rolling = N64::traceHash.rolling;
+    auto rspProfile = N64::rsp.profile;
+    if(data.empty() || !(*root)->unserialize(state)) log("load-state-failed", "-", frame);
+    N64::traceHash.rolling = rolling;
+    N64::rsp.profile = rspProfile;
+    return true;
+  }
+
+  auto execute(const script::PokeTmem& step, u64) -> bool {
+    N64::rdp.engine.tmem()[step.offset] = step.value;
+    return true;
+  }
+
   auto execute(const script::Stop&, u64) -> bool {
     stopRequested = true;
     return true;
@@ -421,6 +456,8 @@ auto nall::main(Arguments arguments) -> void {
   auto options = *parsed;
 
   ScriptRunner runner;
+  ares::Node::System root;
+  runner.root = &root;
   if(options.scriptPath) {
     if(!file::exists(options.scriptPath)) {
       std::fprintf(stderr, "n64-run: cannot read script %s\n", options.scriptPath.data());
@@ -463,13 +500,9 @@ auto nall::main(Arguments arguments) -> void {
     std::_Exit(1);
   }
 
-  N64::option("Enable GPU acceleration", options.rdp == RdpMode::Vulkan ? "true" : "false");
-  N64::option("Quality", "SD");
-  N64::option("Supersampling", "false");
   N64::option("Homebrew Mode", "true");
   N64::option("Expansion Pak", "true");
 
-  ares::Node::System root;
   if(!N64::load(root, "[Nintendo] Nintendo 64 (NTSC)")) {
     std::fprintf(stderr, "n64-run: failed to load N64 system\n");
     std::_Exit(1);
@@ -493,7 +526,7 @@ auto nall::main(Arguments arguments) -> void {
       std::_Exit(1);
     }
     stats.print("frame\torigin\twidth\tdepth\tfb_hash\tcpu_cycles\trsp_busy_clocks"
-                "\tdpc_start\tdpc_end\tcimg\tzimg\ttrace_hash\n");
+                "\tdpc_start\tdpc_end\tcimg\tzimg\trdp_pixels\ttrace_hash\n");
   }
 
   auto wallStart = std::chrono::steady_clock::now();
@@ -507,18 +540,22 @@ auto nall::main(Arguments arguments) -> void {
   while(true) {
     root->run();
     u64 fbHash = 0;
-    if(N64::vulkan.enable) {
-      fbHash = vulkanScanoutHash(runner.shotPath);
+    if(N64::vi.active()) {
+      if(stats) fbHash = rdramFramebufferHash();
+      if(runner.shotPath && !dumpFramebuffer(runner.shotPath)) std::fprintf(stderr, "n64-run: cannot write %s\n", runner.shotPath.data());
       runner.shotPath = {};
     }
-    else if(stats && N64::vi.active()) fbHash = rdramFramebufferHash();
     if(N64::vi.active()) {
       if(stats) {
         auto s = sample(frames, fbHash);
         stats.print(s.frame, "\t", hex(s.origin, 6L), "\t", s.width, "\t", s.depth, "\t",
                     hex(s.fbHash, 16L), "\t", s.cpuCycles, "\t", s.rspBusyClocks, "\t",
                     hex(s.dpcStart, 6L), "\t", hex(s.dpcEnd, 6L), "\t", hex(s.colorImage, 7L), "\t",
-                    hex(s.depthImage, 7L), "\t", hex(s.traceHash, 16L), "\n");
+                    hex(s.depthImage, 7L), "\t", s.rdpPixels, "\t", hex(s.traceHash, 16L), "\n");
+      }
+      for(auto& dump : options.dumps) {
+        if(dump.frame != frames) continue;
+        if(!dumpFramebuffer(dump.path)) std::fprintf(stderr, "n64-run: cannot write %s\n", dump.path.data());
       }
       frames++;
       runner.advance(frames);
@@ -534,8 +571,14 @@ auto nall::main(Arguments arguments) -> void {
   stats.close();
   std::fflush(platform.output);
   std::fflush(stdout);
-  std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f rdp=%s\n",
-    info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed(), N64::vulkan.enable ? "vulkan" : "none");
+  std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f\n",
+    info.name, (unsigned long long)frames, emulatedElapsed(), wallElapsed());
+  //host time inside the engine's render calls and the pixels it rasterized (ADR 0001 risk 1)
+  auto& engine = N64::rdp.engine;
+  std::fprintf(stderr, "n64-run: rdp_engine render_calls=%llu render_ms=%.3f pixels=%llu ns_per_pixel=%.2f\n",
+    (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
+    (unsigned long long)engine.pixels(),
+    engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);

@@ -1,9 +1,14 @@
 #include <n64/n64.hpp>
+#include <chrono>
+#include <cstdarg>
+extern "C" {
+  #include "engine/rdp.h"
+}
 
 namespace ares::Nintendo64 {
 
 RDP rdp;
-#include "render.cpp"
+#include "engine.cpp"
 #include "io.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
@@ -14,6 +19,7 @@ auto RDP::load(Node::Object parent) -> void {
 }
 
 auto RDP::unload() -> void {
+  engine.unload();
   debugger = {};
   node.reset();
 }
@@ -36,28 +42,9 @@ auto RDP::main() -> void {
 
 auto RDP::power(bool reset) -> void {
   Thread::reset();
+  engine.unload();
+  engine.load();
   command = {};
-  edge = {};
-  shade = {};
-  texture = {};
-  zbuffer = {};
-  rectangle = {};
-  other = {};
-  fog = {};
-  blend = {};
-  primitive = {};
-  environment = {};
-  combine = {};
-  tlut = {};
-  load_ = {};
-  tileSize = {};
-  tile = {};
-  set = {};
-  primitiveDepth = {};
-  scissor = {};
-  convert = {};
-  key = {};
-  fillRectangle_ = {};
   io.bist = {};
   io.test = {};
   if(!reset) mapIdentityWarned = 0;

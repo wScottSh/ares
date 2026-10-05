@@ -27,9 +27,6 @@ ares_add_sources(
     timing/verify.cpp
 )
 
-target_enable_feature(ares "N64 Vulkan rendering with paraLLEl-RDP" VULKAN)
-target_compile_definitions(ares PUBLIC VULKAN)
-
 if(OS_WINDOWS)
   include(cmake/os-windows.cmake)
 elseif(OS_MACOS)
@@ -234,10 +231,20 @@ ares_add_sources(
     n64
   INCLUDED #
     rdp/debugger.cpp
+    rdp/engine.cpp
     rdp/io.cpp
     rdp/rdp.hpp
-    rdp/render.cpp
     rdp/serialization.cpp
+    rdp/engine/cen64_compat.h
+    rdp/engine/rdp.h
+    rdp/engine/rdp_blend.h
+    rdp/engine/rdp_blendlut.h
+    rdp/engine/rdp_core.h
+    rdp/engine/rdp_poly.h
+    rdp/engine/rdp_rgba.h
+    rdp/engine/rdp_texpipe.h
+    rdp/engine/rdp_types.h
+    rdp/engine/rdp_wqueue.h
 )
 
 ares_add_sources(
@@ -325,151 +332,24 @@ ares_add_sources(
     vi/vi.hpp
 )
 
-target_compile_definitions(ares PRIVATE VULKAN)
-
+# cen64-jgemu pixel engine (rdp/engine/README.md). C sources; one worker
+# (the emulation thread) so rendering is deterministic.
 set(
-  _parallel_rdp_sources
-  vulkan/vulkan.cpp
-  vulkan/vulkan.hpp
-  vulkan/parallel-rdp/parallel-rdp/command_ring.cpp
-  vulkan/parallel-rdp/parallel-rdp/rdp_device.cpp
-  vulkan/parallel-rdp/parallel-rdp/rdp_dump_write.cpp
-  vulkan/parallel-rdp/parallel-rdp/rdp_renderer.cpp
-  vulkan/parallel-rdp/parallel-rdp/video_interface.cpp
-  vulkan/parallel-rdp/vulkan/buffer.cpp
-  vulkan/parallel-rdp/vulkan/buffer_pool.cpp
-  vulkan/parallel-rdp/vulkan/command_buffer.cpp
-  vulkan/parallel-rdp/vulkan/command_pool.cpp
-  vulkan/parallel-rdp/vulkan/context.cpp
-  vulkan/parallel-rdp/vulkan/cookie.cpp
-  vulkan/parallel-rdp/vulkan/descriptor_set.cpp
-  vulkan/parallel-rdp/vulkan/device.cpp
-  vulkan/parallel-rdp/vulkan/event_manager.cpp
-  vulkan/parallel-rdp/vulkan/fence.cpp
-  vulkan/parallel-rdp/vulkan/fence_manager.cpp
-  vulkan/parallel-rdp/vulkan/image.cpp
-  vulkan/parallel-rdp/vulkan/indirect_layout.cpp
-  vulkan/parallel-rdp/vulkan/memory_allocator.cpp
-  vulkan/parallel-rdp/vulkan/pipeline_event.cpp
-  vulkan/parallel-rdp/vulkan/query_pool.cpp
-  vulkan/parallel-rdp/vulkan/render_pass.cpp
-  vulkan/parallel-rdp/vulkan/sampler.cpp
-  vulkan/parallel-rdp/vulkan/semaphore.cpp
-  vulkan/parallel-rdp/vulkan/semaphore_manager.cpp
-  vulkan/parallel-rdp/vulkan/shader.cpp
-  vulkan/parallel-rdp/vulkan/texture/texture_format.cpp
-  vulkan/parallel-rdp/util/arena_allocator.cpp
-  vulkan/parallel-rdp/util/logging.cpp
-  vulkan/parallel-rdp/util/thread_id.cpp
-  vulkan/parallel-rdp/util/aligned_alloc.cpp
-  vulkan/parallel-rdp/util/timer.cpp
-  vulkan/parallel-rdp/util/timeline_trace_file.cpp
-  vulkan/parallel-rdp/util/thread_name.cpp
-  vulkan/parallel-rdp/util/environment.cpp
-  vulkan/parallel-rdp/volk/volk.c
+  _rdp_engine_sources
+  rdp/engine/rdp.c
+  rdp/engine/rdp_blend.c
+  rdp/engine/rdp_core.c
+  rdp/engine/rdp_poly.c
+  rdp/engine/rdp_texpipe.c
+  rdp/engine/rdp_wqueue.c
 )
-
-if(ARES_UNITY_CORES)
-  ares_add_sources(
-    CORE #
-      n64
-    UNITY #
-      ${_parallel_rdp_sources}
-  )
-else()
-  ares_add_sources(
-    CORE #
-      n64
-    PRIMARY #
-      ${_parallel_rdp_sources}
-  )
-endif()
-
-ares_add_sources(
-  CORE #
-    n64
-  INCLUDED #
-    vulkan/parallel-rdp/parallel-rdp/luts.hpp
-    vulkan/parallel-rdp/parallel-rdp/command_ring.hpp
-    vulkan/parallel-rdp/parallel-rdp/rdp_common.hpp
-    vulkan/parallel-rdp/parallel-rdp/rdp_data_structures.hpp
-    vulkan/parallel-rdp/parallel-rdp/rdp_device.hpp
-    vulkan/parallel-rdp/parallel-rdp/rdp_dump_write.hpp
-    vulkan/parallel-rdp/parallel-rdp/rdp_renderer.hpp
-    vulkan/parallel-rdp/parallel-rdp/video_interface.hpp
-    vulkan/parallel-rdp/parallel-rdp/worker_thread.hpp
-    vulkan/parallel-rdp/vulkan/buffer.hpp
-    vulkan/parallel-rdp/vulkan/buffer_pool.hpp
-    vulkan/parallel-rdp/vulkan/command_buffer.hpp
-    vulkan/parallel-rdp/vulkan/command_pool.hpp
-    vulkan/parallel-rdp/vulkan/context.hpp
-    vulkan/parallel-rdp/vulkan/cookie.hpp
-    vulkan/parallel-rdp/vulkan/descriptor_set.hpp
-    vulkan/parallel-rdp/vulkan/device.hpp
-    vulkan/parallel-rdp/vulkan/event_manager.hpp
-    vulkan/parallel-rdp/vulkan/fence.hpp
-    vulkan/parallel-rdp/vulkan/fence_manager.hpp
-    vulkan/parallel-rdp/vulkan/image.hpp
-    vulkan/parallel-rdp/vulkan/indirect_layout.hpp
-    vulkan/parallel-rdp/vulkan/memory_allocator.hpp
-    vulkan/parallel-rdp/vulkan/pipeline_event.hpp
-    vulkan/parallel-rdp/vulkan/query_pool.hpp
-    vulkan/parallel-rdp/vulkan/render_pass.hpp
-    vulkan/parallel-rdp/vulkan/sampler.hpp
-    vulkan/parallel-rdp/vulkan/semaphore.hpp
-    vulkan/parallel-rdp/vulkan/semaphore_manager.hpp
-    vulkan/parallel-rdp/vulkan/shader.hpp
-    vulkan/parallel-rdp/vulkan/texture/texture_format.hpp
-    vulkan/parallel-rdp/vulkan/quirks.hpp
-    vulkan/parallel-rdp/vulkan/vulkan_common.hpp
-    vulkan/parallel-rdp/vulkan/limits.hpp
-    vulkan/parallel-rdp/vulkan/wsi.hpp
-    vulkan/parallel-rdp/vulkan/type_to_string.hpp
-    vulkan/parallel-rdp/vulkan/vulkan_headers.hpp
-    vulkan/parallel-rdp/vulkan/vulkan_prerotate.hpp
-    vulkan/parallel-rdp/vulkan/format.hpp
-    vulkan/parallel-rdp/vulkan/device_fossilize.hpp
-    vulkan/parallel-rdp/util/arena_allocator.hpp
-    vulkan/parallel-rdp/util/logging.hpp
-    vulkan/parallel-rdp/util/thread_id.hpp
-    vulkan/parallel-rdp/util/aligned_alloc.hpp
-    vulkan/parallel-rdp/util/timer.hpp
-    vulkan/parallel-rdp/util/timeline_trace_file.hpp
-    vulkan/parallel-rdp/util/thread_name.hpp
-    vulkan/parallel-rdp/util/environment.hpp
-    vulkan/parallel-rdp/util/hash.hpp
-    vulkan/parallel-rdp/util/intrusive.hpp
-    vulkan/parallel-rdp/util/intrusive_hash_map.hpp
-    vulkan/parallel-rdp/util/read_write_lock.hpp
-    vulkan/parallel-rdp/util/bitops.hpp
-    vulkan/parallel-rdp/util/small_vector.hpp
-    vulkan/parallel-rdp/util/intrusive_list.hpp
-    vulkan/parallel-rdp/util/object_pool.hpp
-    vulkan/parallel-rdp/util/temporary_hashmap.hpp
-    vulkan/parallel-rdp/util/enum_cast.hpp
-    vulkan/parallel-rdp/util/stack_allocator.hpp
-    vulkan/parallel-rdp/util/dynamic_array.hpp
+target_sources(ares PRIVATE ${_rdp_engine_sources})
+set_source_files_properties(
+  ${_rdp_engine_sources}
+  PROPERTIES COMPILE_DEFINITIONS "RDP_WQ_THREADS=1;RDP_DP_TIMED=0"
 )
-
-target_include_directories(
-  ares
-  PRIVATE
-    vulkan/parallel-rdp/parallel-rdp
-    vulkan/parallel-rdp/volk
-    vulkan/parallel-rdp/vulkan
-    vulkan/parallel-rdp/vulkan-headers/include
-    vulkan/parallel-rdp/util
-)
-
-target_compile_options(ares PRIVATE $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-newline-eof>)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(ares PUBLIC Threads::Threads)
 
-if(OS_WINDOWS)
-  target_compile_definitions(ares PRIVATE VK_USE_PLATFORM_WIN32_KHR)
-  target_link_libraries(ares PRIVATE winmm)
-else()
-  target_link_libraries(ares PRIVATE dl)
-endif()

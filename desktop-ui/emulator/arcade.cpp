@@ -190,15 +190,6 @@ auto Arcade::load() -> LoadResult {
       port->connect();
     }
 
-    ares::Nintendo64::option("Quality", settings.nintendo64.quality);
-    ares::Nintendo64::option("Supersampling", settings.nintendo64.supersampling);
-#if defined(VULKAN)
-    ares::Nintendo64::option("Enable GPU acceleration", true);
-#else
-    ares::Nintendo64::option("Enable GPU acceleration", false);
-#endif
-    ares::Nintendo64::option("Disable Video Interface Processing", settings.nintendo64.disableVideoInterfaceProcessing);
-    ares::Nintendo64::option("Weave Deinterlacing", settings.nintendo64.weaveDeinterlacing);
     ares::Nintendo64::option("Homebrew Mode", settings.developer.homebrewMode);
 
     return successful;

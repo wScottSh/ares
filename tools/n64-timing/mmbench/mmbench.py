@@ -186,13 +186,15 @@ def run_scene(exe, rom, name, steps, outdir, shots):
     stats = scene_dir / "stats.tsv"
     proc = subprocess.run(
         [exe, rom, "--script", str(script), "--stats", str(stats),
-         "--frames", "3000", "--wall-seconds", "600", "--rdp", "vulkan" if shots else "none"],
+         "--frames", "3000", "--wall-seconds", "600"],
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     lines = [l for l in proc.stderr.splitlines() if l.startswith("n64-run: ")]
-    stop = lines[-1] if lines else ""
+    stop = next((l for l in lines if l.startswith("n64-run: stop=")), "")
     wall = float(re.search(r"wall_s=([\d.]+)", stop).group(1)) if "wall_s=" in stop else float("nan")
-    events = [l[len("n64-run: "):] for l in lines if not l.startswith("n64-run: stop=")]
+    events = [l[len("n64-run: "):] for l in lines if not l.startswith(("n64-run: stop=", "n64-run: rdp_"))]
     (scene_dir / "events.txt").write_text("\n".join(events) + "\n", newline="\n")
+    rdp_lines = [l[len("n64-run: "):] for l in lines if l.startswith("n64-run: rdp_")]
+    (scene_dir / "rdp.txt").write_text("\n".join(rdp_lines) + "\n", newline="\n")
     if "stop=script-stop" not in stop:
         raise SystemExit(f"{name}: run did not reach the end of its script: {stop or proc.stderr[-500:]}")
     return events, wall
@@ -230,6 +232,7 @@ def analyze(name, rows, start):
             "rsp_busy_clocks": int(cur["rsp_busy_clocks"]) - int(prev["rsp_busy_clocks"]),
             "dpc_start": cur["dpc_start"], "dpc_end": cur["dpc_end"],
             "cimg": cur["cimg"], "zimg": cur["zimg"],
+            "rdp_pixels": int(cur.get("rdp_pixels", 0)) - int(prev.get("rdp_pixels", 0)),
         })
     # A game frame spans the fields from one VI origin change to the next. Fields before the
     # first change and after the last one belong to frames that straddle the window edges.
@@ -268,6 +271,7 @@ def summarize(fields, gframes, peeks):
         "gframe_fields_min": min(lengths) if lengths else "",
         "gframe_fields_max": max(lengths) if lengths else "",
         "rsp_busy_clocks_per_field_mean": f"{sum(rsp) / len(rsp):.1f}",
+        "rdp_pixels_window": sum(f["rdp_pixels"] for f in fields),
         "gfx_tasks": delta("gfx_tasks"),
         "game_frames": delta("game_frames"),
     }
@@ -359,7 +363,7 @@ def bench(args, out):
 
 def identical_trees(a, b):
     def listing(root):
-        return {p.relative_to(root) for p in root.rglob("*") if p.is_file() and p.name != "wall.tsv"}
+        return {p.relative_to(root) for p in root.rglob("*") if p.is_file() and p.name not in ("wall.tsv", "rdp.txt")}
     files = sorted(listing(a) | listing(b))
     differing = [f for f in files
                  if not (a / f).is_file() or not (b / f).is_file() or (a / f).read_bytes() != (b / f).read_bytes()]
@@ -375,7 +379,7 @@ def main():
     p.add_argument("--scenes", default="filesel,sct,field,title")
     p.add_argument("--jobs", type=int, default=0, help="parallel runs (default: one per scene)")
     p.add_argument("--shots", action="store_true",
-                   help="render with paraLLEl-RDP and save start.ppm/end.ppm per scene (visual check only)")
+                   help="save start.ppm/end.ppm per scene from the RDRAM image the VI samples (visual check only)")
     p.add_argument("--check-determinism", action="store_true",
                    help="run the bench twice (OUT/run1, OUT/run2) and compare every output except wall.tsv")
     args = p.parse_args()

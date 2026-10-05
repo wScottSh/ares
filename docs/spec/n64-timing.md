@@ -169,7 +169,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 | Behavior | Value | Code site | Checks | Note |
 |---|---|---|---|---|
-| `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:104 | pending (no-corpus) | no plan unit: PAL is not the target console |
+| `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:89 | pending (no-corpus) | no plan unit: PAL is not the target console |
 | `legacy.cpu.instruction` | 1 pclk | ares/n64/cpu/memory.cpp:158 | `nemu64:timing/just-nops` | replaced by T7a: Pipeline::issue |
 | `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:117 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
 | `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:125 | pending (no-corpus) | replaced by T7b: exception stage costs |
@@ -211,9 +211,9 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:353 | pending (no-corpus) | no plan unit: CIC boot handshake timeout |
 | `legacy.rsp.halted-quantum` | 64 pclk | ares/n64/rsp/rsp.cpp:37 | `stepcap` | replaced by T5: a halted RSP is Parked and costs nothing |
 | `legacy.rsp.dma-bytes-per-rclk` | 8 B | ares/n64/rsp/dma.cpp:20 | `bench:sp-dma-sweep` | replaced by T8: SpDma 128 B bursts through the RI (sp.dma-burst) |
-| `legacy.rdp.step-quantum` | 1 s | ares/n64/rdp/rdp.cpp:30 | `stepcap` | replaced by T5: the RDP steps as a timeline actor |
+| `legacy.rdp.step-quantum` | 1 s | ares/n64/rdp/rdp.cpp:36 | `stepcap` | replaced by T5: the RDP steps as a timeline actor |
 | `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:76 | pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
-| `legacy.vi.inactive-line` | 2048 vclk | ares/n64/vi/vi.cpp:131 | `stepcap` | replaced by T5: the VI posts no events while disabled |
+| `legacy.vi.inactive-line` | 2048 vclk | ares/n64/vi/vi.cpp:105 | `stepcap` | replaced by T5: the VI posts no events while disabled |
 | `legacy.cart.eeprom-write` | 6 ms | ares/n64/cartridge/joybus.cpp:48 | pending (no-corpus) | no plan unit: EEPROM write busy time |
 | `legacy.cart.rtc-tick` | 1 s | ares/n64/cartridge/rtc.cpp:42 | pending (no-corpus) | no plan unit: cartridge RTC one-second tick |
 | `legacy.cart.flash-mx-sector-erase` | 85 ms | ares/n64/cartridge/flash.cpp:4 | pending (no-corpus) | no plan unit: Macronix flash sector erase |

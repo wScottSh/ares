@@ -489,7 +489,7 @@ def self_test(root):
     root = Path(root)
     work = Path(tempfile.mkdtemp(prefix="behaviors-self-test-"))
     try:
-        shutil.copytree(root / "ares/n64", work / "ares/n64", ignore=shutil.ignore_patterns("vulkan"))
+        shutil.copytree(root / "ares/n64", work / "ares/n64")
         shutil.copytree(root / "tools/n64-timing", work / "tools/n64-timing", ignore=shutil.ignore_patterns("__pycache__"))
         (work / SPEC).parent.mkdir(parents=True)
         shutil.copy(root / SPEC, work / SPEC)

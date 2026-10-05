@@ -137,6 +137,10 @@ auto RDP::IO::readWord(u32 address, Thread& thread) -> u32 {
 
   if(address == 3) {
     //DPS_BUFTEST_DATA
+    //A drawn span-buffer image lands in words 0-31 and zeroes 32-127 (engine/rdp.h)
+    if(self.engine.dpsTake(&test.data[0])) {
+      for(u32 n : range(32, 128)) test.data[n] = 0;
+    }
     data.bit(0,31) = test.data[test.address];
   }
 
@@ -147,6 +151,7 @@ auto RDP::IO::readWord(u32 address, Thread& thread) -> u32 {
 auto RDP::IO::writeWord(u32 address, u32 data_, Thread& thread) -> void {
   address = (address & 0xfffff) >> 2;
   n32 data = data_;
+  self.engine.dpsArm();
 
   if(address == 0) {
     //DPS_TBIST
@@ -192,7 +197,8 @@ auto RDP::flushCommands() -> void {
       debug(unusual, "[RDP] started while RDRAM DeviceId map is non-identity");
       mapIdentityWarned = 1;
     }
-    render();
+    debugger.commands();
+    engine.render();
   }
   command.bufferBusy = 0;
   command.ready = 1;
