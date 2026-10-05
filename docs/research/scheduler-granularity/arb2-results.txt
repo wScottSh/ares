@@ -1,0 +1,16 @@
+rep=0 contention=0.25 decisions=30000000 ns_per_decision=42.85 avg_wait_units=6.7
+rep=0 contention=1.00 decisions=30000000 ns_per_decision=40.05 avg_wait_units=41.6
+rep=0 contention=4.00 decisions=30000000 ns_per_decision=53.35 avg_wait_units=360.6
+rep=1 contention=0.25 decisions=30000000 ns_per_decision=38.88 avg_wait_units=6.7
+rep=1 contention=1.00 decisions=30000000 ns_per_decision=38.67 avg_wait_units=41.6
+rep=1 contention=4.00 decisions=30000000 ns_per_decision=41.27 avg_wait_units=360.6
+rep=2 contention=0.25 decisions=30000000 ns_per_decision=24.89 avg_wait_units=6.7
+rep=2 contention=1.00 decisions=30000000 ns_per_decision=21.31 avg_wait_units=41.6
+rep=2 contention=4.00 decisions=30000000 ns_per_decision=30.79 avg_wait_units=360.6
+rep=3 contention=0.25 decisions=30000000 ns_per_decision=27.07 avg_wait_units=6.7
+rep=3 contention=1.00 decisions=30000000 ns_per_decision=22.67 avg_wait_units=41.6
+rep=3 contention=4.00 decisions=30000000 ns_per_decision=32.32 avg_wait_units=360.6
+rep=4 contention=0.25 decisions=30000000 ns_per_decision=23.77 avg_wait_units=6.7
+rep=4 contention=1.00 decisions=30000000 ns_per_decision=19.66 avg_wait_units=41.6
+rep=4 contention=4.00 decisions=30000000 ns_per_decision=27.72 avg_wait_units=360.6
+checksum=450000000

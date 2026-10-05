@@ -1,0 +1,87 @@
+diff --git a/tools/n64-run/n64-run.cpp b/tools/n64-run/n64-run.cpp
+index 7930b881a..04e98a9f4 100644
+--- a/tools/n64-run/n64-run.cpp
++++ b/tools/n64-run/n64-run.cpp
+@@ -19,6 +19,8 @@ namespace N64 = ares::Nintendo64;
+ 
+ #include "script.hpp"
+ 
++double m9ThreadCpuSeconds();
++
+ namespace {
+ 
+ enum class CpuMode { Interpreter, Recompiler };
+@@ -27,6 +29,14 @@ enum class CpuMode { Interpreter, Recompiler };
+ //Vulkan: paraLLEl-RDP on the host GPU, the same renderer the desktop build uses.
+ enum class RdpMode { None, Vulkan };
+ 
++struct M9Window { bool marked = false; u64 txn[64]; u64 tsc; double cpu; } m9Window;
++inline auto m9MarkWindow() -> void {
++  m9Window.marked = true;
++  for(u32 i = 0; i < N64::m9::NumTxn; i++) m9Window.txn[i] = N64::m9::txn[i];
++  m9Window.tsc = __rdtsc();
++  m9Window.cpu = m9ThreadCpuSeconds();
++}
++
+ enum class StopReason { EmuxExit, ScriptStop, FrameLimit, EmulatedTimeLimit, WallTimeLimit };
+ 
+ struct StopInfo {
+@@ -367,6 +377,7 @@ struct ScriptRunner {
+ 
+   auto execute(const script::Mark& step, u64 frame) -> bool {
+     log("mark", step.name, frame);
++    m9MarkWindow();
+     return true;
+   }
+ 
+@@ -420,6 +431,11 @@ struct Headless : ares::Platform {
+ 
+ }
+ 
++void m9SamplerStart();
++void m9SamplerStop();
++double m9ThreadCpuSeconds();
++unsigned long long m9ThreadCycles();
++
+ auto nall::main(Arguments arguments) -> void {
+   auto parsed = parse(arguments);
+   if(!parsed) { usage(); std::_Exit(1); }
+@@ -504,6 +520,8 @@ auto nall::main(Arguments arguments) -> void {
+   }
+ 
+   auto wallStart = std::chrono::steady_clock::now();
++  u64 tscStart = __rdtsc();
++  m9SamplerStart();
+   auto wallElapsed = [&] {
+     return std::chrono::duration<double>(std::chrono::steady_clock::now() - wallStart).count();
+   };
+@@ -538,6 +556,29 @@ auto nall::main(Arguments arguments) -> void {
+   }
+ 
+   auto info = stopInfo(reason);
++  m9SamplerStop();
++  {
++    double wall = wallElapsed();
++    std::fprintf(stderr, "m9.cpu\tthread_cpu_s=%.3f\tthread_gcycles=%.3f\n", m9ThreadCpuSeconds(), m9ThreadCycles() / 1e9);
++    u64 tscRun = __rdtsc() - tscStart;
++    std::fprintf(stderr, "m9: jit=%lld chunk=%lld bussync=%d rsp_mode=%lld rsp_rec=%d tsc_ghz=%.4f\n",
++      (long long)N64::m9::jit, (long long)N64::m9::chunk, (int)N64::m9::busSync, (long long)N64::m9::rspMode,
++      (int)N64::rsp.recompiler.enabled, tscRun / wall / 1e9);
++    for(u32 i = 0; i < N64::m9::NumSlots; i++)
++      std::fprintf(stderr, "m9.tsc\t%s\t%llu\t%.4f\n", N64::m9::slotNames[i], (unsigned long long)N64::m9::tsc[i], (double)N64::m9::tsc[i] / tscRun);
++    for(u32 i = 0; i < N64::m9::NumTxn; i++)
++      std::fprintf(stderr, "m9.txn\t%s\t%llu\n", N64::m9::txnNames[i], (unsigned long long)N64::m9::txn[i]);
++    if(m9Window.marked) {
++      std::fprintf(stderr, "m9.window\tthread_cpu_s=%.3f\ttsc_s=%.3f\n", m9ThreadCpuSeconds() - m9Window.cpu,
++        (__rdtsc() - m9Window.tsc) / (tscRun / wall));
++      for(u32 i = 0; i < N64::m9::NumTxn; i++)
++        std::fprintf(stderr, "m9.wtxn\t%s\t%llu\n", N64::m9::txnNames[i], (unsigned long long)(N64::m9::txn[i] - m9Window.txn[i]));
++    }
++    const char* dev[] = {"unknown","vr4300_icache","vr4300_dcache","vr4300_uncached","sp_dma","pi_dma","si_dma","vi_dma","ai_dma","dp_dma","dp_draw"};
++    for(u32 i = 0; i < 11; i++)
++      std::fprintf(stderr, "m9.bytes\t%s\t%llu\t%llu\n", dev[i],
++        (unsigned long long)N64::rdram.profile.metrics[i].reads, (unsigned long long)N64::rdram.profile.metrics[i].writes);
++  }
+   stats.close();
+   std::fflush(platform.output);
+   std::fflush(stdout);

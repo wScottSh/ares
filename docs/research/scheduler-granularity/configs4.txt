@@ -1,0 +1,4 @@
+m0|M9_MODE=0|n64-run-m9d.exe|--cpu interpreter
+m1|M9_MODE=1|n64-run-m9d.exe|--cpu interpreter
+b64|M9_MODE=2 M9_BATCH=64|n64-run-m9d.exe|--cpu interpreter
+b512|M9_MODE=2 M9_BATCH=512|n64-run-m9d.exe|--cpu interpreter

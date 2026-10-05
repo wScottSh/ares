@@ -1,0 +1,22 @@
+# boot (matrix3.log)
+config	reps	quiet	wall_med	wall_min	cpu_med	cpu_instr_M	rsp_run_instr_M	rsp_instr_M	syncs_M	ns_per_instr_wall_med	ns_per_instr_wall_min
+base	10	9	8.711	8.507	nan	0.0	0.0	0.0	0.0	NA	NA
+m0	10	7	9.706	9.276	10.015	688.9	48.6	45.9	688.9	14.09	13.46
+m1	10	7	7.357	6.910	7.657	688.9	48.7	45.9	62.6	10.68	10.03
+b64	10	5	7.620	6.666	7.938	688.9	48.7	45.9	25.9	11.06	9.68
+b512	10	8	6.739	6.367	7.062	688.9	48.7	45.9	3.8	9.78	9.24
+b4096	10	5	6.819	6.179	7.101	687.2	48.6	45.9	0.5	9.92	8.99
+
+# sct window (matrix4.log)
+config	reps	quiet	wall_med	wall_min	cpu_med	cpu_instr_M	rsp_run_instr_M	rsp_instr_M	syncs_M	ns_per_instr_wall_med	ns_per_instr_wall_min
+m0	10	9	15.141	14.046	15.055	473.5	249.1	213.9	473.5	31.98	29.66
+m1	10	8	14.320	13.433	14.218	474.2	249.4	214.6	257.9	30.20	28.33
+b64	10	7	10.663	10.347	10.610	472.4	249.2	215.2	21.9	22.57	21.90
+b512	10	7	9.991	9.680	9.938	474.5	249.0	214.3	3.5	21.06	20.40
+
+# sct window (matrix5.log)
+config	reps	quiet	wall_med	wall_min	cpu_med	cpu_instr_M	rsp_run_instr_M	rsp_instr_M	syncs_M	ns_per_instr_wall_med	ns_per_instr_wall_min
+m1	6	2	14.123	13.558	13.992	474.2	249.4	214.6	257.9	29.78	28.59
+m3	6	5	12.381	11.809	12.258	474.9	248.8	213.8	8.7	26.07	24.87
+b512	6	4	10.204	9.748	10.125	474.5	249.0	214.3	3.5	21.51	20.55
+m0	6	3	15.667	14.390	15.539	473.5	249.1	213.9	473.5	33.09	30.39
