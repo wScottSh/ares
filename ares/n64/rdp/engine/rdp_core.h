@@ -101,10 +101,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // hardware's unpopulated-RDRAM behavior. The compares are
 // well-predicted never-taken branches.
 //
-// ares port: RDRAM and DMEM are ares' Memory::Writable buffers, native
-// 32-bit words with the bytes of each word swizzled (byte address ^ 3,
-// halfword index ^ 1), the layout MAME's RDP was written for, so no
-// byteswap is applied. The limit is the installed RDRAM, not the
+// ares port: RDRAM is ares' LSB Memory::Writable buffer, native 32-bit
+// words with the bytes of each word swizzled (byte address ^ 3, halfword
+// index ^ 1), the layout MAME's RDP was written for, so no byteswap is
+// applied. (DMEM is big-endian bytes; see rdp_read_data.) The limit is the installed RDRAM, not the
 // RDP_RDRAM_SIZE constant, because ares allocates 4 MB without the
 // Expansion Pak.
 static inline uint8_t rdp_guard_read8(const uint8_t *mem, uint32_t limit, uint32_t in) {

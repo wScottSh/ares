@@ -38,7 +38,7 @@ auto RDP::Debugger::commands() -> void {
 
   auto& command = rdp.command;
   auto word = [&](u32 address) -> u32 {
-    if(command.source) return ((const u32*)rsp.dmem.data)[(address & 0xfff) >> 2];
+    if(command.source) return bswap32(((const u32*)rsp.dmem.data)[(address & 0xfff) >> 2]);
     return ((const u32*)rdram.ram.data)[(address & rdram.ram.size - 1) >> 2];
   };
   for(u32 address = command.current & ~7; address < (command.end & ~7);) {

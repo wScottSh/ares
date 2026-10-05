@@ -29,7 +29,7 @@ against it shows every change. In summary:
 
 - `cen64_compat.h` stands in for `common/common.h`, `common/debug.h`
   and `common/endian.h` (little-endian host only).
-- RDRAM accessors (`rdp_core.h`): ares stores RDRAM and DMEM as native
+- RDRAM accessors (`rdp_core.h`): ares stores RDRAM as native
   32-bit words with the bytes of each word swizzled (byte address `^ 3`,
   halfword index `^ 1`), the layout the MAME RDP was written for, so the
   `RREAD*`/`RWRITE*` macros index that way with no byteswap. Range checks
@@ -40,8 +40,9 @@ against it shows every change. In summary:
   instead of an 8 MB array inside the renderer, so CPU and DMA writes and
   RDP writes maintain one plane. Direct `m_hidden_bits[... ^ XOR]` uses
   became `HREADADDR8`/`HWRITEADDR8`.
-- `rdp_read_data`: command fetch is two native word reads (no byteswap,
-  no atomic doubleword load; the renderer is single-threaded here).
+- `rdp_read_data`: command fetch is two word reads, native from RDRAM and
+  byteswapped from DMEM, which ares stores as big-endian bytes (no atomic
+  doubleword load; the renderer is single-threaded here).
 - `rdp_z_store` and the fill-rect stale-read restore use the accessor
   macros instead of casting `m_rdram`.
 - `rdp.c`: `rdp_render_init` takes the RDRAM size and hidden plane;
@@ -71,15 +72,15 @@ in `rdp_core.c`, with the macro-call line numbers at this commit:
 
 | Function | Role | Lines |
 |---|---|---|
-| `rdp_read_data` | command fetch from RDRAM or DMEM (cen64's `read_rdram_pair` equivalent; the port has no bus) | 1357, 1363 |
+| `rdp_read_data` | command fetch from RDRAM or DMEM (cen64's `read_rdram_pair` equivalent; the port has no bus) | 1358, 1364 |
 | `rdp_z_store` | Z write and dz hidden bits | 1129-1130 |
 | `rdp_z_decompress`, `rdp_dz_decompress`, `rdp_z_compare` | Z and dz reads | 1153, 1157-1158, 1228-1229 |
-| `rdp_read_pixel8`, `rdp_read_pixel16`, `rdp_read_pixel32` | color image read (image_read_en); `rdp_read_pixel4` reads nothing | 5853, 5859, 5885, 5899 |
-| `rdp_write_pixel4/8/16/32` | 1-cycle and 2-cycle color write with hidden coverage | 5719, 5740-5742, 5781-5789, 5810-5824 |
-| `rdp_copy_pixel4/8/16/32` | copy-mode color write | 5925-5950 |
-| `rdp_span_draw_fill`, `fill_write_word` | fill-mode writes (8/16/32 bpp runs and the byte-enabled burst law) | 7085-7086, 7312-7393 |
-| `rdp_cmd_load_tlut`, `rdp_cmd_load_block`, `rdp_cmd_load_tile` | TMEM load source reads | 4118, 4229-4333, 4421-4483 |
-| `rdp_fill_rect_stale_read` | rect pre-state capture and restore | 4608-4609, 4646 |
+| `rdp_read_pixel8`, `rdp_read_pixel16`, `rdp_read_pixel32` | color image read (image_read_en); `rdp_read_pixel4` reads nothing | 5862, 5868, 5894, 5908 |
+| `rdp_write_pixel4/8/16/32` | 1-cycle and 2-cycle color write with hidden coverage | 5728, 5749-5751, 5790-5798, 5819-5833 |
+| `rdp_copy_pixel4/8/16/32` | copy-mode color write | 5934-5959 |
+| `rdp_span_draw_fill`, `fill_write_word` | fill-mode writes (8/16/32 bpp runs and the byte-enabled burst law) | 7094-7095, 7321-7402 |
+| `rdp_cmd_load_tlut`, `rdp_cmd_load_block`, `rdp_cmd_load_tile` | TMEM load source reads | 4119, 4230-4334, 4422-4484 |
+| `rdp_fill_rect_stale_read` | rect pre-state capture and restore | 4609-4610, 4647 |
 
 `rdp_texpipe.c` touches TMEM only. The hidden plane is also read by
 `rdp_hidden_read_row` in `rdp.c` (VI support, unused by ares).

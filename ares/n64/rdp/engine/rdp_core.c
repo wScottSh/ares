@@ -1347,14 +1347,15 @@ uint32_t rdp_get_log2(uint32_t lod_clamp)
 /*****************************************************************************/
 static uint64_t rdp_read_data(rdp_t *rdp, uint32_t address)
 {
-    // ares port: RDRAM and DMEM hold native words (see rdp_core.h), and
-    // the renderer runs on the emulation thread, so a command is two
-    // plain word reads with no byteswap and no atomic doubleword load.
+    // ares port: RDRAM holds native words (see rdp_core.h) and DMEM holds
+    // big-endian bytes (ares' MSB Memory::Writable), and the renderer runs
+    // on the emulation thread, so a command is two plain word reads with no
+    // atomic doubleword load.
     if (rdp->m_status & 0x1)     // XBUS_DMEM_DMA enabled
     {
         const uint32_t hi = (address & (RDP_DMEM_SIZE - 1u)) / 4;
         const uint32_t lo = ((address + 4) & (RDP_DMEM_SIZE - 1u)) / 4;
-        return ((uint64_t)rdp->m_dmem[hi] << 32) | rdp->m_dmem[lo];
+        return ((uint64_t)byteswap_32(rdp->m_dmem[hi]) << 32) | byteswap_32(rdp->m_dmem[lo]);
     }
     else
     {
