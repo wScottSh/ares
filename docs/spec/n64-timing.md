@@ -264,7 +264,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `nemu64:rsp_timing/sll` | nemu64 | timing | RSP Timing: SLL | self | nemu64-test timing set, ROM self-check |
 | `nemu64:cop0hazard/count` | nemu64 | cop0hazard | MTC0/MFC0 COUNT hazards | self | nemu64-test cop0hazard set, ROM self-check |
 | `nemu64:cop0hazard/softwareinterrupt` | nemu64 | cop0hazard | SoftwareInterrupt1 (enabled, hazard)\|SoftwareInterrupt1 (enable but disable right away)\|SoftwareInterrupt12 (enable and disable after one nop) | self | nemu64-test cop0hazard set, ROM self-check |
-| `nemu64:cycle/smc` | nemu64 | cycle | re:^icache: | self | nemu64-test cycle set, the 7 self-modifying-code cases |
+| `nemu64:cycle/smc` | nemu64 | cycle | re:^icache: | self | nemu64-test cycle set, the icache self-modifying-code tests (7 values) |
 | `bench:mi-memset-uncached` | bench | mi-memset-uncached | point=vi-on metric=pclk_per_sd | suite | n64brew MIPS_Interface memset table, 25.7 ms/MiB |
 | `bench:mi-memset-cached` | bench | mi-memset-cached | point=vi-on metric=pclk_per_line | suite | n64brew MIPS_Interface memset table, 49.8 ms/MiB |
 | `bench:mi-memset-rspdma` | bench | mi-memset-rspdma | point=vi-on metric=b_per_rclk | suite | n64brew MIPS_Interface memset table, 2.58 ms/MiB |

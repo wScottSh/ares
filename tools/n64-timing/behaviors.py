@@ -478,7 +478,9 @@ def results(root, sources):
                 result = READERS[c["runner"]](sources[c["runner"]], c)
             else:
                 result = f"no reader for {c['runner']} yet"
-            tally[result.split(" ")[0]] = tally.get(result.split(" ")[0], 0) + 1
+            status = re.match(r"not run|no reader|pass|fail|pending|missing", result)
+            key = status.group(0) if status else result
+            tally[key] = tally.get(key, 0) + 1
             out.append(f"| `{row['id']}` | {row['basis']} | `{cid}` | {cell(result)} |")
     summary = ", ".join(f"{k} {v}" for k, v in sorted(tally.items()))
     return errors, "\n".join([f"Results: {summary}", ""] + out) + "\n"
