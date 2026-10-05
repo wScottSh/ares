@@ -1,6 +1,6 @@
 id	runner	target	selector	expect	source
 bench:*	bench	tools/n64-timing/romgen/suites/bench	rom	file:tools/n64-timing/romgen/suites/bench/expected.tsv	plan R1; each expected row cites its own source
-thar0:*	thar0	tools/n64-timing/romgen/suites/thar0	config	file:tools/n64-timing/romgen/suites/thar0/expected.tsv	plan R2; Thar0/RDP-Timing-Tests sample_results.txt hw_data (MIT, a81ced93b28d)
+thar0:*	thar0	tools/n64-timing/romgen/suites/thar0	id	file:tools/n64-timing/romgen/suites/thar0/expected.tsv	plan R2; Thar0/RDP-Timing-Tests sample_results.txt hw_data (MIT, a81ced93b28d)
 rdpstat:*	rdpstat	tools/n64-timing/romgen/suites/rdpstat	test	file:tools/n64-timing/romgen/suites/rdpstat/expected.tsv	plan R4; n64-systemtest tests/rdp and repeater64 references (MIT)
 snapper:*	snapper	tools/n64-timing/romgen/suites/snapper	test	file:tools/n64-timing/romgen/suites/snapper/expected.tsv	plan R3; snapper64 console dumps (MIT, e1cd8a61fc43)
 pending:build-corpora	pending	-	-	gate	corpus needs a libdragon or cargo build behind the build-corpora gate
@@ -53,12 +53,12 @@ bench:pi-io-write	bench	pi-io-write	-	134	no ROM in plan R1 yet; n64-systembench
 bench:si-dma	bench	si-dma	direction=write64	4065	no ROM in plan R1 yet; n64-systembench SI DMA 64 B to PIF, 4065 rclk
 bench:wb-fifth-store	bench	wb-fifth-store	-	report	no ROM in plan R1 yet; no public hardware value (vr4300-wb.md)
 bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; TMEM load rate conflict (jgemu-dpc-probe.md)
-thar0:alpha-fail-1cycle	thar0	alpha-fail-1cycle	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)
-thar0:alpha-fail-2cycle	thar0	alpha-fail-2cycle	-	suite	plan T12: exactly 155,052
-thar0:fill-mode	thar0	fill-mode	-	suite	Thar0 hw_data
-thar0:imrd-1cycle	thar0	imrd-1cycle	-	suite	plan T13: IM_RD 1-cycle 163,436
-thar0:zcmp	thar0	zcmp	-	suite	Thar0 hw_data
-thar0:vi-on-separate-bank	thar0	vi-on-separate-bank	-	suite	plan T13: FB+ZB separate banks 225,518
+thar0:alpha-fail-1cycle	thar0	ac-zbsame-vioff-noimrd-1cyc	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)
+thar0:alpha-fail-2cycle	thar0	ac-zbsame-vioff-noimrd-2cyc	-	suite	plan T12: exactly 155,052
+thar0:fill-mode	thar0	fill-mode	-	report	Thar0 hw_data has no fill-mode config among R2's 100; reports the measured value only
+thar0:imrd-1cycle	thar0	nozb-vioff-imrd-1cyc	-	suite	plan T13: IM_RD 1-cycle 163,436
+thar0:zcmp	thar0	ac-zcmp-zbsame-vioff-noimrd-1cyc	-	suite	Thar0 hw_data
+thar0:vi-on-separate-bank	thar0	zbrw-pass-zbsep-vioff-noimrd-1cyc	-	suite	plan T13: FB+ZB separate banks 225,518
 rdpstat:current-prefetch	rdpstat	current-prefetch	-	suite	n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240
 rdpstat:nosync-1cycle	rdpstat	nosync-1cycle	-	suite	repeater64 RDPNoSync1C, 65 references
 snapper:span-tri	snapper	span-tri	-	suite	snapper64 RDP Test-Mode Span Tri, 216 DPS dumps
