@@ -51,7 +51,7 @@ auto RSP::Debugger::instruction() -> void {
   if(unlikely(tracer.instruction->enabled())) {
     u32 address = rsp.pipeline.address & 0xfff;
     u32 instruction = rsp.pipeline.instruction;
-    u32 cycle = rsp.pipeline.clocksTotal / 3 - tracer.traceStartCycle;
+    u32 cycle = rsp.pipeline.clocksTotal / Timing::UnitsPerRclk - tracer.traceStartCycle;
 
     bool hasDblIssues = rsp.pipeline.dblIssueCount > 0 && cycle != 0;
     string cycleStr = hasDblIssues

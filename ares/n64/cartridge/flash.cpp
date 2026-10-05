@@ -1,13 +1,12 @@
-static constexpr u32 FlashMs = 187'500;
 
 const Cartridge::Flash::Model Cartridge::Flash::models[] = {
-  {"MX29L0000",   0x00c2, 0x0000, true,  85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},
-  {"MX29L0001",   0x00c2, 0x0001, true,  85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},
-  {"MX29L1100",   0x00c2, 0x001e, true,  85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},
-  {"MX29L1101_A", 0x00c2, 0x001d, false, 85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},
-  {"MX29L1101_B", 0x00c2, 0x0084, false, 85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},
-  {"MX29L1101_C", 0x00c2, 0x008e, false, 85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},
-  {"MN63F81MPN",  0x0032, 0x00f1, false, 280 * FlashMs, 300 * FlashMs, (300 * FlashMs) / 1000},
+  {"MX29L0000",   0x00c2, 0x0000, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},
+  {"MX29L0001",   0x00c2, 0x0001, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},
+  {"MX29L1100",   0x00c2, 0x001e, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},
+  {"MX29L1101_A", 0x00c2, 0x001d, false, Timing::ms(85),  Timing::ms(85), Timing::us(3500)},
+  {"MX29L1101_B", 0x00c2, 0x0084, false, Timing::ms(85),  Timing::ms(85), Timing::us(3500)},
+  {"MX29L1101_C", 0x00c2, 0x008e, false, Timing::ms(85),  Timing::ms(85), Timing::us(3500)},
+  {"MN63F81MPN",  0x0032, 0x00f1, false, Timing::ms(280), Timing::ms(300), Timing::us(300)},
 };
 
 auto Cartridge::Flash::setModel(string name) -> void {
@@ -187,7 +186,7 @@ auto Cartridge::Flash::command(u32 data) -> void {
 
   case 0x78: { //Erase
     if(eraseSetup == EraseSetup::None) return;
-    u32 duration = model->sectorEraseClocks;
+    Clock duration = model->sectorEraseClocks;
     if(eraseSetup == EraseSetup::Chip) {
       duration = model->chipEraseClocks;
       for(u32 address = 0; address < size; address += 2) {

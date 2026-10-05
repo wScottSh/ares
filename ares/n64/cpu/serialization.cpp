@@ -67,10 +67,13 @@ auto CPU::serialize(serializer& s) -> void {
   s(scc.context.badVirtualAddress);
   s(scc.context.pageTableEntryBase);
   s(scc.wired.index);
+  s(scc.wired.randomEpoch);
   s(scc.badVirtualAddress);
   s(scc.count);
   s(scc.compare);
-  s(countClock);
+  s(countClock.units);
+  s(syncClock.units);
+  s(instructionIndex);
   s(scc.status.interruptEnable);
   s(scc.status.exceptionLevel);
   s(scc.status.errorLevel);
@@ -131,8 +134,4 @@ auto CPU::serialize(serializer& s) -> void {
   s(fpu.csr.flushSubnormals);
 
   s(cop2.latch);
-
-  if constexpr(Accuracy::CPU::Recompiler) {
-    recompiler.reset();
-  }
 }

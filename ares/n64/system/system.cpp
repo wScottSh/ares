@@ -23,27 +23,7 @@ auto load(Node::System& node, string name) -> bool {
 }
 
 auto option(string name, string value) -> bool {
-  #if defined(VULKAN)
-  if(name == "Enable GPU acceleration") vulkan.enable = value.boolean();
-  if(name == "Quality" && value == "SD" ) vulkan.internalUpscale = 1;
-  if(name == "Quality" && value == "HD" ) vulkan.internalUpscale = 2;
-  if(name == "Quality" && value == "UHD") vulkan.internalUpscale = 4;
-  if(name == "Supersampling") vulkan.supersampleScanout = value.boolean();
-  if(name == "Disable Video Interface Processing") vulkan.disableVideoInterfaceProcessing = value.boolean();
-  if(name == "Weave Deinterlacing") vulkan.weaveDeinterlacing = value.boolean();
-  if(vulkan.internalUpscale == 1) vulkan.supersampleScanout = false;
-  vulkan.outputUpscale = vulkan.supersampleScanout ? 1 : vulkan.internalUpscale;
-  #endif
   if(name == "Homebrew Mode") system.homebrewMode = value.boolean();
-  if(name == "Deterministic Entropy") system.deterministicEntropy = value.boolean();
-  if(name == "Recompiler") {
-    if constexpr(Accuracy::CPU::Recompiler) {
-      cpu.recompiler.enabled = value.boolean();
-    }
-    if constexpr(Accuracy::RSP::Recompiler) {
-      rsp.recompiler.enabled = value.boolean();
-    }
-  }
   if(Model::Nintendo64() && name == "Expansion Pak") system.expansionPak = value.boolean();
   if(Model::Nintendo64() && name == "Controller Pak Banks") {
     if (value == "32KiB (Default)") {
@@ -81,10 +61,6 @@ auto System::game() -> string {
 }
 
 auto System::run() -> void {
-  if(_vulkanNeedsLoad) {
-    vulkan.load(node);
-    _vulkanNeedsLoad = false;
-  }
   cpu.main();
 }
 
@@ -98,7 +74,7 @@ auto System::load(Node::System& root, string name) -> bool {
     information.name = "Arcade";
     information.model = Model::Aleck64;
     information.region = Region::NTSC;
-    information.videoFrequency = 48'681'818;
+    information.vclkPeriod = Timing::Behavior::ClockVclk;
     system.expansionPak = true; //Aleck 64 has the 8MB as standard
   } else {
     information.dd = name.find("64DD") ? true : false;
@@ -106,11 +82,11 @@ auto System::load(Node::System& root, string name) -> bool {
 
   if (name.find("NTSC")) {
     information.region = Region::NTSC;
-    information.videoFrequency = 48'681'818;
+    information.vclkPeriod = Timing::Behavior::ClockVclk;
   }
   if (name.find("PAL")) {
     information.region = Region::PAL;
-    information.videoFrequency = 49'656'530;
+    information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};
   }
 
   node = std::make_shared<Core::System>(information.name);
@@ -145,8 +121,6 @@ auto System::load(Node::System& root, string name) -> bool {
   if(model() == Model::Aleck64) aleck64.load(node);
 
   initDebugHooks();
-  _vulkanNeedsLoad = true;
-
   return true;
 }
 
@@ -376,12 +350,6 @@ auto System::initDebugHooks() -> void {
       ++regIdx;
     }
   };
-
-  if constexpr(Accuracy::CPU::Recompiler) {
-    GDB::server.hooks.emuCacheInvalidate = [](u64 address) {
-      cpu.recompiler.invalidateSection((u32)address);
-    };
-  }
 }
 
 auto System::unload() -> void {
@@ -389,10 +357,6 @@ auto System::unload() -> void {
   save();
 
   if(vi.screen) vi.screen->quit(); //stop video thread
-  #if defined(VULKAN)
-  vulkan.unload();
-  _vulkanNeedsLoad = false;
-  #endif
   cartridgeSlot.unload();
   controllerPort1.unload();
   controllerPort2.unload();
@@ -432,27 +396,16 @@ auto System::power(bool reset) -> void {
   for(auto& setting : node->find<Node::Setting::Setting>()) setting->setLatch();
 
   if(!reset) {
-    if(deterministicEntropy) {
-      random.entropy(Random::Entropy::High);
-      random.seed((n64)0);
-    } else {
-      random.entropy(Random::Entropy::High);
-    }
+    random.seed((n64)0);
+    traceHash = {};
   }
 
-  if constexpr(Accuracy::CPU::Recompiler || Accuracy::RSP::Recompiler) {
-    ares::Memory::FixedAllocator::get().release();
-  }
   queue.reset();
   cartridge.power(reset);
   rdram.power(reset);
   if(_DD()) dd.power(reset);
   mi.power(reset);
   vi.power(reset);
-  #if defined(VULKAN)
-  vulkan.unload();
-  _vulkanNeedsLoad = true;
-  #endif
   ai.power(reset);
   pi.power(reset);
   pif.power(reset);

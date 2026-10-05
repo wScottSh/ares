@@ -34,7 +34,6 @@ auto VI::readWord(u32 address, Thread& thread) -> u32 {
     //VI_V_CURRENT_LINE
     data.bit(0)   = io.field;
     data.bit(1,9) = io.vcounter;
-    cpu.forceSynchronize();
   }
 
   if(address == 5) {
@@ -99,10 +98,6 @@ auto VI::readWord(u32 address, Thread& thread) -> u32 {
 auto VI::writeWord(u32 address, u32 data_, Thread& thread) -> void {
   address = (address & 0x3f) >> 2;
   n32 data = data_;
-
-  #if defined(VULKAN)
-  if (vulkan.enable) vulkan.writeWord(address, data);
-  #endif
 
   if(address == 0) {
     //VI_CONTROL

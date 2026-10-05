@@ -8,29 +8,25 @@ auto Cartridge::RTC::load() -> void {
     ram.load(fp);
   
     present = 1;
-    n64 timestamp = ram.read<Dual>(24);
-    if(!~timestamp) {
-      time_t t = time(0);
-      struct tm tmm = *localtime(&t);
-      ram.write<Byte>(16, BCD::encode(tmm.tm_sec));
-      ram.write<Byte>(17, BCD::encode(tmm.tm_min));
-      ram.write<Byte>(18, BCD::encode(tmm.tm_hour) | 0x80);
-      ram.write<Byte>(19, BCD::encode(tmm.tm_mday));
-      ram.write<Byte>(20, BCD::encode(tmm.tm_wday));
-      ram.write<Byte>(21, BCD::encode(tmm.tm_mon + 1));
-      ram.write<Byte>(22, BCD::encode(tmm.tm_year % 100));
-      ram.write<Byte>(23, BCD::encode(tmm.tm_year / 100));
-    } else {
-      time_t now = time(0);
-      time_t saved = (time_t)timestamp;
-      if(now > saved) advance((int)(now - saved));
+    //The clock never reads host time: a new RTC starts at a fixed epoch, and a saved one
+    //resumes where emulation left it. No hardware reference picks the epoch; it is
+    //2000-01-01 00:00:00, a Saturday (century byte 1 counts from 1900).
+    if(!~ram.read<Dual>(24)) {
+      ram.write<Byte>(16, 0x00);
+      ram.write<Byte>(17, 0x00);
+      ram.write<Byte>(18, 0x80);
+      ram.write<Byte>(19, 0x01);
+      ram.write<Byte>(20, 0x06);
+      ram.write<Byte>(21, 0x01);
+      ram.write<Byte>(22, 0x00);
+      ram.write<Byte>(23, 0x01);
     }
   }
 }
 
 auto Cartridge::RTC::save() -> void {
   if(auto fp = self.pak->write("save.rtc")) {
-    ram.write<Dual>(24, time(0));
+    ram.write<Dual>(24, 0);
     ram.save(fp);
   }
 }
@@ -43,7 +39,7 @@ auto Cartridge::RTC::tick(int nsec) -> void {
 auto Cartridge::RTC::run(bool run) -> void {
   status.bit(7) = !run;
   queue.remove(Queue::RTC_Tick);
-  if(run) cpu.queueInsert(Queue::RTC_Tick, 187'500'000);
+  if(run) cpu.queueInsert(Queue::RTC_Tick, Timing::seconds(1));
 }
 
 auto Cartridge::RTC::running() -> bool {

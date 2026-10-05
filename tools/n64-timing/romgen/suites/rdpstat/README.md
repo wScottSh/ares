@@ -14,11 +14,11 @@ Run these from the repository root.
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite rdpstat --out $N64_TIMING_HOME/roms
-N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/rdpstat/run.sh --rdp vulkan
+N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/rdpstat/run.sh
 ```
 
 - The build reads the 20 No-Sync references from a local repeater64 checkout. The default path is `$N64_TIMING_HOME/scratch/r29/clones/repeater64/assets`; set `REPEATER64_ASSETS` to override it. The build stops if a file's SHA-256 differs from the value pinned in `repeater64.py`. The references are not committed.
-- `run.sh` writes `$N64_TIMING_HOME/results/rdpstat-<rdp>/<set>/` with `stdout.txt`, `stderr.txt`, `values.tsv` and `summary.txt`. `--rdp none` draws no pixels, so every pixel check fails in that mode. Use `--rdp vulkan` for the pixel results.
+- `run.sh` writes `$N64_TIMING_HOME/results/rdpstat/<set>/` with `stdout.txt`, `stderr.txt`, `values.tsv` and `summary.txt`.
 
 ## Port notes
 

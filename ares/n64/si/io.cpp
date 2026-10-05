@@ -48,7 +48,6 @@ auto SI::ioRead(u32 address) -> u32 {
     data.bit( 4, 7) = io.pchState;
     data.bit( 8,11) = io.dmaState;
     data.bit(12)    = io.interrupt;
-    cpu.forceSynchronize();
   }
 
   debugger.io(Read, address, data);
@@ -64,7 +63,7 @@ auto SI::writeWord(u32 address, u32 data, Thread& thread) -> void {
   io.pchState = 0xb;
   io.dmaState = 0x9;
   io.busLatch = data;
-  cpu.queueInsert(Queue::SI_BUS_Write, 2150*3);
+  cpu.queueInsert(Queue::SI_BUS_Write, rclk(2150));
   return pif.write<Word>(address, data);
 }
 
@@ -84,7 +83,7 @@ auto SI::ioWrite(u32 address, u32 data_) -> void {
     io.dmaState = 1;
     io.pchState = 4;
     int cycles = pif.estimateTiming();
-    cpu.queueInsert(Queue::SI_DMA_Read, cycles*3);
+    cpu.queueInsert(Queue::SI_DMA_Read, rclk(cycles));
   }
 
   if(address == 2) {
@@ -101,7 +100,7 @@ auto SI::ioWrite(u32 address, u32 data_) -> void {
     io.dmaBusy = 1;
     io.dmaState = 4;
     io.pchState = 1;
-    cpu.queueInsert(Queue::SI_DMA_Write, 4065*3);
+    cpu.queueInsert(Queue::SI_DMA_Write, rclk(4065));
   }
 
   if(address == 5) {

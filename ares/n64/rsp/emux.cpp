@@ -43,7 +43,7 @@ auto RSP::XTRACESTART(u32 code) -> void {
   if(!system.homebrewMode) return;
   if(!debugger.tracer.instruction->enabled()) debugger.tracer.instruction->setEnabled(true);
   debugger.tracer.instructionCountdown = code;
-  debugger.tracer.traceStartCycle = pipeline.clocksTotal / 3;
+  debugger.tracer.traceStartCycle = pipeline.clocksTotal / Timing::UnitsPerRclk;
 }
 
 auto RSP::XTRACESTOP() -> void {

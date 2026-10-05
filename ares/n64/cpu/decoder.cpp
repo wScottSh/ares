@@ -3,20 +3,10 @@
 
 #define Branch                            info.flags |= OpInfo::Branch
 #define LikelyBranch                      info.flags |= OpInfo::LikelyBranch
-#define JitStateKeyMayChange              info.flags |= OpInfo::JitStateKeyMayChange
 #define CountCompareWrite                 info.flags |= OpInfo::CountCompareWrite
 #define UnconditionalJump                 info.flags |= OpInfo::UnconditionalJump
 #define UnconditionalJumpAndLink          info.flags |= OpInfo::UnconditionalJumpAndLink
 #define LikelyIf(x)                       if(x) LikelyBranch
-#define WritesGpSp(n)                     (((n) == 28 || (n) == 29) \
-                                            ? (JitStateKeyMayChange) : info.flags)
-#define WritesGpSpRt                      WritesGpSp(instruction >> 16 & 31)
-#define WritesGpSpRtExceptSpSelf          (((instruction >> 16 & 31) == 28 \
-                                            || ((instruction >> 16 & 31) == 29 \
-                                            && (instruction >> 21 & 31) != 29)) \
-                                            ? (JitStateKeyMayChange) : info.flags)
-#define WritesGpSpRd                      WritesGpSp(instruction >> 11 & 31)
-#define WritesGpSpXrt                     WritesGpSp(instruction >> 15 & 31)
 #define CountCompareWriteRd               ((((instruction >> 11) & 31) == 9 || ((instruction >> 11) & 31) == 11) \
                                             ? (CountCompareWrite) : 0)
 
@@ -30,14 +20,14 @@ auto CPU::decoderEXECUTEInfo(u32 instruction) const -> OpInfo {
   op(0x05, BNE, Branch);
   op(0x06, BLEZ, Branch);
   op(0x07, BGTZ, Branch);
-  op(0x08, ADDI, WritesGpSpRt);
-  op(0x09, ADDIU, WritesGpSpRtExceptSpSelf);
-  op(0x0a, SLTI, WritesGpSpRt);
-  op(0x0b, SLTIU, WritesGpSpRt);
-  op(0x0c, ANDI, WritesGpSpRt);
-  op(0x0d, ORI, WritesGpSpRt);
-  op(0x0e, XORI, WritesGpSpRt);
-  op(0x0f, LUI, WritesGpSpRt);
+  op(0x08, ADDI);
+  op(0x09, ADDIU);
+  op(0x0a, SLTI);
+  op(0x0b, SLTIU);
+  op(0x0c, ANDI);
+  op(0x0d, ORI);
+  op(0x0e, XORI);
+  op(0x0f, LUI);
   jp(0x10, SCC);
   jp(0x11, FPU);
   jp(0x12, COP2);
@@ -46,22 +36,22 @@ auto CPU::decoderEXECUTEInfo(u32 instruction) const -> OpInfo {
   op(0x15, BNEL, Branch, LikelyBranch);
   op(0x16, BLEZL, Branch, LikelyBranch);
   op(0x17, BGTZL, Branch, LikelyBranch);
-  op(0x18, DADDI, WritesGpSpRt);
-  op(0x19, DADDIU, WritesGpSpRtExceptSpSelf);
-  op(0x1a, LDL, WritesGpSpRt);
-  op(0x1b, LDR, WritesGpSpRt);
+  op(0x18, DADDI);
+  op(0x19, DADDIU);
+  op(0x1a, LDL);
+  op(0x1b, LDR);
   op(0x1c, INVALID);
   op(0x1d, INVALID);
   op(0x1e, INVALID);
   op(0x1f, INVALID);
-  op(0x20, LB, WritesGpSpRt);
-  op(0x21, LH, WritesGpSpRt);
-  op(0x22, LWL, WritesGpSpRt);
-  op(0x23, LW, WritesGpSpRt);
-  op(0x24, LBU, WritesGpSpRt);
-  op(0x25, LHU, WritesGpSpRt);
-  op(0x26, LWR, WritesGpSpRt);
-  op(0x27, LWU, WritesGpSpRt);
+  op(0x20, LB);
+  op(0x21, LH);
+  op(0x22, LWL);
+  op(0x23, LW);
+  op(0x24, LBU);
+  op(0x25, LHU);
+  op(0x26, LWR);
+  op(0x27, LWU);
   op(0x28, SB);
   op(0x29, SH);
   op(0x2a, SWL);
@@ -70,19 +60,19 @@ auto CPU::decoderEXECUTEInfo(u32 instruction) const -> OpInfo {
   op(0x2d, SDR);
   op(0x2e, SWR);
   op(0x2f, CACHE);
-  op(0x30, LL, WritesGpSpRt);
+  op(0x30, LL);
   op(0x31, LWC1);
   op(0x32, LWC2);
   op(0x33, LWC3);
-  op(0x34, LLD, WritesGpSpRt);
+  op(0x34, LLD);
   op(0x35, LDC1);
   op(0x36, LDC2);
-  op(0x37, LD, WritesGpSpRt);
-  op(0x38, SC, WritesGpSpRt);
+  op(0x37, LD);
+  op(0x38, SC);
   op(0x39, SWC1);
   op(0x3a, SWC2);
   op(0x3b, SWC3);
-  op(0x3c, SCD, WritesGpSpRt);
+  op(0x3c, SCD);
   op(0x3d, SDC1);
   op(0x3e, SDC2);
   op(0x3f, SD);
@@ -92,30 +82,30 @@ auto CPU::decoderEXECUTEInfo(u32 instruction) const -> OpInfo {
 
 auto CPU::decoderSPECIALInfo(u32 instruction) const -> OpInfo {
   switch(instruction & 0x3f) {
-  op(0x00, SLL, WritesGpSpRd);
+  op(0x00, SLL);
   op(0x01, INVALID);
-  op(0x02, SRL, WritesGpSpRd);
-  op(0x03, SRA, WritesGpSpRd);
-  op(0x04, SLLV, WritesGpSpRd);
+  op(0x02, SRL);
+  op(0x03, SRA);
+  op(0x04, SLLV);
   op(0x05, INVALID);
-  op(0x06, SRLV, WritesGpSpRd);
-  op(0x07, SRAV, WritesGpSpRd);
+  op(0x06, SRLV);
+  op(0x07, SRAV);
   op(0x08, JR, Branch, UnconditionalJump);
-  op(0x09, JALR, Branch, UnconditionalJump, UnconditionalJumpAndLink, WritesGpSpRd);
+  op(0x09, JALR, Branch, UnconditionalJump, UnconditionalJumpAndLink);
   op(0x0a, INVALID);
   op(0x0b, INVALID);
   op(0x0c, SYSCALL);
   op(0x0d, BREAK);
   op(0x0e, INVALID);
   op(0x0f, SYNC);
-  op(0x10, MFHI, WritesGpSpRd);
+  op(0x10, MFHI);
   op(0x11, MTHI);
-  op(0x12, MFLO, WritesGpSpRd);
+  op(0x12, MFLO);
   op(0x13, MTLO);
-  op(0x14, DSLLV, WritesGpSpRd);
+  op(0x14, DSLLV);
   op(0x15, INVALID);
-  op(0x16, DSRLV, WritesGpSpRd);
-  op(0x17, DSRAV, WritesGpSpRd);
+  op(0x16, DSRLV);
+  op(0x17, DSRAV);
   op(0x18, MULT);
   op(0x19, MULTU);
   op(0x1a, DIV);
@@ -124,22 +114,22 @@ auto CPU::decoderSPECIALInfo(u32 instruction) const -> OpInfo {
   op(0x1d, DMULTU);
   op(0x1e, DDIV);
   op(0x1f, DDIVU);
-  op(0x20, ADD, WritesGpSpRd);
-  op(0x21, ADDU, WritesGpSpRd);
-  op(0x22, SUB, WritesGpSpRd);
-  op(0x23, SUBU, WritesGpSpRd);
-  op(0x24, AND, WritesGpSpRd);
-  op(0x25, OR, WritesGpSpRd);
-  op(0x26, XOR, WritesGpSpRd);
-  op(0x27, NOR, WritesGpSpRd);
+  op(0x20, ADD);
+  op(0x21, ADDU);
+  op(0x22, SUB);
+  op(0x23, SUBU);
+  op(0x24, AND);
+  op(0x25, OR);
+  op(0x26, XOR);
+  op(0x27, NOR);
   op(0x28, INVALID);
   op(0x29, INVALID);
-  op(0x2a, SLT, WritesGpSpRd);
-  op(0x2b, SLTU, WritesGpSpRd);
-  op(0x2c, DADD, WritesGpSpRd);
-  op(0x2d, DADDU, WritesGpSpRd);
-  op(0x2e, DSUB, WritesGpSpRd);
-  op(0x2f, DSUBU, WritesGpSpRd);
+  op(0x2a, SLT);
+  op(0x2b, SLTU);
+  op(0x2c, DADD);
+  op(0x2d, DADDU);
+  op(0x2e, DSUB);
+  op(0x2f, DSUBU);
   op(0x30, TGE);
   op(0x31, TGEU);
   op(0x32, TLT);
@@ -148,14 +138,14 @@ auto CPU::decoderSPECIALInfo(u32 instruction) const -> OpInfo {
   op(0x35, INVALID);
   op(0x36, TNE);
   op(0x37, INVALID);
-  op(0x38, DSLL, WritesGpSpRd);
+  op(0x38, DSLL);
   op(0x39, INVALID);
-  op(0x3a, DSRL, WritesGpSpRd);
-  op(0x3b, DSRA, WritesGpSpRd);
-  op(0x3c, DSLL32, WritesGpSpRd);
+  op(0x3a, DSRL);
+  op(0x3b, DSRA);
+  op(0x3c, DSLL32);
   op(0x3d, INVALID);
-  op(0x3e, DSRL32, WritesGpSpRd);
-  op(0x3f, DSRA32, WritesGpSpRd);
+  op(0x3e, DSRL32);
+  op(0x3f, DSRA32);
   }
   return {};
 }
@@ -200,12 +190,12 @@ auto CPU::decoderREGIMMInfo(u32 instruction) const -> OpInfo {
 
 auto CPU::decoderSCCInfo(u32 instruction) const -> OpInfo {
   switch(instruction >> 21 & 0x1f) {
-  op(0x00, MFC0, WritesGpSpRt);
-  op(0x01, DMFC0, WritesGpSpRt);
+  op(0x00, MFC0);
+  op(0x01, DMFC0);
   op(0x02, INVALID);
   op(0x03, INVALID);
-  op(0x04, MTC0, JitStateKeyMayChange, CountCompareWriteRd);
-  op(0x05, DMTC0, JitStateKeyMayChange, CountCompareWriteRd);
+  op(0x04, MTC0, CountCompareWriteRd);
+  op(0x05, DMTC0, CountCompareWriteRd);
   op(0x06, INVALID);
   op(0x07, INVALID);
   op(0x08, INVALID);
@@ -224,7 +214,7 @@ auto CPU::decoderSCCInfo(u32 instruction) const -> OpInfo {
   op(0x06, TLBWR);
   op(0x08, TLBP);
   op(0x10, INVALID);
-  op(0x18, ERET, JitStateKeyMayChange);
+  op(0x18, ERET);
   op(0x20, XDETECT);
   op(0x25, XLOG);
   op(0x27, XHEXDUMP);
@@ -239,13 +229,13 @@ auto CPU::decoderSCCInfo(u32 instruction) const -> OpInfo {
 
 auto CPU::decoderFPUInfo(u32 instruction) const -> OpInfo {
   switch(instruction >> 21 & 0x1f) {
-  op(0x00, MFC1, WritesGpSpRt);
-  op(0x01, DMFC1, WritesGpSpRt);
-  op(0x02, CFC1, WritesGpSpRt);
+  op(0x00, MFC1);
+  op(0x01, DMFC1);
+  op(0x02, CFC1);
   op(0x03, DCFC1);
   op(0x04, MTC1);
   op(0x05, DMTC1);
-  op(0x06, CTC1, JitStateKeyMayChange);
+  op(0x06, CTC1);
   op(0x07, DCTC1);
   case 0x08: {
     if((instruction >> 16 & 31) >= 4) return {};
@@ -380,9 +370,9 @@ auto CPU::decoderFPUInfo(u32 instruction) const -> OpInfo {
 
 auto CPU::decoderCOP2Info(u32 instruction) const -> OpInfo {
   switch(instruction >> 21 & 0x1f) {
-  op(0x00, MFC2, WritesGpSpXrt);
-  op(0x01, DMFC2, WritesGpSpXrt);
-  op(0x02, CFC2, WritesGpSpXrt);
+  op(0x00, MFC2);
+  op(0x01, DMFC2);
+  op(0x02, CFC2);
   op(0x03, COP2INVALID);
   op(0x04, MTC2);
   op(0x05, DMTC2);
@@ -405,14 +395,8 @@ auto CPU::decoderCOP2Info(u32 instruction) const -> OpInfo {
 #undef op
 #undef Branch
 #undef LikelyBranch
-#undef JitStateKeyMayChange
 #undef CountCompareWrite
 #undef UnconditionalJump
 #undef UnconditionalJumpAndLink
 #undef LikelyIf
-#undef WritesGpSp
-#undef WritesGpSpRt
-#undef WritesGpSpRtExceptSpSelf
-#undef WritesGpSpRd
-#undef WritesGpSpXrt
 #undef CountCompareWriteRd

@@ -1,0 +1,98 @@
+path	function	line	rows	note
+ares/n64/ai/ai.cpp	power	dac.frequency = 44100;	legacy.ai.power-on-rate	
+ares/n64/ai/io.cpp	writeWord	dac.frequency = max(1, system.videoFrequency() / (io.dacRate + 1));	-	max(1, ...) keeps the DAC frequency nonzero for the division that follows
+ares/n64/cartridge/flash.cpp	-	{"MX29L0000",   0x00c2, 0x0000, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L0001",   0x00c2, 0x0001, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1100",   0x00c2, 0x001e, true,  Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1101_A", 0x00c2, 0x001d, false, Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1101_B", 0x00c2, 0x0084, false, Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1101_C", 0x00c2, 0x008e, false, Timing::ms(85),  Timing::ms(85), Timing::us(3500)},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MN63F81MPN",  0x0032, 0x00f1, false, Timing::ms(280), Timing::ms(300), Timing::us(300)},	legacy.cart.flash-mn63-sector-erase legacy.cart.flash-mn63-chip-erase legacy.cart.flash-mn63-program	
+ares/n64/cartridge/joybus.cpp	joybusComm	cpu.queueInsert(Queue::EEPROM_Write, Timing::ms(6)); //6ms	legacy.cart.eeprom-write	
+ares/n64/cartridge/rtc.cpp	run	if(run) cpu.queueInsert(Queue::RTC_Tick, Timing::seconds(1));	legacy.cart.rtc-tick	
+ares/n64/cpu/cpu.cpp	main	queueInsert(Queue::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});	-	host GDB server poll, scheduled only while a debugger client is attached
+ares/n64/cpu/cpu.cpp	gdbPoll	queueInsert(Queue::GDB_Poll, Clock{Timing::UnitsPerSecond / 60 / 240});	-	host GDB server poll, scheduled only while a debugger client is attached
+ares/n64/cpu/cpu.cpp	instruction#1	step(pclk(1));	legacy.cpu.interrupt-entry	
+ares/n64/cpu/cpu.cpp	instruction#2	step(pclk(1));	legacy.cpu.nmi-entry	
+ares/n64/cpu/cpu.cpp	instruction#3	step(pclk(1));	legacy.cpu.sysad-frozen-step	
+ares/n64/cpu/cpu.hpp	fill	cpu.step(pclk(48));	legacy.cpu.icache-fill	
+ares/n64/cpu/cpu.hpp	writeBack	cpu.step(pclk(48));	legacy.cpu.icache-writeback	
+ares/n64/cpu/dcache.cpp	fill	cpu.step(pclk(40));	legacy.cpu.dcache-fill	
+ares/n64/cpu/dcache.cpp	writeBack	cpu.step(pclk(40));	legacy.cpu.dcache-writeback	
+ares/n64/cpu/dcache.cpp	read	cpu.step(pclk(1));	legacy.cpu.dcache-hit	
+ares/n64/cpu/dcache.cpp	write	cpu.step(pclk(1));	legacy.cpu.dcache-hit	
+ares/n64/cpu/interpreter-fpu.cpp	FADD_S	step(pclk(3 - 1));	legacy.cpu.fpu-add	
+ares/n64/cpu/interpreter-fpu.cpp	FADD_D	step(pclk(3 - 1));	legacy.cpu.fpu-add	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_D	step(pclk(2 - 1));	legacy.cpu.fpu-cvt-s-d	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_W	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_L	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_D_W	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_D_L	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FDIV_S	step(pclk(29 - 1));	legacy.cpu.fpu-div-s	
+ares/n64/cpu/interpreter-fpu.cpp	FDIV_D	step(pclk(58 - 1));	legacy.cpu.fpu-div-d	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FMUL_S	step(pclk(5 - 1));	legacy.cpu.fpu-mul-s	
+ares/n64/cpu/interpreter-fpu.cpp	FMUL_D	step(pclk(8 - 1));	legacy.cpu.fpu-mul-d	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FSQRT_S	step(pclk(29 - 1));	legacy.cpu.fpu-sqrt-s	
+ares/n64/cpu/interpreter-fpu.cpp	FSQRT_D	step(pclk(58 - 1));	legacy.cpu.fpu-sqrt-d	
+ares/n64/cpu/interpreter-fpu.cpp	FSUB_S	step(pclk(3 - 1));	legacy.cpu.fpu-add	
+ares/n64/cpu/interpreter-fpu.cpp	FSUB_D	step(pclk(3 - 1));	legacy.cpu.fpu-add	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_L_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_L_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_W_S	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_W_D	step(pclk(5 - 1));	legacy.cpu.fpu-convert	
+ares/n64/cpu/interpreter-ipu.cpp	DDIV	step(pclk(69 - 1));	legacy.cpu.ddiv	
+ares/n64/cpu/interpreter-ipu.cpp	DDIVU	step(pclk(69 - 1));	legacy.cpu.ddiv	
+ares/n64/cpu/interpreter-ipu.cpp	DIV	step(pclk(37 - 1));	legacy.cpu.div	
+ares/n64/cpu/interpreter-ipu.cpp	DIVU	step(pclk(37 - 1));	legacy.cpu.div	
+ares/n64/cpu/interpreter-ipu.cpp	DMULT	step(pclk(8 - 1));	legacy.cpu.dmult	
+ares/n64/cpu/interpreter-ipu.cpp	DMULTU	step(pclk(8 - 1));	legacy.cpu.dmult	
+ares/n64/cpu/interpreter-ipu.cpp	MULT	step(pclk(5 - 1));	legacy.cpu.mult	
+ares/n64/cpu/interpreter-ipu.cpp	MULTU	step(pclk(5 - 1));	legacy.cpu.mult	
+ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 - wired : 96 - wired;	-	CP0 Random wrap range (32 TLB entries, Wired), not time; plan T7c owns Random
+ares/n64/cpu/memory.cpp	fetch	step(pclk(1));	legacy.cpu.instruction	
+ares/n64/cpu/memory.cpp	vaddrAlignedError	step(pclk(1));	legacy.cpu.address-error	
+ares/n64/memory/io.hpp	-	const u32 DefaultReadCycles = 20;	legacy.cpu.rcp-read	
+ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
+ares/n64/pi/bus.hpp	writeWord	cpu.queueInsert(Queue::PI_BUS_Write, pclk(200));	legacy.pi.write-busy	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += (14 + bsd.latency + 1) * pbusPages;	legacy.pi.dma-page-setup	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += (bsd.pulseWidth + 1 + bsd.releaseDuration + 1) * len / 2;	legacy.pi.dma-bytes-per-pulse	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += numBuffers * 28;	legacy.pi.dma-buffer-writeback	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += partialBytes * 1;	legacy.pi.dma-partial-byte	
+ares/n64/pif/hle.cpp	estimateTiming	u32 cycles = 13600;	legacy.si.dma-read-base	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 22000;	legacy.si.dma-read-controller	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 18000;	legacy.si.dma-read-empty-port	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 20000;	legacy.si.dma-read-accessory	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 1420 * short_cmds;	legacy.si.dma-read-short-command	
+ares/n64/pif/hle.cpp	mainHLE	constexpr Clock clocks = pclk(10240 * 4);	legacy.pif.step-quantum	
+ares/n64/pif/hle.cpp	mainHLE	intram.bootTimeout = Timing::seconds(6).units;  //6 seconds	legacy.pif.boot-timeout	
+ares/n64/rdp/rdp.cpp	main	constexpr Clock quantum = Timing::seconds(1);	legacy.rdp.step-quantum	
+ares/n64/rdram/rdram.cpp	power	chip.delay = 0x0000'0023;  //WriteDelay=4, WriteBits=3	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rdram/rdram.cpp	power	chip.writeDelay = 4;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rdram/rdram.cpp	writeRegister	chip.delay = data & 0x3838'1838;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rdram/rdram.cpp	writeRegister	chip.writeDelay = chip.delay >> 3 & 7;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rsp/dma.cpp	dmaTransferStart	dmaQueue(rclk((dma.current.length+8) / 8), thread);	legacy.rsp.dma-bytes-per-rclk	
+ares/n64/rsp/dma.cpp	dmaTransferStep	dmaQueue(rclk((dma.current.length+8) / 8), *this);	legacy.rsp.dma-bytes-per-rclk	
+ares/n64/rsp/rsp.cpp	main	step(pclk(64));	legacy.rsp.halted-quantum	
+ares/n64/rsp/rsp.cpp	main	profile.cycles += pclk(64).units;	legacy.rsp.halted-quantum	
+ares/n64/rsp/rsp.cpp	main	profile.haltedCycles += pclk(64).units;	legacy.rsp.halted-quantum	
+ares/n64/si/io.cpp	writeWord	cpu.queueInsert(Queue::SI_BUS_Write, rclk(2150));	legacy.si.bus-write	
+ares/n64/si/io.cpp	ioWrite	cpu.queueInsert(Queue::SI_DMA_Write, rclk(4065));	legacy.si.dma-write64	
+ares/n64/system/system.cpp	load	information.vclkPeriod = {Timing::UnitsPerSecond, 49'656'530};	legacy.clock.vclk-pal	
+ares/n64/vi/vi.cpp	main	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
+ares/n64/vi/vi.cpp	main	step(0x800);	legacy.vi.inactive-line	

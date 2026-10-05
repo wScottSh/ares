@@ -19,10 +19,6 @@ auto PI::dmaWrite() -> void {
   i32 maxBlockSize = 128;
   bool firstBlock = true;
 
-  if constexpr(Accuracy::CPU::Recompiler) {
-    cpu.recompiler.invalidateRange(io.dramAddress, (length + 1) & ~1);
-  }
-
   auto& bsd = bsdForAddress(io.pbusAddress);
   u32 pageMask = (1 << (bsd.pageSize + 2)) - 1;
   bool addressSelected = false;
@@ -69,7 +65,7 @@ auto PI::dmaFinished() -> void {
   mi.raise(MI::IRQ::PI);
 }
 
-auto PI::dmaDuration(bool read) -> u32 {
+auto PI::dmaDuration(bool read) -> Clock {
   auto len = read ? io.readLength : io.writeLength;
   len = (len | 1) + 1;
 
@@ -108,5 +104,5 @@ auto PI::dmaDuration(bool read) -> u32 {
   cycles += (bsd.pulseWidth + 1 + bsd.releaseDuration + 1) * len / 2;
   cycles += numBuffers * 28;
   cycles += partialBytes * 1;
-  return cycles * 3;
+  return rclk(cycles);
 }

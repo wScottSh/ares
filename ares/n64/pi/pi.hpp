@@ -51,7 +51,7 @@ struct PI : Memory::RCP<PI> {
   auto dmaRead() -> void;
   auto dmaWrite() -> void;
   auto dmaFinished() -> void;
-  auto dmaDuration(bool read) -> u32;
+  auto dmaDuration(bool read) -> Clock;
 
   //io.cpp
   auto ioRead(u32 address) -> u32;
@@ -67,7 +67,7 @@ struct PI : Memory::RCP<PI> {
   auto readWord(u32 address, Thread& thread) -> u32;
   auto writeWord(u32 address, u32 data, Thread& thread) -> void;
   auto writeFinished() -> void;
-  auto writeForceFinish() -> u32;
+  auto writeForceFinish() -> Clock;
 
   //serialization.cpp
   auto serialize(serializer&) -> void;
