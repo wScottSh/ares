@@ -116,7 +116,8 @@ struct Channel {
 
   auto reset() -> void {
     count = 0;
-    sequence = 0;
+    for(auto& p : pending) p = {};
+    for(auto& n : sequences) n = 0;
     free = {};
     for(auto& bank : banks) bank = {};
     for(auto& c : counters) c = {};
@@ -128,7 +129,7 @@ struct Channel {
   auto post(const Burst& burst, Clock at) -> void {
     if(count == Capacity) abort();
     Clock arrival = at + Timing::Behavior::RiRequestLatency;
-    pending[count++] = {burst, arrival, sequence++};
+    pending[count++] = {burst, arrival, sequences[(u32)burst.requester]++};
     Clock d = Timing::nextRclkEdge(arrival > free ? arrival : free);
     if(d < cachedNext) cachedNext = d;
   }
@@ -148,8 +149,11 @@ struct Channel {
       if(pending[i].arrival > d) continue;
       if(w == count || before(pending[i], pending[w])) w = i;
     }
+    //removing in place keeps the array a pure function of the live requests,
+    //so a save state does not depend on the order the host posted them in
     const Pending p = pending[w];
-    pending[w] = pending[--count];
+    for(u32 i = w + 1; i < count; i++) pending[i - 1] = pending[i];
+    pending[--count] = {};
 
     const Burst& b = p.burst;
     Grant g{b, d, d, d, false};
@@ -185,6 +189,7 @@ struct Channel {
   }
 
   template<typename S> auto serialize(S& s) -> void {
+    if(s.writing()) canonicalize();
     s(count);
     for(auto& p : pending) {
       s(p.burst.address);
@@ -201,7 +206,7 @@ struct Channel {
       s(bank.dirty);
     }
     s(free.units);
-    s(sequence);
+    for(auto& n : sequences) s(n);
     for(auto& c : counters) {
       s(c.bursts);
       s(c.bytesRead);
@@ -217,7 +222,7 @@ struct Channel {
   u32      count = 0;
   Bank     banks[8] = {};
   Clock    free;  //the channel takes its next request packet from here
-  u32      sequence = 0;
+  u32      sequences[(u32)Requester::Count] = {};  //per requester: its posts arrive in its own order
   Counters counters[(u32)Requester::Count] = {};
 
 private:
@@ -227,6 +232,23 @@ private:
     if(a.arrival != b.arrival) return a.arrival < b.arrival;
     if(a.burst.requester != b.burst.requester) return a.burst.requester < b.burst.requester;
     return a.sequence < b.sequence;
+  }
+
+  //Live requests in (arrival, requester, sequence) order: the order two
+  //requesters' posts reached the host never shows in the state.
+  auto canonicalize() -> void {
+    for(u32 i = 1; i < count; i++) {
+      Pending p = pending[i];
+      u32 j = i;
+      for(; j > 0 && later(pending[j - 1], p); j--) pending[j] = pending[j - 1];
+      pending[j] = p;
+    }
+  }
+
+  static auto later(const Pending& a, const Pending& b) -> bool {
+    if(a.arrival != b.arrival) return a.arrival > b.arrival;
+    if(a.burst.requester != b.burst.requester) return a.burst.requester > b.burst.requester;
+    return a.sequence > b.sequence;
   }
 
   auto recompute() -> void {
