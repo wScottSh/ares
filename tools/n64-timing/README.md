@@ -132,6 +132,33 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 
 `results/nemu64/summary.txt` concatenates the set summaries.
 
+## Behavior table, spec and checks
+
+`ares/n64/timing/behaviors.tsv` is the one source for every timing constant. Each row has an id, a value, a unit, a basis, a reference, the checks that decide it, and a note. `checks.tsv` defines every check id: its runner, target, selector, expectation and source.
+
+```sh
+python tools/n64-timing/behaviors.py              # writes ares/n64/timing/behaviors.hpp and docs/spec/n64-timing.md
+python tools/n64-timing/behaviors.py --check      # the gen check; the CMake target n64-timing-gen runs it before every build
+python tools/n64-timing/behaviors.py --self-test  # breaks each rule once and checks that the failure names its fix
+python tools/n64-timing/behaviors.py --fix-lines  # moves each legacy row's file:line to its current code site
+python tools/n64-timing/behaviors.py --results nemu64=$N64_TIMING_HOME/results/nemu64 det=det.txt [--out FILE]
+```
+
+`--check` fails when:
+
+- a row has no value, no reference, or no check;
+- a check id is not defined in `checks.tsv`;
+- a time value is not a whole number of 750 MHz units and the basis is not `fit`;
+- code names `Timing::Behavior::X` for a row with no numeric value, or for no row;
+- `behaviors.hpp` or `docs/spec/n64-timing.md` differs from the generated output;
+- `lint-literals.py` finds a timing literal that the allowlist does not pin to a row.
+
+To add or change a constant, edit its row and run `behaviors.py`. Code reads the value as `Timing::Behavior::<Name>`, in 750 MHz units.
+
+A row with basis `legacy` is a cost that today's core still charges. Its reference is the code site. `literal-allowlist.tsv` pins the literal at that site to the row, and the row's value must appear on the line. The note names the plan unit that replaces the cost. That unit deletes the allowlist entries and the row, so the allowlist only shrinks. A row with basis `model-choice` has no published value, and its reference states the reason for the choice.
+
+A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `file:<path>` to the suite's expected-value file, and its selector names the file's key column. When that file exists, each id under the prefix that the file defines resolves with no row of its own. Each explicit row whose expect is `suite` must then find its target and selector in the file. A `pending:<gate>` check names a corpus that the program cannot run yet. The spec prints it as pending, never as verified.
+
 ## Self-test without the corpus
 
 `make-emux-smoke-rom.py` builds a ROM that prints one line through emux `XLOG` and then requests an emux exit. It uses libdragon's public-domain `ipl3_compat.z64` as boot code.

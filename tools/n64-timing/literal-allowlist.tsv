@@ -1,0 +1,113 @@
+path	function	line	rows	note
+ares/n64/ai/ai.cpp	power	dac.frequency = 44100;	legacy.ai.power-on-rate	
+ares/n64/ai/io.cpp	writeWord	dac.frequency = max(1, system.videoFrequency() / (io.dacRate + 1));	-	max(1, ...) keeps the DAC frequency nonzero for the division that follows
+ares/n64/cartridge/flash.cpp	-	static constexpr u32 FlashMs = 187'500;	legacy.clock.ticks-per-ms	
+ares/n64/cartridge/flash.cpp	-	{"MX29L0000",   0x00c2, 0x0000, true,  85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L0001",   0x00c2, 0x0001, true,  85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1100",   0x00c2, 0x001e, true,  85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1101_A", 0x00c2, 0x001d, false, 85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1101_B", 0x00c2, 0x0084, false, 85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MX29L1101_C", 0x00c2, 0x008e, false, 85 * FlashMs,  85 * FlashMs, (3500 * FlashMs) / 1000},	legacy.cart.flash-mx-sector-erase legacy.cart.flash-mx-chip-erase legacy.cart.flash-mx-program	
+ares/n64/cartridge/flash.cpp	-	{"MN63F81MPN",  0x0032, 0x00f1, false, 280 * FlashMs, 300 * FlashMs, (300 * FlashMs) / 1000},	legacy.cart.flash-mn63-sector-erase legacy.cart.flash-mn63-chip-erase legacy.cart.flash-mn63-program	
+ares/n64/cartridge/joybus.cpp	joybusComm	cpu.queueInsert(Queue::EEPROM_Write, 187'500 * 6); //6ms	legacy.cart.eeprom-write legacy.clock.ticks-per-ms	
+ares/n64/cartridge/rtc.cpp	run	if(run) cpu.queueInsert(Queue::RTC_Tick, 187'500'000);	legacy.cart.rtc-tick	
+ares/n64/cpu/cpu.cpp	main	queueInsert(Queue::GDB_Poll, (93750000*2)/60/240);	-	host GDB server poll, scheduled only while a debugger client is attached
+ares/n64/cpu/cpu.cpp	gdbPoll	queueInsert(Queue::GDB_Poll, (93750000*2)/60/240);	-	host GDB server poll, scheduled only while a debugger client is attached
+ares/n64/cpu/cpu.cpp	flushCount	countClock += clocks << 1;	legacy.clock.ticks-per-pclk-shift	
+ares/n64/cpu/cpu.cpp	instruction#1	step(1 * 2);	legacy.cpu.interrupt-entry legacy.clock.ticks-per-pclk	
+ares/n64/cpu/cpu.cpp	instruction#2	step(1 * 2);	legacy.cpu.nmi-entry legacy.clock.ticks-per-pclk	
+ares/n64/cpu/cpu.cpp	instruction#3	step(1 * 2);	legacy.cpu.sysad-frozen-step legacy.clock.ticks-per-pclk	
+ares/n64/cpu/cpu.hpp	fill	cpu.step(48 * 2);	legacy.cpu.icache-fill legacy.clock.ticks-per-pclk	
+ares/n64/cpu/cpu.hpp	writeBack	cpu.step(48 * 2);	legacy.cpu.icache-writeback legacy.clock.ticks-per-pclk	
+ares/n64/cpu/dcache.cpp	fill	cpu.step(40 * 2);	legacy.cpu.dcache-fill legacy.clock.ticks-per-pclk	
+ares/n64/cpu/dcache.cpp	writeBack	cpu.step(40 * 2);	legacy.cpu.dcache-writeback legacy.clock.ticks-per-pclk	
+ares/n64/cpu/dcache.cpp	read	cpu.step(1 * 2);	legacy.cpu.dcache-hit legacy.clock.ticks-per-pclk	
+ares/n64/cpu/dcache.cpp	write	cpu.step(1 * 2);	legacy.cpu.dcache-hit legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FADD_S	step((3 - 1) * 2);	legacy.cpu.fpu-add legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FADD_D	step((3 - 1) * 2);	legacy.cpu.fpu-add legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_L_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_W_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCEIL_W_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_D	step((2 - 1) * 2);	legacy.cpu.fpu-cvt-s-d legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_W	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_S_L	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_D_W	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_D_L	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_L_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_L_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_W_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FCVT_W_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FDIV_S	step((29 - 1) * 2);	legacy.cpu.fpu-div-s legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FDIV_D	step((58 - 1) * 2);	legacy.cpu.fpu-div-d legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_L_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_L_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_W_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FFLOOR_W_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FMUL_S	step((5 - 1) * 2);	legacy.cpu.fpu-mul-s legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FMUL_D	step((8 - 1) * 2);	legacy.cpu.fpu-mul-d legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_L_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_L_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_W_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FROUND_W_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FSQRT_S	step((29 - 1) * 2);	legacy.cpu.fpu-sqrt-s legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FSQRT_D	step((58 - 1) * 2);	legacy.cpu.fpu-sqrt-d legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FSUB_S	step((3 - 1) * 2);	legacy.cpu.fpu-add legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FSUB_D	step((3 - 1) * 2);	legacy.cpu.fpu-add legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_L_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_L_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_W_S	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-fpu.cpp	FTRUNC_W_D	step((5 - 1) * 2);	legacy.cpu.fpu-convert legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	DDIV	step((69 - 1) * 2);	legacy.cpu.ddiv legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	DDIVU	step((69 - 1) * 2);	legacy.cpu.ddiv legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	DIV	step((37 - 1) * 2);	legacy.cpu.div legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	DIVU	step((37 - 1) * 2);	legacy.cpu.div legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	DMULT	step((8 - 1) * 2);	legacy.cpu.dmult legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	DMULTU	step((8 - 1) * 2);	legacy.cpu.dmult legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	MULT	step((5 - 1) * 2);	legacy.cpu.mult legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-ipu.cpp	MULTU	step((5 - 1) * 2);	legacy.cpu.mult legacy.clock.ticks-per-pclk	
+ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 - wired : 96 - wired;	-	CP0 Random wrap range (32 TLB entries, Wired), not time; plan T7c owns Random
+ares/n64/cpu/memory.cpp	fetch	step(1 * 2);	legacy.cpu.instruction legacy.clock.ticks-per-pclk	
+ares/n64/cpu/memory.cpp	vaddrAlignedError	step(1 * 2);	legacy.cpu.address-error legacy.clock.ticks-per-pclk	
+ares/n64/memory/io.hpp	-	const u32 DefaultReadCycles = 20;	legacy.cpu.rcp-read	
+ares/n64/memory/io.hpp	read	thread.step(DefaultReadCycles * 2);	legacy.clock.ticks-per-pclk	
+ares/n64/memory/io.hpp	write	thread.step(DefaultWriteCycles * 2);	legacy.clock.ticks-per-pclk	
+ares/n64/pi/bus.hpp	readWord	thread.step(writeForceFinish() * 2);	legacy.clock.ticks-per-pclk	
+ares/n64/pi/bus.hpp	readWord	thread.step(250 * 2);	legacy.pi.cart-read legacy.clock.ticks-per-pclk	
+ares/n64/pi/bus.hpp	writeWord	cpu.queueInsert(Queue::PI_BUS_Write, 400);	legacy.pi.write-busy	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += (14 + bsd.latency + 1) * pbusPages;	legacy.pi.dma-page-setup	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += (bsd.pulseWidth + 1 + bsd.releaseDuration + 1) * len / 2;	legacy.pi.dma-bytes-per-pulse	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += numBuffers * 28;	legacy.pi.dma-buffer-writeback	
+ares/n64/pi/dma.cpp	dmaDuration	cycles += partialBytes * 1;	legacy.pi.dma-partial-byte	
+ares/n64/pi/dma.cpp	dmaDuration	return cycles * 3;	legacy.clock.ticks-per-rclk	
+ares/n64/pif/hle.cpp	estimateTiming	u32 cycles = 13600;	legacy.si.dma-read-base	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 22000;	legacy.si.dma-read-controller	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 18000;	legacy.si.dma-read-empty-port	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 20000;	legacy.si.dma-read-accessory	
+ares/n64/pif/hle.cpp	estimateTiming	cycles += 1420 * short_cmds;	legacy.si.dma-read-short-command	
+ares/n64/pif/hle.cpp	mainHLE	constexpr u32 clocks = 10240 * 8;	legacy.pif.step-quantum	
+ares/n64/pif/hle.cpp	mainHLE	intram.bootTimeout = 6 * 187500000;  //6 seconds	legacy.pif.boot-timeout legacy.clock.ticks-per-s	
+ares/n64/rdp/io.cpp	writeWord	if(data.bit(9)) command.clock = (Thread::clock - thread.clock) / 3;	legacy.clock.ticks-per-rclk	
+ares/n64/rdp/rdp.cpp	main	command.clock += clocks / 3;	legacy.clock.ticks-per-rclk	
+ares/n64/rdram/rdram.cpp	power	chip.delay = 0x0000'0023;  //WriteDelay=4, WriteBits=3	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rdram/rdram.cpp	power	chip.writeDelay = 4;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rdram/rdram.cpp	writeRegister	chip.delay = data & 0x3838'1838;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rdram/rdram.cpp	writeRegister	chip.writeDelay = chip.delay >> 3 & 7;	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)
+ares/n64/rsp/debugger.cpp	instruction	u32 cycle = rsp.pipeline.clocksTotal / 3 - tracer.traceStartCycle;	legacy.clock.ticks-per-rclk	
+ares/n64/rsp/dma.cpp	dmaTransferStart	dmaQueue((dma.current.length+8) / 8 * 3, thread);	legacy.rsp.dma-bytes-per-rclk legacy.clock.ticks-per-rclk	
+ares/n64/rsp/dma.cpp	dmaTransferStep	dmaQueue((dma.current.length+8) / 8 * 3, *this);	legacy.rsp.dma-bytes-per-rclk legacy.clock.ticks-per-rclk	
+ares/n64/rsp/emux.cpp	XTRACESTART	debugger.tracer.traceStartCycle = pipeline.clocksTotal / 3;	legacy.clock.ticks-per-rclk	
+ares/n64/rsp/rsp.cpp	main	step(128);	legacy.rsp.halted-quantum	
+ares/n64/rsp/rsp.cpp	main	profile.cycles += 128;	legacy.rsp.halted-quantum	
+ares/n64/rsp/rsp.cpp	main	profile.haltedCycles += 128;	legacy.rsp.halted-quantum	
+ares/n64/rsp/rsp.hpp	end	clocks += 3;	legacy.rsp.issue	
+ares/n64/rsp/rsp.hpp	stall	clocks += 3;	legacy.rsp.stall	
+ares/n64/si/io.cpp	writeWord	cpu.queueInsert(Queue::SI_BUS_Write, 2150*3);	legacy.si.bus-write legacy.clock.ticks-per-rclk	
+ares/n64/si/io.cpp	ioWrite	cpu.queueInsert(Queue::SI_DMA_Read, cycles*3);	legacy.clock.ticks-per-rclk	
+ares/n64/si/io.cpp	ioWrite	cpu.queueInsert(Queue::SI_DMA_Write, 4065*3);	legacy.si.dma-write64 legacy.clock.ticks-per-rclk	
+ares/n64/system/system.cpp	load	information.videoFrequency = 48'681'818;	legacy.clock.vclk-ntsc	
+ares/n64/system/system.cpp	load	information.videoFrequency = 49'656'530;	legacy.clock.vclk-pal	
+ares/n64/system/system.hpp	serialize	u32 frequency = 93'750'000 * 2;	legacy.clock.pclk legacy.clock.ticks-per-pclk	
+ares/n64/system/system.hpp	serialize	u32 videoFrequency = 48'681'818;	legacy.clock.vclk-ntsc	
+ares/n64/vi/vi.cpp	main	u32 lineDuration = io.quarterLineDuration+1;	-	VI_H_SYNC and the leap registers hold a line length minus one; the +1 decodes the register
+ares/n64/vi/vi.cpp	main	step(0x800);	legacy.vi.inactive-line	

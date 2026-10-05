@@ -1,0 +1,72 @@
+id	runner	target	selector	expect	source
+bench:*	bench	tools/n64-timing/romgen/suites/bench	rom	file:tools/n64-timing/romgen/suites/bench/expected.tsv	plan R1; each expected row cites its own source
+thar0:*	thar0	tools/n64-timing/romgen/suites/thar0	config	file:tools/n64-timing/romgen/suites/thar0/expected.tsv	plan R2; Thar0/RDP-Timing-Tests sample_results.txt hw_data (MIT, a81ced93b28d)
+rdpstat:*	rdpstat	tools/n64-timing/romgen/suites/rdpstat	test	file:tools/n64-timing/romgen/suites/rdpstat/expected.tsv	plan R4; n64-systemtest tests/rdp and repeater64 references (MIT)
+snapper:*	snapper	tools/n64-timing/romgen/suites/snapper	test	file:tools/n64-timing/romgen/suites/snapper/expected.tsv	plan R3; snapper64 console dumps (MIT, e1cd8a61fc43)
+pending:build-corpora	pending	-	-	gate	corpus needs a libdragon or cargo build behind the build-corpora gate
+pending:snapper-lfs	pending	-	-	gate	snapper64 assets need git lfs pull (plan R3)
+pending:no-corpus	pending	-	-	gate	no corpus in the program measures this behavior; it stays pending until one does
+det	det	tools/n64-timing/determinism.sh	every mm scene	equal	two runs byte-identical, stats and trace_hash (plan T2)
+stepcap	stepcap	n64-run --step-cap	every mm scene and nemu64 ROM	equal	step-capped run equals the normal run byte for byte (plan T5)
+gen	gen	tools/n64-timing/behaviors.py --check	-	pass	this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3)
+mm:file-select	mm	tools/n64-timing/mmbench	file-select	report	Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench)
+mm:south-clock-town	mm	tools/n64-timing/mmbench	south-clock-town	report	Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench)
+nemu64:timing/random	nemu64	timing	Random (decrement)|Random (masking)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/just-nops	nemu64	timing	Timing: Just NOPs	self	nemu64-test timing set, ROM self-check
+nemu64:timing/individual-instructions	nemu64	timing	Timing: Individual instructions (CPU)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/mult-div-interlock	nemu64	timing	Timing: MULT/DIV to MFLO interlock	self	nemu64-test timing set, ROM self-check
+nemu64:timing/exceptions	nemu64	timing	Timing: Exceptions	self	nemu64-test timing set, ROM self-check
+nemu64:timing/cached-loads-and-store	nemu64	timing	Timing: Cached loads and store (with warm cache)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/cop1instructions32	nemu64	timing	Timing: COP1 instruction (32 bit)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/cop1instructions64	nemu64	timing	Timing: COP1 instruction (64 bit)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/uncached-write-buffer	nemu64	timing	Timing: 4 element write-buffer for uncached memory	self	nemu64-test timing set, ROM self-check
+nemu64:timing/cpu-register-dependency	nemu64	timing	Timing: CPU register dependency	self	nemu64-test timing set, ROM self-check
+nemu64:timing/cop1-register-dependency	nemu64	timing	Timing: COP1 register dependency	self	nemu64-test timing set, ROM self-check
+nemu64:timing/likely-branch	nemu64	timing	Timing: Likely branch has to count the skipped instruction	self	nemu64-test timing set, ROM self-check
+nemu64:timing/cache	nemu64	timing	Timing: CPU register dependency #C10	self	nemu64-test timing set, the CACHE values (category C10 in nemu64-timing-failures.md)
+nemu64:timing/load-miss-vi-on	nemu64	timing	Timing: Load Miss (with VI enabled)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/load-miss-vi-off	nemu64	timing	Timing: Load Miss (with VI disabled)	self	nemu64-test timing set, ROM self-check
+nemu64:timing/load-from-uncached-vi-on-same-bank	nemu64	timing	Timing: Load from uncached (with VI enabled) @(true,	self	nemu64-test timing set, the same-bank value (36 pclk median)
+nemu64:timing/load-from-uncached-vi-off	nemu64	timing	Timing: Load from uncached (with VI disabled)	self	nemu64-test timing set, ROM self-check
+nemu64:rsp_timing/clock-cpu-vs-rdp	nemu64	timing	RSP Timing: Clock CPU vs RDP	self	nemu64-test timing set, ROM self-check (100,000 COUNT = 133,333 +- 20 DP_CLOCK)
+nemu64:rsp_timing/sll	nemu64	timing	RSP Timing: SLL	self	nemu64-test timing set, ROM self-check
+nemu64:cop0hazard/count	nemu64	cop0hazard	MTC0/MFC0 COUNT hazards	self	nemu64-test cop0hazard set, ROM self-check
+nemu64:cop0hazard/softwareinterrupt	nemu64	cop0hazard	SoftwareInterrupt1 (enabled, hazard)|SoftwareInterrupt1 (enable but disable right away)|SoftwareInterrupt12 (enable and disable after one nop)	self	nemu64-test cop0hazard set, ROM self-check
+nemu64:cycle/smc	nemu64	cycle	re:^icache: 	self	nemu64-test cycle set, the 7 self-modifying-code cases
+bench:mi-memset-uncached	bench	mi-memset-uncached	point=vi-on metric=pclk_per_sd	suite	n64brew MIPS_Interface memset table, 25.7 ms/MiB
+bench:mi-memset-cached	bench	mi-memset-cached	point=vi-on metric=pclk_per_line	suite	n64brew MIPS_Interface memset table, 49.8 ms/MiB
+bench:mi-memset-rspdma	bench	mi-memset-rspdma	point=vi-on metric=b_per_rclk	suite	n64brew MIPS_Interface memset table, 2.58 ms/MiB
+bench:sp-dma-sweep	bench	sp-dma-sweep	-	suite	n64brew memset 6.5 B/rclk (check); hcs64 5.55 (report)
+bench:pi-dma-sizes	bench	pi-dma-sizes	metric=rclk	suite	n64-systembench main.c:572-608, cited values
+bench:uncached-vs-hpos	bench	uncached-vs-hpos	-	suite	rdram-bus-arbitration.md B11-B12; vi-fetch.md
+bench:dirty-row-sweep	bench	dirty-row-sweep	-	suite	report only; no published hardware value
+bench:dirty-miss-isolated	bench	dirty-miss-isolated	-	suite	report only; no published hardware value (plan T6)
+bench:rdp-sync-sweep	bench	rdp-sync-sweep	-	suite	n64brew Commands, SYNC_PIPE 50, SYNC_TILE 33, SYNC_LOAD 25
+bench:rdp-setter-sweep	bench	rdp-setter-sweep	-	suite	n64brew Pipeline, 1 clock per setter
+bench:rdp-atomic-sweep	bench	rdp-atomic-sweep	-	suite	SDK pro-man 12.2.3, 30 to 40 null cycles
+bench:rdp-rectn	bench	rdp-rectn	-	suite	cen64 RECTN 2021 and DUTY 80,287 (reported, not asserted)
+bench:ifill-isolated	bench	ifill-isolated	-	report	no ROM in plan R1 yet; no public hardware value (cpu-memory-costs.md)
+bench:uncached-sizes	bench	uncached-sizes	size=8	37	no ROM in plan R1 yet; n64-systembench main.c:572-584 U64 read, 37 pclk
+bench:rcp-reg-read	bench	rcp-reg-read	register=vi-control	24	no ROM in plan R1 yet; n64-systembench VI_CONTROL read, 24 pclk including about 2 of harness
+bench:pif-ram-read	bench	pif-ram-read	-	1974	no ROM in plan R1 yet; n64-systembench PIF RAM read, 1974 rclk
+bench:pi-io-write	bench	pi-io-write	-	134	no ROM in plan R1 yet; n64-systembench PI I/O write busy, 134 rclk
+bench:si-dma	bench	si-dma	direction=write64	4065	no ROM in plan R1 yet; n64-systembench SI DMA 64 B to PIF, 4065 rclk
+bench:wb-fifth-store	bench	wb-fifth-store	-	report	no ROM in plan R1 yet; no public hardware value (vr4300-wb.md)
+bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; TMEM load rate conflict (jgemu-dpc-probe.md)
+thar0:alpha-fail-1cycle	thar0	alpha-fail-1cycle	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)
+thar0:alpha-fail-2cycle	thar0	alpha-fail-2cycle	-	suite	plan T12: exactly 155,052
+thar0:fill-mode	thar0	fill-mode	-	suite	Thar0 hw_data
+thar0:imrd-1cycle	thar0	imrd-1cycle	-	suite	plan T13: IM_RD 1-cycle 163,436
+thar0:zcmp	thar0	zcmp	-	suite	Thar0 hw_data
+thar0:vi-on-separate-bank	thar0	vi-on-separate-bank	-	suite	plan T13: FB+ZB separate banks 225,518
+rdpstat:current-prefetch	rdpstat	current-prefetch	-	suite	n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240
+rdpstat:nosync-1cycle	rdpstat	nosync-1cycle	-	suite	repeater64 RDPNoSync1C, 65 references
+snapper:span-tri	snapper	span-tri	-	suite	snapper64 RDP Test-Mode Span Tri, 216 DPS dumps
+snapper:rect-nosync	snapper	rect-nosync	-	suite	snapper64 RDPRectNoSync captures
+noise:a	noise	dataset-a	-	pass	Thar0/RDP-Noise dataset A (Unlicense)
+noise:b	noise	dataset-b	-	pass	Thar0/RDP-Noise dataset B (Unlicense)
+noise:c	noise	dataset-c	-	pass	Thar0/RDP-Noise dataset C (Unlicense)
+noise:rect-1016	noise	rect-1016	-	pass	romgen 1016-px rect ROM against dataset A
+pidma:logs	pidma	rasky_n64_pi_dma_test/pi_dma_test.z64	-	self	ROM self-check within 10%; harness replays the 64 golden logs within 3% (plan T8)
+unit:ri-cost-table	unit	n64-timing-tests	ri-cost-table	pass	read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes (rdram-bus-arbitration.md)
+unit:ri-split	unit	n64-timing-tests	ri-split	pass	n64brew RDRAM_Interface, 1-16 octbytes per request
