@@ -179,10 +179,10 @@ Run the codemod after merging a branch that predates the rebase. It rewrites onl
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms
-tools/n64-timing/run-thar0.sh [--cpu interpreter|recompiler]
+tools/n64-timing/run-thar0.sh
 ```
 
-`run-thar0.sh` writes `stdout.txt`, `stderr.txt`, `compare.tsv` and `summary.txt` under `$N64_TIMING_HOME/results/thar0-<cpu>/`. See [romgen/suites/thar0/README.md](romgen/suites/thar0/README.md).
+`run-thar0.sh` writes `stdout.txt`, `stderr.txt`, `compare.tsv` and `summary.txt` under `$N64_TIMING_HOME/results/thar0/`. See [romgen/suites/thar0/README.md](romgen/suites/thar0/README.md).
 
 ## Self-test without the corpus
 
