@@ -2,7 +2,6 @@ struct System {
   Node::System node;
   VFS::Pak pak;
   bool homebrewMode = false;
-  bool deterministicEntropy = false;
   bool expansionPak = true;
   u8 configuredControllerPakBankCount = 1;
   u8 controllerPakBankCount = 1;
@@ -14,8 +13,10 @@ struct System {
   auto model() const -> Model { return information.model; }
   auto region() const -> Region { return information.region; }
   auto _DD() const -> bool { return information.dd; }
-  auto frequency() const -> u32 { return information.frequency; }
-  auto videoFrequency() const -> u32 { return information.videoFrequency; }
+  auto vclkPeriod() const -> Timing::Ratio { return information.vclkPeriod; }
+  auto videoFrequency() const -> u32 {
+    return Timing::UnitsPerSecond * information.vclkPeriod.denominator / information.vclkPeriod.numerator;
+  }
 
   //system.cpp
   auto game() -> string;
@@ -28,24 +29,19 @@ struct System {
   //serialization.cpp
   auto serialize(bool synchronize = true) -> serializer;
   auto unserialize(serializer&) -> bool;
+  auto serialize(serializer&, bool synchronize) -> void;
 
 private:
   struct Information {
     string name = "Nintendo 64";
     Model model = Model::Nintendo64;
     Region region = Region::NTSC;
-    u32 frequency = 93'750'000 * 2;
-    u32 videoFrequency = 48'681'818;
+    Timing::Ratio vclkPeriod = Timing::Behavior::ClockVclk;  //units per VCLK
     bool dd = false;
   } information;
   
-  atomic<bool> _vulkanNeedsLoad = false;
-
   auto initDebugHooks() -> void;
   auto _power(bool reset) -> void;
-
-  //serialization.cpp
-  auto serialize(serializer&, bool synchronize) -> void;
 };
 
 extern System system;

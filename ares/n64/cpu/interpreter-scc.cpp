@@ -164,6 +164,7 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
     break;
   case  6:  //wired
     scc.wired.index  = data.bit(0,5);
+    scc.wired.randomEpoch = instructionIndex + 2;
     break;
   case  8:  //badvaddr
   //scc.badVirtualAddress = data;  //read-only
@@ -213,12 +214,10 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
     if(scc.status.instructionTracing) {
       debug(unimplemented, "[CPU::setControlRegister] instructionTracing=1");
     }
-    cpu.interruptPoll();
   } break;
   case 13:  //cause
     scc.cause.interruptPending.bit(0) = data.bit(8);
     scc.cause.interruptPending.bit(1) = data.bit(9);
-    cpu.interruptPoll();
     break;
   case 14:  //exception program counter
     scc.epc = data;
@@ -266,9 +265,17 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
   }
 }
 
+//nemu64-test cop0 RandomDecrement, RandomMasking, RandomReadEarly: Random decrements once per
+//instruction, is set to 31 by a Wired write, and reloads 31 after it reaches Wired; with
+//Wired > 31 it wraps through 63 down to Wired. The reload lands two instructions after the
+//Wired write. Counting PClock cycles instead fails RandomMasking (reads 11, expects 27), so
+//stall cycles do not count. Placeholder until TimedCp0 (plan T7c): a read inside those two
+//instructions sees 31 instead of the old count.
 auto CPU::getControlRandom() -> u8 {
-  if (scc.wired.index > 31) return (n6)random();
-  return random() % (32 - scc.wired.index) + scc.wired.index;
+  u64 elapsed = instructionIndex > scc.wired.randomEpoch ? instructionIndex - scc.wired.randomEpoch : 0;
+  u32 wired = scc.wired.index;
+  u32 period = wired <= 31 ? 32 - wired : 96 - wired;
+  return (31 - elapsed % period) & 63;
 }
 
 auto CPU::DMFC0(r64& rt, u8 rd) -> void {
@@ -299,10 +306,8 @@ auto CPU::ERET() -> void {
     pipeline.setPc(scc.epc);
     scc.status.exceptionLevel = 0;
   }
-  pipeline.exception();
   scc.llbit = 0;
   context.setMode();
-  cpu.interruptPoll();
 }
 
 auto CPU::MFC0(r64& rt, u8 rd) -> void {

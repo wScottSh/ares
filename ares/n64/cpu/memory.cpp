@@ -155,7 +155,7 @@ static auto reverseEndianPaddr(u32 paddr) -> u32 {
 }
 
 auto CPU::fetch(PhysAccess access) -> maybe<u32> {
-  step(1 * 2);
+  step(pclk(1));
   if(!access) return nothing;
   u32 paddr = access.paddr;
   if(context.littleEndian()) paddr = reverseEndianPaddr<Word>(paddr);
@@ -209,14 +209,14 @@ template<u32 Size>
 auto CPU::vaddrAlignedError(u64 vaddr, bool write) -> bool {
   if constexpr(Accuracy::CPU::AddressErrors) {
     if(unlikely(vaddr & Size - 1)) {
-      step(1 * 2);
+      step(pclk(1));
       addressException(vaddr);
       if(write) exception.addressStore();
       else exception.addressLoad();
       return true;
     }
     if (context.bits == 32 && unlikely((s32)vaddr != vaddr)) {
-      step(1 * 2);
+      step(pclk(1));
       addressException(vaddr);
       if(write) exception.addressStore();
       else exception.addressLoad();

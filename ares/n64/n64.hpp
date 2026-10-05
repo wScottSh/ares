@@ -1,14 +1,10 @@
 #pragma once
 //started: 2020-04-28
 
-#define XXH_INLINE_ALL
-#include <xxhash.h>
 #include <float.h>
 #include <ares/ares.hpp>
 #include <nall/float-env.hpp>
-#include <nall/hashset.hpp>
 #include <nall/queue.hpp>
-#include <nall/recompiler/generic/generic.hpp>
 #include <component/processor/sm5k/sm5k.hpp>
 #include <functional>
 #include <span>
@@ -21,17 +17,6 @@ using v128 = __m128i;
 #define SSE2NEON_SUPPRESS_WARNINGS
 #include <sse2neon.h>
 using v128 = __m128i;
-#endif
-
-#if defined(VULKAN)
-  #if defined(__clang__)
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wnewline-eof"
-  #endif
-  #include <n64/vulkan/vulkan.hpp>
-  #if defined(__clang__)
-    #pragma clang diagnostic pop
-  #endif
 #endif
 
 // Include the GB core, we can use its cartridge emulation for Transfer Pak
@@ -59,20 +44,26 @@ namespace ares::Nintendo64 {
 
   inline static auto _DD() -> bool;
 
+  #include <n64/timing/clock.hpp>
+  #include <n64/timing/behaviors.hpp>
+  using Timing::Clock;
+  using Timing::pclk;
+  using Timing::rclk;
+
   struct Thread {
     auto reset() -> void {
-      clock = 0;
+      clock = {};
     }
 
-    auto step(u32 clocks) -> void {
+    auto step(Clock clocks) -> void {
       clock += clocks;
     }
 
     auto serialize(serializer& s) -> void {
-      s(clock);
+      s(clock.units);
     }
 
-    s64 clock;
+    Clock clock;
   };
 
   struct Queue : priority_queue<u32[512]> {
@@ -147,4 +138,5 @@ namespace ares::Nintendo64 {
   #include <n64/memory/bus.hpp>
   #include <n64/mi/bus.hpp>
   #include <n64/pi/bus.hpp>
+  #include <n64/timing/verify.hpp>
 }

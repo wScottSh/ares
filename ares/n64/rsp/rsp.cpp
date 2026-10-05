@@ -10,7 +10,6 @@ RSP rsp;
 #include "interpreter-ipu.cpp"
 #include "interpreter-scc.cpp"
 #include "interpreter-vpu.cpp"
-#include "recompiler.cpp"
 #include "debugger.cpp"
 #include "serialization.cpp"
 #include "disassembler.cpp"
@@ -31,13 +30,13 @@ auto RSP::unload() -> void {
 }
 
 auto RSP::main() -> void {
-  while(Thread::clock < 0) {
+  while(Thread::clock < cpu.clock) {
     auto clock = Thread::clock;
 
     if(status.halted) {
-      step(128);
-      profile.cycles += 128;
-      profile.haltedCycles += 128;
+      step(pclk(64));
+      profile.cycles += pclk(64).units;
+      profile.haltedCycles += pclk(64).units;
     } else {
       instruction();
     }
@@ -47,42 +46,35 @@ auto RSP::main() -> void {
 }
 
 auto RSP::instruction() -> void {
-  if(Accuracy::RSP::Recompiler && recompiler.enabled) {
-    auto block = recompiler.block(ipu.pc);
-    block->execute(*this);
-  } else {
-    pipeline.dblIssueCount = 0;
-    u32 instruction = imem.read<Word>(ipu.pc);
-    instructionPrologue(instruction);
-    branch.begin();
-    pipeline.begin();
-    OpInfo op0 = decoderEXECUTE(instruction);
-    pipeline.issue(op0);
-    interpreterEXECUTE();
+  pipeline.dblIssueCount = 0;
+  u32 instruction = imem.read<Word>(ipu.pc);
+  instructionPrologue(instruction);
+  branch.begin();
+  pipeline.begin();
+  OpInfo op0 = decoderEXECUTE(instruction);
+  pipeline.issue(op0);
+  interpreterEXECUTE();
 
-    if(!pipeline.singleIssue && !op0.branch()) {
-      u32 instruction = imem.read<Word>(ipu.pc + 4);
-      OpInfo op1 = decoderEXECUTE(instruction);
+  if(!pipeline.singleIssue && !op0.branch()) {
+    u32 instruction = imem.read<Word>(ipu.pc + 4);
+    OpInfo op1 = decoderEXECUTE(instruction);
 
-      if(canDualIssue(op0, op1)) {
-        pipeline.dblIssueCount = 1;
-        instructionEpilogue<0>(0);
-        instructionPrologue(instruction);
-        branch.begin();
-        pipeline.issue(op1);
-        interpreterEXECUTE();
-      }
+    if(canDualIssue(op0, op1)) {
+      pipeline.dblIssueCount = 1;
+      instructionEpilogue();
+      instructionPrologue(instruction);
+      branch.begin();
+      pipeline.issue(op1);
+      interpreterEXECUTE();
     }
-
-    pipeline.end();
-    instructionEpilogue<0>(0);
   }
 
-  //this handles all stepping for the interpreter
-  //with the recompiler, it only steps for taken branch stalls
+  pipeline.end();
+  instructionEpilogue();
+
   step(pipeline.clocks);
-  profile.cycles += pipeline.clocks;
-  pipeline.clocksTotal += pipeline.clocks;
+  profile.cycles += pipeline.clocks.units;
+  pipeline.clocksTotal += pipeline.clocks.units;
 }
 
 auto RSP::instructionPrologue(u32 instruction) -> void {
@@ -91,8 +83,8 @@ auto RSP::instructionPrologue(u32 instruction) -> void {
   debugger.instruction();
 }
 
-auto RSP::instructionBranchEpilogue() -> s32 {
-  bool endBlock = branch.state & Branch::EndBlock;
+auto RSP::instructionEpilogue() -> void {
+  ipu.r[0].u32 = 0;
   if(branch.inDelaySlot()) {
     pipeline.stall();
     if(branch.pc & 4) pipeline.singleIssue = 1;
@@ -100,22 +92,6 @@ auto RSP::instructionBranchEpilogue() -> s32 {
 
   branch.end();
   ipu.pc = branch.pc;
-  return status.halted || endBlock;
-}
-
-template<bool Recompiled>
-auto RSP::instructionEpilogue(u32 clocks) -> s32 {
-  if constexpr(Recompiled) {
-    step(clocks);
-    profile.cycles += clocks;
-    pipeline.clocksTotal += clocks;
-
-    assert(ipu.r[0].u32 == 0);
-  } else {
-    ipu.r[0].u32 = 0;
-  }
-
-  return instructionBranchEpilogue();
 }
 
 auto RSP::power(bool reset) -> void {
@@ -162,12 +138,6 @@ auto RSP::power(bool reset) -> void {
     //find the largest b where b < 1.0 / sqrt(a)
     while(a * (b + 1) * (b + 1) < (u64(1) << 44)) b++;
     inverseSquareRoots[index] = u16(b >> 1);
-  }
-
-  if constexpr(Accuracy::RSP::Recompiler) {
-    auto buffer = ares::Memory::FixedAllocator::get().tryAcquire(1_MiB);
-    recompiler.allocator.resize(1_MiB, bump_allocator::executable, buffer);
-    recompiler.reset();
   }
 
   if constexpr(Accuracy::RSP::SISD) {

@@ -1,11 +1,11 @@
-auto RSP::dmaQueue(u32 clocks, Thread& thread) -> void {
+auto RSP::dmaQueue(Clock clocks, Thread& thread) -> void {
   dma.clock = (Thread::clock - thread.clock) - clocks;
 }
 
-auto RSP::dmaStep(u32 clocks) -> void {
+auto RSP::dmaStep(Clock clocks) -> void {
   if(dma.busy.any()) {
     dma.clock += clocks;
-    if(dma.clock >= 0) {
+    if(dma.clock >= Clock{}) {
       dmaTransferStep();
     }
   }
@@ -17,17 +17,12 @@ auto RSP::dmaTransferStart(Thread& thread) -> void {
     dma.current = dma.pending;
     dma.busy    = dma.full;
     dma.full    = {0,0};
-    dmaQueue((dma.current.length+8) / 8 * 3, thread);
+    dmaQueue(rclk((dma.current.length+8) / 8), thread);
   }
 }
 
 auto RSP::dmaTransferStep() -> void {
   if(dma.busy.read) {
-    if constexpr(Accuracy::RSP::Recompiler) {
-      if(dma.current.pbusRegion) {
-        recompiler.invalidate(dma.current.pbusAddress, dma.current.length + 8);
-      }
-    }
     for(u32 i = 0; i <= dma.current.length; i += 8) {
       if(dma.current.pbusRegion) {
         u64 data = rdram.ram.read<Dual>(dma.current.dramAddress, RBusDevice::SP_DMA);
@@ -64,7 +59,7 @@ auto RSP::dmaTransferStep() -> void {
   if(dma.current.count) {
     dma.current.count -= 1;
     dma.current.dramAddress += dma.current.skip;
-    dmaQueue((dma.current.length+8) / 8 * 3, *this);
+    dmaQueue(rclk((dma.current.length+8) / 8), *this);
   } else {
     dma.busy = {0,0};
     dma.current.length = 0xFF8;

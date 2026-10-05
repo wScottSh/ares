@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Runs the rdpstat ROMs through n64-run and writes per-set results.
 #
-# usage: run.sh [--rdp none|vulkan] [SET...]
+# usage: run.sh [SET...]
 # SET defaults to "systemtest dpc repeater64". ROMs come from
 # romgen/build.py --suite rdpstat --out $N64_TIMING_HOME/roms.
-# Output: $N64_TIMING_HOME/results/rdpstat-<rdp>/<set>/{stdout.txt,stderr.txt,values.tsv,summary.txt}
-#         $N64_TIMING_HOME/results/rdpstat-<rdp>/summary.txt
+# Output: $N64_TIMING_HOME/results/rdpstat/<set>/{stdout.txt,stderr.txt,values.tsv,summary.txt}
+#         $N64_TIMING_HOME/results/rdpstat/summary.txt
 set -euo pipefail
 
 N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
@@ -16,11 +16,9 @@ runner="${N64_RUN:-$N64_TIMING_HOME/build/$(basename "$repo")/n64-run/rundir/n64
 [ -x "$runner" ] || runner="${runner%.exe}"
 roms="${RDPSTAT_ROMS:-$N64_TIMING_HOME/roms}"
 
-rdp=none
-if [ "${1:-}" = "--rdp" ]; then rdp="$2"; shift 2; fi
 sets="${*:-systemtest dpc repeater64}"
 
-results="$N64_TIMING_HOME/results/rdpstat-$rdp"
+results="$N64_TIMING_HOME/results/rdpstat"
 mkdir -p "$results"
 : > "$results/summary.txt"
 
@@ -30,10 +28,10 @@ for set in $sets; do
   out="$results/$set"
   mkdir -p "$out"
   status=0
-  "$runner" "$rom" --rdp "$rdp" --emulated-seconds 120 --wall-seconds 600 \
+  "$runner" "$rom" --emulated-seconds 120 --wall-seconds 600 \
     > "$out/stdout.txt" 2> "$out/stderr.txt" || status=$?
   {
-    echo "== $set (rdp=$rdp) exit=$status"
+    echo "== $set exit=$status"
     grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
     grep "^Test '" "$out/stdout.txt" || true
     grep -o '[A-Za-z-]*: Failed [0-9]* of [0-9]* tests.*' "$out/stdout.txt" || echo "no summary line"

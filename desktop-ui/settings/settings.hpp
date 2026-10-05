@@ -115,10 +115,6 @@ struct Settings : Markup::Node {
     bool expansionPak = true;
     u8 controllerPakBankCount = 1;
     string controllerPakBankString = "32KiB (Default)";
-    string quality = "SD";
-    bool supersampling = false;
-    bool disableVideoInterfaceProcessing = false;
-    bool weaveDeinterlacing = true;
   } nintendo64;
 
   struct GameBoyAdvance {
@@ -394,20 +390,6 @@ struct CoreSettings : VerticalLayout {
       Label nintendo64ControllerPakBankLabel{&nintendo64ControllerPakBankLayout, Size{0, layoutVertSize}};
       ComboButton nintendo64ControllerPakBankOption{&nintendo64ControllerPakBankLayout, Size{0, 0}};
       Label nintendo64ControllerPakBankHint{&nintendo64ControllerPakBankLayout, Size{0, layoutVertSize}};
-    HorizontalLayout disableVideoInterfaceProcessingLayout{this, Size{~0, 0}, 5};
-      CheckLabel disableVideoInterfaceProcessingOption{&disableVideoInterfaceProcessingLayout, Size{0, 0}, 5};
-      Label disableVideoInterfaceProcessingHint{&disableVideoInterfaceProcessingLayout, Size{0, layoutVertSize}};
-    HorizontalLayout weaveDeinterlacingLayout{this, Size{~0, 0}, 5};
-      CheckLabel weaveDeinterlacingOption{&weaveDeinterlacingLayout, Size{0, 0}, 5};
-      Label weaveDeinterlacingHint{&weaveDeinterlacingLayout, Size{0, layoutVertSize}};
-    HorizontalLayout renderQualityLayout{this, Size{~0, 0}, 5};
-      RadioLabel renderQuality1x{&renderQualityLayout, Size{0, 0}};
-      RadioLabel renderQuality2x{&renderQualityLayout, Size{0, 0}};
-      RadioLabel renderQuality4x{&renderQualityLayout, Size{0, 0}};
-      Group renderQualityGroup{&renderQuality1x, &renderQuality2x, &renderQuality4x};
-    HorizontalLayout renderSupersamplingLayout{this, Size{~0, 0}, 5};
-      CheckLabel renderSupersamplingOption{&renderSupersamplingLayout, Size{0, 0}, 5};
-      Label renderSupersamplingHint{&renderSupersamplingLayout, Size{0, layoutVertSize}};
 
   Label gameBoyAdvanceSettingsLabel{this, Size{~0, 0}, 5};
     HorizontalLayout gameBoyPlayerLayout{this, Size{~0, 0}, 5};

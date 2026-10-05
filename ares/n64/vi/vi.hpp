@@ -17,7 +17,7 @@ struct VI : Thread, Memory::RCP<VI> {
   //vi.cpp
   auto load(Node::Object) -> void;
   auto unload() -> void;
-  auto step(u32 clocks) -> void;
+  auto step(u32 vclks) -> void;
 
   auto main() -> void;
   auto refresh() -> void;
@@ -67,15 +67,12 @@ struct VI : Thread, Memory::RCP<VI> {
     n3  leapCounter;
   } io;
 
-  u32 clockFraction;
+  Timing::VclkAccumulator vclk;
   u32 inactiveCounter;
 
 //unserialized:
   bool refreshed;
 
-  #if defined(VULKAN)
-  bool gpuOutputValid = false;
-  #endif
 };
 
 extern VI vi;

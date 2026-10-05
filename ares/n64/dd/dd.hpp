@@ -15,6 +15,10 @@ struct DD : PIDeviceMemory {
   Memory::Writable error;
   n1 asicAccess;
 
+  //The 64DD's delays are counts of 187.5 MHz ticks, the core's clock unit before the 750 MHz
+  //rebase (plan T4); the target console has no 64DD, so they were converted, not re-derived.
+  static constexpr auto ticks(u64 n) -> Clock { return {(s64)n * Timing::UnitsPerPclk / 2}; }
+
   struct Debugger {
     //debugger.cpp
     auto load(Node::Object) -> void;

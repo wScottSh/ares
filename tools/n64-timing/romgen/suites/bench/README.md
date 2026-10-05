@@ -10,12 +10,12 @@ Run these from the repository root.
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite bench --out $N64_TIMING_HOME/roms/bench
-N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/bench/run.sh --cpu interpreter [ROM...]
+N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/bench/run.sh [ROM...]
 python tools/n64-timing/romgen/suites/bench/selftest.py
 ```
 
 - `build.py` writes one `bench-<rom>.z64` per ROM, and a `bench-<rom>.tests.tsv` listing that names every point. Two builds produce byte-identical files.
-- `run.sh` runs each ROM and writes `results/bench-<cpu>/<rom>/{stdout,stderr}.txt`. It then runs `report.py`, which writes `measurements.tsv` (every raw and derived value) and `results.tsv` (one row per `expected.tsv` entry, with a verdict). `run.sh` exits 1 only when a ROM did not print every point in its listing. A value outside its band is reported but does not change the exit code.
+- `run.sh` runs each ROM and writes `results/bench/<rom>/{stdout,stderr}.txt`. It then runs `report.py`, which writes `measurements.tsv` (every raw and derived value) and `results.tsv` (one row per `expected.tsv` entry, with a verdict). `run.sh` exits 1 only when a ROM did not print every point in its listing. A value outside its band is reported but does not change the exit code.
 - `selftest.py` checks the derived metrics in `report.py` against synthetic inputs whose answers are known.
 
 ## Output format

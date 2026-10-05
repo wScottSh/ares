@@ -8,7 +8,7 @@ Run these from the repository root.
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
-N64_RUN=<path to n64-run.exe> tools/n64-timing/run-nemu64.sh --cpu interpreter
+N64_RUN=<path to n64-run.exe> tools/n64-timing/run-nemu64.sh
 python tools/n64-timing/romgen/selftest.py
 python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms
 tools/n64-timing/run-thar0.sh

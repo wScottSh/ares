@@ -1,6 +1,11 @@
+//The pulse runs on emulated time, not host time: PClock is 93.75 MHz, so 93.75 cycles per microsecond.
+static auto emulatedMicrosecond() -> u64 {
+  return cpu.pclock() * 4 / 375;
+}
+
 auto Gamepad::BioSensor::load() -> void {
   beatsPerMinute = 60;  //default to 60 BPM
-  pulseNext = chrono::microsecond();
+  pulseNext = emulatedMicrosecond();
 }
 
 auto Gamepad::BioSensor::unload() -> void {
@@ -13,7 +18,7 @@ auto Gamepad::BioSensor::update() -> void {
   //Calculate pulse interval in microseconds
   static constexpr u64 PULSE_DURATION = 200'000;
   u64 pulseInterval = 60'000'000 / beatsPerMinute;
-  u64 now = chrono::microsecond();
+  u64 now = emulatedMicrosecond();
 
   //Check if current pulse should end
   if(isPulsing && (now - pulseStart >= PULSE_DURATION)) {

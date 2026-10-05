@@ -8,7 +8,7 @@ Run these from the repository root.
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms [--define RUNS=1000]
-tools/n64-timing/run-thar0.sh [--cpu interpreter|recompiler]
+tools/n64-timing/run-thar0.sh
 python -m romgen.suites.thar0.selftest                     # from tools/n64-timing
 python -m romgen.suites.thar0.import_hw <clone dir>        # from tools/n64-timing; rewrites expected.tsv
 ```

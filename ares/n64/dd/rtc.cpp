@@ -10,15 +10,15 @@ auto DD::RTC::load() -> void {
   //byte 8 to 15 = timestamp of when the last save was made
   n64 timestamp = 0;
   for(auto n : range(8)) timestamp.byte(n) = ram.read<Byte>(8 + n);
-  if(!~check || !~timestamp) {  //new save file
-    time_t t = time(0);
-    struct tm tmm = *localtime(&t);
-    ram.write<Byte>(0, BCD::encode(tmm.tm_year % 100));
-    ram.write<Byte>(1, BCD::encode(tmm.tm_mon + 1));
-    ram.write<Byte>(2, BCD::encode(tmm.tm_mday));
-    ram.write<Byte>(3, BCD::encode(tmm.tm_hour));
-    ram.write<Byte>(4, BCD::encode(tmm.tm_min));
-    ram.write<Byte>(5, BCD::encode(tmm.tm_sec));
+  //The clock never reads host time: a new save starts at a fixed epoch with no hardware
+  //reference (2000-01-01 00:00:00), and a saved clock resumes where emulation left it.
+  if(!~check || !~timestamp) {
+    ram.write<Byte>(0, 0x00);
+    ram.write<Byte>(1, 0x01);
+    ram.write<Byte>(2, 0x01);
+    ram.write<Byte>(3, 0x00);
+    ram.write<Byte>(4, 0x00);
+    ram.write<Byte>(5, 0x00);
     return;
   }
 
@@ -27,14 +27,6 @@ auto DD::RTC::load() -> void {
     for(auto n : range(8)) ram.write<Byte>(n, 0xff);
     return;
   }
-
-  //update based on the amount of time that has passed since the last save
-  time_t now = time(0);
-  time_t saved = (time_t)timestamp;
-  if(now > saved) {
-    timestamp = now - saved;
-    while(timestamp--) tickSecond();
-  }
 }
 
 auto DD::RTC::reset() -> void {
@@ -42,8 +34,7 @@ auto DD::RTC::reset() -> void {
 }
 
 auto DD::RTC::save() -> void {
-  n64 timestamp = time(0);
-  for(auto n : range(8)) ram.write<Byte>(8 + n, timestamp.byte(n));
+  for(auto n : range(8)) ram.write<Byte>(8 + n, 0x00);
 
   if(auto fp = system.pak->write("time.rtc")) {
     ram.save(fp);
@@ -64,7 +55,7 @@ auto DD::RTC::tick(u32 offset) -> void {
 auto DD::RTC::tickClock() -> void {
   tickSecond();
   queue.remove(Queue::DD_Clock_Tick);
-  cpu.queueInsert(Queue::DD_Clock_Tick, 187'500'000);
+  cpu.queueInsert(Queue::DD_Clock_Tick, ticks(187'500'000));
 }
 
 auto DD::RTC::tickSecond() -> void {

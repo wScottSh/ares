@@ -150,7 +150,7 @@ auto DD::power(bool reset) -> void {
   
   motorStop();
 
-  cpu.queueInsert(Queue::DD_Clock_Tick, 187'500'000);
+  cpu.queueInsert(Queue::DD_Clock_Tick, ticks(187'500'000));
   queue.remove(Queue::DD_MECHA_Response);
   queue.remove(Queue::DD_BM_Request);
   lower(IRQ::MECHA);

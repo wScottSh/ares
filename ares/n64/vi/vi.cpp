@@ -7,25 +7,14 @@ VI vi;
 #include "debugger.cpp"
 #include "serialization.cpp"
 
-auto VI::step(u32 clocks) -> void {
-  auto scaled = (u64)clocks * system.frequency() + clockFraction;
-  Thread::clock += scaled / system.videoFrequency();
-  clockFraction = scaled % system.videoFrequency();
+auto VI::step(u32 vclks) -> void {
+  Thread::clock = vclk.advance(vclks);
 }
 
 auto VI::load(Node::Object parent) -> void {
   node = parent->append<Node::Object>("VI");
 
-  u32 width = 640;
-  u32 height = 576;
-
-  #if defined(VULKAN)
-  if (vulkan.enable) {
-    width *= vulkan.outputUpscale;
-    height *= vulkan.outputUpscale;
-  }
-  #endif
-  screen = node->append<Node::Video::Screen>("Screen", width, height);
+  screen = node->append<Node::Video::Screen>("Screen", 640, 576);
   screen->setRefresh(std::bind_front(&VI::refresh, this));
   screen->refreshRateHint(Region::PAL() ? 50 : 60); // TODO: More accurate refresh rate hint
   screen->colors((1 << 24) + (1 << 15), [&](n32 color) -> n64 {
@@ -46,18 +35,7 @@ auto VI::load(Node::Object parent) -> void {
   
   int videoHeight = Region::PAL() ? 576 : 480;
 
-  #if defined(VULKAN)
-  if(vulkan.enable) {
-    screen->setSize(vulkan.outputUpscale * 640, vulkan.outputUpscale * videoHeight);
-    if(!vulkan.supersampleScanout) {
-      screen->setScale(1.0 / vulkan.outputUpscale, 1.0 / vulkan.outputUpscale);
-    }
-  } else {
-    screen->setSize(640, videoHeight);
-  }
-  #else
   screen->setSize(640, videoHeight);
-  #endif
 
   // Pedantic N64 NTSC aspect ratio is 120:119, but let's keep 120:120 to avoid slight scaling.
   // Pedantic N64 PAL aspect ratio is 5900000:4965653, but let's use 12:10 to achieve the
@@ -75,7 +53,7 @@ auto VI::unload() -> void {
 }
 
 auto VI::main() -> void {
-  while(Thread::clock < 0) {
+  while(Thread::clock < cpu.clock) {
     if(active()) {
       ++io.vcounter;
       int halfline = io.vcounter << 1 | io.field;
@@ -86,12 +64,6 @@ auto VI::main() -> void {
       }
 
       if(io.vcounter == io.vstart >> 1) {
-        #if defined(VULKAN)
-        if (vulkan.enable) {
-          gpuOutputValid = vulkan.scanoutAsync(io.field);
-          vulkan.frame();
-        }
-        #endif
         refreshed = true;
         screen->frame();
         ri.checkRefresh();
@@ -136,32 +108,6 @@ auto VI::main() -> void {
 }
 
 auto VI::refresh() -> void {
-  #if defined(VULKAN)
-  if(vulkan.enable && gpuOutputValid) {
-    const u8* rgba = nullptr;
-    u32 width = 0, height = 0;
-    vulkan.mapScanoutRead(rgba, width, height);
-    if(rgba) {
-      screen->setViewport(0, 0, width, height);
-      for(u32 y : range(height)) {
-        auto source = rgba + width * y * sizeof(u32);
-        auto target = screen->pixels(1).data() + y * vulkan.outputUpscale * 640;
-        for(u32 x : range(width)) {
-          target[x] = source[x * 4 + 0] << 16 | source[x * 4 + 1] << 8 | source[x * 4 + 2] << 0;
-        }
-      }
-    } else {
-      screen->setViewport(0, 0, 1, 1);
-      screen->pixels(1).data()[0] = 0;
-    }
-    vulkan.unmapScanoutRead();
-    vulkan.endScanout();
-
-    if(Model::Aleck64()) aleck64.vdp.render(screen); //aleck64 supports overlay graphics
-    return;
-  }
-  #endif
-
   if(io.serrate == 0) screen->setProgressive(0);
   if(io.serrate == 1) screen->setInterlace(!io.field);
 
@@ -223,6 +169,8 @@ auto VI::refresh() -> void {
       y0 += vi.io.yscale;
     }
   }
+
+  if(Model::Aleck64()) aleck64.vdp.render(screen);
 }
 
 auto VI::power(bool reset) -> void {
@@ -230,11 +178,7 @@ auto VI::power(bool reset) -> void {
   screen->power();
   io = {};
   refreshed = false;
-  clockFraction = 0;
-
-  #if defined(VULKAN)
-  gpuOutputValid = false;
-  #endif
+  vclk = {system.vclkPeriod()};
 }
 
 }

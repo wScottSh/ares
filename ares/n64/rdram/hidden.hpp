@@ -1,5 +1,26 @@
+//The ninth bit of each RDRAM byte: one byte per 16-bit word, bit 1 the even byte, bit 0 the odd.
 struct HiddenRAM {
   u8* data = nullptr;
+  u32 size = 0;
+
+  ~HiddenRAM() { reset(); }
+
+  auto allocate(u32 ramSize) -> void {
+    reset();
+    size = ramSize / 2;
+    data = new u8[size];
+  }
+
+  auto reset() -> void {
+    delete[] data;
+    data = nullptr;
+    size = 0;
+  }
+
+  //0x03 is paraLLEl-RDP's clear value, which ares has always powered on with.
+  auto fill() -> void {
+    memory::fill<u8>(data, size, 0x03);
+  }
 
   auto nibble(u32 address) -> u32 {
     u8* h = &data[address >> 1];

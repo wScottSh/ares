@@ -8,11 +8,6 @@ target_include_directories(
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/ares
     ${CMAKE_SOURCE_DIR}/thirdparty
-    ${CMAKE_SOURCE_DIR}/ares/n64/vulkan/parallel-rdp/parallel-rdp
-    ${CMAKE_SOURCE_DIR}/ares/n64/vulkan/parallel-rdp/volk
-    ${CMAKE_SOURCE_DIR}/ares/n64/vulkan/parallel-rdp/vulkan
-    ${CMAKE_SOURCE_DIR}/ares/n64/vulkan/parallel-rdp/vulkan-headers/include
-    ${CMAKE_SOURCE_DIR}/ares/n64/vulkan/parallel-rdp/util
 )
 target_compile_definitions(n64-run PRIVATE MIA_LIBRARY)
 target_link_libraries(n64-run PRIVATE ares::ares ares::mia ares::nall)

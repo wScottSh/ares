@@ -100,7 +100,14 @@ struct serializer {
   }
 
   template<typename T> auto operator()(std::span<T> array) -> serializer& {
-    for(auto& value : array) operator()(value);
+    if constexpr(std::is_same_v<T, u8>) {
+      reserve(_size + array.size());
+      if(writing()) memory::copy(_data + _size, array.data(), array.size());
+      if(reading()) memory::copy(array.data(), _data + _size, array.size());
+      _size += array.size();
+    } else {
+      for(auto& value : array) operator()(value);
+    }
     return *this;
   }
 

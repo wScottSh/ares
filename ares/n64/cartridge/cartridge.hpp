@@ -45,9 +45,9 @@ struct Cartridge {
       u16 manufacturerId;
       u16 deviceId;
       bool wordIndexed;
-      u32 sectorEraseClocks;
-      u32 chipEraseClocks;
-      u32 programClocks;
+      Clock sectorEraseClocks;
+      Clock chipEraseClocks;
+      Clock programClocks;
     };
     static const Model models[];
 

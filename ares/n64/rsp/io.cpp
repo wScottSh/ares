@@ -45,7 +45,6 @@ auto RSP::ioRead(u32 address, Thread &thread) -> u32 {
     data.bit(12) = status.signal[5];
     data.bit(13) = status.signal[6];
     data.bit(14) = status.signal[7];
-    cpu.forceSynchronize();
   }
 
   if(address == 5) {
@@ -62,7 +61,6 @@ auto RSP::ioRead(u32 address, Thread &thread) -> u32 {
     //SP_SEMAPHORE
     data.bit(0) = status.semaphore;
     status.semaphore = 1;
-    cpu.forceSynchronize();
   }
 
   debugger.ioSCC(Read, address, data);
@@ -71,7 +69,7 @@ auto RSP::ioRead(u32 address, Thread &thread) -> u32 {
 
 auto RSP::writeWord(u32 address, u32 data, Thread& thread) -> void {
   if(address <= 0x0403'ffff) {
-    if(address & 0x1000) return recompiler.invalidate(address & 0xfff), imem.write<Word>(address, data);
+    if(address & 0x1000) return imem.write<Word>(address, data);
     else                 return dmem.write<Word>(address, data);
   }
   return ioWrite(address, data, thread);
@@ -144,7 +142,6 @@ auto RSP::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     if(data.bit(22) && !data.bit(21)) status.signal[6] = 1;
     if(data.bit(23) && !data.bit(24)) status.signal[7] = 0;
     if(data.bit(24) && !data.bit(23)) status.signal[7] = 1;
-    cpu.forceSynchronize();
   }
 
   if(address == 5) {
@@ -158,7 +155,6 @@ auto RSP::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
   if(address == 7) {
     //SP_SEMAPHORE
     status.semaphore = 0;
-    cpu.forceSynchronize();
   }
 
   debugger.ioSCC(Write, address, data);
@@ -170,11 +166,9 @@ auto RSP::Status::readWord(u32 address, Thread& thread) -> u32 {
 
   if(address == 0) {
     //SP_PC_REG
-    if(halted) {
-      data.bit(0,11) = self.ipu.pc;
-    } else {
-      data.bit(0,11) = random();
-    }
+    //n64brew (RSP, SP_PC): reads while the RSP runs return random bits. No deterministic
+    //rule is published, so the model returns the PC the interpreter has reached.
+    data.bit(0,11) = self.ipu.pc;
   }
 
   if(address == 1) {

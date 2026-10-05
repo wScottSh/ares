@@ -181,7 +181,7 @@ auto DD::command(n16 command) -> void {
   else if(ctl.error.invalidParam)     io.status.mechaError = 1;
   else if(io.status.writeProtect)     io.status.mechaError = 1;
 
-  cpu.queueInsert(Queue::DD_MECHA_Response, count);
+  cpu.queueInsert(Queue::DD_MECHA_Response, ticks(count));
 }
 
 auto DD::mechaResponse() -> void {
