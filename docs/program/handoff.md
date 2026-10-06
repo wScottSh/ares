@@ -20,6 +20,7 @@ Scott paused the program after this batch because of token budget ("when this ba
 
 ## Next units, in order (plan.md has goal, files, check for each)
 
+0. L0 Linux harness port (new; not in plan.md). The program moved to the Linux host `qwen` (unicron: Ubuntu, 32 cores, 107 GB RAM, g++/cmake/ninja/python3/gh; no clang, no bun). `tools/n64-timing/build.sh` is MSYS2-clang64-only and the scripts assume a `.exe` runner and Windows drive-letter path conversion (`cygpath`). Make the harness build and run natively on Linux (g++ or clang via apt), keep Windows working, then rerun the full standing-check set on master and record the Linux baseline: nemu64 453/9/5, snapper 2592/2592, rdpstat 0/7 0/2 0/21, thar0 84/92/85/93 exact, det, stepcap, state-roundtrip, MM 600-field wall time. Determinism across hosts is not required, but within-host runs must be byte-identical; report any value that differs from the Windows baseline with cause. Regenerate local data: `romgen/build.py`, `suites/snapper/fetch.sh` into `~/n64-timing/corpora`, and re-clone the research corpora the briefs name (`~/n64-timing/scratch/r29/clones/...`, cen64 jgemu at `~/n64-timing/scratch/jgcen64`) from the URLs and commits in `docs/research/hardware-corpora.md` and `docs/research/jgemu-dpc-probe.md`.
 1. T7b exceptions and bubbles (C1, 439 nemu64 values; `Pipeline::fault()` is the hook, see reports/t7a.md "For T7b").
 2. T7c CP0 timing, then T7d fetch window and I-fills (cycle 13/13).
 3. T11 VI fetch on the bus (memset band residuals, VI-on same-bank 36), drops VI from the Rdram::ram friend list.
@@ -29,9 +30,11 @@ Scott paused the program after this batch because of token budget ("when this ba
 
 ## How to resume
 
-1. Copy `docs/program/` to `~/.claude/orchestrate/ares-n64-timing/` on the new machine. Remove the STOP line at the top of `preferences.md`.
-2. Set up the build: MSYS2 clang64 (see `tools/n64-timing/README.md`), `tools/n64-timing/build.sh`. Generate ROMs with `python tools/n64-timing/romgen/build.py --suite <name>`; fetch snapper64 with `suites/snapper/fetch.sh`; supply your own MM ROM (NTSC-U 1.0).
+On qwen this is already done: the repo is `~/repos/ares` (pulled to master), the store is installed at `~/.claude/orchestrate/ares-n64-timing/` with the STOP line removed, and the model sheet is `~/.claude/pstack-models.md`. The MM ROM is `~/repos/mm-decomp-60fps/baseroms/n64-us/baserom.z64` (md5 2a0a8acb61538235bc1094d297fb6556, the NTSC-U 1.0 the decomp matches). `tools/n64-timing/program-paths.py --home <home>` rewrites the operative program files for another host.
+
+1. Install the pstack plugin in Claude Code on the host (the briefs name its skills and the orchestrate CLI; the CLI needs bun: `npm install -g bun`).
+2. Start the coordinator in `~/repos/ares` with `/pstack:poteto-mode continue the ares timing program from ~/.claude/orchestrate/ares-n64-timing/handoff.md`. It runs L0 first.
 3. Each build unit: spawn a fresh worker with `briefs/build-common.md` naming the unit and base `master`; then an independent verifier on a different model with `briefs/verify-pr.md`; merge on PASS. Model policy (Scott): opus workers, sonnet verifiers, medium effort.
 4. Human-only items, unchanged: #16 hardware calibration run, #25 contact the jgemu author (draft in the #25 comment).
 
-Paths in reports refer to the original machine (`C:\Users\Scott\...`).
+Paths in `reports/` refer to the original Windows machine's user directory and are kept as a historical record; briefs, standing orders and this handoff use qwen paths.
