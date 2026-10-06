@@ -4,14 +4,14 @@ GOAL
 One command runs a deterministic 600-frame MM benchmark on the fork through the headless runner and reports per-frame timing per scene. This replaces the unavailable mm-decomp-60fps tools/bench and is the map's final acceptance instrument ("a 600-frame MM bench run takes <= 2 min").
 
 SCOPE
-- Worktree C:\Users\Scott\repos\ares-wt\mmbench on branch feat/mmbench from origin/feat/harness. PR targets feat/harness.
-- May write: tools/n64-run/ (add scripted controller input, and memory-read/dump hooks if needed), tools/n64-timing/mmbench/ (scripts, input scripts, README). Generated saves/states/results under C:\Users\Scott\n64-timing\mmbench\ (not committed; no Nintendo data in git).
+- Worktree /home/wscottsh/repos/ares-wt/mmbench on branch feat/mmbench from origin/feat/harness. PR targets feat/harness.
+- May write: tools/n64-run/ (add scripted controller input, and memory-read/dump hooks if needed), tools/n64-timing/mmbench/ (scripts, input scripts, README). Generated saves/states/results under /home/wscottsh/n64-timing/mmbench/ (not committed; no Nintendo data in git).
 - May not write: ares/ core timing code, other worktrees.
 
 CONTEXT
-- Harness README and runner: `git -C C:\Users\Scott\repos\ares show origin/feat/harness:tools/n64-timing/README.md`, report C:\Users\Scott\.claude\orchestrate\ares-n64-timing\reports\harness.md (gotcha: pass the ROM as C:/... path; apostrophe in the name). ROM: C:/Users/Scott/PARA/3-Resources/Emulation/ROMs/N64/Legend of Zelda - Majora's Mask.v64 (verify it is NTSC-U 1.0 by hash; zeldaret/mm lists it).
+- Harness README and runner: `git -C /home/wscottsh/repos/ares show origin/feat/harness:tools/n64-timing/README.md`, report /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/harness.md. ROM: /home/wscottsh/repos/mm-decomp-60fps/baseroms/n64-us/baserom.z64 (verify it is NTSC-U 1.0 by hash; zeldaret/mm lists it).
 - The original bench measured MM frame time over 600 frames in scenes including the file-select menu and South Clock Town (see map #1 and #11, #27 tickets). Its tool is not available; design ours.
-- MM decomp for symbols and RAM addresses: C:\Users\Scott\n64-timing\scratch\mm (zeldaret/mm 56fa21dd). #23 doc gives addresses to confirm at run time: `git -C C:\Users\Scott\repos\ares show origin/research/mm-buffer-placement:docs/research/mm-buffer-placement.md` ("Run-time confirmation recipe").
+- MM decomp for symbols and RAM addresses: /home/wscottsh/n64-timing/scratch/mm (zeldaret/mm 56fa21dd). #23 doc gives addresses to confirm at run time: `git -C /home/wscottsh/repos/ares show origin/research/mm-buffer-placement:docs/research/mm-buffer-placement.md` ("Run-time confirmation recipe").
 - No rendered pixels exist with --rdp none. Check whether the scenes you pick depend on reading rendered pixels; prefer --rdp none if they do not, and document it.
 
 DESIGN FREEDOM
@@ -32,7 +32,7 @@ FORBIDDEN
 No core timing changes, no Nintendo data committed, no gt, no rebase, no force-push, no merging.
 
 REPORT
-Write C:\Users\Scott\.claude\orchestrate\ares-n64-timing\reports\mmbench.md and return it: status, branch, head SHA, PR URL, commands, per-scene results table (raw), determinism, wall time, #23 confirmation table, gotchas, follow-ups.
+Write /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/mmbench.md and return it: status, branch, head SHA, PR URL, commands, per-scene results table (raw), determinism, wall time, #23 confirmation table, gotchas, follow-ups.
 
 STANDING
-Read and obey C:\Users\Scott\.claude\orchestrate\ares-n64-timing\preferences.md.
+Read and obey /home/wscottsh/.claude/orchestrate/ares-n64-timing/preferences.md.

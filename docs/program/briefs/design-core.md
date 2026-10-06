@@ -10,17 +10,17 @@ A design package for the timing core of this ares fork's N64 emulation: the arch
 4. The RDP as a time-stepped device (#13, #2, #3, #8, #12, #17, #18, #19, #20, #21): where pixels and per-pixel results come from (paraLLEl GPU with per-span counters + readback, a CPU-side software rasterizer such as a port of angrylion-rdp-plus or cen64/MAME RDP — check licenses vs ares ISC — or other), how DPC_CURRENT advances, END_PENDING/DMA_BUSY/TMEM_BUSY, FIFO back-pressure, DP interrupt at modeled time, span RAM, write granularity per run of written pixels.
 5. The RSP (#28, #10): its timing seam and recompiler policy.
 6. Where behaviour parameters live (one table of hardware constants with reference citations, so the spec rows and the code cannot drift), and how verification attaches per behaviour.
-7. The run budget: 600 MM frames (10 s emulated) must run in <= 2 min host time on this machine (Windows 11, x86-64 desktop). Estimate cost of your design with reasoning; flag what must be measured.
+7. The run budget: 600 MM frames (10 s emulated) must run in <= 2 min host time on this machine (Linux, 32-core x86-64 host). Estimate cost of your design with reasoning; flag what must be measured.
 
 CONTEXT (read all)
 - Map: `gh issue view 1 -R wScottSh/ares` (Notes = hard constraints; Decisions = findings). Open design tickets: `gh issue view 13 --comments`, `14`, `15`, `9`, `27`, `28` (repo wScottSh/ares).
-- Grounding (Phase A, already done): `git -C C:\Users\Scott\repos\ares show origin/research/ares-timing-architecture:docs/research/ares-timing-architecture.md`. Read it first; it is the traced model of today's code with file:line citations and maps every decision to code sites.
-- Every research doc linked from the map: `git -C C:\Users\Scott\repos\ares show origin/research/<branch>:docs/research/<file>.md` (branches: rdp-command-timing, rdp-memory-traffic, rdram-bus-arbitration, nemu64-timing-failures, cpu-memory-costs, dma-timing, rsp-rdp-fifo, recompiler-parity, rdp-pixel-timing-coupling, rdp-write-granularity, rdp-noise, 1prim-cost, span-ram, mm-rdp-stream, vi-fetch, clocks, vr4300-wb, mm-buffer-placement, jgemu-dpc-probe).
-- Source: C:\Users\Scott\repos\ares (read only; ares/n64/**).
-- The architect skill: C:\Users\Scott\.claude\plugins\cache\pstack-claude\pstack\0.9.67\skills\architect\SKILL.md, runner discipline references/runner-prompt.md, package shape references/rationale-template.md, screen against references/design-red-flags.md. Follow them.
+- Grounding (Phase A, already done): `git -C /home/wscottsh/repos/ares show origin/research/ares-timing-architecture:docs/research/ares-timing-architecture.md`. Read it first; it is the traced model of today's code with file:line citations and maps every decision to code sites.
+- Every research doc linked from the map: `git -C /home/wscottsh/repos/ares show origin/research/<branch>:docs/research/<file>.md` (branches: rdp-command-timing, rdp-memory-traffic, rdram-bus-arbitration, nemu64-timing-failures, cpu-memory-costs, dma-timing, rsp-rdp-fifo, recompiler-parity, rdp-pixel-timing-coupling, rdp-write-granularity, rdp-noise, 1prim-cost, span-ram, mm-rdp-stream, vi-fetch, clocks, vr4300-wb, mm-buffer-placement, jgemu-dpc-probe).
+- Source: /home/wscottsh/repos/ares (read only; ares/n64/**).
+- The architect skill: /home/wscottsh/.claude/plugins/cache/pstack-claude/pstack/<installed-version>\skills\architect\SKILL.md, runner discipline references/runner-prompt.md, package shape references/rationale-template.md, screen against references/design-red-flags.md. Follow them.
 
 OUTPUT
-Write to C:\Users\Scott\n64-timing\design\core\candidate-<your-model-name>\:
+Write to /home/wscottsh/n64-timing/design/core/candidate-<your-model-name>/:
 - rationale.md, shaped per rationale-template.md (Problem, Usage, Shape, Tradeoffs, Alternatives, Open questions, Next step; leave Synthesis decision empty).
 - sketch/ : C++ header sketches (types, signatures, module map) in the ares code style, bodies `/* not implemented */` with pseudocode for tricky logic. Show the core data structures (timeline/event, bus transaction, bank state, device interface, cost tables) concretely.
 - plan.md : the build sequence as verifiable units (each with its check: which test ROM / bench / measurement proves it), ordered so each lands on a green base. This is what the program's build track will execute.
@@ -33,4 +33,4 @@ REPORT
 Return: path, a 20-line summary of your shape and the three load-bearing decisions, the cost estimate, and what you are least sure of.
 
 STANDING
-Read and obey C:\Users\Scott\.claude\orchestrate\ares-n64-timing\preferences.md.
+Read and obey /home/wscottsh/.claude/orchestrate/ares-n64-timing/preferences.md.

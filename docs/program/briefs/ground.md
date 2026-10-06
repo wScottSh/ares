@@ -4,13 +4,13 @@ GOAL
 A traced, file:line-cited model of how emulated time flows through this fork's N64 core today, plus a table mapping every map decision to the code it will change. Three design units (CPU pipeline #15, bus model #14, RDP timing architecture #13) will be grounded on this document.
 
 SCOPE
-- Write only: worktree C:\Users\Scott\repos\ares-wt\ground on branch research/ares-timing-architecture (from origin/master), file docs/research/ares-timing-architecture.md. Push the branch. No PR.
+- Write only: worktree /home/wscottsh/repos/ares-wt/ground on branch research/ares-timing-architecture (from origin/master), file docs/research/ares-timing-architecture.md. Push the branch. No PR.
 - Read anything. No code changes.
 
 CONTEXT
 - Map with all decisions so far: https://github.com/wScottSh/ares/issues/1 (gh issue view 1). Each decision links a doc on an origin/research/* branch; read them with `git show origin/research/<branch>:docs/research/<file>.md`. Read all of them.
 - Open design questions to ground: #13, #14, #15 (gh issue view N --comments), and research #9 (scheduler granularity).
-- Follow the output contract of the `how` skill at C:\Users\Scott\.claude\plugins\cache\pstack-claude\pstack\0.9.67\skills\how\SKILL.md (read it first). Do the reading yourself.
+- Follow the output contract of the `how` skill at /home/wscottsh/.claude/plugins/cache/pstack-claude/pstack/<installed-version>\skills\how\SKILL.md (read it first). Do the reading yourself.
 
 Cover at least:
 1. Scheduler and threads: how ares sequences CPU, RSP, RDP, VI, AI, PI, SI, RI (the Thread/Scheduler classes, clock units, frequencies, synchronize calls, JitInterleaving or equivalent).
@@ -37,7 +37,7 @@ FORBIDDEN
 No code edits, no PRs, no gt, no force-push.
 
 REPORT
-Write to C:\Users\Scott\.claude\orchestrate\ares-n64-timing\reports\ground.md and return it: status, branch, head SHA, doc URL (https://github.com/wScottSh/ares/blob/research/ares-timing-architecture/docs/research/ares-timing-architecture.md), a 15-line summary of the model, the three biggest structural obstacles to a hardware-accurate timing model, suggested follow-ups.
+Write to /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/ground.md and return it: status, branch, head SHA, doc URL (https://github.com/wScottSh/ares/blob/research/ares-timing-architecture/docs/research/ares-timing-architecture.md), a 15-line summary of the model, the three biggest structural obstacles to a hardware-accurate timing model, suggested follow-ups.
 
 STANDING
-Read and obey C:\Users\Scott\.claude\orchestrate\ares-n64-timing\preferences.md before starting.
+Read and obey /home/wscottsh/.claude/orchestrate/ares-n64-timing/preferences.md before starting.
