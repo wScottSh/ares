@@ -65,9 +65,11 @@ auto RDP::Port::granted(const RiBus::Grant& g) -> void {
   freeAt = g.dataEnd;
   Clock landAt = g.dataEnd;
   if(this == &self->memory) {
+    //the interface's own cost scales with the burst's bytes, fit per 64 B half
     using namespace Timing::Behavior;
-    if(p.write) freeAt = freeAt + RdpMemOverheadWrite;
-    else freeAt = freeAt + RdpMemOverheadRead, landAt = freeAt + RdpSpanReadLatency;
+    auto scaled = [&](Clock perHalf) -> Clock { return {perHalf.units * p.bytes / RdpSpanRamHalf}; };
+    if(p.write) freeAt = freeAt + scaled(RdpMemOverheadWrite);
+    else freeAt = freeAt + scaled(RdpMemOverheadRead), landAt = freeAt + RdpSpanReadLatency;
   }
   flights.push_back({p, landAt});
   timeline.wake(Timing::ActorId::RDP);

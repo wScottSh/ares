@@ -13,6 +13,7 @@ unit:dpc-regs	unit	n64-timing-dpc-regs	dpc-regs	pass	DPC register transitions wi
 gen	gen	tools/n64-timing/behaviors.py --check	-	pass	this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3)
 mm:file-select	mm	tools/n64-timing/mmbench	file-select	report	Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench)
 mm:south-clock-town	mm	tools/n64-timing/mmbench	south-clock-town	report	Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench)
+mm:filesel-acceptance	mm	tools/n64-timing/mmbench	filesel_check.py	self	mm-filesel-slowdown.md acceptance (#11): empty files 1 field per game frame, two named files 2, Options idle 1 (tools/n64-timing/mmbench/filesel_check.py)
 nemu64:timing/random	nemu64	timing	Random (decrement)|Random (masking)	self	nemu64-test timing set, ROM self-check
 nemu64:timing/just-nops	nemu64	timing	Timing: Just NOPs	self	nemu64-test timing set, ROM self-check
 nemu64:timing/individual-instructions	nemu64	timing	Timing: Individual instructions (CPU)	self	nemu64-test timing set, ROM self-check
