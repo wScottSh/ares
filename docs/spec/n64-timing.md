@@ -8,12 +8,12 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Basis | Meaning | Rows |
 |---|---|---|
-| measured | a hardware measurement: a test ROM result or a console capture | 33 |
+| measured | a hardware measurement: a test ROM result or a console capture | 32 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 15 |
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 17 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
-| derived | computed from other cited values | 9 |
+| derived | computed from other cited values | 10 |
 | inferred | reasoned from cited values with no measurement or published value of its own; the note states the inference | 1 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 19 |
 | model-choice | no published value; the reference states why the model chose this one | 22 |
@@ -24,11 +24,10 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | fail | at least one check failed; the detail in Check results gives the residual | 30 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 10 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 3 |
-| not-built | the code does not use the row's value; its code column says what the code does instead. Its checks measure that code, not the row | 1 |
 | pass | a check other than the row's fit data passed, and none failed | 60 |
 | pending:calibration-16 | no check decided the row: calibration-16: no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it | 11 |
 | pending:no-corpus | no check decided the row: no-corpus: no corpus in the program measures this behavior; it stays pending until one does | 16 |
-| pending:no-rom | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it | 4 |
+| pending:no-rom | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it | 5 |
 | pending:no-rom pending:report-only | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it; report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 1 |
 | pending:report-only | no check decided the row: report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 10 |
 
@@ -80,7 +79,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
 | `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` `bench:uncached-sizes-u32` | **pass**: `nemu64:timing/load-from-uncached-vi-off` pass; `bench:uncached-sizes-u32` pending:no-rom | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
-| `cpu.uncached-read-dword-total` | 37 pclk | measured | n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's) | `bench:uncached-sizes` | **not-built**: `bench:uncached-sizes` pending:no-rom | not-built: an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk |  |
+| `cpu.uncached-read-dword-total` | 35 pclk | derived | n64-systembench @845635c main.c:580 U64R 37 pclk less its 2 pclk harness: its C64R 3 pclk (main.c:575) less the 1 pclk cached hit (nemu64-test, cpu.dcache-hit); research/cpu-memory-costs.md | `bench:uncached-sizes` | **pending:no-rom**: `bench:uncached-sizes` pending:no-rom | reads `Timing::Behavior::CpuUncachedReadDwordTotal` | SysAD DwordReadPath (ares/n64/cpu/sysad.hpp) is this less the modeled RI time, as ReadPath is for the word read |
 | `cpu.dfill-total` | 41 pclk | measured | nemu64-test cache.rs:193-286 median, VI off | `nemu64:timing/load-miss-vi-off` | **fail**: `nemu64:timing/load-miss-vi-off` fail | reads `Timing::Behavior::CpuDfillTotal` | assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost. With the VI off the model charges exactly 41 per miss, and load-miss-vi-off, which expects a mean of 42.5, fails: the missing tail of about 1.5 pclk is attributed to RDRAM refresh, which the model runs only while the VI is active (ri.refresh-trigger). That cause is a hypothesis, not measured |
 | `cpu.ifill-stall` | 45 pclk | inferred | NEC Table 11-2 with M from D-fill (cpu-memory-costs.md) | `bench:ifill-isolated` | **pending:report-only**: `bench:ifill-isolated` pending:report-only | reads `Timing::Behavior::CpuIfillStall` | no public hardware value and no asserting check (bench:ifill-isolated only reports, and has no ROM). cpu-memory-costs.md takes Table 11-2's 1-2 PClock term and M = 31-32 independently and gets a 45-47 range; nemu64-test's '~43 extra cycles' is a source comment, not an assertion. Read jointly with the 41 pclk D-fill as one issue slot plus the Table 11-1 stall (40 = 7 + x + M), the two formulas give 13 + x + M = 46 for either x, so the 45 is the range's low corner, not the joint value. M comes from the D-fill measurement, a clean row miss, so the 45 is the uncontended total at a clean row miss: the SysAD path is 45 less the modeled 32 B clean-miss wire and the mean rclk-edge wait, and the RI adds row state and contention |
 | `cpu.dcache-hit` | 1 pclk | measured | nemu64-test Cached loads and store, 19 cases | `nemu64:timing/cached-loads-and-store` | **pass**: `nemu64:timing/cached-loads-and-store` pass | reads `Timing::Behavior::CpuDcacheHit` |  |
@@ -225,7 +224,6 @@ The code does not use these rows' values. Each says what the code does instead; 
 
 | Behavior | Value | Basis | What the code does instead | Checks |
 |---|---|---|---|---|
-| `cpu.uncached-read-dword-total` | 37 pclk | measured | an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk | `bench:uncached-sizes` pending:no-rom |
 
 ## Legacy costs in today's core
 

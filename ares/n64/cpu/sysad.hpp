@@ -54,6 +54,8 @@ struct SysAD : Timing::Actor, RI::Client {
   //Last data beat to pipeline restart: the measured total less the modeled RI time for
   //the measurement's row state and the mean edge wait (ADR 0001 Decision 2).
   static constexpr Clock ReadPath  = Timing::Behavior::CpuUncachedReadTotal - Issue - MeanEdgeWait - hitWire(RiBus::Direction::Read, 8);
+  //A doubleword is one octbyte on the wire as well, so only its measured total differs.
+  static constexpr Clock DwordReadPath = Timing::Behavior::CpuUncachedReadDwordTotal - Issue - MeanEdgeWait - hitWire(RiBus::Direction::Read, 8);
   //nemu64-test's miss loop evicts with a line 8 KiB away, a clean row miss in the same bank.
   static constexpr Clock DfillPath = Timing::Behavior::CpuDfillTotal - Issue - MeanEdgeWait
       - RiBus::wire(RiBus::Direction::Read, 2, RiBus::Row::CleanMiss);

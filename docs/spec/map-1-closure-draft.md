@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run not-built/after on f70b7bda5). 30 fail, 10 fit only, 3 model-choice, 1 not-built, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 4 pending:no-rom, 1 pending:no-rom pending:report-only, 10 pending:report-only. 1 behaviors are not built: the code does not use their value (`cpu.uncached-read-dword-total`). Behaviors not built says what the code does instead.
+The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run not-built/after on f70b7bda5). 30 fail, 10 fit only, 3 model-choice, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 5 pending:no-rom, 1 pending:no-rom pending:report-only, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
@@ -45,7 +45,6 @@ The code does not use these rows' values, so no check result says anything about
 
 | Behavior | Basis | Value | What the code does instead |
 |---|---|---|---|
-| `cpu.uncached-read-dword-total` | measured | 37 pclk | an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk |
 
 ## Rows whose checks fail
 
@@ -138,6 +137,7 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.cart.flash-mn63-sector-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-chip-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-program` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
+| `cpu.uncached-read-dword-total` | derived | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `cpu.rcp-register-read` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `cpu.pif-ram-read` | derived | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `pi.io-busy` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
