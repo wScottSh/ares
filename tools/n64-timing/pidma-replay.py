@@ -17,8 +17,10 @@ Log record (data/pidma_ram<off>_rom0.log, 1040 B per size 1..383): 512 B buffer,
 u16 min ticks, u16 max ticks, u32 post dram, u32 post cart, u32 post len (big
 endian), 512 B buffer after an 8 B follow-up DMA.
 
+--calibrated does both and scores at every best-fit offset; standing.sh runs it.
+
 usage: pidma-replay.py PILOG LOGDIR [--stdout ROMSTDOUT] [--offset UNITS]
-                       [--tolerance 0.03] [--sizes 8-382] [--calibrate]
+                       [--tolerance 0.03] [--sizes 8-382] [--calibrate | --calibrated]
 """
 import argparse
 import re
@@ -92,6 +94,42 @@ def rom_mean(raws, offset):
     return sum(ticks) // len(ticks)
 
 
+def calibrate(meas, printed):
+    """The (read, write) shifts with the least worst-case error against the printed values."""
+    error = {}
+    for read in range(-UNITS_PER_TICK * 64, UNITS_PER_TICK * 64):
+        for write in range(UNITS_PER_TICK):
+            error[read, write] = max(abs(rom_mean(meas[k], (read, write)) - v) for k, v in printed.items())
+    best = min(error.values())
+    return best, sorted(k for k, e in error.items() if e == best)
+
+
+def score(gold, meas, offset, sizes, tolerance):
+    """(fails, rows, scored points, worst deviation per size) at one offset."""
+    lo_s, hi_s = sizes
+    fails, rows = [], []
+    for (off, size), (lo, hi, *_rest) in sorted(gold.items()):
+        if (off, size) not in meas:
+            fails.append((off, size, None, lo, hi))
+            continue
+        mean = rom_mean(meas[off, size], offset)
+        rows.append((off, size, mean, lo, hi))
+        if lo_s <= size <= hi_s and not (lo * (1 - tolerance) <= mean <= hi * (1 + tolerance)):
+            fails.append((off, size, mean, lo, hi))
+    worst = {}
+    for off, size, mean, lo, hi in rows:
+        if lo_s <= size <= hi_s:
+            dev = (mean - lo) / lo if mean < lo else (mean - hi) / hi if mean > hi else 0.0
+            worst[size] = max(worst.get(size, 0.0), dev, key=abs)
+    return fails, rows, sum(1 for (o, s) in gold if lo_s <= s <= hi_s), worst
+
+
+def bands(worst, sizes):
+    lo_s, hi_s = sizes
+    return " ".join(f"{b}-{b + 31}:{max((worst[s] for s in worst if b <= s < b + 32), key=abs, default=0):+.2%}"
+                    for b in range(lo_s - lo_s % 32, hi_s + 1, 32))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pilog")
@@ -101,53 +139,46 @@ def main():
     ap.add_argument("--tolerance", type=float, default=0.03)
     ap.add_argument("--sizes", default="8-382")
     ap.add_argument("--calibrate", action="store_true")
+    ap.add_argument("--calibrated", action="store_true",
+                    help="calibrate from --stdout, score at every best-fit offset, and print one verdict line "
+                         "that also carries the ROM's own self-check")
     ap.add_argument("--table")
     a = ap.parse_args()
 
     gold = golden(a.logdir)
     meas, cart = measurements(a.pilog)
+    sizes = tuple(map(int, a.sizes.split("-")))
     print(f"cart address 0x{cart:08x}; {len(meas)} (offset, size) points measured")
 
-    if a.calibrate:
+    if a.calibrate or a.calibrated:
         printed = found(a.stdout)
-        error = {}
-        for read in range(-UNITS_PER_TICK * 64, UNITS_PER_TICK * 64):
-            for write in range(UNITS_PER_TICK):
-                error[read, write] = max(abs(rom_mean(meas[k], (read, write)) - v) for k, v in printed.items())
-        best = min(error.values())
-        fits = sorted(k for k, e in error.items() if e == best)
+        best, fits = calibrate(meas, printed)
         print(f"printed values: {printed}")
         print(f"best worst-case error {best} tick(s), {len(fits)} offsets (read, write), "
               f"read {min(f[0] for f in fits)}..{max(f[0] for f in fits)}: {fits}")
-        return 0 if best == 0 else 1
+        if a.calibrate:
+            return 0 if best == 0 else 1
+        scored = [(len(score(gold, meas, f, sizes, a.tolerance)[0]), f) for f in fits]
+        most, least = max(scored), min(scored)
+        fails, _, n, worst = score(gold, meas, most[1], sizes, a.tolerance)
+        m = re.search(r"^Test finished\n(?:(\d+) failures|SUCCESS)$", Path(a.stdout).read_text(errors="replace"), re.M)
+        rom_failures = int(m.group(1) or 0) if m else None
+        ok = most[0] == 0 and rom_failures == 0
+        print(f"pidma: {'PASS' if ok else 'FAIL'}: replay sizes {sizes[0]}-{sizes[1]} "
+              f"{n - most[0]}..{n - least[0]}/{n} within +-{a.tolerance:.0%} of hardware min..max over {len(fits)} "
+              f"calibrated offsets (calibration error {best} tick); worst offset {most[1]} by size band {bands(worst, sizes)}; "
+              f"ROM self-check {'no verdict' if rom_failures is None else f'{rom_failures} failures'}")
+        return 0 if ok else 1
 
     offset = tuple(map(int, a.offset.split(",")))
-    lo_s, hi_s = map(int, a.sizes.split("-"))
-    fails = []
-    rows = []
-    for (off, size), (lo, hi, *_rest) in sorted(gold.items()):
-        if (off, size) not in meas:
-            fails.append((off, size, None, lo, hi))
-            continue
-        mean = rom_mean(meas[off, size], offset)
-        rows.append((off, size, mean, lo, hi))
-        if lo_s <= size <= hi_s and not (lo * (1 - a.tolerance) <= mean <= hi * (1 + a.tolerance)):
-            fails.append((off, size, mean, lo, hi))
+    fails, rows, n, worst = score(gold, meas, offset, sizes, a.tolerance)
     if a.table:
         with open(a.table, "w") as f:
             f.write("ram_offset\tsize\tticks\thw_min\thw_max\n")
             for r in rows:
                 f.write("0x%x\t%d\t%d\t%d\t%d\n" % (r[0] + 0x780, *r[1:]))
-    n = sum(1 for (o, s) in gold if lo_s <= s <= hi_s)
-    worst = {}
-    for off, size, mean, lo, hi in rows:
-        if lo_s <= size <= hi_s:
-            dev = (mean - lo) / lo if mean < lo else (mean - hi) / hi if mean > hi else 0.0
-            worst[size] = max(worst.get(size, 0.0), dev, key=abs)
-    print(f"sizes {lo_s}-{hi_s}: {n - len(fails)}/{n} within +-{a.tolerance:.0%} of hardware min..max")
-    print("worst deviation by size band: " + " ".join(
-        f"{b}-{b + 31}:{max((worst[s] for s in worst if b <= s < b + 32), key=abs, default=0):+.2%}"
-        for b in range(lo_s - lo_s % 32, hi_s + 1, 32)))
+    print(f"sizes {sizes[0]}-{sizes[1]}: {n - len(fails)}/{n} within +-{a.tolerance:.0%} of hardware min..max")
+    print("worst deviation by size band: " + bands(worst, sizes))
     for f in fails[:40]:
         print("FAIL ram=0x%x size=%d ticks=%s hw=[%d..%d]" % (f[0] + 0x780, f[1], f[2], f[3], f[4]))
     return 1 if fails else 0
