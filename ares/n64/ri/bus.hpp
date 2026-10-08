@@ -115,8 +115,9 @@ constexpr auto wire(Direction direction, u32 octs, Row row) -> Clock {
 
 //Channel time a burst holds beyond its wire time before the next request
 //packet: the per-direction RI overhead fitted from SP DMA throughput, then the
-//NEC post-transaction gap.
+//NEC post-transaction gap. Scanout has its own overhead (ri.overhead-vi).
 constexpr auto trailer(Requester requester, Direction direction) -> Clock {
+  if(requester == Requester::ViFetch) return Timing::Behavior::RiOverheadVi + Timing::Behavior::RiPostReadGap;
   bool dp = requester >= Requester::DpCommand && requester <= Requester::DpFill;
   if(direction == Direction::Read)
     return (dp ? Timing::Behavior::RiOverheadRdp : Timing::Behavior::RiOverheadRead) + Timing::Behavior::RiPostReadGap;

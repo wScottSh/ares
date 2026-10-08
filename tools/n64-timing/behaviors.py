@@ -59,7 +59,7 @@ TIME_UNITS = {
     "us": 750, "ms": 750_000, "s": 750_000_000, "vclk": Fraction(5500, 357),
 }
 NUMBER_UNITS = {"Hz", "B", "entries", "dwords", "px", "lines", "instr", "rank", "bit",
-                "B/rclk", "px/rclk"}
+                "B/rclk", "px/rclk", "vclk/px"}
 FLAG_UNITS = {"flag"}
 TEXT_UNITS = {"order", "map", "rule", "event"}
 RUNNERS = {"nemu64", "bench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",

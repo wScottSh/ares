@@ -284,9 +284,9 @@ def run_scene(exe, rom, name, steps, outdir, shots, extra=()):
     lines = [l for l in proc.stderr.splitlines() if l.startswith("n64-run: ")]
     stop = next((l for l in lines if l.startswith("n64-run: stop=")), "")
     wall = float(re.search(r"wall_s=([\d.]+)", stop).group(1)) if "wall_s=" in stop else float("nan")
-    events = [l[len("n64-run: "):] for l in lines if not l.startswith(("n64-run: stop=", "n64-run: rdp_", "n64-run: cpu_instructions=", "n64-run: ri"))]
+    events = [l[len("n64-run: "):] for l in lines if not l.startswith(("n64-run: stop=", "n64-run: rdp_", "n64-run: cpu_instructions=", "n64-run: ri", "n64-run: vi_"))]
     (scene_dir / "events.txt").write_text("\n".join(events) + "\n", newline="\n")
-    rdp_lines = [l[len("n64-run: "):] for l in lines if l.startswith(("n64-run: rdp_", "n64-run: cpu_instructions=", "n64-run: ri"))]
+    rdp_lines = [l[len("n64-run: "):] for l in lines if l.startswith(("n64-run: rdp_", "n64-run: cpu_instructions=", "n64-run: ri", "n64-run: vi_"))]
     (scene_dir / "rdp.txt").write_text("\n".join(rdp_lines) + "\n", newline="\n")
     if "stop=script-stop" not in stop:
         raise SystemExit(f"{name}: run did not reach the end of its script: {stop or proc.stderr[-500:]}")
