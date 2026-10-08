@@ -20,6 +20,7 @@ mkdir -p "$roms"
 for s in nemu64 rdpstat snapper thar0 noise; do
   (cd "$n64_repo" && "$PYTHON" tools/n64-timing/romgen/build.py --suite "$s" --out "$roms") > "$out/romgen-$s.txt" 2>&1
 done
+rm -rf "$roms/bench" "$results/bench"
 (cd "$n64_repo" && "$PYTHON" tools/n64-timing/romgen/build.py --suite bench --out "$roms/bench") > "$out/romgen-bench.txt" 2>&1
 (cd "$roms" && find . -name '*.z64' | sort | xargs sha256sum) > "$out/rom-sha256.txt"
 

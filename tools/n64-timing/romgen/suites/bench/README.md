@@ -40,7 +40,7 @@ Each point prints one XLOG line:
 | `mi-memset-rspdma` | `vi-on`, `vi-off` | 1 MiB from DMEM to RDRAM, as 4 KiB SP DMAs queued whenever `SP_DMA_FULL` clears |
 | `mi-memset-repeat` | `vi-on`, `vi-off` | 1 MiB in MI repeat mode: `MI_MODE` = 0x17F, then one uncached SD per 128 B |
 | `sp-dma-sweep` | `poll`, `{rd,wr}-<8..4096>-off{0,7c0,7f8}` | One SP DMA from trigger to `SP_DMA_BUSY` clear, in both directions. Offsets are row-aligned, and 64 B and 8 B before a 2 KiB row end. |
-| `pi-dma-sizes` | `poll`, `cart-to-ram-{8,128,1024,65536}` | One PI DMA from cartridge 0x10000000, from trigger to `PI_STATUS` idle |
+| `pi-dma-sizes` | `cart-to-ram-{8,128,1024,65536}` | n64-systembench PI DMA: one PI DMA from cartridge 0x10000000, from the `PI_WR_LEN` write until 8-poll rounds of `PI_STATUS` see idle, with the poll phase walked as `pi-io-write` |
 | `uncached-vs-hpos` | `bank5`, `bank2-vi` | Back-to-back timed uncached LWs over three VI lines, each with its offset from the line start. Bank 2 holds the VI front buffer. |
 | `dirty-row-sweep` | `{clean,dirty}-<delta>` | One uncached LW after the bank's open row was read (clean) or written (dirty). The target is the same row (`8`) or another row in the same bank. |
 | `dirty-miss-isolated` | `{invalid,clean,dirty}-{single,gap0,gap20,gap80}` | A D-cache LW miss whose victim is invalid, clean or dirty. Optionally a second miss follows after a 0, 20 or 80 iteration loop. |
@@ -56,9 +56,9 @@ Each point prints one XLOG line:
 | `si-io-write` | `pif-ram` | n64-systembench SI I/O W: one PIF RAM word write, then 8-poll rounds of SI_STATUS until idle |
 | `si-dma` | `write64`, `write64-rom`, `read64-{1..4}`, `empty-{0,1,4,8,32,56,63}b`, `accessory` | n64-systembench SI DMA W RAM and ROM, and JOY: a 64 B SI DMA to the PIF RAM or PIF ROM address until SI_STATUS idle, and a 64 B read after a joybus block: n read-buttons commands, an end marker after N zero bytes, or one info command |
 
-The n64-systembench ports run its TIMEIT_MULTI: 50 reps (10 for `write64` and `write64-rom`), and `report.py` takes the mean of all but the lowest and highest rep in its xcycle units, truncated to whole pclk or rclk (`sb_pclk`, `sb_rclk`). Its harness adds about 2 pclk, its cached read (3) less a cached hit (1). The port's harness is its own, so `net_pclk` is `sb_pclk` less the port's overhead, measured the same way from the ROM's `c<bits>` point (`overhead_pclk`). The bands are the original's pass rule: within 1 pclk or 2 rclk, or under 0.2 %.
+The n64-systembench ports run its TIMEIT_MULTI: 50 reps (10 for `write64`, `write64-rom` and `pi-dma-sizes`), and `report.py` takes the mean of all but the lowest and highest rep in its xcycle units, truncated to whole pclk or rclk (`sb_pclk`, `sb_rclk`). Its harness adds about 2 pclk, its cached read (3) less a cached hit (1). The port's harness is its own, so `net_pclk` is `sb_pclk` less the port's overhead, measured the same way from the ROM's `c<bits>` point (`overhead_pclk`). The bands are the original's pass rule: within 1 pclk or 2 rclk, or under 0.2 %.
 
-A TIMEIT_WHILE result can only end on a poll, and the polls are about 25 pclk apart. The core is deterministic, so every rep would put the poll grid at the same phase, and the result would be the busy time plus that one phase's delay. The `pi-io-write`, `si-io-write` and `si-dma` `write64*` reps therefore run 0 to 49 nops (5 per rep for the 10-rep points) between the write and the first poll. This spreads them over two poll periods. These points print `walk=poll` and `max2`, the second highest rep (the highest is the cold first one, which TIMEIT_MULTI drops too), and `report.py` takes `min`..`max2` as the model's range over poll phase (`sb_rclk_rep_min`, `sb_rclk_rep_max`).
+A TIMEIT_WHILE result can only end on a poll, and the polls are about 25 pclk apart. The core is deterministic, so every rep would put the poll grid at the same phase, and the result would be the busy time plus that one phase's delay. The `pi-dma-sizes`, `pi-io-write`, `si-io-write` and `si-dma` `write64*` reps therefore run 0 to 49 nops (5 per rep for the 10-rep points) between the write and the first poll. This spreads them over two poll periods. These points print `walk=poll` and `max2`, the second highest rep (the highest is the cold first one, which TIMEIT_MULTI drops too), and `report.py` takes `min`..`max2` as the model's range over poll phase (`sb_rclk_rep_min`, `sb_rclk_rep_max`).
 
 RDP lists use 1-cycle mode with the combiner outputting the primitive color. The blender, Z and image read are off. The color image is 320-wide RGBA5551 at 0x00700000. The VI is blanked while an RDP list runs. Each list is built in uncached RDRAM at 0x00600000, ends with `SYNC_FULL`, and is timed until the DP interrupt.
 
@@ -76,9 +76,14 @@ Each `check` row names a `rule`. The rule follows from what the hardware number 
 | `mean` | the model's phase mean is in the band | `mi-memset-*`, `sp-dma-sweep` | The n64brew memset times cover 41 to 780 VI lines each, so they average many refresh and fetch phases. The SP DMA rate is that memset's average over 256 transfers. |
 | `every` | every delay is in the band | `rdp-*`, `uncached-vs-hpos` | A documented fixed cost (a sync, a setter, the 1-primitive gap) or one refresh per line must hold at every phase. |
 
-`pi-dma-sizes` and the `si-dma` JOY points end on a poll the port does not walk, so their range covers boot phase only, not poll phase.
+The `si-dma` JOY points end on a one-read poll loop that the port does not walk, so their range covers boot phase only, not poll phase.
 
-The delays. The measured periods set them (phase PR report, `~/n64-timing/results/phase`). PHASE_PERIODS_PLACEHOLDER
+The delays come from two measured periods.
+
+- The idle VI. While VI_CONTROL selects no pixel type, the VI posts a line event every 0x800 VCLKs, 3944 pclk (`ares/n64/vi/vi.cpp` `VI::line`). The first line after `vi_init` sets a type starts on that grid, so the VI's line phase against the program is set by where the boot ends against a grid that runs from power-on. One delay iteration is 3 pclk, so the grid is 1313 iterations. Over 872 delays (K = 1 to 400, every 13th to 5991, then 40 geometric steps to 625302, about 1.2 VI fields), `mi-memset-rspdma` dips to 6.42 B/rclk at K = 1 and 1300 to 1316 (every delay), and near 2611, 3924 and 5237 (every 13th delay), and `sp-dma-sweep` `wr-4096-off0` repeats its 6.16 to 6.69 pattern on the same period. No value appears past the first period that the first period lacks. With the idle step at 1 VCLK (a scratch build), every value is the same at all 45 delays tried.
+- The CPU poll loops, 25 and 26 pclk.
+
+`phases.py` takes 32 delays 41 iterations (123 pclk) apart. They cover one grid period and land at 32 different poll phases (123 mod 26 = 19). The 32 give every check the verdict the 872 give. A standing bench run is 640 runner runs and 32 ROM builds, about 40 s with 4 runners on a loaded host.
 
 `N64_BENCH_DELAYS=K,K,...` replaces the list in `build.py`, `run.sh` and `report.py` alike, for a scan.
 
