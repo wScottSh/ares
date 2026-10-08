@@ -3,10 +3,10 @@ bench:*	bench	tools/n64-timing/romgen/suites/bench	rom	file:tools/n64-timing/rom
 thar0:*	thar0	tools/n64-timing/romgen/suites/thar0	id	file:tools/n64-timing/romgen/suites/thar0/expected.tsv	plan R2; Thar0/RDP-Timing-Tests sample_results.txt hw_data (MIT, a81ced93b28d)
 rdpstat:*	rdpstat	tools/n64-timing/romgen/suites/rdpstat	test	file:tools/n64-timing/romgen/suites/rdpstat/expected.tsv	plan R4; n64-systemtest tests/rdp and repeater64 references (MIT)
 snapper:*	snapper	tools/n64-timing/romgen/suites/snapper	test	file:tools/n64-timing/romgen/suites/snapper/expected.tsv	plan R3; snapper64 console dumps (MIT, e1cd8a61fc43)
-pending:build-corpora	pending	-	-	gate	corpus needs a libdragon or cargo build behind the build-corpora gate
 pending:no-corpus	pending	-	-	gate	no corpus in the program measures this behavior; it stays pending until one does
 pending:no-rom	pending	-	-	gate	a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it
 pending:calibration-16	pending	-	-	gate	no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it
+pending:report-only	pending	-	-	gate	the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it
 det	det	tools/n64-timing/determinism.sh	every mm scene	equal	two runs byte-identical, stats and trace_hash (plan T2)
 stepcap	stepcap	tools/n64-timing/determinism.sh --step-cap	every mm scene and nemu64 ROM	equal	step-capped run equals the normal run byte for byte (plan T5)
 unit:timeline	unit	n64-timing-tests	timeline	pass	scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5)
@@ -51,8 +51,8 @@ bench:mi-memset-rspdma	bench	mi-memset-rspdma	point=vi-on metric=b_per_rclk	suit
 bench:sp-dma-sweep	bench	sp-dma-sweep	-	suite	n64brew memset 6.5 B/rclk (check); hcs64 5.55 (report)
 bench:pi-dma-sizes	bench	pi-dma-sizes	metric=rclk	suite	n64-systembench main.c:572-608, cited values
 bench:uncached-vs-hpos	bench	uncached-vs-hpos	-	suite	rdram-bus-arbitration.md B11-B12; vi-fetch.md
-bench:dirty-row-sweep	bench	dirty-row-sweep	-	suite	report only; no published hardware value
-bench:dirty-miss-isolated	bench	dirty-miss-isolated	-	suite	report only; no published hardware value (plan T6)
+bench:dirty-row-sweep	bench	dirty-row-sweep	-	suite	report only; NEC uPD488170L datasheet inference, a dirty row miss 3 pclk over a clean one (expected.tsv), no console measurement
+bench:dirty-miss-isolated	bench	dirty-miss-isolated	-	suite	report only; nemu64-test clean fill 41 pclk reported (the sample also holds its harness), no hardware value for the dirty cases (plan T6)
 bench:rdp-sync-sweep	bench	rdp-sync-sweep	-	suite	n64brew Commands, SYNC_PIPE 50, SYNC_TILE 33, SYNC_LOAD 25
 bench:rdp-setter-sweep	bench	rdp-setter-sweep	-	suite	n64brew Pipeline, 1 clock per setter
 bench:rdp-atomic-sweep	bench	rdp-atomic-sweep	-	suite	SDK pro-man 12.2.3, 30 to 40 null cycles
@@ -63,6 +63,10 @@ bench:rcp-reg-read	bench	rcp-reg-read	register=vi-control	24	no ROM in plan R1 y
 bench:pif-ram-read	bench	pif-ram-read	-	1974	no ROM in plan R1 yet; n64-systembench PIF RAM read, 1974 rclk
 bench:pi-io-write	bench	pi-io-write	-	134	no ROM in plan R1 yet; n64-systembench PI I/O write busy, 134 rclk
 bench:si-dma	bench	si-dma	direction=write64	4065	no ROM in plan R1 yet; n64-systembench SI DMA 64 B to PIF, 4065 rclk
+bench:si-dma-read64-1	bench	si-dma	direction=read64 commands=1	37987	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 1 joybus command, 37987 rclk (dma-timing.md SI DMA)
+bench:si-dma-read64-2	bench	si-dma	direction=read64 commands=2	57972	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA)
+bench:si-dma-read64-3	bench	si-dma	direction=read64 commands=3	77924	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA)
+bench:si-dma-read64-4	bench	si-dma	direction=read64 commands=4	97890	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA)
 bench:wb-fifth-store	bench	wb-fifth-store	-	report	no ROM in plan R1 yet; no public hardware value (vr4300-wb.md)
 bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; TMEM load rate conflict (jgemu-dpc-probe.md)
 thar0:alpha-fail-1cycle	thar0	ac-zbsame-vioff-noimrd-1cyc	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)
@@ -71,7 +75,7 @@ thar0:fill-mode	thar0	fill-mode	-	report	Thar0 hw_data has no fill-mode config a
 thar0:imrd-1cycle	thar0	nozb-vioff-imrd-1cyc	-	suite	plan T13: IM_RD 1-cycle 163,436
 thar0:zcmp	thar0	ac-zcmp-zbsame-vioff-noimrd-1cyc	-	suite	Thar0 hw_data
 thar0:separate-bank	thar0	zbrw-pass-zbsep-vioff-noimrd-1cyc	-	suite	plan T13: FB+ZB separate banks 225,518
-rdpstat:current-prefetch	rdpstat	current-prefetch	-	240	n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240
+rdpstat:current-prefetch	rdpstat	current-prefetch	-	240	n64-systemtest rdp/mod.rs:21-23 TODO comment, the author's intent and not a recorded result: CURRENT reaches START+240 while the RDP is frozen
 rdpstat:nosync-1cycle	rdpstat	repeater64	RDP 1-Cycle No-Sync	self	repeater64 RDPNoSync1C, 20 console references (assets/10000000-10000013.test; the other 45 assets belong to other demos)
 snapper:span-tri	snapper	span-tri	-	suite	snapper64 RDP Test-Mode Span Tri, 216 DPS dumps
 snapper:rect-nosync	snapper	rect-nosync	-	suite	snapper64 RDPRectNoSync captures
@@ -80,7 +84,7 @@ noise:b	noise	dataset-b	-	pass	Thar0/RDP-Noise dataset B (Unlicense): ctest nois
 noise:c	noise	dataset-c	-	pass	Thar0/RDP-Noise four c captures (Unlicense): ctest noise:c, a's outputs give each capture's clock and c one step ahead matches every recoverable bit (plan T14)
 noise:rect-1016	noise	rect-1016	-	pass	romgen 1016-px rect ROM (romgen/suites/noise): the dumped a, b, c bits are the LFSR sequences at the ROM's own pixel clocks and dataset A at a phase offset (plan T14)
 unit:noise-lfsr	unit	n64-timing-noise	noise-lfsr	pass	RDPTimed::NoiseLfsr: GF(2) jump equals stepping, periods 2^29-1, 2^28-1, 2^27-1, all-ones reset with c one step ahead, at() a pure function of the clock (plan T14)
-pidma:logs	pidma	rasky_n64_pi_dma_test/pi_dma_test.z64	-	self	ROM self-check within 10%; tools/n64-timing/pidma-replay.py rebuilds the ROM's COUNT measurement for every point from ARES_PILOG and checks sizes 8-382 within 3% of the 64 golden logs' min..max (plan T8)
+pidma:logs	pidma	n64_pi_dma_test/pi_dma_test.z64	-	self	prebuilt rasky n64_pi_dma_test ROM and its 64 golden logs (no license; run from outside the repo, sha256 pinned in standing.sh). Passes when the ROM's own 10% self-check reports 0 failures and pidma-replay.py --calibrated finds sizes 8-382 within 3% of the golden min..max at every calibrated (read, write) offset (plan T8)
 unit:ri-cost-table	unit	n64-timing-tests	ri-cost-table	pass	RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6)
 unit:ri-split	unit	n64-timing-tests	ri-split	pass	n64brew RDRAM_Interface, 1-16 octbytes per request; a DMA burst never crosses a 2 KiB row (plan T8)
 unit:rdram-private	unit	n64-timing-rdram-device	rdram-private	pass	ADR 0001 Decision 2: a device-side read of rdram.ram fails to compile on the access check, a Loader read compiles (tests/rdram-private.cmake, plan T8)
@@ -88,3 +92,4 @@ rdpstat:dpc-sequencing	rdpstat	dpc	-	self	rdpstat dpc ROM: DMA_BUSY while a long
 rdpstat:xbus	rdpstat	systemtest	RDP STATUS: Run from DMEM (xbus)	self	n64-systemtest tests/rdp run_from_dmem, three DMEM placements
 rdpstat:1prim	rdpstat	1prim	-	self	rdpstat 1prim ROM: four stacked one-row image-read rectangles, 1- and 2-cycle, 8 and 32 px; non-atomic narrow stacks retire the two-blend value, wide ones and atomic stacks the four-blend value (cen64 jgemu rdp_core.c:4551-4567, PRDP 12:15/12:16 checksums; 1prim-cost.md)
 rdpstat:unsynced-combiner	rdpstat	unsynced	-	self	rdpstat unsynced ROM: an unsynced Set Combine after a 64x4 rectangle recolors its last 24 cycles in 1-cycle, 22 in 2-cycle (n64brew Pipeline table combiner row; rdp-command-timing.md s.3.7); no console capture. Only the 1-cycle case pins rdp.pipeline-depth: the 2-cycle case cannot tell 22 cycles from 24 (both recolor 11 px; verify-69 depth +1 still passes it)
+harness:emux-bus	harness	emux-bus	-	self	rdpstat emux-bus ROM: emux XPROFREAD 0x04RF returns the RDRAM channel counters per requester, globally and per profile slot, that mmbench's bus.tsv reports. It guards the tool, not a behavior. Covers the CPU XPROFREAD and the RSP one (rsp/emux.cpp), which forwards to it
