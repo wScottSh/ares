@@ -108,7 +108,9 @@ auto SI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     dma.toRdram = 0;
     dma.offset = 0;
     dmaPost(thread.clock);
-    scheduleAfter(EventKind::SI_DMA_Write, Timing::Behavior::SiWrite64);
+    //the PIF ROM range (below PIF RAM's 0x7c0) ends sooner: n64-systembench SI DMA W ROM
+    bool rom = (io.writeAddress & 0x7ff) < 0x7c0;
+    scheduleAfter(EventKind::SI_DMA_Write, rom ? Timing::Behavior::SiWrite64Rom : Timing::Behavior::SiWrite64);
   }
 
   if(address == 5) {

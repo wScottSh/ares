@@ -1,4 +1,4 @@
-# standing run sysbench2/si-write on 90575f04f
+# standing run sysbench2/si-rom on 6f6e8cb26
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 20 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 2 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -29,7 +29,7 @@ bench:si-dma-read64-1	fail	read64-1 sb_rclk 38477 (expected 37987, 37911.026..38
 bench:si-dma-read64-2	pending:report-only	read64-2 sb_rclk 57890 (expected 57972) report
 bench:si-dma-read64-3	pending:report-only	read64-3 sb_rclk 77321 (expected 77924) report
 bench:si-dma-read64-4	pending:report-only	read64-4 sb_rclk 96734 (expected 97890) report
-bench:si-dma-write64-rom	fail	write64-rom sb_rclk 4068 (expected 2144, 2139.712..2148.288) fail
+bench:si-dma-write64-rom	pass	write64-rom sb_rclk 2147 (expected 2144, 2139.712..2148.288) pass
 bench:si-io-write	pass	pif-ram sb_rclk 2158 (expected 2158, 2153.684..2162.316) pass
 bench:sp-dma-sweep	fail	wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail
 bench:uncached-sizes	pass	u64 net_pclk 35 (expected 35, 34..36) pass

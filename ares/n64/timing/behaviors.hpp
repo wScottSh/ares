@@ -90,6 +90,7 @@ namespace Behavior {
   constexpr Clock PiIoBusy = {1608};  //134 rclk
   constexpr Clock SiIoBusy = {25896};  //2158 rclk
   constexpr Clock SiWrite64 = {48780};  //4065 rclk
+  constexpr Clock SiWrite64Rom = {25728};  //2144 rclk
   constexpr Clock SiRead64Base = {163200};  //13600 rclk
   constexpr s64 AiFetchBytes = 8;  //8 B
   constexpr s64 ViLinesPerOutputLine = 3;  //3 lines
@@ -206,7 +207,8 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"pi.block-writeback", Basis::Derived, "28", "rclk", "dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part", "pidma:logs bench:pi-dma-sizes", ""},
   {"pi.io-busy", Basis::Measured, "134", "rclk", "n64-systembench @845635c main.c:595 PI I/O W 134 rclk, a cart word write until PI_STATUS idle (cited value; research/cpu-memory-costs.md)", "bench:pi-io-write", ""},
   {"si.io-busy", Basis::Measured, "2158", "rclk", "n64-systembench @845635c main.c:600 SI I/O W 2158 rclk, a PIF RAM word write until SI_STATUS idle (cited value; research/cpu-memory-costs.md)", "bench:si-io-write", ""},
-  {"si.write64", Basis::Measured, "4065", "rclk", "n64-systembench SI DMA 64 B to PIF (cited value)", "bench:si-dma ~bench:si-dma-write64-rom", ""},
+  {"si.write64", Basis::Measured, "4065", "rclk", "n64-systembench SI DMA 64 B to PIF (cited value)", "bench:si-dma", ""},
+  {"si.write64-rom", Basis::Measured, "2144", "rclk", "n64-systembench @845635c main.c:598 SI DMA W ROM 2144 rclk, a 64 B SI DMA to the PIF ROM address 0x1FC00700 until SI_STATUS idle (cited value; research/dma-timing.md SI DMA)", "bench:si-dma-write64-rom", "a WRITE64B whose PIF address is below PIF RAM (0x7c0)"},
   {"si.read64-base", Basis::Derived, "13600", "rclk", "ares pif.estimateTiming (systembench-derived)", "bench:si-dma-read64-1 bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 bench:si-dma-empty-0b bench:si-dma-empty-1b bench:si-dma-empty-4b bench:si-dma-empty-8b bench:si-dma-empty-32b bench:si-dma-empty-56b bench:si-dma-empty-63b bench:si-dma-accessory", "ares took it from pif.estimateTiming, which charges it as the joybus phase's base; the RD64B totals decide it together with the per-command legacy.si.dma-read-* costs"},
   {"ai.fetch-bytes", Basis::Vendor, "8", "B", "US 6,166,748 '8 bytes at a time' (dma-timing.md)", "mm:south-clock-town", "functional; contention effect 0.026% of peak"},
   {"vi.lines-per-output-line", Basis::Vendor, "3", "lines", "SDK pro-man s.24.4; US 6,166,748 FIG. 34 (vi-fetch.md)", "nemu64:timing/load-from-uncached-vi-on-same-bank", ""},

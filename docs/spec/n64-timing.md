@@ -8,7 +8,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Basis | Meaning | Rows |
 |---|---|---|
-| measured | a hardware measurement: a test ROM result or a console capture | 33 |
+| measured | a hardware measurement: a test ROM result or a console capture | 34 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 15 |
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 17 |
@@ -21,10 +21,10 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Status | Meaning | Rows |
 |---|---|---|
-| fail | at least one check failed; the detail in Check results gives the residual | 37 |
+| fail | at least one check failed; the detail in Check results gives the residual | 36 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 10 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 3 |
-| pass | a check other than the row's fit data passed, and none failed | 65 |
+| pass | a check other than the row's fit data passed, and none failed | 67 |
 | pending:calibration-16 | no check decided the row: calibration-16: no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it | 7 |
 | pending:no-corpus | no check decided the row: no-corpus: no corpus in the program measures this behavior; it stays pending until one does | 15 |
 | pending:report-only | no check decided the row: report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 10 |
@@ -157,7 +157,8 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
 | `si.io-busy` | 2158 rclk | measured | n64-systembench @845635c main.c:600 SI I/O W 2158 rclk, a PIF RAM word write until SI_STATUS idle (cited value; research/cpu-memory-costs.md) | `bench:si-io-write` | **pass**: `bench:si-io-write` pass | reads `Timing::Behavior::SiIoBusy` |  |
-| `si.write64` | 4065 rclk | measured | n64-systembench SI DMA 64 B to PIF (cited value) | `bench:si-dma` `bench:si-dma-write64-rom` (guard) | **fail**: `bench:si-dma` pass; `bench:si-dma-write64-rom` fail (guard) | reads `Timing::Behavior::SiWrite64` |  |
+| `si.write64` | 4065 rclk | measured | n64-systembench SI DMA 64 B to PIF (cited value) | `bench:si-dma` | **pass**: `bench:si-dma` pass | reads `Timing::Behavior::SiWrite64` |  |
+| `si.write64-rom` | 2144 rclk | measured | n64-systembench @845635c main.c:598 SI DMA W ROM 2144 rclk, a 64 B SI DMA to the PIF ROM address 0x1FC00700 until SI_STATUS idle (cited value; research/dma-timing.md SI DMA) | `bench:si-dma-write64-rom` | **pass**: `bench:si-dma-write64-rom` pass | reads `Timing::Behavior::SiWrite64Rom` | a WRITE64B whose PIF address is below PIF RAM (0x7c0) |
 | `si.read64-base` | 13600 rclk | derived | ares pif.estimateTiming (systembench-derived) | `bench:si-dma-read64-1` `bench:si-dma-read64-2` `bench:si-dma-read64-3` `bench:si-dma-read64-4` `bench:si-dma-empty-0b` `bench:si-dma-empty-1b` `bench:si-dma-empty-4b` `bench:si-dma-empty-8b` `bench:si-dma-empty-32b` `bench:si-dma-empty-56b` `bench:si-dma-empty-63b` `bench:si-dma-accessory` | **fail**: `bench:si-dma-read64-1` fail; `bench:si-dma-read64-2` pending:report-only; `bench:si-dma-read64-3` pending:report-only; `bench:si-dma-read64-4` pending:report-only; `bench:si-dma-empty-0b` pass; `bench:si-dma-empty-1b` fail; `bench:si-dma-empty-4b` fail; `bench:si-dma-empty-8b` fail; `bench:si-dma-empty-32b` fail; `bench:si-dma-empty-56b` fail; `bench:si-dma-empty-63b` fail; `bench:si-dma-accessory` fail | reads `Timing::Behavior::SiRead64Base` | ares took it from pif.estimateTiming, which charges it as the joybus phase's base; the RD64B totals decide it together with the per-command legacy.si.dma-read-* costs |
 
 ### ai
@@ -251,7 +252,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run sysbench2/si-write on 90575f04f).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run sysbench2/si-rom on 6f6e8cb26).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -284,7 +285,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:si-dma-read64-2` | pending:report-only | read64-2 sb_rclk 57890 (expected 57972) report |
 | `bench:si-dma-read64-3` | pending:report-only | read64-3 sb_rclk 77321 (expected 77924) report |
 | `bench:si-dma-read64-4` | pending:report-only | read64-4 sb_rclk 96734 (expected 97890) report |
-| `bench:si-dma-write64-rom` | fail | write64-rom sb_rclk 4068 (expected 2144, 2139.712..2148.288) fail |
+| `bench:si-dma-write64-rom` | pass | write64-rom sb_rclk 2147 (expected 2144, 2139.712..2148.288) pass |
 | `bench:si-io-write` | pass | pif-ram sb_rclk 2158 (expected 2158, 2153.684..2162.316) pass |
 | `bench:sp-dma-sweep` | fail | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `bench:uncached-sizes` | pass | u64 net_pclk 35 (expected 35, 34..36) pass |
