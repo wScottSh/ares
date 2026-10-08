@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 147 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run t17-fix/after on b7e4d49e9). 30 fail, 10 fit only, 3 model-choice, 3 not-built, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 4 pending:no-rom, 10 pending:report-only. 3 behaviors are not built: the code does not use their value (`cpu.uncached-read-dword-total`, `cpu.pif-ram-read`, `pi.io-busy`). Behaviors not built says what the code does instead.
+The spec is `docs/spec/n64-timing.md`: 147 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run not-built/after on d6f0aefaf). 30 fail, 10 fit only, 3 model-choice, 3 not-built, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 4 pending:no-rom, 10 pending:report-only. 3 behaviors are not built: the code does not use their value (`cpu.uncached-read-dword-total`, `cpu.pif-ram-read`, `pi.io-busy`). Behaviors not built says what the code does instead.
 
 ## Destination
 
