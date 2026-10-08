@@ -566,7 +566,7 @@ auto nall::main(Arguments arguments) -> void {
   if(options.behaviorsPath) {
     string table = "id\tbasis\tvalue\tunit\tverify\n";
     for(auto& b : N64::Timing::behaviors) table.append(b.id, "\t", N64::Timing::basisNames[(u32)b.basis], "\t", b.value, "\t", b.unit, "\t", b.verify, "\n");
-    if(!file::write(options.behaviorsPath, {table.data(), table.size()})) std::fprintf(stderr, "n64-run: cannot write %s\n", options.behaviorsPath.data());
+    if(!file::write(options.behaviorsPath, {(const u8*)table.data(), table.size()})) std::fprintf(stderr, "n64-run: cannot write %s\n", options.behaviorsPath.data());
   }
   if(options.statsPath) {
     if(!stats.open(options.statsPath, file::mode::write)) {
