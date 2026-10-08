@@ -119,7 +119,8 @@ auto CPU::instruction() -> void {
   auto& slot = pipeline.take();
   u32 word = slot.word;
   if(!slot.translated) {
-    //the fetch faulted: raise it now that the instruction issues, or read the word if the TLB has changed since
+    //the fetch faulted: raise it now that the instruction issues, or read the word if the TLB has changed since.
+    //The fault is charged the issue slot above; inferred, no test times a fetch-time exception (cpu.issue).
     auto access = devirtualize<Read, Word>(ipu.pc);
     if(!access) return;
     word = fetch(access);
