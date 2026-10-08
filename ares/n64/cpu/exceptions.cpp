@@ -1,6 +1,7 @@
 //Detection stage by exception code (nemu64-test Exceptions, JustFire, measured):
 //RF for Sys, Bp, RI and CpU; EX for Ov, Tr, AdEL and TLBL. AdES, TLBS and Mod
-//are inferred to share the load's stage (one address check serves both).
+//have no test and are inferred to share the load's stage; no reference says
+//where a store's address check runs.
 //Interrupts (plan T7c), bus errors, watch and emux have no reference.
 static auto faultStage(u32 code) -> CPU::FaultStage {
   using FaultStage = CPU::FaultStage;

@@ -43,7 +43,8 @@ auto CPU::opTiming(u32 instruction) -> OpTiming {
   case 0x2f:  //CACHE: only D-cache Index Load Tag has a measured cost
     if((instruction >> 16 & 31) == 0x05) t.cost = CpuCacheIndexLoadTag;
     return t;
-  case 0x31: case 0x35:  //LWC1, LDC1: the base only ("LD $T3; LWC1 $F11" does not stall)
+  case 0x31: case 0x35:  //LWC1, LDC1: the base only ("LD $T3; LWC1 $F11" does not stall).
+                         //The FPR result taking the LDI latency is inferred, no test (cpu.ldi).
     t.gprFields = OpTiming::RS;
     t.late = Late::LoadFt;
     return t;
@@ -62,7 +63,9 @@ auto CPU::fpuTiming(u32 instruction) -> OpTiming {
   using Fast = OpTiming::Fast;
   OpTiming t{CpuIssue, OpTiming::RT};
   u32 format = instruction >> 21 & 31;
-  if(format < 16) return t;  //moves and BC1: no FPU dependency in either direction
+  //Moves and BC1: no FPU dependency in either direction. BC1's rt bits are cc, nd and tf,
+  //but checking them against a GPR load is unmeasured (cpu.ldi).
+  if(format < 16) return t;
   t.fprFields = true;
   u32 function = instruction & 0x3f;
   if(function < 0x30) t.late = OpTiming::Late::FpuFd;  //C.cond writes only the condition bit
