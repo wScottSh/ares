@@ -136,7 +136,7 @@ struct Fnv1a {
 
 //Walks the RDRAM pixels the VI scans out this field, sampling them the way VI::refresh does.
 //The callback receives the output position and the raw 16- or 32-bit pixel.
-template<typename F> auto walkFramebuffer(F&& pixelAt) -> void {
+template<typename F> auto walkFramebuffer(F&& pixelAt, maybe<u32> origin = nothing) -> void {
   auto& io = N64::vi.io;
   if(io.colorDepth < 2) return;
 
@@ -162,7 +162,7 @@ template<typename F> auto walkFramebuffer(F&& pixelAt) -> void {
   u32 y0 = io.ysubpixel + io.yscale * (dy0 - io.vstart);
   for(s32 dy = dy0; dy < dy1; dy++) {
     if(!io.serrate || (dy & 1) == !io.field) {
-      u32 line = io.dramAddress + (y0 >> 11) * pitch * bytesPerPixel;
+      u32 line = origin(io.dramAddress) + (y0 >> 11) * pitch * bytesPerPixel;
       u32 x0 = io.xsubpixel + io.xscale * (dx0 - io.hstart);
       for(s32 dx = dx0; dx < dx1; dx++) {
         u32 address = line + (x0 >> 10) * bytesPerPixel;
@@ -184,6 +184,24 @@ auto rdramFramebufferHash() -> u64 {
   Fnv1a fnv;
   walkFramebuffer([&](u32, u32, u32 pixel) { fnv.mix(pixel); });
   return N64::vi.io.colorDepth < 2 ? 0 : fnv.hash;
+}
+
+//Pixels of the field the VI just finished scanning that differ from RDRAM at
+//that moment, at the origin it scanned: the tearing of plan T11, where a line
+//was fetched before its pixels were drawn. Progressive modes only, where
+//every field composes every row. It compares the screen as VI::compose wrote
+//it, so a change in the bits the screen drops (16 bpp coverage, 32 bpp alpha)
+//is not a tear.
+auto scanoutTearPixels() -> u64 {
+  auto& io = N64::vi.io;
+  if(io.colorDepth < 2 || io.serrate) return 0;
+  const bool half = io.colorDepth == 2;
+  const auto screen = N64::vi.screen->pixels(0);
+  u64 differ = 0;
+  walkFramebuffer([&](u32 x, u32 y, u32 pixel) {
+    differ += screen[y * 640 + x] != (half ? 1 << 24 | pixel >> 1 : pixel >> 8);
+  }, N64::vi.scannedOrigin);
+  return differ;
 }
 
 //Writes the sampled image as a 640x480 binary PPM. Unsampled positions stay black.
@@ -540,6 +558,9 @@ auto nall::main(Arguments arguments) -> void {
   auto emulatedElapsed = [] { return N64::cpu.profile.cpuCycles / CpuCyclesPerSecond; };
 
   u64 frames = 0;
+  std::vector<std::pair<u64, u64>> tears;  //(field, pixels)
+  //the field being scanned is the one whose stats row was printed last
+  if(stats) N64::vi.fieldScanned = [&] { if(frames) if(auto n = scanoutTearPixels()) tears.push_back({frames - 1, n}); };
   StopReason reason;
   while(true) {
     root->run();
@@ -604,6 +625,21 @@ auto nall::main(Arguments arguments) -> void {
       name, (unsigned long long)(c.bytesRead + c.bytesWritten), name, (unsigned long long)(c.wait.units / N64::Timing::UnitsPerRclk));
   }
   std::fprintf(stderr, "\n");
+  std::fprintf(stderr, "n64-run: vi_tear fields=%llu list=", (unsigned long long)tears.size());
+  for(u32 i = 0; i < tears.size(); i++)
+    std::fprintf(stderr, "%s%llu:%llu", i ? "," : "", (unsigned long long)tears[i].first, (unsigned long long)tears[i].second);
+  std::fprintf(stderr, "\n");
+  //VI scanout and refresh as shares of channel time since power-on, and per HSYNC
+  //(one refresh each) for the vi-fetch.md bands (plan T11)
+  auto& viBus = counters[(u32)N64::RiBus::Requester::ViFetch];
+  const double elapsed = (double)N64::cpu.clock.units;
+  const double lines = (double)refresh.bursts;
+  std::fprintf(stderr, "n64-run: ri_vi grants_vi=%llu vi_bytes=%llu vi_row_misses=%llu vi_busy_rclk=%llu vi_wait_rclk=%llu"
+    " vi_share=%.4f refresh_share=%.4f vi_rclk_per_line=%.2f refresh_rclk_per_line=%.2f\n",
+    (unsigned long long)viBus.bursts, (unsigned long long)viBus.bytesRead, (unsigned long long)viBus.rowMisses,
+    (unsigned long long)(viBus.busy.units / N64::Timing::UnitsPerRclk), (unsigned long long)(viBus.wait.units / N64::Timing::UnitsPerRclk),
+    elapsed ? viBus.busy.units / elapsed : 0.0, elapsed ? refresh.busy.units / elapsed : 0.0,
+    lines ? viBus.busy.units / N64::Timing::UnitsPerRclk / lines : 0.0, lines ? refresh.busy.units / N64::Timing::UnitsPerRclk / lines : 0.0);
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);

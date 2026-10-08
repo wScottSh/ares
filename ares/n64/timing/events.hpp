@@ -3,6 +3,7 @@
 
 enum class EventKind : u32 {
   VI_Line,        //one VI half-line: counters, VI interrupt, field boundary
+  VI_Fetch,       //the next scanout burst of the output line is due
   AI_Sample,      //one DAC sample
   CPU_Compare,    //COP0 COUNT reaches COMPARE
   PIF_Poll,       //PIF HLE boot handshake poll

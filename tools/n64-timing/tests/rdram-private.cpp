@@ -1,5 +1,5 @@
 //unit:rdram-private: RDRAM data is private to the RI, MI, the loader and the
-//not-yet-converted VI and RDP (ADR 0001 Decision 2). rdram-private.cmake
+//not-yet-converted RDP (ADR 0001 Decision 2). rdram-private.cmake
 //compiles this file twice: with RDRAM_PRIVATE_FRIEND the access goes through
 //the host Loader and must compile; without it a device-side function reads
 //rdram.ram the way the DMA engines did before T8 and must fail to compile on

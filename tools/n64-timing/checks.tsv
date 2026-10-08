@@ -30,6 +30,7 @@ nemu64:timing/cache	nemu64	timing	Timing: CPU register dependency #C10	self	nemu
 nemu64:timing/load-miss-vi-on	nemu64	timing	Timing: Load Miss (with VI enabled)	self	nemu64-test timing set, ROM self-check
 nemu64:timing/load-miss-vi-off	nemu64	timing	Timing: Load Miss (with VI disabled)	self	nemu64-test timing set, ROM self-check
 nemu64:timing/load-from-uncached-vi-on-same-bank	nemu64	timing	Timing: Load from uncached (with VI enabled) @(true,	self	nemu64-test timing set, the same-bank value (36 pclk median)
+nemu64:timing/load-from-uncached-vi-on-other-bank	nemu64	timing	Timing: Load from uncached (with VI enabled) @(false,	self	nemu64-test timing set, the other-bank value (32.5 pclk mean)
 nemu64:timing/load-from-uncached-vi-off	nemu64	timing	Timing: Load from uncached (with VI disabled)	self	nemu64-test timing set, ROM self-check
 nemu64:rsp_timing/clock-cpu-vs-rdp	nemu64	timing	RSP Timing: Clock CPU vs RDP	self	nemu64-test timing set, ROM self-check (100,000 COUNT = 133,333 +- 20 DP_CLOCK)
 nemu64:rsp_timing/sll	nemu64	timing	RSP Timing: SLL	self	nemu64-test timing set, ROM self-check

@@ -1,4 +1,4 @@
-static const string SerializerVersion = "v153.8-dma";
+static const string SerializerVersion = "v153.9-vifetch";
 
 auto System::serialize(bool synchronize) -> serializer {
   serializer s;

@@ -94,6 +94,8 @@ auto VI::line() -> void {
       }
     }
 
+    startFetch();
+
     u32 lineDuration = io.quarterLineDuration+1;
     if(io.vcounter == 1)
       lineDuration = io.hsyncLeap[io.leapPattern.bit(io.leapCounter)];      
@@ -111,70 +113,144 @@ auto VI::line() -> void {
   }
 }
 
+auto VI::window() const -> Window {
+  Window w;
+  w.hscanStart = Region::NTSC() ? 108 : 128;
+  w.vscanStart = Region::NTSC() ?  34 :  44;
+  w.hscanLen   = 640;
+  w.vscanLen   = Region::NTSC() ? 480 : 576;
+  s32 hscanStop = w.hscanStart + w.hscanLen;
+  s32 vscanStop = w.vscanStart + w.vscanLen;
+
+  w.dy0 = io.vstart;
+  w.dy1 = io.vend;   if(w.dy1 < w.dy0) w.dy1 = vscanStop;
+  w.dx0 = io.hstart;
+  w.dx1 = io.hend;
+
+  w.dy0 = max((s32)w.vscanStart, w.dy0);
+  w.dy1 = min(vscanStop, w.dy1);
+  w.dx0 = max((s32)w.hscanStart, w.dx0);
+  w.dx1 = min(hscanStop, w.dx1);
+
+  // Undocumented VI guard-band "hardware bug" (match parallel-RDP)
+  if(w.dx0 >= (s32)w.hscanStart) w.dx0 += 8;
+  if(w.dx1 <  hscanStop)         w.dx1 -= 7;
+  return w;
+}
+
+auto VI::drawn(const Window& w, s32 dy) const -> bool {
+  return dy >= w.dy0 && dy < w.dy1 && (!io.serrate || (dy & 1) == !io.field);
+}
+
+//Output line l covers screen rows 2l and 2l+1 (V_VIDEO counts half-lines).
+//Each row samples framebuffer line (y >> 11) of the three fetched at HSYNC.
+auto VI::compose() -> void {
+  auto w = window();
+  const u32 bpp = io.colorDepth == 2 ? 2 : 4;
+  const u32 fetched = Fetch::Lines * fetch.pitch;
+  for(s32 dy = 2 * fetch.output; dy < 2 * fetch.output + 2; dy++) {
+    if(!drawn(w, dy)) continue;
+    u32 y = io.ysubpixel + io.yscale * (dy - io.vstart);
+    u32 base = ((y >> 11) - fetch.line) * fetch.pitch;
+    auto row = screen->pixels(0).data() + (dy - w.vscanStart) * w.hscanLen;
+    u32 x = io.xsubpixel + io.xscale * (w.dx0 - io.hstart);
+    for(s32 dx = w.dx0; dx < w.dx1; dx++, x += io.xscale) {
+      u32 at = base + (x >> 10) * bpp;
+      //the VI reads only the fetched lines; a sample past them has no bytes
+      u32 pixel = 0;
+      if(at + bpp <= fetched) {
+        const u8* p = fetch.bytes + at;
+        pixel = bpp == 2 ? p[0] << 8 | p[1] : p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
+      }
+      row[dx - w.hscanStart] = bpp == 2 ? 1 << 24 | pixel >> 1 : pixel >> 8;
+    }
+  }
+  if(2 * (s32)fetch.output + 2 >= w.dy1 && fieldScanned) fieldScanned();
+}
+
+//A line still fetching at the next HSYNC (only a VI programmed with a line
+//shorter than its H_VIDEO window) keeps fetching; the new line fetches nothing.
+auto VI::startFetch() -> void {
+  if(io.colorDepth < 2 || !io.width) return;
+  if(fetch.next < fetch.count || fetch.inFlight) return;
+  auto w = window();
+  s32 dy = 2 * io.vcounter;
+  if(!drawn(w, dy)) dy++;
+  if(!drawn(w, dy)) return;
+  fetch.hsync  = vclk;
+  fetch.hstart = io.hstart;
+  fetch.hend   = io.hend;
+  fetch.output = io.vcounter;
+  if(dy == w.dy0 || dy == w.dy0 + 1) scannedOrigin = io.dramAddress;
+  fetch.line   = io.ysubpixel + io.yscale * (dy - io.vstart) >> 11;
+  const u32 pitch = io.width * (io.colorDepth == 2 ? 2 : 4);
+  fetch.start(io.dramAddress + fetch.line * pitch, pitch);
+  fetch.next = 0;
+  timeline.schedule({fetch.dueAt(0), (u32)EventKind::VI_Fetch});
+}
+
 auto VI::refresh() -> void {
   if(io.serrate == 0) screen->setProgressive(0);
   if(io.serrate == 1) screen->setInterlace(!io.field);
-
-  u32 hscan_start = Region::NTSC() ? 108 : 128;
-  u32 vscan_start = Region::NTSC() ?  34 :  44;
-  u32 hscan_len   = Region::NTSC() ? 640 : 640;
-  u32 vscan_len   = Region::NTSC() ? 480 : 576;
-  u32 hscan_stop  = hscan_start + hscan_len;
-  u32 vscan_stop  = vscan_start + vscan_len;
-  screen->setViewport(0, 0, hscan_len, vscan_len);
-
-  i32 dy0 = vi.io.vstart;
-  i32 dy1 = vi.io.vend;   if (dy1 < dy0) dy1 = vscan_stop;
-  i32 dx0 = vi.io.hstart;
-  i32 dx1 = vi.io.hend;
-
-  dy0 = max(vscan_start, dy0);
-  dy1 = min(vscan_stop,  dy1);
-  dx0 = max(hscan_start, dx0);
-  dx1 = min(hscan_stop,  dx1);
-
-  // Undocumented VI guard-band "hardware bug" (match parallel-RDP)
-  if(dx0 >= hscan_start) dx0 += 8;
-  if(dx1 <  hscan_stop)  dx1 -= 7;
-
-  u32 pitch = vi.io.width;
-  if(vi.io.colorDepth == 2) {
-    //15bpp
-    u32 y0 = vi.io.ysubpixel + vi.io.yscale * (dy0 - vi.io.vstart);
-    for(i32 dy = dy0; dy < dy1; dy++) {
-      if(!io.serrate || (dy & 1) == !io.field) {
-        u32 address = vi.io.dramAddress + (y0 >> 11) * pitch * 2;
-        auto line = screen->pixels(1).data() + (dy - vscan_start) * hscan_len;
-        u32 x0 = vi.io.xsubpixel + vi.io.xscale * (dx0 - vi.io.hstart);
-        for(i32 dx = dx0; dx < dx1; dx++) {
-          u16 data = rdram.ram.read<Half>(address + (x0 >> 10) * 2, RBusDevice::VI_DMA);
-          line[dx - hscan_start] = 1 << 24 | data >> 1;
-          x0 += vi.io.xscale;
-        }
-      }
-      y0 += vi.io.yscale;
-    }
-  }
-
-  if(vi.io.colorDepth == 3) {
-    //24bpp
-    u32 y0 = vi.io.ysubpixel + vi.io.yscale * (dy0 - vi.io.vstart);
-    for(i32 dy = dy0; dy < dy1; dy++) {
-      if(!io.serrate || (dy & 1) == !io.field) {
-        u32 address = vi.io.dramAddress + (y0 >> 11) * pitch * 4;
-        auto line = screen->pixels(1).data() + (dy - vscan_start) * hscan_len;
-        u32 x0 = vi.io.xsubpixel + vi.io.xscale * (dx0 - vi.io.hstart);
-        for(i32 dx = dx0; dx < dx1; dx++) {
-          u32 data = rdram.ram.read<Word>(address + (x0 >> 10) * 4, RBusDevice::VI_DMA);
-          line[dx - hscan_start] = data >> 8;
-          x0 += vi.io.xscale;
-        }
-      }
-      y0 += vi.io.yscale;
-    }
-  }
-
+  auto w = window();
+  screen->setViewport(0, 0, w.hscanLen, w.vscanLen);
   if(Model::Aleck64()) aleck64.vdp.render(screen);
+}
+
+//At HSYNC: latch the line's geometry and build its burst list. Segment j of
+//lines n, n+1, n+2 in turn (US 6,166,748: a block of line n, then of n+1 and
+//n+2), each split where it crosses a 2 KiB row (ri.row-of).
+auto VI::Fetch::start(u32 origin_, u32 pitch_) -> void {
+  origin = origin_;
+  pitch = pitch_;
+  count = 0;
+  for(u32 j = 0; j < pitch; j += Timing::Behavior::ViBurst) {
+    for(u32 k = 0; k < Lines; k++) {
+      u32 offset = k * pitch + j;
+      u32 left = min((u32)Timing::Behavior::ViBurst, pitch - j);
+      while(left) {
+        u32 address = origin + offset & 0xffffff;
+        u32 n = RiBus::split(address, left);
+        slots[count++] = {address, offset, (u8)n};
+        offset += n;
+        left -= n;
+      }
+    }
+  }
+}
+
+//Slot k of N is due at H_START + k (H_END - H_START) / N pixels into the line
+//(vi.fetch-window); H_VIDEO counts pixels of vi.vclk-per-pixel VCLKs.
+auto VI::Fetch::dueAt(u32 slot) const -> Clock {
+  u32 width = hend > hstart ? hend - hstart : 0;
+  auto t = hsync;
+  return t.advance((u64)(hstart + (u64)slot * width / count) * Timing::Behavior::ViVclkPerPixel);
+}
+
+auto VI::Fetch::post(Clock at) -> void {
+  const auto& s = slots[next];
+  ri.post({s.address, s.bytes, RiBus::Direction::Read, RiBus::Requester::ViFetch, (u16)next}, at);
+  inFlight = true;
+  due = false;
+  if(++next < count) {
+    Clock t = dueAt(next);
+    timeline.schedule({t > at ? t : at, (u32)EventKind::VI_Fetch});
+  }
+}
+
+auto VI::fetchDue() -> void {
+  if(fetch.inFlight) { fetch.due = true; return; }
+  fetch.post(timeline.now(Thread::clock));
+}
+
+auto VI::Fetch::buffer(const RiBus::Burst& b) -> void* {
+  return bytes + slots[b.tag].offset;
+}
+
+auto VI::Fetch::granted(const RiBus::Grant& g) -> void {
+  inFlight = false;
+  if(next == count) return vi.compose();
+  if(due) post(g.dataEnd);
 }
 
 auto VI::power(bool reset) -> void {
@@ -183,6 +259,9 @@ auto VI::power(bool reset) -> void {
   io = {};
   refreshed = false;
   vclk = {system.vclkPeriod()};
+  fetch.count = fetch.next = 0;
+  fetch.inFlight = fetch.due = false;
+  ri.attach(RiBus::Requester::ViFetch, &fetch);
   timeline.schedule({Thread::clock, (u32)EventKind::VI_Line});
 }
 
