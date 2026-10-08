@@ -414,7 +414,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `bench:mi-memset-cached` | bench | mi-memset-cached | point=vi-on metric=pclk_per_line | suite | n64brew MIPS_Interface memset table, 49.8 ms/MiB |
 | `bench:mi-memset-rspdma` | bench | mi-memset-rspdma | point=vi-on metric=b_per_rclk | suite | n64brew MIPS_Interface memset table, 2.58 ms/MiB |
 | `bench:sp-dma-sweep` | bench | sp-dma-sweep | - | suite | n64brew memset 6.5 B/rclk (check); hcs64 5.55 (report) |
-| `bench:pi-dma-sizes` | bench | pi-dma-sizes | metric=rclk | suite | n64-systembench main.c:572-608, cited values |
+| `bench:pi-dma-sizes` | bench | pi-dma-sizes | metric=sb_rclk | suite | n64-systembench main.c:589-592, cited values; TIMEIT_WHILE_MULTI port (main.c:171-180) |
 | `bench:uncached-vs-hpos` | bench | uncached-vs-hpos | - | suite | rdram-bus-arbitration.md B11-B12; vi-fetch.md |
 | `bench:dirty-row-sweep` | bench | dirty-row-sweep | - | suite | report only; NEC uPD488170L datasheet inference, a dirty row miss 3 pclk over a clean one (expected.tsv), no console measurement |
 | `bench:dirty-miss-isolated` | bench | dirty-miss-isolated | - | suite | report only; nemu64-test clean fill 41 pclk reported (the sample also holds its harness), no hardware value for the dirty cases (plan T6) |

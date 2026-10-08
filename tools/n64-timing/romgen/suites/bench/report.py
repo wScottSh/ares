@@ -27,7 +27,7 @@ XCYCLES = {"tick": 12, "pclk": 6, "rclk": 9}
 #A cached load's whole cost on hardware (nemu64-test Cached loads and store, cpu.dcache-hit), so a
 #cached-read sample less this is the harness's own overhead (research/cpu-memory-costs.md TL;DR).
 CACHED_HIT_PCLK = 1
-SYSBENCH_ROMS = ("uncached-sizes", "rcp-reg-read", "pif-ram-read", "pi-io-read", "pi-io-write", "si-io-write", "si-dma")
+SYSBENCH_ROMS = ("pi-dma-sizes", "uncached-sizes", "rcp-reg-read", "pif-ram-read", "pi-io-read", "pi-io-write", "si-io-write", "si-dma")
 
 
 def parse(stdout_txt):

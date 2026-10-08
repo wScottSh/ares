@@ -119,16 +119,14 @@ PI_SIZES = [8, 128, 1024, 65536]
 
 
 def pi_dma_sizes(suite):
+    """n64-systembench bench_pidma (main.c:171-180): TIMEIT_WHILE_MULTI(10), PI_DRAM_ADDR and
+    PI_CART_ADDR as setup, the PI_WR_LEN write timed until PI_STATUS idle."""
     rom = Rom(suite, "pi-dma-sizes")
     # Pads the payload so every DMA reads cartridge bytes that exist (ROM 0x1000 onward).
     suite.blob([0x5A5A5A5A] * (max(PI_SIZES) // 4))
-    rom.point("poll", "k_mmio_dma", [PI_BASE, 0x0, PI_DMA_BUF, 0x4, 0x10000000,
-                                     0x0, PI_DMA_BUF, 0x10, 3, 0x10, 2],
-              [("bytes", 0)])
     for size in PI_SIZES:
-        rom.point(f"cart-to-ram-{size}", "k_mmio_dma",
-                  [PI_BASE, 0x0, PI_DMA_BUF, 0x4, 0x10000000, 0xC, size - 1, 0x10, 3, 0x10, 2],
-                  [("bytes", size)])
+        sb_while(rom, f"cart-to-ram-{size}", [(PI_BASE + 0x0, PI_DMA_BUF), (PI_BASE + 0x4, 0x10000000)],
+                 (PI_BASE + 0xC, size - 1), PI_BASE + 0x10, 10, [("bytes", size)])
 
 
 HPOS_MAX_SAMPLES = 1536
@@ -297,9 +295,11 @@ def pif_ram_read(suite):
     sb_point(rom, "pif-ram", "k_sb_lw", [KSEG1 | PIF_RAM, 0], 50, "rclk")
 
 
-def sb_while(rom, point, setup, stmt, poll, reps, consts=(), pre=()):
-    """A TIMEIT_WHILE point whose reps spread their poll phase over SB_JITTER_PCLK (asm.py k_sb_while)."""
-    sb_point(rom, point, "k_sb_while", [*setup, *stmt, poll, SB_JITTER_PCLK // reps], reps, "rclk",
+def sb_while(rom, point, setups, stmt, poll, reps, consts=(), pre=()):
+    """A TIMEIT_WHILE point whose reps spread their poll phase over SB_JITTER_PCLK (asm.py k_sb_while).
+    setups: up to two (register, value) writes before the timed stmt."""
+    setups = list(setups) + [(0, 0)] * (2 - len(setups))
+    sb_point(rom, point, "k_sb_while", [*setups[0], *setups[1], *stmt, poll, SB_JITTER_PCLK // reps], reps, "rclk",
              [*consts, ("walk", "poll")], pre)
 
 
@@ -311,12 +311,12 @@ def pi_io_read(suite):
 
 def si_io_write(suite):
     rom = Rom(suite, "si-io-write")
-    sb_while(rom, "pif-ram", (0, 0), (KSEG1 | PIF_RAM, 0), SI_BASE + 0x18, 50)
+    sb_while(rom, "pif-ram", [], (KSEG1 | PIF_RAM, 0), SI_BASE + 0x18, 50)
 
 
 def pi_io_write(suite):
     rom = Rom(suite, "pi-io-write")
-    sb_while(rom, "rom-word", (0, 0), (KSEG1 | 0x10000000, 0), PI_BASE + 0x10, 50)
+    sb_while(rom, "rom-word", [], (KSEG1 | 0x10000000, 0), PI_BASE + 0x10, 50)
 
 
 # bench_joybus_empty* (main.c:307-424): the end marker after 0, 1, 4, 8, 32, 56 or 62 zero bytes.
@@ -338,9 +338,9 @@ def joybus_block(dwords):
 def si_dma(suite):
     rom = Rom(suite, "si-dma")
     zero = Step("bench_list_step", [suite.blob([0] * 16), 16, 0, 0, 0, 0, 0, KSEG1 | SB_BUF], 0)
-    sb_while(rom, "write64", (SI_BASE + 0x0, SB_BUF), (SI_BASE + 0x10, PIF_RAM), SI_BASE + 0x18, 10,
+    sb_while(rom, "write64", [(SI_BASE + 0x0, SB_BUF)], (SI_BASE + 0x10, PIF_RAM), SI_BASE + 0x18, 10,
              [("dir", "write64")], pre=[zero])
-    sb_while(rom, "write64-rom", (SI_BASE + 0x0, SB_BUF), (SI_BASE + 0x10, PIF_ROM), SI_BASE + 0x18, 10,
+    sb_while(rom, "write64-rom", [(SI_BASE + 0x0, SB_BUF)], (SI_BASE + 0x10, PIF_ROM), SI_BASE + 0x18, 10,
              [("dir", "write64")])
     blocks = {f"read64-{n}": ([0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1], n)
               for n in range(1, 5)}
