@@ -116,14 +116,14 @@ auto CPU::instruction() -> void {
   }
 
   step(Timing::Behavior::CpuIssue);
-  auto fetched = pipeline.take();
-  if(!fetched.translated) {
-    //raises the fetch's exception now that the instruction issues, or reads it under the TLB it changed to
+  auto slot = pipeline.take();
+  if(!slot.translated) {
+    //the fetch faulted: raise it now that the instruction issues, or read the word if the TLB has changed since
     auto access = devirtualize<Read, Word>(ipu.pc);
     if(!access) return;
-    fetched.word = fetch(access);
+    slot.word = fetch(access);
   }
-  u32 word = fetched.word;
+  u32 word = slot.word;
   instructionIndex++;
   pipeline.begin();
   auto issued = pipeline.issue(word);
