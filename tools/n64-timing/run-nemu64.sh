@@ -8,11 +8,9 @@
 #         $N64_TIMING_HOME/results/nemu64/summary.txt
 set -euo pipefail
 
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(cd "$here/../.." && pwd)"
-runner="${N64_RUN:-$N64_TIMING_HOME/build/$(basename "$repo")/n64-run/rundir/n64-run.exe}"
-[ -x "$runner" ] || runner="${runner%.exe}"
+. "$here/host.sh"
+runner="${N64_RUN:-$(n64_target n64-run)}"
 
 sets="${*:-timing cycle cop0hazard}"
 
@@ -33,9 +31,9 @@ for set in $sets; do
   {
     echo "== $set exit=$status wall_s=$wall"
     grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
-    python "$here/nemu64-results.py" "$out/stdout.txt" "$out"
+    "$PYTHON" "$here/nemu64-results.py" "$out/stdout.txt" "$out"
     if [ -f "${rom%.z64}.tests.tsv" ]; then
-      PYTHONPATH="$here" python -m romgen.report "${rom%.z64}.tests.tsv" "$out/stdout.txt" "$out"
+      PYTHONPATH="$here" "$PYTHON" -m romgen.report "${rom%.z64}.tests.tsv" "$out/stdout.txt" "$out"
     fi
   } | tee "$out/summary.txt" >> "$results/summary.txt"
 done

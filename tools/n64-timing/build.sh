@@ -1,29 +1,31 @@
 #!/usr/bin/env bash
-# Builds tools/n64-run (headless N64 runner) natively with MSYS2 clang64.
-# Output: $N64_TIMING_HOME/build/<name>/n64-run/rundir/n64-run.exe
+# Builds tools/n64-run (headless N64 runner) natively: MSYS2 clang64 on Windows, the host
+# compiler on Linux (clang if installed, else gcc). Prints the runner path (host.sh n64_target).
 set -euo pipefail
 
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
-repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-build="${N64_BUILD_DIR:-$N64_TIMING_HOME/build/$(basename "$repo")}"
+. "$(dirname "${BASH_SOURCE[0]}")/host.sh"
 config="${N64_BUILD_TYPE:-RelWithDebInfo}"
-msys="${MSYS2_ROOT:-/c/msys64}"
 
-export PATH="$msys/clang64/bin:$PATH"
-for tool in clang++ cmake ninja; do
-  command -v "$tool" >/dev/null || {
-    echo "missing $tool; install with: $msys/usr/bin/pacman -S --needed mingw-w64-clang-x86_64-{toolchain,cmake,ninja}" >&2
-    exit 1
-  }
+if [ -n "$n64_windows" ]; then
+  msys="${MSYS2_ROOT:-/c/msys64}"
+  export PATH="$msys/clang64/bin:$PATH"
+  cc=clang cxx=clang++
+  install="$msys/usr/bin/pacman -S --needed mingw-w64-clang-x86_64-{toolchain,cmake,ninja}"
+else
+  if command -v clang++ >/dev/null; then cc=clang cxx=clang++; else cc=gcc cxx=g++; fi
+  install="the system package manager (apt install g++ cmake ninja-build)"
+fi
+for tool in "$cxx" cmake ninja; do
+  command -v "$tool" >/dev/null || { echo "missing $tool; install with: $install" >&2; exit 1; }
 done
 
-if [ ! -f "$build/CMakeCache.txt" ]; then
-  cmake -S "$repo" -B "$build" -G Ninja \
+if [ ! -f "$n64_build/CMakeCache.txt" ]; then
+  cmake -S "$n64_repo" -B "$n64_build" -G Ninja \
     -DCMAKE_BUILD_TYPE="$config" \
-    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+    -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx" \
     -DARES_CORES=n64 \
     -DARES_SKIP_DEPS=ON \
     -DENABLE_CCACHE=OFF
 fi
-cmake --build "$build" --target n64-run n64-timing-tests n64-timing-dpc-regs
-echo "$build/n64-run/rundir/n64-run.exe"
+cmake --build "$n64_build" --target n64-run n64-timing-tests n64-timing-dpc-regs
+n64_target n64-run

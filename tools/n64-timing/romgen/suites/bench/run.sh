@@ -8,15 +8,13 @@
 #         $N64_TIMING_HOME/results/bench/{measurements.tsv,results.tsv,summary.txt}
 set -euo pipefail
 
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 romgen="$(cd "$here/../.." && pwd)"
-repo="$(cd "$romgen/../../.." && pwd)"
-runner="${N64_RUN:-$N64_TIMING_HOME/build/$(basename "$repo")/n64-run/rundir/n64-run.exe}"
-[ -x "$runner" ] || runner="${runner%.exe}"
+. "$romgen/../host.sh"
+runner="${N64_RUN:-$(n64_target n64-run)}"
 roms_dir="${BENCH_ROMS:-$N64_TIMING_HOME/roms/bench}"
 
-roms="${*:-$(cd "$romgen/.." && python -c 'from romgen.suites.bench.benches import ROMS; print(" ".join(ROMS))')}"
+roms="${*:-$(cd "$romgen/.." && "$PYTHON" -c 'from romgen.suites.bench.benches import ROMS; print(" ".join(ROMS))')}"
 
 results="${BENCH_RESULTS:-$N64_TIMING_HOME/results/bench}"
 mkdir -p "$results"
@@ -30,4 +28,4 @@ for rom in $roms; do
     > "$out/stdout.txt" 2> "$out/stderr.txt" || status=$?
   echo "== $rom exit=$status $(grep '^n64-run: stop=' "$out/stderr.txt" || echo 'no stop line')"
 done
-(cd "$romgen/.." && python -m romgen.suites.bench.report "$roms_dir" "$results" $roms) | tee "$results/summary.txt"
+(cd "$romgen/.." && "$PYTHON" -m romgen.suites.bench.report "$roms_dir" "$results" $roms) | tee "$results/summary.txt"
