@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass, field
 
-from . import dpc, repeater64, routines, systemtest
+from . import dpc, repeater64, routines, stale, systemtest
 
 
 @dataclass
@@ -36,4 +36,6 @@ SETS = [
            dpc.build, dpc.LISTS),
     SetDef("repeater64", "rdpstat-repeater64", "RDP-pixels", "(rdpstat: repeater64 no-sync)",
            repeater64.build, repeater64.LISTS, repeater64_data),
+    SetDef("1prim", "rdpstat-1prim", "RDP-1prim", "(rdpstat: span-buffer coherency, cen64 PRDP 12:15/12:16)",
+           stale.build, stale.LISTS),
 ]

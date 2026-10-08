@@ -281,6 +281,8 @@ auto RDP::prefetch(Clock at) -> void {
   retire();
   if(pipe.prefetched >= 0 || pipe.count == Slots) return;
   rdp_span_info info;
+  //the slot past a primitive's last real span draws nothing and never enters the pipe
+  while(rdp_render_span_peek(0, &info) && info.phantom) rdp_render_span_run();
   if(!rdp_render_span_peek(0, &info)) return;
   if(info.atomic && info.primitive != pipe.lastPrimitive) {
     if(pipe.count || pipe.current >= 0) return;
@@ -327,7 +329,7 @@ auto RDP::startSpan(Clock at) -> bool {
   auto& slot = slots[pipe.prefetched];
   if(slot.reads) return false;
   Clock start = max(pipe.time, slot.ready);
-  if(start > at && !slot.info.phantom) return wakeAt(start), false;
+  if(start > at) return wakeAt(start), false;
   rdp_memwin windows[2];
   u32 n = 0;
   for(auto* w : {&slot.color, &slot.depth})
@@ -339,12 +341,6 @@ auto RDP::startSpan(Clock at) -> bool {
   rdp_render_set_windows(nullptr, 0);
   pipe.current = pipe.prefetched;
   pipe.prefetched = -1;
-  if(slot.info.phantom) {
-    slot.shaded = true;
-    pipe.current = -1;
-    retire();
-    return true;
-  }
   pipe.pixel = 0;
   pipe.time = start;
   for(auto* s : {&pipe.color, &pipe.depth}) {
@@ -433,8 +429,11 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   const u32 bpp = image == Color ? bytesPerPixel(info.fb_size) : 2;
   const u32 base = (image == Color ? info.fb_address : info.zb_address) & 0xffffff;
   const u32 row = base + ((u32)info.y * info.fb_width + (u32)info.x0) * bpp;
+  //the span's end flushes the whole window: the walk can touch one position
+  //past the drawn width (the clipped end pixel)
+  const bool end = endPixel >= spanPixels(info);
   u32 lo = direct ? w.lo : max(w.lo, row + firstPixel * bpp);
-  u32 hi = direct ? w.hi : min(w.hi, row + endPixel * bpp);
+  u32 hi = direct || end ? w.hi : min(w.hi, row + endPixel * bpp);
   u8 half = 0xff;
   Half* h = nullptr;
   if(!direct) {
@@ -460,6 +459,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
 
 auto RDP::pipeline(Clock at) -> void {
   while(true) {
+    prefetch(at);
     if(pipe.chunk) {
       if(pipe.chunkEnd > at) return;
       endChunk(pipe.chunkEnd);
@@ -469,7 +469,6 @@ auto RDP::pipeline(Clock at) -> void {
       prefetch(at);
       if(!startSpan(at)) return;
       prefetch(at);
-      if(pipe.current < 0) continue;
     }
     if(!beginChunk(at)) return;
   }

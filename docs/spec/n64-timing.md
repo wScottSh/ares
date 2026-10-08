@@ -186,7 +186,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `rdp.fill-copy-rate` | 8 B/rclk | vendor | SDK 12.1.4/12.1.5 | `thar0:fill-mode` |  |
 | `rdp.tmem-load-rate` | 8 B/rclk | rtl | MiSTer RTL and angrylion structure; reverted cen64 law 0.418 B/clk conflicts (jgemu-dpc-probe.md) | `bench:rdp-loadsz-sweep` | conflict recorded; no vendor figure |
 | `rdp.pipeline-depth` | 25 rclk | derived | cen64 hazard fit D = min(3L-2, 25); n64brew corruption table 0-29 (rdp-command-timing.md s.3.7) | `rdpstat:nosync-1cycle` `snapper:rect-nosync` | T15 |
-| `rdp.atomic-dead` | 35 rclk | vendor | SDK pro-man 12.2.3: 30 to 40 null cycles (1prim-cost.md) | `bench:rdp-atomic-sweep` | midpoint of a vendor range |
+| `rdp.atomic-dead` | 35 rclk | vendor | SDK pro-man 12.2.3: 30 to 40 null cycles (1prim-cost.md) | `bench:rdp-atomic-sweep` `rdpstat:1prim` | midpoint of a vendor range |
 | `rdp.span-ram-half` | 64 B | measured | snapper64 216 dumps via the cen64 DPS model (span-ram.md rows 3-5) | `snapper:span-tri` |  |
 | `rdp.span-ram-segment` | 16 B | wiki | DPS_TEST_MODE counters count 16 B segments (span-ram.md) | `snapper:span-tri` |  |
 | `rdp.color-half-pixels-16bpp` | 32 px | model-choice | span-ram.md question 1: 16 or 32 at 16 bpp, unmeasured | `snapper:span-tri` | calibration #16 |
@@ -317,3 +317,4 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `unit:rdram-private` | unit | n64-timing-rdram-device | rdram-private | pass | ADR 0001 Decision 2: a device-side read of rdram.ram fails to compile on the access check, a Loader read compiles (tests/rdram-private.cmake, plan T8) |
 | `rdpstat:dpc-sequencing` | rdpstat | dpc | - | self | rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12) |
 | `rdpstat:xbus` | rdpstat | systemtest | RDP STATUS: Run from DMEM (xbus) | self | n64-systemtest tests/rdp run_from_dmem, three DMEM placements |
+| `rdpstat:1prim` | rdpstat | 1prim | - | self | rdpstat 1prim ROM: four stacked one-row image-read rectangles, 1- and 2-cycle, 8 and 32 px; non-atomic narrow stacks retire the two-blend value, wide ones and atomic stacks the four-blend value (cen64 jgemu rdp_core.c:4551-4567, PRDP 12:15/12:16 checksums; 1prim-cost.md) |

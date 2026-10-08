@@ -29,6 +29,11 @@ def res_mask(src, mask, res):
     return Step("step_res_mask", [src, mask], res)
 
 
+def res_eq(a, b, res):
+    """RES[res] = 1 when RES[a] == RES[b], else 0, to compare two outcomes of one ROM."""
+    return Step("step_res_eq", [a, b], res)
+
+
 def fill32(addr, words, value):
     return Step("step_fill32", [addr, words, value])
 
@@ -98,6 +103,21 @@ step_res_mask:
     and $t1, $t1, $t2
     jr $ra
     sw $t1, 0($a1)
+
+step_res_eq:
+    lw $t0, 0($a0)
+    lw $t2, 4($a0)
+    la $t1, DATA_BASE + D_RES
+    sll $t0, $t0, 2
+    addu $t0, $t0, $t1
+    sll $t2, $t2, 2
+    addu $t2, $t2, $t1
+    lw $t0, 0($t0)
+    lw $t2, 0($t2)
+    xor $t0, $t0, $t2
+    sltiu $t0, $t0, 1
+    jr $ra
+    sw $t0, 0($a1)
 
 step_fill32:
     lw $t0, 0($a0)

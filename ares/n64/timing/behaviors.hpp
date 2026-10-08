@@ -229,7 +229,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.fill-copy-rate", Basis::Vendor, "8", "B/rclk", "SDK 12.1.4/12.1.5", "thar0:fill-mode", ""},
   {"rdp.tmem-load-rate", Basis::Rtl, "8", "B/rclk", "MiSTer RTL and angrylion structure; reverted cen64 law 0.418 B/clk conflicts (jgemu-dpc-probe.md)", "bench:rdp-loadsz-sweep", "conflict recorded; no vendor figure"},
   {"rdp.pipeline-depth", Basis::Derived, "25", "rclk", "cen64 hazard fit D = min(3L-2, 25); n64brew corruption table 0-29 (rdp-command-timing.md s.3.7)", "rdpstat:nosync-1cycle snapper:rect-nosync", "T15"},
-  {"rdp.atomic-dead", Basis::Vendor, "35", "rclk", "SDK pro-man 12.2.3: 30 to 40 null cycles (1prim-cost.md)", "bench:rdp-atomic-sweep", "midpoint of a vendor range"},
+  {"rdp.atomic-dead", Basis::Vendor, "35", "rclk", "SDK pro-man 12.2.3: 30 to 40 null cycles (1prim-cost.md)", "bench:rdp-atomic-sweep rdpstat:1prim", "midpoint of a vendor range"},
   {"rdp.span-ram-half", Basis::Measured, "64", "B", "snapper64 216 dumps via the cen64 DPS model (span-ram.md rows 3-5)", "snapper:span-tri", ""},
   {"rdp.span-ram-segment", Basis::Wiki, "16", "B", "DPS_TEST_MODE counters count 16 B segments (span-ram.md)", "snapper:span-tri", ""},
   {"rdp.color-half-pixels-16bpp", Basis::ModelChoice, "32", "px", "span-ram.md question 1: 16 or 32 at 16 bpp, unmeasured", "snapper:span-tri", "calibration #16"},
