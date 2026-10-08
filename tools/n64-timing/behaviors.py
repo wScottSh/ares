@@ -12,7 +12,11 @@ usage: behaviors.py                 write ares/n64/timing/behaviors.hpp, docs/sp
        behaviors.py --self-test     prove each --check failure fires and names its fix
 
 behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note.
-Every row names a reference and at least one check. A fit row's fit-from names the
+Every row names a reference and at least one check. A check written `~id` is a guard: it
+runs and can fail the row, but it never makes the row pass, because it does not measure the
+row's value. det and stepcap are always written as guards: they show a run repeats, not that
+a value is right. A row whose checks are all guards must be a model-choice row; its status is
+model-choice. A fit row's fit-from names the
 checks whose data its value was solved from; a pass on those verifies the arithmetic,
 not the model, so its verify column needs another check that decides it (not a report
 or a pending gate). A fit row with none starts its note with `verify-is-fit: <reason>`
@@ -71,8 +75,9 @@ NUMBER_UNITS = {"Hz", "B", "entries", "dwords", "px", "lines", "instr", "rank", 
 FLAG_UNITS = {"flag"}
 TEXT_UNITS = {"order", "map", "rule", "event"}
 RUNNERS = {"nemu64", "bench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",
-           "mm", "det", "stepcap", "unit", "gen", "pending"}
+           "mm", "det", "stepcap", "unit", "gen", "pending", "harness"}
 BARE_RUNNERS = {"det", "stepcap", "gen"}
+GUARD_RUNNERS = {"det", "stepcap"}
 EXPECT = re.compile(r"^(self|suite|report|equal|pass|gate|file:\S+|-?[\d.]+)$")
 VERIFY_IS_FIT = re.compile(r"^verify-is-fit: \S")
 LEGACY_NOTE = re.compile(r"^(replaced by T(?:\d+[a-d]?|-L)|no plan unit): \S")
@@ -206,6 +211,11 @@ def suite_matches(suite_file, target, selector):
     return [b for b in body if b.get(key) == target and all(b.get(c) == v for c, v in wanted.items())]
 
 
+def verify_checks(row):
+    """(check id, guard) for each check in the row's verify column."""
+    return [(c[1:], True) if c.startswith("~") else (c, False) for c in row["verify"].split()]
+
+
 def decides(cid, explicit, suite_files):
     """False for a check that cannot fail: a pending gate, or a report with no asserted row."""
     row = explicit.get(cid)
@@ -285,10 +295,18 @@ def validate(root):
         if not row["verify"]:
             errors.append(f"{where}: `{rid}` has no check. Name the check that decides it from {CHECKS}, "
                           f"or pending:<gate> when its corpus cannot run yet.")
-        for cid in row["verify"].split():
+        for cid, guard in verify_checks(row):
             if not check_defined(cid, explicit, suite_files):
                 errors.append(f"{where}: check `{cid}` is not defined in {CHECKS}. Add a row there "
                               f"(id, runner, target, selector, expect, source), or land the suite file that defines it.")
+            elif guard and cid.startswith("pending:"):
+                errors.append(f"{where}: `~{cid}` marks a gate as a guard. A gate is not a check; write `{cid}`.")
+            elif not guard and explicit.get(cid, {}).get("runner") in GUARD_RUNNERS:
+                errors.append(f"{where}: `{cid}` shows a run repeats, not that `{rid}`'s value is right. "
+                              f"Write `~{cid}` so it guards the row without passing it.")
+        if row["verify"] and basis != "model-choice" and all(guard for _, guard in verify_checks(row)):
+            errors.append(f"{where}: every check of `{rid}` is a guard, so nothing decides its value. Name a check "
+                          f"that measures it, or the pending:<gate> that keeps one from running.")
         fit_from, flagged = row["fit-from"].split(), bool(VERIFY_IS_FIT.match(row["note"]))
         for cid in fit_from:
             if not check_defined(cid, explicit, suite_files):
@@ -296,7 +314,8 @@ def validate(root):
         if basis != "fit" and (fit_from or flagged):
             errors.append(f"{where}: only a fit row has fit-from or a verify-is-fit note. Clear them, or mark the basis fit.")
         elif basis == "fit":
-            independent = [c for c in row["verify"].split() if c not in fit_from and decides(c, explicit, suite_files)]
+            independent = [c for c, guard in verify_checks(row)
+                           if not guard and c not in fit_from and decides(c, explicit, suite_files)]
             if not fit_from:
                 errors.append(f"{where}: fit row `{rid}` has no fit-from. Name the checks whose data the value was solved "
                               f"from in the fit-from column.")
@@ -383,6 +402,8 @@ def cell(text):
 
 
 def check_cell(cid):
+    if cid.startswith("~"):
+        return check_cell(cid[1:]) + " (guard)"
     return f"pending ({cid[8:]})" if cid.startswith("pending:") else f"`{cid}`"
 
 
@@ -404,6 +425,8 @@ def value_cell(row):
 
 
 def result_word(cid, found):
+    if cid.startswith("~"):
+        return result_word(cid[1:], found) + " (guard)"
     return check_cell(cid) if cid.startswith("pending:") else f"`{cid}` {found.get(cid, ('missing', ''))[0]}"
 
 
@@ -415,6 +438,8 @@ STATUS_MEANING = {
     "pass": "a check other than the row's fit data passed, and none failed",
     "fail": "at least one check failed; the detail in Check results gives the residual",
     "fit only": "only the checks the value was fitted to passed (verify-is-fit)",
+    "model-choice": "a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the "
+                    "same every time, not that its value is right",
 }
 
 
@@ -440,13 +465,16 @@ def render_spec(rows, checks, found):
         "There is no unverified status. A behavior is built from its reference, or it is a model choice whose reference states the reason. "
         "A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. "
         "A fit row names the checks its value was solved from (fit from). A pass on those verifies the arithmetic, not the model, "
-        "so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why.",
+        "so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why. "
+        "A check marked (guard) runs and can fail its row, but it never passes it, because it does not measure the row's value: "
+        "det and stepcap show a run repeats, not that a value is right.",
         "",
         f"Results come from `behaviors.py --results` over one standing run of every suite, recorded in `{RESULTS}`. "
-        "A check is pass, fail, or pending on a named gate. A check that can only report (no hardware value to compare) is "
-        "pending on the calibration run. A Thar0 check passes when the model's count lies inside the console's minimum..maximum "
-        "over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data passes, "
-        "fit only when only its fit data passes, and otherwise the gates of its pending checks.",
+        "A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on "
+        "report-only. A Thar0 check passes when the model's count lies inside the console's minimum..maximum "
+        "over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data and "
+        "its guards passes, fit only when only its fit data passes, model-choice when a model-choice row has only guards, "
+        "and otherwise the gates of its pending checks.",
         "",
         "| Basis | Meaning | Rows |",
         "|---|---|---|",
@@ -494,14 +522,49 @@ def results_source(found):
     return found.get("#source", ("", ""))[1]
 
 
-def render_closure(rows, checks, found):
+WALL_BUDGET = "tools/n64-timing/mmbench/wall-budget.tsv"
+BUDGET_S = 120
+TOOLS_BENCH = (
+    "mm-decomp-60fps `tools/bench` (untracked in the checkout at 56fa21dd) still runs `ares` from PATH "
+    "through `tools/ares/ares-headless.sh` and records the upstream ares revision, and its BENCH build still pins "
+    "`func_80173B48` (`src/code/game.c`, `tools/bench/README.md`). The fork measures MM with its own "
+    "`tools/n64-timing/mmbench` instead, on the retail NTSC-U 1.0 ROM (mmbench.py checks MD5 {md5}), where "
+    "`func_80173B48` is the unpinned retail code. Per-behavior provenance is in `docs/spec/mm-bench.md`.")
+
+
+def found_result(found, cid):
+    return found.get(cid, ("missing", ""))
+
+
+def destination(root, found):
+    """The map #1 Destination items as (item, result, evidence)."""
+    det, stepcap = found_result(found, "det"), found_result(found, "stepcap")
+    walls = tsv_rows(Path(root) / WALL_BUDGET)
+    slow = max(walls, key=lambda r: float(r["wall_s"]))
+    filesel = [(c, found_result(found, c)) for c in ("mm:filesel-empty", "mm:filesel-named")]
+    md5 = re.search(r'ROM_MD5 = "(\w+)"', (Path(root) / "tools/n64-timing/mmbench/mmbench.py").read_text(encoding="utf-8"))
+    return [
+        ("Timing is bit-deterministic across runs", "pass" if det[0] == stepcap[0] == "pass" else "fail",
+         f"`det` {det[0]}: {det[1]}; `stepcap` {stepcap[0]}: {stepcap[1]}"),
+        ("A 600-frame MM bench run takes <= 2 min", "pass" if float(slow["wall_s"]) <= BUDGET_S else "fail",
+         f"slowest scene {slow['run']} {float(slow['wall_s']):g} s of {BUDGET_S} s; "
+         + ", ".join(f"{r['run']} {float(r['wall_s']):g}" for r in walls) + f" s ({WALL_BUDGET}: {slow['source']})"),
+        ("MM file select (#11): empty files <= 1.05 and named files 1.90-2.10 fields per game frame, both must pass",
+         "pass" if all(r[0] == "pass" for _, r in filesel) else "fail",
+         "; ".join(f"`{c}` {r[0]}: {r[1]}" for c, r in filesel)),
+        ("MM bench integration: point `tools/bench` at the fork, remove the `func_80173B48` pin", "not done",
+         TOOLS_BENCH.format(md5=md5.group(1) if md5 else "?")),
+    ]
+
+
+def render_closure(root, rows, checks, found):
     gates = {c["id"]: c for c in checks if c["runner"] == "pending"}
     by_status = {}
     for r in rows:
         by_status.setdefault(row_status(r, found), []).append(r)
     count = statuses(rows, found)
     out = [
-        f"<!-- GENERATED by tools/n64-timing/behaviors.py from {TABLE}, {CHECKS} and {RESULTS}. "
+        f"<!-- GENERATED by tools/n64-timing/behaviors.py from {TABLE}, {CHECKS}, {RESULTS} and {WALL_BUDGET}. "
         "A draft for a comment on map #1; not posted. -->",
         "",
         "# Map #1 closure (draft)",
@@ -510,33 +573,48 @@ def render_closure(rows, checks, found):
         f"results ({cell(results_source(found))}). "
         + ", ".join(f"{n} {s}" for s, n in sorted(count.items())) + ".",
         "",
-        "Every behavior is built from its reference. The rows below are the ones the program cannot decide yet, "
-        "the ones whose checks fail against hardware data, and the ones checked only against their own fit data.",
+        "## Destination",
         "",
-        "## Pending rows and their gates",
-        "",
-        "| Behavior | Basis | Gate | What closes it |",
-        "|---|---|---|---|",
+        "| Item | Result | Evidence |",
+        "|---|---|---|",
     ]
+    out += [f"| {item} | **{result}** | {cell(evidence)} |" for item, result, evidence in destination(root, found)]
+    failing = sorted(c for c, (result, _) in found.items() if result == "fail")
+    out += ["", "## Failing checks", "",
+            "Every check whose result is fail, with its residual, and the rows that name it.", "",
+            "| Check | Detail | Rows (verify) | Rows (fit from) |", "|---|---|---|---|"]
+    for c in failing:
+        verify = [r["id"] for r in rows if c in (x for x, _ in verify_checks(r))]
+        fit = [r["id"] for r in rows if c in r["fit-from"].split()]
+        out.append(f"| `{c}` | {cell(found[c][1])} | {' '.join(f'`{x}`' for x in verify) or '-'} | "
+                   f"{' '.join(f'`{x}`' for x in fit) or '-'} |")
+    out += ["", "## Rows whose checks fail", "", "| Behavior | Basis | Failing checks |", "|---|---|---|"]
+    for r in by_status.get("fail", []):
+        bad = [c for c, _ in verify_checks(r) if found_result(found, c)[0] == "fail"]
+        out.append(f"| `{r['id']}` | {r['basis']} | {cell('; '.join(f'`{c}`: {found[c][1]}' for c in bad))} |")
+    out += ["", "## Model choices that only guards check", "",
+            "No published value exists for these, and no check measures them: their checks are guards that passed.", "",
+            "| Behavior | Guards |", "|---|---|"]
+    for r in by_status.get("model-choice", []):
+        out.append(f"| `{r['id']}` | {' '.join(f'`{c}`' for c, _ in verify_checks(r))} |")
+    out += ["", "## Rows checked only against their fit data", "", "| Behavior | Fit from |", "|---|---|"]
+    for r in by_status.get("fit only", []):
+        out.append(f"| `{r['id']}` | {' '.join(f'`{c}`' for c in r['fit-from'].split())} |")
+    out += ["", "## Pending rows and their gates", "",
+            "| Behavior | Basis | Gate | What closes it |",
+            "|---|---|---|---|"]
     for s, members in sorted(by_status.items()):
         if s in STATUS_MEANING:
             continue
         for r in members:
             out.append(f"| `{r['id']}` | {r['basis']} | {', '.join(g[8:] for g in s.split())} | "
                        f"{cell('; '.join(gates[g]['source'] for g in s.split() if g in gates))} |")
-    out += ["", "## Rows whose checks fail", "", "| Behavior | Basis | Failing checks |", "|---|---|---|"]
-    for r in by_status.get("fail", []):
-        failing = [c for c in r["verify"].split() if found.get(c, ("",))[0] == "fail"]
-        out.append(f"| `{r['id']}` | {r['basis']} | {cell('; '.join(f'`{c}`: {found[c][1]}' for c in failing))} |")
-    out += ["", "## Rows checked only against their fit data", "", "| Behavior | Fit from |", "|---|---|"]
-    for r in by_status.get("fit only", []):
-        out.append(f"| `{r['id']}` | {' '.join(f'`{c}`' for c in r['fit-from'].split())} |")
-    out += ["", "## Pending checks inside rows that pass or fail", "",
+    out += ["", "## Pending checks inside rows that pass, fail or are fit only", "",
             "These checks are gated too, but another check already decides their row.", "",
             "| Behavior | Status | Pending checks |", "|---|---|---|"]
     for r in rows:
         s = row_status(r, found)
-        pend = [c for c in r["verify"].split() if (c if c.startswith("pending:") else found.get(c, ("",))[0]).startswith("pending:")]
+        pend = [c for c, _ in verify_checks(r) if (c if c.startswith("pending:") else found_result(found, c)[0]).startswith("pending:")]
         if s in STATUS_MEANING and pend:
             out.append(f"| `{r['id']}` | {s} | " + "; ".join(
                 check_cell(c) if c.startswith("pending:") else f"`{c}` pending ({found[c][0][8:]})" for c in pend) + " |")
@@ -547,7 +625,7 @@ def generated(root):
     errors, rows, checks, sites = validate(root)
     found = load_results(root, rows, checks, errors)
     return errors, {HEADER: render_header(rows), SPEC: render_spec(rows, checks, found),
-                    CLOSURE: render_closure(rows, checks, found)}
+                    CLOSURE: render_closure(root, rows, checks, found)}
 
 
 def check(root):
@@ -736,41 +814,44 @@ def mm_result(run, row):
 
 
 def pidma_result(run, row):
-    return None
+    m = re.search(r"^pidma: (PASS|FAIL): (.*)$", text(run / "pidma" / "summary.txt") or "", re.M)
+    return (m.group(1).lower(), m.group(2)) if m else None
 
 
 READERS = {"nemu64": nemu64_result, "det": lambda run, row: suite_runs(run, "det-*.txt", "determinism"),
            "stepcap": lambda run, row: suite_runs(run, "stepcap-*.txt", "stepcap"),
            "bench": bench_result, "thar0": thar0_result, "rdpstat": rdpstat_result, "snapper": snapper_result,
-           "unit": ctest_result, "noise": noise_result, "gen": gen_result, "mm": mm_result, "pidma": pidma_result}
-ROM_FILES = {"bench": "./bench/bench-{}.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64"}
+           "unit": ctest_result, "noise": noise_result, "gen": gen_result, "mm": mm_result, "pidma": pidma_result,
+           "harness": rdpstat_result}
+ROM_FILES = {"bench": "./bench/bench-{}.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
+             "harness": "./rdpstat-{}.z64"}
 RESULT = re.compile(r"^(pass|fail|pending:[a-z0-9-]+)$")
 
 
 def gate_for(row, explicit, suite_files, built):
     """The gate that keeps a check from deciding anything, or None when it can run and decide."""
     if not decides(row["id"], explicit, suite_files):
-        return "pending:calibration-16"
-    if row["runner"] == "pidma":
-        return "pending:build-corpora"
+        return "pending:report-only"
     pattern = ROM_FILES.get(row["runner"])
     if pattern and pattern.format(row["target"]) not in built:
         return "pending:no-rom"
     return None
 
 
-def referenced_checks(rows):
-    return sorted({c for r in rows for c in (r["verify"] + " " + r["fit-from"]).split()})
+def referenced_checks(rows, checks):
+    """Every check a behavior names, and every harness check (it guards the measuring tools, not a behavior)."""
+    named = {c.lstrip("~") for r in rows for c in (r["verify"] + " " + r["fit-from"]).split()}
+    return sorted(named | {c["id"] for c in checks if c["runner"] == "harness"})
 
 
 def results(root, run):
     """Reads one standing run (see tools/n64-timing/README.md) into one result per referenced check."""
-    errors, rows, _, _ = validate(root)
+    errors, rows, checks, _ = validate(root)
     _, explicit, _, suite_files = load_checks(root, [])
     run = Path(run)
     built = set((text(run / "rom-sha256.txt") or "").split())
     out = []
-    for cid in referenced_checks(rows):
+    for cid in referenced_checks(rows, checks):
         if cid.startswith("pending:"):
             continue
         prefix, _, rest = cid.partition(":")
@@ -780,7 +861,7 @@ def results(root, run):
         if gate:
             result, detail = gate, (measured[1] if measured else "")
         elif measured is None or measured[0] in ("missing", "report"):
-            result, detail = "not-run", measured[1] if measured else f"no {row['runner']} output for it in {run}"
+            result, detail = "not-run", measured[1] if measured else f"no {row['runner']} output for it in {run_label(run)}"
             errors.append(f"{cid}: {detail}. Rerun the standing set into {run}, or fix the check's target and selector.")
         else:
             result, detail = measured
@@ -788,9 +869,14 @@ def results(root, run):
     return errors, out
 
 
+def run_label(path):
+    """A run directory without the local part of its path: its last two components."""
+    return "/".join(Path(path).resolve().parts[-2:])
+
+
 def write_results(root, run, out):
     commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
-    head = f"# standing run {Path(run).resolve()} on {commit or 'an unknown commit'}"
+    head = f"# standing run {run_label(run)} on {commit or 'an unknown commit'}"
     lines = [head, "check\tresult\tdetail"] + [f"{c}\t{r}\t{d}" for c, r, d in out]
     (Path(root) / RESULTS).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
@@ -812,7 +898,7 @@ def load_results(root, rows, checks, errors):
                           f"rerun the check, or name the gate that keeps it from running.")
         elif result.startswith("pending:") and result not in gates:
             errors.append(f"{RESULTS}: `{cid}` is {result}, which is not a pending row in {CHECKS}. Add the gate there.")
-    wanted = [c for c in referenced_checks(rows) if not c.startswith("pending:")]
+    wanted = [c for c in referenced_checks(rows, checks) if not c.startswith("pending:")]
     for cid in wanted:
         if cid not in found:
             errors.append(f"{RESULTS}: check `{cid}` has no result. Rerun tools/n64-timing/behaviors.py --results "
@@ -823,17 +909,19 @@ def load_results(root, rows, checks, errors):
 
 
 def row_status(row, found):
-    """pass, fail, fit-only or pending:<gates> for one behavior, from its checks' results."""
-    verify, fit_from = row["verify"].split(), set(row["fit-from"].split())
-    res = {c: (c if c.startswith("pending:") else found.get(c, ("missing", ""))[0]) for c in verify}
-    if any(r == "fail" for r in res.values()):
+    """pass, fail, fit only, model-choice or pending:<gates> for one behavior, from its checks' results.
+    A guard can fail the row but never pass it."""
+    fit_from = set(row["fit-from"].split())
+    res = [(c, guard, c if c.startswith("pending:") else found.get(c, ("missing", ""))[0]) for c, guard in verify_checks(row)]
+    if any(r == "fail" for _, _, r in res):
         return "fail"
-    passed = [c for c, r in res.items() if r == "pass"]
+    passed = [c for c, guard, r in res if r == "pass" and not guard]
     if any(c not in fit_from for c in passed):
         return "pass"
     if passed:
         return "fit only"
-    return " ".join(sorted(set(res.values())))
+    undecided = sorted({r for _, guard, r in res if not guard})
+    return " ".join(undecided) if undecided else "model-choice"
 
 
 def self_test(root):
@@ -899,6 +987,17 @@ def self_test(root):
             ("verify-is-fit beside an independent check", TABLE,
              row_field("rdp.span-line-gap", "verify", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle thar0:zcmp"),
              "but `thar0:zcmp` decides it from other data. Remove the verify-is-fit note"),
+            ("det named without ~", TABLE, row_field("ri.request-latency", "verify", "det ~stepcap"),
+             "Write `~det` so it guards the row without passing it"),
+            ("a gate written as a guard", TABLE,
+             row_field("cpu.dcb", "verify", "~nemu64:timing/cpu-register-dependency ~pending:calibration-16"),
+             "marks a gate as a guard"),
+            ("only guards on a row that is not a model choice", TABLE,
+             row_field("cpu.dcb", "verify", "~nemu64:timing/cpu-register-dependency"), "is a guard, so nothing decides its value"),
+            ("a fit row whose only other check is a guard", TABLE,
+             lambda t: row_field("rdp.span-line-gap", "note", "Applied to fill and copy spans")(
+                 row_field("rdp.span-line-gap", "verify", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle ~thar0:zcmp")(t)),
+             "so a pass verifies the arithmetic, not the model"),
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("editing the closure draft", CLOSURE, lambda t: t + "manual edit\n", f"{CLOSURE} differs from the generated output"),
             ("a check with no result", RESULTS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("unit:timeline\t")),
@@ -939,6 +1038,17 @@ def self_test(root):
                 shutil.copy(root / TABLE, work / TABLE)
             if restore:
                 restore()
+        found = {"det": ("pass", ""), "stepcap": ("pass", ""), "x:pass": ("pass", ""), "x:fail": ("fail", "")}
+        for name, row, want in [
+            ("a model choice that passes only det and stepcap", ("model-choice", "~det ~stepcap", ""), "model-choice"),
+            ("a guard that passes beside a gate", ("vendor", "~x:pass pending:calibration-16", ""), "pending:calibration-16"),
+            ("a guard that fails", ("vendor", "~x:fail pending:calibration-16", ""), "fail"),
+            ("a fit row with a passing guard", ("fit", "x:pass ~det", "x:pass"), "fit only"),
+            ("a check that decides beside a guard", ("model-choice", "x:pass ~det", ""), "pass"),
+        ]:
+            got = row_status(dict(zip(("basis", "verify", "fit-from"), row)), found)
+            print(f"self-test: status of {name}: {'ok' if got == want else 'FAILED'}: {got} (expected {want})")
+            failures += got != want
         return failures
     finally:
         shutil.rmtree(work, ignore_errors=True)

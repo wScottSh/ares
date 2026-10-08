@@ -4,7 +4,8 @@
 #
 # usage: standing.sh OUT MM_ROM
 # env: N64_TIMING_HOME (ROMs go to $N64_TIMING_HOME/roms, rebuilt from this tree), N64_BUILD_DIR,
-#      REPEATER64_ASSETS (rdpstat repeater64 references)
+#      REPEATER64_ASSETS (rdpstat repeater64 references), PIDMA_DIR (a rasky/n64_pi_dma_test
+#      checkout: its prebuilt pi_dma_test.z64, pinned below, and the golden logs in data/)
 set -uo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,6 +32,16 @@ uptime > "$out/load-start.txt"
 "$here/romgen/suites/snapper/run.sh" > "$out/snapper.txt" 2>&1
 "$here/romgen/suites/noise/run.sh" > "$out/noise.txt" 2>&1
 "$here/run-thar0.sh" > "$out/thar0.txt" 2>&1
+pidma="${PIDMA_DIR:-$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test}"
+mkdir -p "$out/pidma"
+if echo "1d2c999c42baa57b9c16a21c0bd75b984901ee615ab30482fdec6ed7fcf156cb  $pidma/pi_dma_test.z64" \
+    | sha256sum -c - > "$out/pidma/sha256.txt" 2>&1; then
+  ARES_PILOG="$out/pidma/pi.log" "$N64_RUN" "$pidma/pi_dma_test.z64" --frames 3000 \
+    > "$out/pidma/stdout.txt" 2> "$out/pidma/stderr.txt"
+  "$PYTHON" "$here/pidma-replay.py" "$out/pidma/pi.log" "$pidma/data" --stdout "$out/pidma/stdout.txt" --calibrated \
+    > "$out/pidma/summary.txt" 2>&1
+  rm -f "$out/pidma/pi.log"
+fi
 for suite in nemu64 bench rdpstat snapper noise thar0; do
   rm -rf "$out/$suite"
   cp -r "$results/$suite" "$out/$suite"

@@ -164,7 +164,7 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 
 ## Behavior table, spec and checks
 
-`ares/n64/timing/behaviors.tsv` is the one source for every timing constant. Each row has an id, a value, a unit, a basis, a reference, the checks that decide it, the checks a fit was solved from (`fit-from`), and a note. `checks.tsv` defines every check id: its runner, target, selector, expectation and source.
+`ares/n64/timing/behaviors.tsv` is the one source for every timing constant. Each row has an id, a value, a unit, a basis, a reference, the checks that decide it, the checks a fit was solved from (`fit-from`), and a note. A check written `~id` in the verify column is a guard: it runs and can fail the row, but it never passes it, because it does not measure the row's value. `det` and `stepcap` are always guards. A `model-choice` row whose checks are all guards gets the status `model-choice`, not `pass`. `checks.tsv` defines every check id: its runner, target, selector, expectation and source.
 
 ```sh
 python tools/n64-timing/behaviors.py              # writes behaviors.hpp, docs/spec/n64-timing.md and docs/spec/map-1-closure-draft.md
@@ -178,6 +178,7 @@ python tools/n64-timing/behaviors.py --results RUN_DIR  # writes docs/spec/n64-t
 
 - a row has no value, no reference, or no check;
 - a check id is not defined in `checks.tsv`;
+- `det` or `stepcap` is named without `~`, a gate is written as a guard, or every check of a row that is not `model-choice` is a guard;
 - a time value is not a whole number of 750 MHz units and the basis is not `fit`;
 - a `fit` row has an empty `fit-from`, or every check in its verify column is in its `fit-from`, reports only, or is pending, and its note does not start with `verify-is-fit: <reason>`;
 - a row's note says `verify-is-fit` but another check decides it, or a row that is not `fit` has a `fit-from`;
@@ -194,7 +195,7 @@ A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `f
 
 ### Results
 
-`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that can only report is `pending:calibration-16`, a pidma check is `pending:build-corpora`, and a check whose ROM the suite does not build is `pending:no-rom`. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
+`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that reports a number but asserts none is `pending:report-only`, and a check whose ROM the suite does not build is `pending:no-rom`. `pidma/` holds the pi_dma_test run: standing.sh runs the prebuilt ROM from `$PIDMA_DIR` (default `$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test`, sha256 pinned) for 3000 frames with `ARES_PILOG`, then `pidma-replay.py --calibrated` writes the verdict line to `pidma/summary.txt`. A `harness:` check guards a measuring tool, not a behavior, so it gets a result though no row names it. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
 
 ## Clock units
 
@@ -266,4 +267,4 @@ The scripts are the ones `mmbench.py` writes. Each scene's wall time covers the 
 | `sct` | 906 | 63.10 | 62.92 to 63.57 | CPU interpreter 23%, RSP 22%, RI and timeline 22% |
 | `field` | 924 | 60.67 | 60.66 to 60.74 | CPU interpreter 24%, RSP 22%, RI and timeline 21% |
 
-Every scene is within the budget. `filesel-rotate` is the closest, at 103 s for 1764 fields, because its window runs eight rotations (1157 fields) instead of 600. The runner is single-threaded and runs 3.8 to 4.8 instructions per cycle, so the wall time follows the instruction count on one core. The shares come from `perf record -F 999` runs that are not part of the timing. The other subsystems are the pixel engine's shading (11 to 23%), the RDP front end's scheduling (6 to 8%), and the per-field state hash behind `trace_hash` (7 to 11%).
+`mmbench/wall-budget.tsv` holds these medians; the map #1 closure draft reads the budget result from it. Every scene is within the budget. `filesel-rotate` is the closest, at 103 s for 1764 fields, because its window runs eight rotations (1157 fields) instead of 600. The runner is single-threaded and runs 3.8 to 4.8 instructions per cycle, so the wall time follows the instruction count on one core. The shares come from `perf record -F 999` runs that are not part of the timing. The other subsystems are the pixel engine's shading (11 to 23%), the RDP front end's scheduling (6 to 8%), and the per-field state hash behind `trace_hash` (7 to 11%).

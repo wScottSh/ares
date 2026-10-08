@@ -1,0 +1,8 @@
+run	wall_s	source
+title	39.270	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
+filesel	55.948	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
+filesel-named	81.334	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
+filesel-options	67.071	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
+filesel-rotate	102.897	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
+sct	63.097	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
+field	60.669	T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)
