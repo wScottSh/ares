@@ -65,7 +65,8 @@ auto SI::writeWord(u32 address, u32 data, Thread& thread) -> void {
   io.pchState = 0xb;
   io.dmaState = 0x9;
   io.busLatch = data;
-  scheduleAfter(EventKind::SI_BUS_Write, rclk(2150));
+  //si.io-busy: n64-systembench SI I/O W, the write to SI_STATUS idle
+  scheduleAfter(EventKind::SI_BUS_Write, Timing::Behavior::SiIoBusy);
   return pif.write<Word>(address, data);
 }
 
