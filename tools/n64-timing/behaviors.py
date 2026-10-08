@@ -586,13 +586,14 @@ def render_spec(rows, checks, found):
         for r in members:
             out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['reference'])} | "
                        f"{checks_cell(r)} | {cell(result_cell(r, found))} | {code_cell(r)} | {cell(r['note'])} |")
-    out += ["", "## Not built", "",
+    unbuilt = [r for r in rows if not_built(r)]
+    out += ["", "## Not built", ""] + ([
             "The code does not use these rows' values. Each says what the code does instead; their checks measure that code.", "",
             "| Behavior | Value | Basis | What the code does instead | Checks |", "|---|---|---|---|---|"]
-    for r in rows:
-        if not_built(r):
-            out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['code'][len(NOT_BUILT):])} | "
-                       f"{cell('; '.join(result_word(c, found) for c in r['verify'].split()))} |")
+            if unbuilt else ["None: the code reads each value or implements each rule."])
+    for r in unbuilt:
+        out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['code'][len(NOT_BUILT):])} | "
+                   f"{cell('; '.join(result_word(c, found) for c in r['verify'].split()))} |")
     out += ["", "## Legacy costs in today's core", "",
             "Each row is a constant that today's core still charges. `tools/n64-timing/literal-allowlist.tsv` pins the literal "
             "at its code site to the row, so the code and this table cannot disagree. The plan unit in the note replaces the cost "
@@ -689,9 +690,10 @@ def render_closure(root, rows, checks, found):
         fit = [r["id"] for r in rows if c in r["fit-from"].split()]
         out.append(f"| `{c}` | {cell(found[c][1])} | {' '.join(f'`{x}`' for x in verify) or '-'} | "
                    f"{' '.join(f'`{x}`' for x in fit) or '-'} |")
-    out += ["", "## Behaviors not built", "",
+    out += ["", "## Behaviors not built", ""] + ([
             "The code does not use these rows' values, so no check result says anything about them.", "",
             "| Behavior | Basis | Value | What the code does instead |", "|---|---|---|---|"]
+            if by_status.get("not-built") else ["None."])
     for r in by_status.get("not-built", []):
         out.append(f"| `{r['id']}` | {r['basis']} | {value_cell(r)} | {cell(r['code'][len(NOT_BUILT):])} |")
     out += ["", "## Rows whose checks fail", "", "| Behavior | Basis | Failing checks |", "|---|---|---|"]

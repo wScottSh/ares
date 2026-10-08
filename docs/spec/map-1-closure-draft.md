@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run not-built/after on f70b7bda5). 30 fail, 10 fit only, 3 model-choice, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 5 pending:no-rom, 1 pending:no-rom pending:report-only, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench/after on 604d5b809). 36 fail, 10 fit only, 3 model-choice, 64 pass, 7 pending:calibration-16, 16 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
@@ -10,7 +10,7 @@ The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a refer
 |---|---|---|
 | Timing is bit-deterministic across runs | **pass** | `det` pass: det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash; `stepcap` pass: stepcap-mm: stepcap: PASS, 29 files byte-identical, 8219 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 24 fields with trace_hash |
 | A 600-frame MM bench run takes <= 2 min | **pass** | slowest scene filesel-rotate 102.897 s of 120 s; title 39.27, filesel 55.948, filesel-named 81.334, filesel-options 67.071, filesel-rotate 102.897, sct 63.097, field 60.669 s (tools/n64-timing/mmbench/wall-budget.tsv: T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)) |
-| MM file select (#11): empty files <= 1.05 and named files 1.90-2.10 fields per game frame, both must pass | **fail** | `mm:filesel-empty` pass: filesel: mean 1.0113, 98.9% of 444 game frames at 1 field(s); `mm:filesel-named` fail: filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) |
+| MM file select (#11): empty files <= 1.05 and named files 1.90-2.10 fields per game frame, both must pass | **fail** | `mm:filesel-empty` pass: filesel: mean 1.0113, 98.9% of 444 game frames at 1 field(s); `mm:filesel-named` fail: filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) |
 | MM bench integration: point `tools/bench` at the fork, remove the `func_80173B48` pin | **not done** | mm-decomp-60fps `tools/bench` (untracked in the checkout at 56fa21dd) still runs `ares` from PATH through `tools/ares/ares-headless.sh` and records the upstream ares revision, and its BENCH build still pins `func_80173B48` (`src/code/game.c`, `tools/bench/README.md`). The fork measures MM with its own `tools/n64-timing/mmbench` instead, on the retail NTSC-U 1.0 ROM (mmbench.py checks MD5 2a0a8acb61538235bc1094d297fb6556), where `func_80173B48` is the unpinned retail code. Per-behavior provenance is in `docs/spec/mm-bench.md`. |
 
 ## Failing checks
@@ -19,38 +19,37 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 | Check | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|
-| `bench:mi-memset-cached` | vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
-| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
-| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
+| `bench:mi-memset-cached` | vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
+| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.717 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
+| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
+| `bench:pi-io-write` | rom-word sb_rclk 140 (expected 134, 132..136) fail | `pi.io-busy` | - |
+| `bench:si-dma-read64-1` | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail | `si.read64-base` `legacy.si.dma-read-controller` `legacy.si.dma-read-empty-port` `legacy.si.dma-read-accessory` `legacy.si.dma-read-short-command` | - |
 | `bench:sp-dma-sweep` | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail | `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `ri.overhead-read` `ri.overhead-write` `sp.dma-burst` | `ri.overhead-read` |
-| `mm:filesel-named` | filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
+| `mm:filesel-named` | filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
 | `nemu64:timing/load-miss-vi-off` | 0 of 1 tests pass | `cpu.dfill-total` | - |
-| `pidma:logs` | replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures | `pi.page-setup` `pi.halfword-bias` `pi.block-bytes` `pi.block-writeback` | - |
+| `pidma:logs` | replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures | `pi.page-setup` `pi.halfword-bias` `pi.block-bytes` `pi.block-writeback` | - |
 | `rdpstat:1prim` | 2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px | `rdp.atomic-dead` | - |
 | `thar0:ac-zbsame-vioff-imrd-1cyc` | model 108697 vs console 105999 (105940..106092), +2.55% | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` |
 | `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` | model 170392 vs console 166352 (166182..166520), +2.43% | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` |
 | `thar0:imrd-1cycle` | model 176749 vs console 163556 (163436..163654), +8.07% | `ri.overhead-rdp` `rdp.span-slots` `rdp.port-lookahead` `rdp.read-gate` | `rdp.port-lookahead` |
 | `thar0:nozb-vioff-imrd-1cyc` | model 176749 vs console 163556 (163436..163654), +8.07% | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` |
 | `thar0:nozb-visame-noimrd-1cyc` | model 77772 vs console 81791.4 (81654..81868), -4.91% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
-| `thar0:nozb-visep-imrd-1cyc` | model 181098 vs console 174059 (173832..174382), +4.04% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
+| `thar0:nozb-visep-imrd-1cyc` | model 181087 vs console 174059 (173832..174382), +4.04% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:separate-bank` | model 225260 vs console 225679 (225518..225802), -0.19% | `ri.arbitration` `ri.overhead-rdp` | - |
-| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | model 199069 vs console 208861 (208473..209121), -4.69% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
-| `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | model 232652 vs console 245639 (245078..246077), -5.29% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
+| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | model 199079 vs console 208861 (208473..209121), -4.68% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
+| `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | model 232657 vs console 245639 (245078..246077), -5.28% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:zcmp` | model 108697 vs console 106000 (105940..106088), +2.54% | `rdp.read-gate` | - |
 
 ## Behaviors not built
 
-The code does not use these rows' values, so no check result says anything about them.
-
-| Behavior | Basis | Value | What the code does instead |
-|---|---|---|---|
+None.
 
 ## Rows whose checks fail
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail |
+| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.717 (expected 18.38, 18.346..18.418) fail |
 | `ri.octbyte` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.post-read-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
@@ -63,23 +62,29 @@ The code does not use these rows' values, so no check result says anything about
 | `ri.overhead-write` | derived | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.overhead-rdp` | derived | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19%; `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `cpu.dfill-total` | measured | `nemu64:timing/load-miss-vi-off`: 0 of 1 tests pass |
-| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail |
-| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail |
-| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail |
+| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail |
+| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.717 (expected 18.38, 18.346..18.418) fail |
+| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail |
 | `sp.dma-burst` | model-choice | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
-| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
-| `pi.block-bytes` | wiki | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures |
-| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
+| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `pi.block-bytes` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures |
+| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `pi.io-busy` | measured | `bench:pi-io-write`: rom-word sb_rclk 140 (expected 134, 132..136) fail |
+| `si.read64-base` | derived | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
 | `vi.lines-per-output-line` | vendor | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `vi.aa-mode-lines` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `rdp.atomic-dead` | vendor | `rdpstat:1prim`: 2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px |
-| `rdp.span-read-latency` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181098 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232652 vs console 245639 (245078..246077), -5.29%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199069 vs console 208861 (208473..209121), -4.69%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) |
-| `rdp.mem-overhead-read` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181098 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232652 vs console 245639 (245078..246077), -5.29%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199069 vs console 208861 (208473..209121), -4.69%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) |
-| `rdp.mem-overhead-write` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181098 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232652 vs console 245639 (245078..246077), -5.29%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199069 vs console 208861 (208473..209121), -4.69%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) |
+| `rdp.span-read-latency` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181087 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232657 vs console 245639 (245078..246077), -5.28%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199079 vs console 208861 (208473..209121), -4.68%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) |
+| `rdp.mem-overhead-read` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181087 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232657 vs console 245639 (245078..246077), -5.28%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199079 vs console 208861 (208473..209121), -4.68%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) |
+| `rdp.mem-overhead-write` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181087 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232657 vs console 245639 (245078..246077), -5.28%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199079 vs console 208861 (208473..209121), -4.68%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) |
 | `rdp.span-slots` | model-choice | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.port-lookahead` | fit | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.read-gate` | vendor | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07%; `thar0:zcmp`: model 108697 vs console 106000 (105940..106088), +2.54% |
+| `legacy.si.dma-read-controller` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
+| `legacy.si.dma-read-empty-port` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
+| `legacy.si.dma-read-accessory` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
+| `legacy.si.dma-read-short-command` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
 
 ## Model choices that only guards check
 
@@ -117,10 +122,6 @@ No published value exists for these, and no check measures them: their checks ar
 | `rdp.color-half-pixels-16bpp` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `rdp.noise-alpha-dither` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `rdp.noise-dither-bits` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-controller` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-empty-port` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-accessory` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-short-command` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `legacy.clock.vclk-pal` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.nmi-entry` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.sysad-frozen-step` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
@@ -137,12 +138,6 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.cart.flash-mn63-sector-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-chip-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-program` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `cpu.uncached-read-dword-total` | derived | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `cpu.rcp-register-read` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `cpu.pif-ram-read` | derived | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `pi.io-busy` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `si.write64` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `si.read64-base` | derived | no-rom, report-only | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `clock.vclk` | derived | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `cpu.ifill-stall` | inferred | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `cpu.dirty-miss-order` | vendor | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
@@ -161,6 +156,10 @@ These checks are gated too, but another check already decides their row.
 | Behavior | Status | Pending checks |
 |---|---|---|
 | `ri.retry-dirty` | pass | `bench:dirty-row-sweep` pending (report-only) |
-| `cpu.uncached-read-total` | pass | `bench:uncached-sizes-u32` pending (no-rom) |
 | `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only) |
+| `si.read64-base` | fail | `bench:si-dma-read64-2` pending (report-only); `bench:si-dma-read64-3` pending (report-only); `bench:si-dma-read64-4` pending (report-only) |
 | `rdp.primitive-base` | fit only | `bench:rdp-rectn` pending (report-only) |
+| `legacy.si.dma-read-controller` | fail | `bench:si-dma-read64-2` pending (report-only); `bench:si-dma-read64-3` pending (report-only); `bench:si-dma-read64-4` pending (report-only); pending (calibration-16) |
+| `legacy.si.dma-read-empty-port` | fail | `bench:si-dma-read64-2` pending (report-only); `bench:si-dma-read64-3` pending (report-only); `bench:si-dma-read64-4` pending (report-only); pending (calibration-16) |
+| `legacy.si.dma-read-accessory` | fail | `bench:si-dma-read64-2` pending (report-only); `bench:si-dma-read64-3` pending (report-only); `bench:si-dma-read64-4` pending (report-only); pending (calibration-16) |
+| `legacy.si.dma-read-short-command` | fail | `bench:si-dma-read64-2` pending (report-only); `bench:si-dma-read64-3` pending (report-only); `bench:si-dma-read64-4` pending (report-only); pending (calibration-16) |
