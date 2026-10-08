@@ -399,6 +399,21 @@ struct ScriptRunner {
     return true;
   }
 
+  //RDRAM channel counters since power-on, per RI requester: bursts, bytes read, bytes written,
+  //row misses, RCP clocks it held the channel, RCP clocks it waited (ri/bus.hpp Counters)
+  auto execute(const script::Bus& step, u64 frame) -> bool {
+    static const char* names[] = {"refresh", "vi", "cpu", "sp", "dp_cmd", "dp_color", "dp_depth", "dp_texture", "dp_fill", "pi", "si", "ai"};
+    static_assert(std::size(names) == (u32)N64::RiBus::Requester::Count);
+    string detail;
+    for(u32 r : range((u32)N64::RiBus::Requester::Count)) {
+      auto& c = N64::ri.channel.counters[r];
+      detail.append(r ? " " : "", names[r], "=", c.bursts, ",", c.bytesRead, ",", c.bytesWritten, ",", c.rowMisses, ",",
+        c.busy.units / N64::Timing::UnitsPerRclk, ",", c.wait.units / N64::Timing::UnitsPerRclk);
+    }
+    log("bus", step.name, frame, detail);
+    return true;
+  }
+
   auto execute(const script::Shot& step, u64) -> bool {
     shotPath = step.path;
     return true;

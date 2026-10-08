@@ -90,6 +90,7 @@ An input script is a text file with one step per line. `#` starts a comment. The
 | `copy SRC DST LEN` | Copies LEN guest bytes. |
 | `peek NAME ADDR W` | Logs a guest value as `n64-run: peek NAME frame=N 0x...`. |
 | `mark NAME` | Logs `n64-run: mark NAME frame=N`. |
+| `bus NAME` | Logs `n64-run: bus NAME frame=N refresh=B,R,W,M,H,T vi=... cpu=... sp=... dp_cmd=... dp_color=... dp_depth=... dp_texture=... dp_fill=... pi=... si=... ai=...`: per RI requester since power-on, bursts, bytes read, bytes written, row misses, RCP clocks it held the channel, RCP clocks it waited. |
 | `shot FILE` | Writes the next field's RDRAM image, as `--dump-frame` does, to FILE. |
 | `save-state FILE` | Writes the core's save state to FILE. |
 | `load-state FILE` | Loads a save state from FILE. The `trace_hash` chain and the RSP profile behind `rsp_busy_clocks` carry across the load, because they describe the run, not the machine. |

@@ -7,6 +7,7 @@ auto CPU::ProfileSlot::global() -> ProfileSlot
   p.rsp.cycles = ::ares::Nintendo64::rsp.profile.cycles;
   p.rsp.haltedCycles = ::ares::Nintendo64::rsp.profile.haltedCycles;
   p.rdram = ::ares::Nintendo64::rdram.profile;
+  for(u32 r : range((u32)RiBus::Requester::Count)) p.ri[r] = ::ares::Nintendo64::ri.channel.counters[r];
   return p;
 }
 
@@ -110,6 +111,11 @@ auto CPU::XPROF(cr64& rd, u64 code) -> void {
             prof.rdram.metrics[i].reads  -= global.rdram.metrics[i].reads;
             prof.rdram.metrics[i].writes -= global.rdram.metrics[i].writes;
         }
+        for (u32 r : range((u32)RiBus::Requester::Count)) {
+            auto& c = prof.ri[r]; auto& g = global.ri[r];
+            c.bursts -= g.bursts; c.bytesRead -= g.bytesRead; c.bytesWritten -= g.bytesWritten;
+            c.rowMisses -= g.rowMisses; c.busy = c.busy - g.busy; c.wait = c.wait - g.wait;
+        }
         prof.started = 1;
     }
     if(code == 2) { //stop profiling
@@ -121,6 +127,11 @@ auto CPU::XPROF(cr64& rd, u64 code) -> void {
         for (int i=0; i<sizeof(prof.rdram.metrics)/sizeof(prof.rdram.metrics[0]); i++) {
             prof.rdram.metrics[i].reads  += global.rdram.metrics[i].reads;
             prof.rdram.metrics[i].writes += global.rdram.metrics[i].writes;
+        }
+        for (u32 r : range((u32)RiBus::Requester::Count)) {
+            auto& c = prof.ri[r]; auto& g = global.ri[r];
+            c.bursts += g.bursts; c.bytesRead += g.bytesRead; c.bytesWritten += g.bytesWritten;
+            c.rowMisses += g.rowMisses; c.busy += g.busy; c.wait += g.wait;
         }
         prof.started = 0;
     }
@@ -188,7 +199,22 @@ auto CPU::XPROFREAD(cr64& rd, r64& rt) -> void {
     case 0x03A0: rt.u64 = prof.rdram.metrics[(u32)RBusDevice::DP_DMA].total(); break;
     case 0x03A1: rt.u64 = prof.rdram.metrics[(u32)RBusDevice::DP_DMA].reads; break;
     case 0x03A2: rt.u64 = prof.rdram.metrics[(u32)RBusDevice::DP_DMA].writes; break;
-    default:     rt.u64 = 0; break;
+    default:
+      //0x04RF: RDRAM channel counters of RI requester R (RiBus::Requester order) since power-on or
+      //over a slot; field F 0 bursts, 1 bytes read, 2 bytes written, 3 row misses, 4 busy rclk, 5 wait rclk
+      if((code & 0xff00) == 0x0400 && (code >> 4 & 0xf) < (u32)RiBus::Requester::Count) {
+        auto& c = prof.ri[code >> 4 & 0xf];
+        switch(code & 0xf) {
+        case 0x0: rt.u64 = c.bursts; return;
+        case 0x1: rt.u64 = c.bytesRead; return;
+        case 0x2: rt.u64 = c.bytesWritten; return;
+        case 0x3: rt.u64 = c.rowMisses; return;
+        case 0x4: rt.u64 = c.busy.units / Timing::UnitsPerRclk; return;
+        case 0x5: rt.u64 = c.wait.units / Timing::UnitsPerRclk; return;
+        }
+      }
+      rt.u64 = 0;
+      break;
   }
 }
 
