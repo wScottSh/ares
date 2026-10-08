@@ -65,11 +65,15 @@ auto CPU::serialize(serializer& s) -> void {
   s(scc.context.pageTableEntryBase);
   s(scc.wired.index);
   s(scc.wired.randomEpoch);
+  s(scc.wired.previousIndex);
+  s(scc.wired.previousEpoch);
   s(scc.badVirtualAddress);
   s(scc.count);
   s(scc.compare);
   s(countClock.units);
+  s(countResume.units);
   s(instructionIndex);
+  s(interruptSampled);
   s(scc.status.interruptEnable);
   s(scc.status.exceptionLevel);
   s(scc.status.errorLevel);

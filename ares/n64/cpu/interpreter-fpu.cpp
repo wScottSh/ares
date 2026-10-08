@@ -164,12 +164,15 @@ auto CPU::setControlRegisterFPU(n5 index, n32 data) -> void {
       }
     }
 
-    if(fpu.csr.cause.inexact()          && fpu.csr.enable.inexact())          return exception.floatingPoint();
-    if(fpu.csr.cause.underflow()        && fpu.csr.enable.underflow())        return exception.floatingPoint();
-    if(fpu.csr.cause.overflow()         && fpu.csr.enable.overflow())         return exception.floatingPoint();
-    if(fpu.csr.cause.divisionByZero()   && fpu.csr.enable.divisionByZero())   return exception.floatingPoint();
-    if(fpu.csr.cause.invalidOperation() && fpu.csr.enable.invalidOperation()) return exception.floatingPoint();
-    if(fpu.csr.cause.unimplementedOperation())                                 return exception.floatingPoint();
+    bool raise = fpu.csr.cause.inexact()          && fpu.csr.enable.inexact()
+              || fpu.csr.cause.underflow()        && fpu.csr.enable.underflow()
+              || fpu.csr.cause.overflow()         && fpu.csr.enable.overflow()
+              || fpu.csr.cause.divisionByZero()   && fpu.csr.enable.divisionByZero()
+              || fpu.csr.cause.invalidOperation() && fpu.csr.enable.invalidOperation()
+              || fpu.csr.cause.unimplementedOperation();
+    //The FPE is taken while the following instruction decodes, so Cause.CE holds that
+    //instruction's coprocessor field (behavior cpu.ctc1-fpe-ce).
+    if(raise) exception.trigger(15, readDebug<Word>(pipeline.pc) >> 26 & 3);
 
   } break;
   }
