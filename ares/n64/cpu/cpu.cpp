@@ -119,6 +119,7 @@ auto CPU::instruction() -> void {
   instructionIndex++;
   pipeline.begin();
   auto issued = pipeline.issue(*data);
+  pipeline.inFlight = &issued;
   instructionPrologue(ipu.pc, *data);
   decoderEXECUTE(*data);
   instructionEpilogue();

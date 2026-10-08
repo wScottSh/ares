@@ -1,3 +1,17 @@
+//Detection stage by exception code (nemu64-test Exceptions, JustFire, measured):
+//RF for Sys, Bp, RI and CpU; EX for Ov, Tr, AdEL and TLBL. AdES, TLBS and Mod
+//are inferred to share the load's stage (one address check serves both).
+//Interrupts (plan T7c), bus errors, watch and emux have no reference.
+static auto faultStage(u32 code) -> CPU::FaultStage {
+  using FaultStage = CPU::FaultStage;
+  switch(code) {
+  case 1: case 2: case 3: case 4: case 5: case 12: case 13: return FaultStage::EX;
+  case 8: case 9: case 10: case 11: return FaultStage::RF;
+  case 15: return FaultStage::FPU;
+  }
+  return FaultStage::None;
+}
+
 auto CPU::Exception::trigger(u32 code, u32 coprocessor, bool tlbMiss) -> void {
   self.debugger.exception(code);
   if (code != 0) {  //ignore interrupt exceptions
@@ -26,7 +40,7 @@ auto CPU::Exception::trigger(u32 code, u32 coprocessor, bool tlbMiss) -> void {
     self.scc.cause.coprocessorError = coprocessor;
   }
 
-  self.pipeline.fault();
+  self.pipeline.fault(faultStage(code));
   self.pipeline.setPc(vectorBase + vectorOffset);
   self.context.setMode();
 }

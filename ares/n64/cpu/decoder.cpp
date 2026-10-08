@@ -21,6 +21,9 @@ auto CPU::opTiming(u32 instruction) -> OpTiming {
   case 0x10:  //COP0
     switch(instruction >> 21 & 31) {
     case 0x00: case 0x01: t.late = Late::Cp0Rt; break;  //MFC0, DMFC0
+    case 0x10:  //CO
+      if((instruction & 0x3f) == 0x18) t.cost = CpuEret;  //ERET
+      break;
     case 0x04: case 0x05:  //MTC0, DMTC0
       switch(instruction >> 11 & 31) {
       case 1: case 2: case 3: case 7: case 10: t.cost = CpuMtc0SlowRegs; break;
@@ -36,6 +39,9 @@ auto CPU::opTiming(u32 instruction) -> OpTiming {
   case 0x1a: case 0x1b: case 0x20: case 0x21: case 0x22: case 0x23:
   case 0x24: case 0x25: case 0x26: case 0x27: case 0x30: case 0x34: case 0x37:
     t.late = Late::LoadRt;
+    return t;
+  case 0x2f:  //CACHE: only D-cache Index Load Tag has a measured cost
+    if((instruction >> 16 & 31) == 0x05) t.cost = CpuCacheIndexLoadTag;
     return t;
   case 0x31: case 0x35:  //LWC1, LDC1: the base only ("LD $T3; LWC1 $F11" does not stall)
     t.gprFields = OpTiming::RS;
@@ -62,7 +68,10 @@ auto CPU::fpuTiming(u32 instruction) -> OpTiming {
   if(function < 0x30) t.late = OpTiming::Late::FpuFd;  //C.cond writes only the condition bit
 
   bool d = format == 17;
-  if(format == 16 || format == 17) switch(function) {
+  //A W or L format op that has an S form raises unimplemented operation after
+  //the S form's latency (behaviors.tsv cpu.exc-fpu-detect).
+  bool sForm = format == 16 || d || ((format == 20 || format == 21) && function != 0x20 && function != 0x21);
+  if(sForm) switch(function) {
   case 0x00: case 0x01: t.cost = CpuFpuAdd; t.fast = Fast::AddSub; break;
   case 0x02: t.cost = d ? CpuFpuMulD : CpuFpuMulS; t.fast = Fast::Mul; break;
   case 0x03: t.cost = d ? CpuFpuDivD : CpuFpuDivS; t.fast = Fast::Div; break;
