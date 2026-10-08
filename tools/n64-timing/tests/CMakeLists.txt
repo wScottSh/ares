@@ -25,3 +25,13 @@ endforeach()
 target_compile_definitions(n64-timing-rdram-friend PRIVATE RDRAM_PRIVATE_FRIEND)
 add_test(NAME unit:rdram-private
   COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/rdram-private.cmake)
+
+add_executable(n64-timing-noise noise-lfsr.cpp)
+target_include_directories(n64-timing-noise PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/ares)
+target_link_libraries(n64-timing-noise PRIVATE ares::nall)
+ares_configure_executable(n64-timing-noise)
+set_target_properties(n64-timing-noise PROPERTIES FOLDER tests PREFIX "")
+add_test(NAME unit:noise-lfsr COMMAND n64-timing-noise noise-lfsr)
+add_test(NAME noise:a COMMAND n64-timing-noise dataset-a)
+add_test(NAME noise:b COMMAND n64-timing-noise dataset-b)
+add_test(NAME noise:c COMMAND n64-timing-noise dataset-c)

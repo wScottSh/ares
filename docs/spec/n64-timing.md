@@ -14,7 +14,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | derived | computed from other cited values | 8 |
 | inferred | reasoned from cited values with no measurement or published value of its own; the note states the inference | 1 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 18 |
-| model-choice | no published value; the reference states why the model chose this one | 19 |
+| model-choice | no published value; the reference states why the model chose this one | 21 |
 | legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 23 |
 
 ## Behaviors
@@ -198,7 +198,9 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `rdp.write-run` | per-contiguous-run rule | measured | snapper64 Span Tri console dumps, 113 shared-octbyte cases (rdp-write-granularity.md) | `snapper:span-tri` `thar0:alpha-fail-1cycle` | transaction form is inference; content is measured |
 | `rdp.noise-step` | every-rclk rule | measured | Thar0 RDP-Noise dumps re-solved (rdp-noise.md) | `noise:a` `noise:b` `noise:c` |  |
 | `rdp.noise-reset` | all-ones rule | measured | Thar0 data reproduction (rdp-noise.md) | `noise:a` |  |
-| `rdp.noise-pixel-offset` | 0 rclk | model-choice | rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured | `noise:rect-1016` | calibration #16 |
+| `rdp.noise-pixel-offset` | 0 rclk | model-choice | rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured | `noise:rect-1016` | calibration #16. A span's j-th pixel in walk order samples the LFSRs at its own pipeline clock (the span's start rounded up to an rclk edge, plus j x clocks per pixel) plus this; a 2-cycle pixel at the first of its two clocks (rdp-noise.md question 4, unmeasured) |
+| `rdp.noise-alpha-dither` | abc rule | model-choice | rdp-noise.md: no hardware data for the G_AD_NOISE bits; Angrylion combiner.c:263-285 adds (noise >> 6) & 7, the combiner NOISE bits a b c (a highest), 0-7; MiSTer uses other bits (odd values 1-7) | pending (no-corpus) | conflict recorded (Angrylion 0-7 vs MiSTer 1,3,5,7); decides writes only in MM's two noise texrects (rdp-noise.md) |
+| `rdp.noise-dither-bits` | top-3-of-abc rule | model-choice | rdp-noise.md: no hardware data for the G_CD_NOISE (9 bits, 3 per channel, different per channel: n64brew Commands) or G_AC_DITHER (8 bits) source; the model takes the top three bits of the a, b and c registers (each register's current output and next two) for R, G, B, and the top 8 of those 9 as the threshold | pending (no-corpus) | MM never uses G_AC_DITHER and G_CD_NOISE never reaches a write decision (rdp-noise.md); replaces the port's paraLLEl position hash |
 
 ## Legacy costs in today's core
 
@@ -309,10 +311,11 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `rdpstat:nosync-1cycle` | rdpstat | nosync-1cycle | - | suite | repeater64 RDPNoSync1C, 65 references |
 | `snapper:span-tri` | snapper | span-tri | - | suite | snapper64 RDP Test-Mode Span Tri, 216 DPS dumps |
 | `snapper:rect-nosync` | snapper | rect-nosync | - | suite | snapper64 RDPRectNoSync captures |
-| `noise:a` | noise | dataset-a | - | pass | Thar0/RDP-Noise dataset A (Unlicense) |
-| `noise:b` | noise | dataset-b | - | pass | Thar0/RDP-Noise dataset B (Unlicense) |
-| `noise:c` | noise | dataset-c | - | pass | Thar0/RDP-Noise dataset C (Unlicense) |
-| `noise:rect-1016` | noise | rect-1016 | - | pass | romgen 1016-px rect ROM against dataset A |
+| `noise:a` | noise | dataset-a | - | pass | Thar0/RDP-Noise dataset A (Unlicense): ctest noise:a, NoiseLfsr's a output from power-on equals all 1016 pixels at clock 256,586,636 (plan T14) |
+| `noise:b` | noise | dataset-b | - | pass | Thar0/RDP-Noise dataset B (Unlicense): ctest noise:b, b at the same clock as a (plan T14) |
+| `noise:c` | noise | dataset-c | - | pass | Thar0/RDP-Noise four c captures (Unlicense): ctest noise:c, a's outputs give each capture's clock and c one step ahead matches every recoverable bit (plan T14) |
+| `noise:rect-1016` | noise | rect-1016 | - | pass | romgen 1016-px rect ROM (romgen/suites/noise): the dumped a, b, c bits are the LFSR sequences at the ROM's own pixel clocks and dataset A at a phase offset (plan T14) |
+| `unit:noise-lfsr` | unit | n64-timing-noise | noise-lfsr | pass | RDPTimed::NoiseLfsr: GF(2) jump equals stepping, periods 2^29-1, 2^28-1, 2^27-1, all-ones reset with c one step ahead, at() a pure function of the clock (plan T14) |
 | `pidma:logs` | pidma | rasky_n64_pi_dma_test/pi_dma_test.z64 | - | self | ROM self-check within 10%; tools/n64-timing/pidma-replay.py rebuilds the ROM's COUNT measurement for every point from ARES_PILOG and checks sizes 8-382 within 3% of the 64 golden logs' min..max (plan T8) |
 | `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6) |
 | `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request; a DMA burst never crosses a 2 KiB row (plan T8) |

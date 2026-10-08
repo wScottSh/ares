@@ -251,4 +251,67 @@ inline auto xbusLatency(u32 dwords) -> Clock {
   return Timing::rclk(divideRoundingUp(dwords * sizeof(u64), Timing::Behavior::RdpXbusFetchRate));
 }
 
+
+//The RDP's noise (rdp-noise.md, from Thar0/RDP-Noise console dumps): three
+//Fibonacci LFSRs, a(x) = x^29 + x^2 + 1, b(x) = x^28 + x^3 + 1 and
+//c(x) = x^27 + x^5 + x^2 + x + 1. A register holds its next `degree` outputs,
+//the current one in its top bit, and shifts in the parity of its taps once
+//per RDP clock, stalls included (rdp.noise-step). All three are all ones at
+//power-on, c one step ahead (rdp.noise-reset). The state is a function of the
+//clock count alone, so a gap is a GF(2) matrix power, not a loop.
+struct NoiseLfsr {
+  struct Registers { u32 a, b, c; };
+
+  struct Lfsr {
+    u32 degree, taps;
+    u32 power[64][32];  //power[k][j]: bit j's image after 2^k steps
+
+    Lfsr(u32 degree, u32 taps) : degree(degree), taps(taps) {
+      for(u32 j = 0; j < degree; j++) power[0][j] = shift(1u << j);
+      for(u32 k = 1; k < 64; k++)
+        for(u32 j = 0; j < degree; j++) power[k][j] = apply(power[k - 1], power[k - 1][j]);
+    }
+    auto ones() const -> u32 { return (1u << degree) - 1; }
+    auto shift(u32 r) const -> u32 { return (r << 1 | (u32)__builtin_parity(r & taps)) & ones(); }
+    auto apply(const u32* m, u32 r) const -> u32 {
+      u32 o = 0;
+      for(u32 j = 0; r; j++, r >>= 1) if(r & 1) o ^= m[j];
+      return o;
+    }
+    auto advance(u32 r, u64 steps) const -> u32 {
+      for(u32 k = 0; steps; k++, steps >>= 1) if(steps & 1) r = apply(power[k], r);
+      return r;
+    }
+    auto output(u32 r) const -> u32 { return r >> (degree - 1) & 1; }
+  };
+
+  //Taps in register order: bit i is the output i + 1 steps back.
+  static auto a() -> const Lfsr& { static const Lfsr l{29, 1u << 1 | 1u << 28}; return l; }
+  static auto b() -> const Lfsr& { static const Lfsr l{28, 1u << 2 | 1u << 27}; return l; }
+  static auto c() -> const Lfsr& { static const Lfsr l{27, 1u << 0 | 1u << 1 | 1u << 4 | 1u << 26}; return l; }
+
+  static auto jump(u64 rdpClock) -> Registers {
+    return {a().advance(a().ones(), rdpClock), b().advance(b().ones(), rdpClock), c().advance(c().ones(), rdpClock + 1)};
+  }
+
+  //The registers at an RDP clock counted from power-on. Pixels ask in
+  //clock order, so a short gap steps; anything else jumps from reset.
+  auto at(u64 rdpClock) -> Registers {
+    if(rdpClock < clock || rdpClock - clock > 64) {
+      registers = jump(rdpClock);
+      clock = rdpClock;
+    }
+    for(; clock < rdpClock; clock++) registers = {a().shift(registers.a), b().shift(registers.b), c().shift(registers.c)};
+    return registers;
+  }
+
+  //The combiner's NOISE bits a, b, c at that clock (combiner NOISE = abc100000).
+  static auto outputs(Registers r) -> u32 {
+    return a().output(r.a) << 2 | b().output(r.b) << 1 | c().output(r.c);
+  }
+
+  Registers registers = jump(0);
+  u64 clock = 0;
+};
+
 }

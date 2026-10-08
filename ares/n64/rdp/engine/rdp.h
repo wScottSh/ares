@@ -133,6 +133,17 @@ typedef struct rdp_span_info {
   uint8_t  image_read, z_compare, z_update, atomic;
 } rdp_span_info;
 
+/* Plan T14: the hardware noise LFSRs (rdp-noise.md) live in the host. Each
+ * register is left-aligned: bit 31 is its output at the asked RDP clock, the
+ * bits below it its outputs at the clocks after. */
+typedef struct rdp_noise_bits {
+  uint32_t a, b, c;
+} rdp_noise_bits;
+void rdp_render_set_noise(rdp_noise_bits (*noise)(uint64_t rdp_clock));
+/* The RDP clock, counted from power-on, at which the next span's first pixel
+ * samples the noise, and the clocks from one pixel to the next. */
+void rdp_render_set_span_clock(uint64_t first_clock, uint32_t clocks_per_pixel);
+
 /* The queued span `ahead` places past the next one to run; 0 when none. */
 int      rdp_render_span_peek(unsigned ahead, rdp_span_info *info);
 /* Runs the next queued span against the installed windows. */
@@ -169,7 +180,7 @@ void rdp_render_quiesce(void);
 
 /* ares port: save states. Visits every piece of renderer state that
  * outlives a command (modes, colors, tiles, scissor, TMEM, the buffered
- * command words, the noise counter, the DPS model, the queued spans) in a
+ * command words, the DPS model, the queued spans) in a
  * fixed order, passing each block to io.
  * With loading set, io fills the blocks and TMEM lands in pool slot zero.
  * Saving never mutates the renderer. */

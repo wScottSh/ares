@@ -64,6 +64,28 @@ static void rdp_log_stderr(int level, const char *fmt, ...)
 
 void (*cen64_log)(int, const char *, ...) = rdp_log_stderr;
 
+static rdp_noise_bits rdp_noise_unset(uint64_t rdp_clock)
+{
+    (void)rdp_clock;
+    rdp_noise_bits none = {0, 0, 0};
+    return none;
+}
+
+rdp_noise_bits (*rdp_noise)(uint64_t) = rdp_noise_unset;
+
+void rdp_render_set_noise(rdp_noise_bits (*noise)(uint64_t rdp_clock))
+{
+    rdp_noise = noise != NULL ? noise : rdp_noise_unset;
+}
+
+void rdp_render_set_span_clock(uint64_t first_clock, uint32_t clocks_per_pixel)
+{
+    if (s_ctx.rdp == NULL)
+        return;
+    s_ctx.rdp->m_noise_clock = first_clock;
+    s_ctx.rdp->m_noise_step = clocks_per_pixel;
+}
+
 void rdp_render_set_log(void (*log)(int level, const char *fmt, ...))
 {
     cen64_log = log != NULL ? log : rdp_log_stderr;
@@ -341,7 +363,6 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
     RDP_STATE(m_span_base);
     RDP_STATE(m_aux_buf_ptr);
     RDP_STATE(m_pipeline_crashed);
-    RDP_STATE(m_primitive_counter);
     RDP_STATE(m_pixels);
     RDP_STATE(m_pipe_clean);
     RDP_STATE(m_start);

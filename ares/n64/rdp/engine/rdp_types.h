@@ -241,7 +241,6 @@ typedef struct rdp_poly_state
     rdp_tile_t          m_tiles[8];             /* texture tile state */
     uint8_t               m_tmem[0x1000];         /* texture cache */
     int32_t               tilenum;                /* texture tile index */
-    uint32_t              m_primitive_offset;     /* per-primitive index for the noise hash */
     /* Producer-offload snapshot: everything the worker-side span aux
      * initialization (rdp_span_aux_init) needs, captured once per
      * primitive alongside the other snapshots above so the producer's
@@ -273,10 +272,9 @@ typedef struct rdp_poly_state
 // the layout is sized for the span count, not for a single primitive.
 typedef struct rdp_span_aux
 {
-    /* mode-3 alpha-compare threshold for the current pixel: the shared
-     * per-pixel seeded noise (ParaLLEl-RDP noise_get_blend_threshold), set
-     * by the span loop, consumed by the blender's alpha reject. Replaces the
-     * stateful machine LFSR, which carried hidden state across primitives. */
+    /* mode-3 alpha-compare threshold for the current pixel
+     * (rdp_noise_threshold), set by the span loop, consumed by the
+     * blender's alpha reject. */
     int32_t m_blend_noise_threshold;
     /* Alpha-compare reference for 2-cycle mode: hardware tests the CYCLE-0
      * combiner alpha (ParaLLEl-RDP combiner.h: combiner_cycle0 produces

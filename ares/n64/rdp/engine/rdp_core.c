@@ -53,39 +53,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cen64_compat.h"
 #include "rdp_core.h"
 
-// N64 RDP noise. The hardware noise source is not documented/reverse-engineered
-// (n64brew specifies only where noise is consumed: the NOISE combiner input,
-// RGB/alpha noise dither, and the 8-bit alpha-compare threshold). We therefore
-// match ParaLLEl-RDP's model exactly: a single value per pixel, derived from a
-// deterministic hash of (x, y, primitive_offset) and SHARED by every consumer.
-// This is a pure function -- there is no sequential state to over-advance, and
-// the value depends on pixel position rather than draw order (both hardware
-// facts). Source: ParaLLEl-RDP shaders/noise.h reseed_noise + noise_get_*.
-static inline uint32_t rdp_seeded_noise(uint32_t x, uint32_t y, uint32_t primitive_offset)
+/* Noise (plan T14). The span's j-th pixel in walk order samples the host's
+ * LFSRs at its own RDP clock (rdp_render_set_span_clock). */
+static inline rdp_noise_bits rdp_pixel_noise(const rdp_t *rdp, int32_t j)
 {
-    const uint32_t NOISE_PRIME = 1103515245u;
-    uint32_t s0 = x, s1 = y, s2 = primitive_offset;
-    for (int i = 0; i < 3; i++)
-    {
-        const uint32_t n0 = ((s0 >> 8) ^ s1) * NOISE_PRIME;   // (seed >> 8) ^ seed.yzx, *P
-        const uint32_t n1 = ((s1 >> 8) ^ s2) * NOISE_PRIME;
-        const uint32_t n2 = ((s2 >> 8) ^ s0) * NOISE_PRIME;
-        s0 = n0; s1 = n1; s2 = n2;
-    }
-    return (s0 >> 16) & 0xffff;   // seeded_noise, 16-bit
+    return rdp_noise(rdp->m_noise_clock + (uint64_t)j * rdp->m_noise_step);
 }
 
-// Consumers, reading the single per-pixel seeded_noise (ParaLLEl noise.h).
-static inline uint32_t rdp_noise_combiner(uint32_t seeded) {
-    return ((seeded & 7u) << 6) | 0x20u;
+/* Combiner NOISE: abc100000, a b c the three LFSR outputs (Thar0/RDP-Noise). */
+static inline uint32_t rdp_noise_combiner(rdp_noise_bits n) {
+    return (n.a >> 31) << 8 | (n.b >> 31) << 7 | (n.c >> 31) << 6 | 0x20u;
 }
 
-static inline uint32_t rdp_noise_dither_color(uint32_t seeded) {
-    return seeded & 0x1ffu;
+/* G_AD_NOISE: the same three bits, a highest (rdp.noise-alpha-dither). */
+static inline uint32_t rdp_noise_dither_alpha(rdp_noise_bits n) {
+    return (n.a >> 31) << 2 | (n.b >> 31) << 1 | (n.c >> 31);
 }
 
-static inline uint32_t rdp_noise_dither_alpha(uint32_t seeded) {
-    return seeded & 7u;
+/* G_CD_NOISE takes 3 bits per channel and the G_AC_DITHER threshold 8 bits;
+ * neither source is known, so both read the top three bits of a, b and c
+ * (rdp.noise-dither-bits). */
+static inline uint32_t rdp_noise_dither_color(rdp_noise_bits n) {
+    return (n.a >> 29) << 6 | (n.b >> 29) << 3 | (n.c >> 29);
+}
+
+static inline uint32_t rdp_noise_threshold(rdp_noise_bits n) {
+    return rdp_noise_dither_color(n) >> 1;
 }
 
 /* RDP span-setup patterns (generic rdp_s* helpers live in rdp_core.h). */
@@ -1165,27 +1158,25 @@ static uint32_t rdp_dz_compress(uint32_t value)
     for (; value > 1; j++, value >>= 1);
     return j;
 }
-static void rdp_get_dither_values(rdp_t *rdp, int32_t x, int32_t y, int32_t* cdith, int32_t* adith, const rdp_poly_state *object)
+static void rdp_get_dither_values(rdp_t *rdp, int32_t x, int32_t y, int32_t j, int32_t* cdith, int32_t* adith, const rdp_poly_state *object)
 {
-    (void)rdp;
     /* Port of ParaLLEl-RDP dither_coefficients (shaders/dither.h). The RGB
      * dither is a packed 9-bit value (3 bits per channel via DITHER_SPLAT for
      * the matrix modes, or the per-channel noise bits); the alpha dither is a
-     * single 3-bit value. Noise for every consumer comes from the one shared
-     * per-pixel seeded_noise -- no sequential RNG, no over-advance. */
+     * single 3-bit value. The noise modes read the LFSRs at the pixel's
+     * clock (rdp_pixel_noise). */
     const int32_t idx        = (((y >> object->m_scissor.m_field) & 3) << 2) | (x & 3);
     const int32_t rgb_mode   = object->m_other_modes.rgb_dither_sel;
     const int32_t alpha_mode = object->m_other_modes.alpha_dither_sel;
-    /* The per-pixel noise hash is only needed by the noise dither modes; skip
-     * it entirely for the common matrix/off cases (avoids ~9 mults per pixel). */
-    const unsigned seeded = (rgb_mode == 2 || alpha_mode == 2)
-        ? rdp_seeded_noise((uint32_t)x, (uint32_t)y, object->m_primitive_offset) : 0;
+    rdp_noise_bits noise = {0, 0, 0};
+    if (rgb_mode == 2 || alpha_mode == 2)
+        noise = rdp_pixel_noise(rdp, j);
     const int32_t DITHER_SPLAT = (1 << 0) | (1 << 3) | (1 << 6);
 
     if (rgb_mode < 2)
         *cdith = s_dither_matrix[rgb_mode][idx] * DITHER_SPLAT;
     else if (rgb_mode == 2)
-        *cdith = (int32_t)rdp_noise_dither_color(seeded);
+        *cdith = (int32_t)rdp_noise_dither_color(noise);
     else
         *cdith = 0;
 
@@ -1195,7 +1186,7 @@ static void rdp_get_dither_values(rdp_t *rdp, int32_t x, int32_t y, int32_t* cdi
     }
     else if (alpha_mode == 2)
     {
-        *adith = (int32_t)rdp_noise_dither_alpha(seeded);
+        *adith = (int32_t)rdp_noise_dither_alpha(noise);
     }
     else
     {
@@ -5036,7 +5027,6 @@ int rdp_construct(rdp_t *rdp, uint32_t rdram_size)
     memset(rdp, 0, sizeof(*rdp));
     if (poly_manager_init(&rdp->m_pool, rdp))
         return 1;
-    rdp->m_primitive_counter = 0;
 
     rdp->m_mem8_limit = rdram_size - 1u;
     rdp->m_pixels = 0;
@@ -5328,7 +5318,6 @@ static void rdp_render_spans(rdp_t *rdp, int32_t start, int32_t end, int32_t til
     memcpy(&object->m_scissor, &rdp->m_scissor, sizeof(rectangle_t));
     memcpy(&object->m_tiles, &rdp->m_tiles, 8 * sizeof(rdp_tile_t));
     object->tilenum = tilenum;
-    object->m_primitive_offset = rdp->m_primitive_counter++;
     /* Producer-offload snapshot: source data for the worker-side span aux
      * initialization (rdp_span_aux_init). Captured here with the
      * other per-primitive snapshots, before any work is queued. */
@@ -6107,8 +6096,7 @@ static cen64_flatten void rdp_span_draw_1cycle(rdp_t *rdp, int32_t scanline, con
     }
 
     /* NOISE combiner input (mux code 7) only resolves to sub_a_rgb, either
-     * cycle. Gate the per-pixel noise hash so it is only paid for when the
-     * combiner actually reads NOISE (the common case pays nothing). */
+     * cycle. */
     const bool cc_uses_noise =
         userdata->m_color_inputs.combiner_rgbsub_a[0] == &userdata->m_noise_color ||
         userdata->m_color_inputs.combiner_rgbsub_a[1] == &userdata->m_noise_color;
@@ -6236,13 +6224,9 @@ static cen64_flatten void rdp_span_draw_1cycle(rdp_t *rdp, int32_t scanline, con
              * here, saving 32 bytes of stores per textured pixel. */
             }
 
-            /* Combiner NOISE input: the single shared per-pixel noise value
-             * (ParaLLEl noise_get_combiner), a function of (x, y, primitive).
-             * Only computed when the combiner reads NOISE (gate above). */
             if (cc_uses_noise)
             {
-                const unsigned seeded = rdp_seeded_noise((uint32_t)sw.x, (uint32_t)scanline, object->m_primitive_offset);
-                const unsigned noise = rdp_noise_combiner(seeded);
+                const unsigned noise = rdp_noise_combiner(rdp_pixel_noise(rdp, j));
                 rgbaint_set_rgba(&userdata->m_noise_color, 0, (int32_t)noise, (int32_t)noise, (int32_t)noise);
             }
 
@@ -6279,9 +6263,9 @@ static cen64_flatten void rdp_span_draw_1cycle(rdp_t *rdp, int32_t scanline, con
             {
                 int32_t cdith = 0;
                 int32_t adith = 0;
-                rdp_get_dither_values(rdp, sw.x, scanline, &cdith, &adith, object);
+                rdp_get_dither_values(rdp, sw.x, scanline, j, &cdith, &adith, object);
                 if (alpha_dither_noise)
-                    userdata->m_blend_noise_threshold = (int32_t)(rdp_seeded_noise((uint32_t)sw.x, (uint32_t)scanline, object->m_primitive_offset) & 0xff);
+                    userdata->m_blend_noise_threshold = (int32_t)rdp_noise_threshold(rdp_pixel_noise(rdp, j));
 
                 bool rendered = rdp_blender_cycle1(&blend_ctx, cdith, adith);
 
@@ -6457,8 +6441,7 @@ static cen64_flatten void rdp_span_draw_2cycle(rdp_t *rdp, int32_t scanline, con
         .dsinc = sw.dsinc, .dtinc = sw.dtinc, .dwinc = sw.dwinc,
         .prim_tile = prim_tile, .need_lod = true };
 
-    /* Gate the per-pixel noise hash on the combiner actually reading NOISE
-     * (mux code 7, sub_a_rgb only), matching the 1-cycle path. */
+    /* NOISE combiner input (mux code 7) only resolves to sub_a_rgb. */
     const bool cc_uses_noise =
         userdata->m_color_inputs.combiner_rgbsub_a[0] == &userdata->m_noise_color ||
         userdata->m_color_inputs.combiner_rgbsub_a[1] == &userdata->m_noise_color;
@@ -6538,13 +6521,9 @@ static cen64_flatten void rdp_span_draw_2cycle(rdp_t *rdp, int32_t scanline, con
             rgbaint_set_rgba(&userdata->m_texel1_alpha, t1a, t1a, t1a, t1a);
             }
 
-            /* Combiner NOISE input: the single shared per-pixel noise value
-             * (ParaLLEl noise_get_combiner), a function of (x, y, primitive).
-             * Only computed when the combiner reads NOISE (gate above). */
             if (cc_uses_noise)
             {
-                const unsigned seeded = rdp_seeded_noise((uint32_t)sw.x, (uint32_t)scanline, object->m_primitive_offset);
-                const unsigned noise = rdp_noise_combiner(seeded);
+                const unsigned noise = rdp_noise_combiner(rdp_pixel_noise(rdp, j));
                 rgbaint_set_rgba(&userdata->m_noise_color, 0, (int32_t)noise, (int32_t)noise, (int32_t)noise);
             }
 
@@ -6711,7 +6690,7 @@ static cen64_flatten void rdp_span_draw_2cycle(rdp_t *rdp, int32_t scanline, con
                 else
                 {
                     int32_t refcd = 0, refad = 0;
-                    rdp_get_dither_values(rdp, sw.x, scanline, &refcd, &refad, object);
+                    rdp_get_dither_values(rdp, sw.x, scanline, j, &refcd, &refad, object);
                     ref += refad;
                 }
                 if (ref > 0xff) ref = 0xff;
@@ -6727,9 +6706,9 @@ static cen64_flatten void rdp_span_draw_2cycle(rdp_t *rdp, int32_t scanline, con
 
             if(rdp_z_compare(rdp, zbcur, zhbcur, sz, sw.dzpix, userdata, object))
             {
-                rdp_get_dither_values(rdp, sw.x, scanline, &cdith, &adith, object);
+                rdp_get_dither_values(rdp, sw.x, scanline, j, &cdith, &adith, object);
                 if (object->m_other_modes.alpha_dither_mode == 3)
-                    userdata->m_blend_noise_threshold = (int32_t)(rdp_seeded_noise((uint32_t)sw.x, (uint32_t)scanline, object->m_primitive_offset) & 0xff);
+                    userdata->m_blend_noise_threshold = (int32_t)rdp_noise_threshold(rdp_pixel_noise(rdp, j));
 
                 bool rendered = rdp_blender_cycle2(&blend_ctx, cdith, adith);
 

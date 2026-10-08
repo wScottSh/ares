@@ -27,5 +27,5 @@ if [ ! -f "$n64_build/CMakeCache.txt" ]; then
     -DARES_SKIP_DEPS=ON \
     -DENABLE_CCACHE=OFF
 fi
-cmake --build "$n64_build" --target n64-run n64-timing-tests n64-timing-dpc-regs
+cmake --build "$n64_build" --target n64-run n64-timing-tests n64-timing-dpc-regs n64-timing-noise
 n64_target n64-run
