@@ -8,12 +8,12 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Basis | Meaning | Rows |
 |---|---|---|
-| measured | a hardware measurement: a test ROM result or a console capture | 34 |
+| measured | a hardware measurement: a test ROM result or a console capture | 33 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 15 |
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 17 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
-| derived | computed from other cited values | 8 |
+| derived | computed from other cited values | 9 |
 | inferred | reasoned from cited values with no measurement or published value of its own; the note states the inference | 1 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 19 |
 | model-choice | no published value; the reference states why the model chose this one | 22 |
@@ -24,11 +24,11 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | fail | at least one check failed; the detail in Check results gives the residual | 30 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 10 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 3 |
-| not-built | the code does not use the row's value; its code column says what the code does instead. Its checks measure that code, not the row | 2 |
+| not-built | the code does not use the row's value; its code column says what the code does instead. Its checks measure that code, not the row | 1 |
 | pass | a check other than the row's fit data passed, and none failed | 60 |
 | pending:calibration-16 | no check decided the row: calibration-16: no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it | 11 |
 | pending:no-corpus | no check decided the row: no-corpus: no corpus in the program measures this behavior; it stays pending until one does | 16 |
-| pending:no-rom | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it | 3 |
+| pending:no-rom | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it | 4 |
 | pending:no-rom pending:report-only | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it; report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 1 |
 | pending:report-only | no check decided the row: report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 10 |
 
@@ -119,7 +119,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | `cpu.wb-block-entries` | 2 entries | vendor | R4300i datasheet p.9 | `bench:mi-memset-cached` | **fail**: `bench:mi-memset-cached` fail | reads `Timing::Behavior::CpuWbBlockEntries` |  |
 | `cpu.wb-release` | slot rule | vendor | NEC 'has a space' (s.4.9) chosen over R4300i datasheet 'emptied'; burst shape only | `bench:wb-fifth-store` | **pending:report-only**: `bench:wb-fifth-store` pending:report-only | ares/n64/cpu/sysad.cpp:SysAD::reserve | conflict recorded; no public hardware value |
 | `cpu.rcp-register-read` | 22 pclk | measured | n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value) | `bench:rcp-reg-read` | **pending:no-rom**: `bench:rcp-reg-read` pending:no-rom | reads `Timing::Behavior::CpuRcpRegisterRead` |  |
-| `cpu.pif-ram-read` | 1974 rclk | measured | n64-systembench PIF RAM read (cited value) | `bench:pif-ram-read` | **not-built**: `bench:pif-ram-read` pending:no-rom | not-built: a PIF RAM read is charged as an RCP register read (ares/n64/memory/io.hpp:CpuRcpRegisterRead, cpu.rcp-register-read 22 pclk), not 1974 rclk |  |
+| `cpu.pif-ram-read` | 2959 pclk | derived | n64-systembench @845635c main.c:599 SI I/O R 1974 rclk = 2961 pclk, less its 2 pclk harness: its C32R 3 pclk (main.c:574) less the 1 pclk cached hit (nemu64-test, cpu.dcache-hit); research/cpu-memory-costs.md | `bench:pif-ram-read` | **pending:no-rom**: `bench:pif-ram-read` pending:no-rom | reads `Timing::Behavior::CpuPifRamRead` | the whole uncached word read of PIF RAM (0x1fc0_07c0-0x1fc0_07ff); a PIF ROM read is unmeasured and stays a register read |
 | `cpu.random-rule` | decrement-per-instruction rule | fit | nemu64-test Random (decrement): Random after 1, 16, 31 and 100 instructions for Wired 0-63, from 31 down to Wired and wrapping (through 63 when Wired > 31); Random (masking): an MTC0 Random is ignored, and counting PClock cycles instead of instructions reads 11 where 27 is expected, so stall cycles do not count | `nemu64:timing/random` `nemu64:cop0hazard/random-read-early` (fit from `nemu64:timing/random`) | **pass**: `nemu64:timing/random` pass; `nemu64:cop0hazard/random-read-early` pass | ares/n64/cpu/interpreter-scc.cpp:CPU::getControlRandom | Random (read early) checks the decrement over 10 instructions from other code (21) |
 | `cpu.wired-write-latency` | 2 instr | fit | nemu64-test Random (decrement): Random reads 30 three instructions after an MTC0 Wired, for every Wired, so the reload to 31 lands two instructions after the write | `nemu64:timing/random` `nemu64:cop0hazard/random-read-early` (fit from `nemu64:timing/random`) | **pass**: `nemu64:timing/random` pass; `nemu64:cop0hazard/random-read-early` pass | reads `Timing::Behavior::CpuWiredWriteLatency` | Random (read early) checks the landing independently: one instruction after the write Random still follows the previous Wired bound (29), two after it reads 31 |
 | `cpu.ctc1-fpe-ce` | following-instruction-bits-27-26 rule | fit | nemu64-test cop1 FireExceptionViaCTC1 followed by MFC1 and by MFC2: EPC is the CTC1 and Cause.CE is 1 and 2, the coprocessor of the instruction after it (nemu64-timing-failures.md, cycle set: an inference from the expected values) | **fit only, no independent check:** `nemu64:cycle/ctc1` (fit from `nemu64:cycle/ctc1`) | **fit only**: `nemu64:cycle/ctc1` pass | ares/n64/cpu/interpreter-fpu.cpp:CPU::setControlRegisterFPU | verify-is-fit: the two CTC1 values are the only measurement. After an instruction outside COP1-3 the field comes from the same opcode bits, inferred, no test |
@@ -226,7 +226,6 @@ The code does not use these rows' values. Each says what the code does instead; 
 | Behavior | Value | Basis | What the code does instead | Checks |
 |---|---|---|---|---|
 | `cpu.uncached-read-dword-total` | 37 pclk | measured | an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk | `bench:uncached-sizes` pending:no-rom |
-| `cpu.pif-ram-read` | 1974 rclk | measured | a PIF RAM read is charged as an RCP register read (ares/n64/memory/io.hpp:CpuRcpRegisterRead, cpu.rcp-register-read 22 pclk), not 1974 rclk | `bench:pif-ram-read` pending:no-rom |
 
 ## Legacy costs in today's core
 
@@ -239,7 +238,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:109 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: NMI entry has no timing reference (T7b) |
 | `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:114 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | replaced by T6: SysAD port |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
-| `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:66 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: the SI I/O write busy; T8 left it, no hardware reference |
+| `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:68 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: the SI I/O write busy; T8 left it, no hardware reference |
 | `legacy.si.dma-read-controller` | 22000 rclk | ares/n64/pif/hle.cpp:228 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel with a device |
 | `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel without a device |
 | `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per cartridge channel |

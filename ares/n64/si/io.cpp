@@ -5,6 +5,8 @@ auto SI::readWord(u32 address, Thread& thread) -> u32 {
     writeForceFinish(); //technically, we should wait until EventKind::SI_BUS_Write
     return io.busLatch;
   }
+  //RCP::read charged a register read; a PIF RAM read costs cpu.pif-ram-read in all (n64-systembench SI I/O R)
+  if((address & 0x7ff) >= 0x7c0) thread.step(Timing::Behavior::CpuPifRamRead - Timing::Behavior::CpuRcpRegisterRead);
   return pif.read<Word>(address);
 }
 
