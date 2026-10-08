@@ -241,6 +241,69 @@ def rdp_rectn(suite):
     rdp_point(rom, "duty-320x240", [rcp.fill_rectangle(0, 0, 320, 240)], 1, [("w", 320), ("h", 240)])
 
 
+# Ports of n64-systembench @845635c (rasky, no license: its measurement designs are followed and
+# its numbers cited, no code copied). Each point runs bench_multi, n64-systembench's TIMEIT_MULTI;
+# report.py applies the same averaging and truncation (main.c:105-127, 640-646). The VI is blanked
+# throughout, as the original sets VI_CONTROL = 0 before every bench (main.c:623-624).
+SB_BUF = 0x005C0000          # bank 5, rambuf (64-byte aligned, main.c:47-48)
+SB_LOADS = [(8, "k_sb_lbu"), (16, "k_sb_lhu"), (32, "k_sb_lw"), (64, "k_sb_ld")]
+PIF_RAM = 0x1FC007C0
+SI_BASE = 0xA4800000
+
+
+def sb_point(rom, point, kernel, args, reps, unit, consts=(), pre=()):
+    steps = list(pre) + [
+        Step("bench_multi", [kernel, reps, VI_OFF, *args], 0),
+        emit_step(rom.suite, rom.name, point, list(consts) + [("unit", unit), ("reps", reps)],
+                  TICK_FIELDS + [("sum", 2)]),
+    ]
+    rom.test.values.append(Value(point, steps, []))
+
+
+def sb_cached(rom, bits, kernel):
+    """The cached-read baseline the port's harness overhead comes from (main.c:230-248)."""
+    sb_point(rom, f"c{bits}", kernel, [KSEG0 | SB_BUF, 1], 50, "pclk", [("bits", bits)])
+
+
+def uncached_sizes(suite):
+    rom = Rom(suite, "uncached-sizes")
+    for bits, kernel in SB_LOADS:
+        sb_cached(rom, bits, kernel)
+        sb_point(rom, f"u{bits}", kernel, [KSEG1 | SB_BUF, 0], 50, "pclk", [("bits", bits)])
+
+
+def rcp_reg_read(suite):
+    rom = Rom(suite, "rcp-reg-read")
+    sb_cached(rom, 32, "k_sb_lw")
+    sb_point(rom, "vi-control", "k_sb_lw", [0xA4400000, 0], 50, "pclk")
+
+
+def pif_ram_read(suite):
+    rom = Rom(suite, "pif-ram-read")
+    sb_cached(rom, 32, "k_sb_lw")
+    sb_point(rom, "pif-ram", "k_sb_lw", [KSEG1 | PIF_RAM, 0], 50, "rclk")
+
+
+def pi_io_write(suite):
+    rom = Rom(suite, "pi-io-write")
+    sb_point(rom, "rom-word", "k_sb_while", [0, 0, KSEG1 | 0x10000000, 0, PI_BASE + 0x10], 50, "rclk")
+
+
+def joybus_block(dwords):
+    return [w for d in dwords for w in (d >> 32, d & 0xFFFFFFFF)]
+
+
+def si_dma(suite):
+    rom = Rom(suite, "si-dma")
+    zero = Step("bench_list_step", [suite.blob([0] * 16), 16, 0, 0, 0, 0, 0, KSEG1 | SB_BUF], 0)
+    sb_point(rom, "write64", "k_sb_while", [SI_BASE + 0x0, SB_BUF, SI_BASE + 0x10, PIF_RAM, SI_BASE + 0x18],
+             10, "rclk", [("dir", "write64")], pre=[zero])
+    for n in range(1, 5):
+        block = [0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1]
+        sb_point(rom, f"read64-{n}", "k_sb_joybus", [suite.blob(joybus_block(block)), KSEG1 | SB_BUF, SB_BUF + 64],
+                 50, "rclk", [("dir", "read64"), ("commands", n)])
+
+
 ROMS = {
     "mi-memset-uncached": mi_memset_uncached,
     "mi-memset-cached": mi_memset_cached,
@@ -255,4 +318,9 @@ ROMS = {
     "rdp-setter-sweep": rdp_setter_sweep,
     "rdp-atomic-sweep": rdp_atomic_sweep,
     "rdp-rectn": rdp_rectn,
+    "uncached-sizes": uncached_sizes,
+    "rcp-reg-read": rcp_reg_read,
+    "pif-ram-read": pif_ram_read,
+    "pi-io-write": pi_io_write,
+    "si-dma": si_dma,
 }

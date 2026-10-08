@@ -48,6 +48,13 @@ Each point prints one XLOG line:
 | `rdp-setter-sweep` | `none-0`, `{nop,prim-color,env-color,other-modes}-{256,1024,4096}` | N one-word commands |
 | `rdp-atomic-sweep` | `atomic{0,1}-{1,16,64}` | N 16x4 1-cycle rects with `atomic_prim` off or on |
 | `rdp-rectn` | `rect-320x6`, `rect-320x6-x8`, `duty-320x240` | The cen64 dpc_probe RECTN and DUTY shapes |
+| `uncached-sizes` | `c{8,16,32,64}`, `u{8,16,32,64}` | n64-systembench RDRAM C*R and U*R: one cached (warmed) or uncached LBU, LHU, LW or LD between two COUNT reads |
+| `rcp-reg-read` | `c32`, `vi-control` | n64-systembench RCP I/O R: one VI_CONTROL read, with the cached LW baseline |
+| `pif-ram-read` | `c32`, `pif-ram` | n64-systembench SI I/O R: one PIF RAM word read, with the cached LW baseline |
+| `pi-io-write` | `rom-word` | n64-systembench PI I/O W: one cart word write, then 8-poll rounds of PI_STATUS until idle |
+| `si-dma` | `write64`, `read64-{1..4}` | n64-systembench SI DMA W RAM and JOY: nJ: a 64 B SI DMA to PIF RAM until SI_STATUS idle, and a 64 B read after a joybus block of n read-buttons commands |
+
+The n64-systembench ports run its TIMEIT_MULTI: 50 reps (10 for `write64`), and `report.py` takes the mean of all but the lowest and highest rep in its xcycle units, truncated to whole pclk or rclk (`sb_pclk`, `sb_rclk`). Its harness adds about 2 pclk, its cached read (3) less a cached hit (1). The port's harness is its own, so `net_pclk` is `sb_pclk` less the port's overhead, measured the same way from the ROM's `c<bits>` point (`overhead_pclk`). The bands are the original's pass rule: within 1 pclk or 2 rclk, or under 0.2 %.
 
 RDP lists use 1-cycle mode with the combiner outputting the primitive color. The blender, Z and image read are off. The color image is 320-wide RGBA5551 at 0x00700000. The VI is blanked while an RDP list runs. Each list is built in uncached RDRAM at 0x00600000, ends with `SYNC_FULL`, and is timed until the DP interrupt.
 

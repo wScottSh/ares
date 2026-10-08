@@ -170,7 +170,7 @@ template<u32 Size> auto SysAD::read(u32 address) -> u64 {
   drain();
   if(throughRi(address)) {
     u64 value;
-    readRdram<Size>(address, &value, ReadPath);
+    readRdram<Size>(address, &value, Size == Dual ? DwordReadPath : ReadPath);
     return value;
   }
   resume(free);

@@ -58,15 +58,16 @@ bench:rdp-setter-sweep	bench	rdp-setter-sweep	-	suite	n64brew Pipeline, 1 clock 
 bench:rdp-atomic-sweep	bench	rdp-atomic-sweep	-	suite	SDK pro-man 12.2.3, 30 to 40 null cycles
 bench:rdp-rectn	bench	rdp-rectn	-	suite	cen64 RECTN 2021 and DUTY 80,287 (reported, not asserted)
 bench:ifill-isolated	bench	ifill-isolated	-	report	no ROM in plan R1 yet; no public hardware value (cpu-memory-costs.md)
-bench:uncached-sizes	bench	uncached-sizes	size=8	37	no ROM in plan R1 yet; n64-systembench main.c:572-584 U64 read, 37 pclk
-bench:rcp-reg-read	bench	rcp-reg-read	register=vi-control	24	no ROM in plan R1 yet; n64-systembench VI_CONTROL read, 24 pclk including about 2 of harness
-bench:pif-ram-read	bench	pif-ram-read	-	1974	no ROM in plan R1 yet; n64-systembench PIF RAM read, 1974 rclk
-bench:pi-io-write	bench	pi-io-write	-	134	no ROM in plan R1 yet; n64-systembench PI I/O write busy, 134 rclk
-bench:si-dma	bench	si-dma	direction=write64	4065	no ROM in plan R1 yet; n64-systembench SI DMA 64 B to PIF, 4065 rclk
-bench:si-dma-read64-1	bench	si-dma	direction=read64 commands=1	37987	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 1 joybus command, 37987 rclk (dma-timing.md SI DMA)
-bench:si-dma-read64-2	bench	si-dma	direction=read64 commands=2	57972	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA)
-bench:si-dma-read64-3	bench	si-dma	direction=read64 commands=3	77924	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA)
-bench:si-dma-read64-4	bench	si-dma	direction=read64 commands=4	97890	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA)
+bench:uncached-sizes	bench	uncached-sizes	point=u64 metric=net_pclk	suite	n64-systembench main.c:580 U64R 37 pclk less its 2 pclk harness = 35; the port subtracts its own (expected.tsv)
+bench:uncached-sizes-u32	bench	uncached-sizes	point=u32 metric=net_pclk	suite	n64-systembench main.c:579 U32R 34 pclk less its 2 pclk harness = 32; the port subtracts its own (expected.tsv)
+bench:rcp-reg-read	bench	rcp-reg-read	point=vi-control metric=net_pclk	suite	n64-systembench main.c:586 VI_CONTROL read 24 pclk less its 2 pclk harness = 22; the port subtracts its own (expected.tsv)
+bench:pif-ram-read	bench	pif-ram-read	point=pif-ram metric=sb_rclk	suite	n64-systembench main.c:599 SI I/O R, PIF RAM read 1974 rclk
+bench:pi-io-write	bench	pi-io-write	point=rom-word metric=sb_rclk	suite	n64-systembench main.c:595 PI I/O W, write to PI_STATUS idle 134 rclk
+bench:si-dma	bench	si-dma	point=write64 metric=sb_rclk	suite	n64-systembench main.c:597 SI DMA 64 B to PIF RAM, 4065 rclk
+bench:si-dma-read64-1	bench	si-dma	point=read64-1 metric=sb_rclk	suite	n64-systembench main.c:609 SI DMA RD64B with 1 joybus command, 37987 rclk (dma-timing.md SI DMA)
+bench:si-dma-read64-2	bench	si-dma	point=read64-2 metric=sb_rclk	suite	n64-systembench main.c:610 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
+bench:si-dma-read64-3	bench	si-dma	point=read64-3 metric=sb_rclk	suite	n64-systembench main.c:611 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
+bench:si-dma-read64-4	bench	si-dma	point=read64-4 metric=sb_rclk	suite	n64-systembench main.c:612 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
 bench:wb-fifth-store	bench	wb-fifth-store	-	report	no ROM in plan R1 yet; no public hardware value (vr4300-wb.md)
 bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; reports against two published TMEM load rates that conflict: 8 B/rclk (MiSTer RTL) and the jgemu dpc_probe LOADSZ law, about 15 clocks plus 0.418 clocks per byte (jgemu-dpc-probe.md)
 thar0:alpha-fail-1cycle	thar0	ac-zbsame-vioff-noimrd-1cyc	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)
