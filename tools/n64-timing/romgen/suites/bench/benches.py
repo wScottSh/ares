@@ -249,6 +249,7 @@ SB_BUF = 0x005C0000          # bank 5, rambuf (64-byte aligned, main.c:47-48)
 SB_LOADS = [(8, "k_sb_lbu"), (16, "k_sb_lhu"), (32, "k_sb_lw"), (64, "k_sb_ld")]
 PIF_RAM = 0x1FC007C0
 SI_BASE = 0xA4800000
+SB_JITTER_PCLK = 50          # two poll periods of k_sb_while
 
 
 def sb_point(rom, point, kernel, args, reps, unit, consts=(), pre=()):
@@ -284,9 +285,14 @@ def pif_ram_read(suite):
     sb_point(rom, "pif-ram", "k_sb_lw", [KSEG1 | PIF_RAM, 0], 50, "rclk")
 
 
+def sb_while(rom, point, setup, stmt, poll, reps, consts=(), pre=()):
+    """A TIMEIT_WHILE point whose reps spread their poll phase over SB_JITTER_PCLK (asm.py k_sb_while)."""
+    sb_point(rom, point, "k_sb_while", [*setup, *stmt, poll, SB_JITTER_PCLK // reps], reps, "rclk", consts, pre)
+
+
 def pi_io_write(suite):
     rom = Rom(suite, "pi-io-write")
-    sb_point(rom, "rom-word", "k_sb_while", [0, 0, KSEG1 | 0x10000000, 0, PI_BASE + 0x10], 50, "rclk")
+    sb_while(rom, "rom-word", (0, 0), (KSEG1 | 0x10000000, 0), PI_BASE + 0x10, 50)
 
 
 def joybus_block(dwords):
@@ -296,8 +302,8 @@ def joybus_block(dwords):
 def si_dma(suite):
     rom = Rom(suite, "si-dma")
     zero = Step("bench_list_step", [suite.blob([0] * 16), 16, 0, 0, 0, 0, 0, KSEG1 | SB_BUF], 0)
-    sb_point(rom, "write64", "k_sb_while", [SI_BASE + 0x0, SB_BUF, SI_BASE + 0x10, PIF_RAM, SI_BASE + 0x18],
-             10, "rclk", [("dir", "write64")], pre=[zero])
+    sb_while(rom, "write64", (SI_BASE + 0x0, SB_BUF), (SI_BASE + 0x10, PIF_RAM), SI_BASE + 0x18, 10,
+             [("dir", "write64")], pre=[zero])
     for n in range(1, 5):
         block = [0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1]
         sb_point(rom, f"read64-{n}", "k_sb_joybus", [suite.blob(joybus_block(block)), KSEG1 | SB_BUF, SB_BUF + 64],

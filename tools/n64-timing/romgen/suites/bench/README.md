@@ -51,10 +51,12 @@ Each point prints one XLOG line:
 | `uncached-sizes` | `c{8,16,32,64}`, `u{8,16,32,64}` | n64-systembench RDRAM C*R and U*R: one cached (warmed) or uncached LBU, LHU, LW or LD between two COUNT reads |
 | `rcp-reg-read` | `c32`, `vi-control` | n64-systembench RCP I/O R: one VI_CONTROL read, with the cached LW baseline |
 | `pif-ram-read` | `c32`, `pif-ram` | n64-systembench SI I/O R: one PIF RAM word read, with the cached LW baseline |
-| `pi-io-write` | `rom-word` | n64-systembench PI I/O W: one cart word write, then 8-poll rounds of PI_STATUS until idle |
+| `pi-io-write` | `rom-word` | n64-systembench PI I/O W: one cart word write, then 8-poll rounds of PI_STATUS until idle. Each rep starts the polls at a different phase (below). |
 | `si-dma` | `write64`, `read64-{1..4}` | n64-systembench SI DMA W RAM and JOY: nJ: a 64 B SI DMA to PIF RAM until SI_STATUS idle, and a 64 B read after a joybus block of n read-buttons commands |
 
 The n64-systembench ports run its TIMEIT_MULTI: 50 reps (10 for `write64`), and `report.py` takes the mean of all but the lowest and highest rep in its xcycle units, truncated to whole pclk or rclk (`sb_pclk`, `sb_rclk`). Its harness adds about 2 pclk, its cached read (3) less a cached hit (1). The port's harness is its own, so `net_pclk` is `sb_pclk` less the port's overhead, measured the same way from the ROM's `c<bits>` point (`overhead_pclk`). The bands are the original's pass rule: within 1 pclk or 2 rclk, or under 0.2 %.
+
+A TIMEIT_WHILE result can only end on a poll, and the polls are about 25 pclk apart. The core is deterministic, so every rep would put the poll grid at the same phase, and the result would be the busy time plus that one phase's delay. The `pi-io-write` and `si-dma` `write64` reps therefore run 0 to 49 nops (5 per rep for the 10-rep point) between the write and the first poll. This spreads them over two poll periods, so the mean is taken over the phase.
 
 RDP lists use 1-cycle mode with the combiner outputting the primitive color. The blender, Z and image read are off. The color image is 320-wide RGBA5551 at 0x00700000. The VI is blanked while an RDP list runs. Each list is built in uncached RDRAM at 0x00600000, ends with `SYNC_FULL`, and is timed until the DP interrupt.
 

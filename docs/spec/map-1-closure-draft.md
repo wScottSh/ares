@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench/after on 604d5b809). 36 fail, 10 fit only, 3 model-choice, 64 pass, 7 pending:calibration-16, 16 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench2/item1 on 0ee24be3c). 29 fail, 11 fit only, 3 model-choice, 70 pass, 7 pending:calibration-16, 16 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
@@ -19,12 +19,10 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 | Check | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|
-| `bench:mi-memset-cached` | vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
-| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.717 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
-| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
-| `bench:pi-io-write` | rom-word sb_rclk 140 (expected 134, 132..136) fail | `pi.io-busy` | - |
+| `bench:mi-memset-cached` | vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
+| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
+| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
 | `bench:si-dma-read64-1` | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail | `si.read64-base` `legacy.si.dma-read-controller` `legacy.si.dma-read-empty-port` `legacy.si.dma-read-accessory` `legacy.si.dma-read-short-command` | - |
-| `bench:sp-dma-sweep` | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail | `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `ri.overhead-read` `ri.overhead-write` `sp.dma-burst` | `ri.overhead-read` |
 | `mm:filesel-named` | filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
 | `nemu64:timing/load-miss-vi-off` | 0 of 1 tests pass | `cpu.dfill-total` | - |
@@ -49,28 +47,21 @@ None.
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.717 (expected 18.38, 18.346..18.418) fail |
-| `ri.octbyte` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
+| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
-| `ri.post-read-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `ri.post-write-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.bank-of` | wiki | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.row-of` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.arbitration` | model-choice | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19% |
 | `ri.rank.vi` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
-| `ri.overhead-read` | fit | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `ri.overhead-write` | derived | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.overhead-rdp` | derived | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19%; `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `cpu.dfill-total` | measured | `nemu64:timing/load-miss-vi-off`: 0 of 1 tests pass |
-| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail |
-| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.717 (expected 18.38, 18.346..18.418) fail |
-| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail |
-| `sp.dma-burst` | model-choice | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
-| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail |
+| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail |
+| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail |
+| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
+| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
 | `pi.block-bytes` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures |
-| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
-| `pi.io-busy` | measured | `bench:pi-io-write`: rom-word sb_rclk 140 (expected 134, 132..136) fail |
+| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
 | `si.read64-base` | derived | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
 | `vi.lines-per-output-line` | vendor | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `vi.aa-mode-lines` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
@@ -100,6 +91,7 @@ No published value exists for these, and no check measures them: their checks ar
 
 | Behavior | Fit from |
 |---|---|
+| `ri.overhead-read` | `bench:sp-dma-sweep` |
 | `cpu.exc-fpu-detect` | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` |
 | `cpu.fpu-trivial` | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` |
 | `cpu.eret` | `nemu64:timing/exception-roundtrip` |
