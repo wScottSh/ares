@@ -180,22 +180,30 @@ template<typename F> auto walkFramebuffer(F&& pixelAt, maybe<u32> origin = nothi
   }
 }
 
-auto rdramFramebufferHash() -> u64 {
-  Fnv1a fnv;
-  walkFramebuffer([&](u32, u32, u32 pixel) { fnv.mix(pixel); });
-  return N64::vi.io.colorDepth < 2 ? 0 : fnv.hash;
-}
+//The field's fb_hash, and the pixels of the field the VI just scanned out that
+//differ from RDRAM now at the origin it scanned (a buffer swap is not a tear):
+//the tearing of plan T11, where a line was fetched before its pixels were
+//drawn. Tears count in progressive modes only, where every field composes
+//every row. One walk serves both when the origin has not moved.
+struct FieldSample {
+  u64 fbHash = 0;
+  u64 tearPixels = 0;
+};
 
-//Pixels of the field the VI just scanned out that differ from RDRAM now, at the
-//origin it scanned (a buffer swap is not a tear): the
-//tearing of plan T11, where a line was fetched before its pixels were drawn.
-//Progressive modes only, where every field composes every row.
-auto scanoutTearPixels() -> u64 {
+auto sampleField() -> FieldSample {
   auto& io = N64::vi.io;
-  if(io.colorDepth < 2 || io.serrate) return 0;
+  if(io.colorDepth < 2) return {};
+  const bool tears = !io.serrate;
+  const bool together = tears && N64::vi.scannedOrigin == io.dramAddress;
+  Fnv1a fnv;
   u64 differ = 0;
-  walkFramebuffer([&](u32 x, u32 y, u32 pixel) { differ += N64::vi.scanned[y * 640 + x] != pixel; }, N64::vi.scannedOrigin);
-  return differ;
+  walkFramebuffer([&](u32 x, u32 y, u32 pixel) {
+    fnv.mix(pixel);
+    if(together) differ += N64::vi.scanned[y * 640 + x] != pixel;
+  });
+  if(tears && !together)
+    walkFramebuffer([&](u32 x, u32 y, u32 pixel) { differ += N64::vi.scanned[y * 640 + x] != pixel; }, N64::vi.scannedOrigin);
+  return {fnv.hash, differ};
 }
 
 //Writes the sampled image as a 640x480 binary PPM. Unsampled positions stay black.
@@ -558,8 +566,11 @@ auto nall::main(Arguments arguments) -> void {
     root->run();
     u64 fbHash = 0;
     if(N64::vi.active()) {
-      if(stats) fbHash = rdramFramebufferHash();
-      if(stats && frames) if(auto n = scanoutTearPixels()) tears.push_back({frames - 1, n});
+      if(stats) {
+        auto field = sampleField();
+        fbHash = field.fbHash;
+        if(frames && field.tearPixels) tears.push_back({frames - 1, field.tearPixels});
+      }
       if(runner.shotPath && !dumpFramebuffer(runner.shotPath)) std::fprintf(stderr, "n64-run: cannot write %s\n", runner.shotPath.data());
       runner.shotPath = {};
     }
