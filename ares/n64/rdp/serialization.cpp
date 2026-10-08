@@ -81,6 +81,7 @@ auto RDP::serialize(serializer& s) -> void {
   s(pipe.prefetched);
   s(pipe.lastPrimitive);
   s(pipe.lastWrite.units);
+  s(pipe.lastSpanEnd.units);
   s(pipe.writes);
   s(tmemLoad.active);
   s(tmemLoad.reads);

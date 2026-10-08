@@ -278,7 +278,9 @@ auto RDP::land(Clock at) -> void {
 //Posts the snapshot reads of the next queued span: color if IM_RD, Z if
 //Z_CMP (rdp.read-gate), one span ahead of the pipeline (SDK 12.2.3: the next
 //span is prefetched into another span buffer). A 1-primitive span waits for
-//every earlier write-back to land, plus rdp.atomic-dead (1prim-cost.md).
+//every earlier write-back to land and for rdp.atomic-dead clocks after the
+//previous span was rendered (SDK 12.2.3: "30 to 40 null cycles after the
+//last span of a primitive is rendered"; 1prim-cost.md).
 auto RDP::prefetch(Clock at) -> void {
   retire();
   if(pipe.prefetched >= 0 || pipe.count == Slots) return;
@@ -288,7 +290,7 @@ auto RDP::prefetch(Clock at) -> void {
   if(!rdp_render_span_peek(0, &info)) return;
   if(info.atomic && info.primitive != pipe.lastPrimitive) {
     if(pipe.count || pipe.current >= 0) return;
-    Clock barrier = pipe.lastWrite + Timing::Behavior::RdpAtomicDead;
+    Clock barrier = max(pipe.lastWrite, pipe.lastSpanEnd + Timing::Behavior::RdpAtomicDead);
     if(barrier > at) return wakeAt(barrier);
   }
   u32 index = (pipe.head + pipe.count) % Slots;
@@ -414,6 +416,7 @@ auto RDP::endChunk(Clock at) -> void {
   }
   if(last) {
     slot.shaded = true;
+    pipe.lastSpanEnd = at;
     pipe.current = -1;
     retire();
   }

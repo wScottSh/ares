@@ -179,6 +179,7 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     s32   prefetched = -1;       //slot holding the next unrun span
     u32   lastPrimitive = ~0u;
     Clock lastWrite;             //last write-back landing
+    Clock lastSpanEnd;           //the pipeline finished its last span
     u32   writes = 0;            //write-back bursts not yet landed, every slot
   } pipe;
 
