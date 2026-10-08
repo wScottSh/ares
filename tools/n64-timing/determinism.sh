@@ -10,20 +10,20 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$here/host.sh"
 mode=determinism
 if [ "${1:-}" = "--step-cap" ]; then mode=stepcap; shift; fi
 rom="${1:?usage: determinism.sh [--step-cap] ROM [FRAMES]}"
 frames="${2:-600}"
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
-out="${DET_OUT:-$N64_TIMING_HOME/$mode/$(basename "$rom" | tr -c 'A-Za-z0-9._-\n' _)}"
+out="${DET_OUT:-$N64_TIMING_HOME/$mode/$(basename "$rom" | tr -c 'A-Za-z0-9._\n-' _)}"
 exe="${N64_RUN:-$(bash "$here/build.sh" | tail -n 1)}"
 
 rm -rf "$out/run1" "$out/run2"
 mkdir -p "$out"
-is_mm=$(cd "$here/mmbench" && python -c "import sys, mmbench; print(int(mmbench.rom_md5(sys.argv[1]) == mmbench.ROM_MD5))" "$rom")
+is_mm=$(cd "$here/mmbench" && "$PYTHON" -c "import sys, mmbench; print(int(mmbench.rom_md5(sys.argv[1]) == mmbench.ROM_MD5))" "$rom")
 if [ "$is_mm" = 1 ]; then
   check=--check-determinism; [ "$mode" = stepcap ] && check=--check-step-cap
-  python "$here/mmbench/mmbench.py" "$rom" --exe "$exe" --out "$out" $check > "$out/mmbench.log" 2>&1 || tail -n 3 "$out/mmbench.log" >&2
+  "$PYTHON" "$here/mmbench/mmbench.py" "$rom" --exe "$exe" --out "$out" $check > "$out/mmbench.log" 2>&1 || tail -n 3 "$out/mmbench.log" >&2
 else
   for run in run1 run2; do
     mkdir -p "$out/$run"
@@ -34,7 +34,7 @@ else
   done
 fi
 
-exec python - "$out/run1" "$out/run2" "$mode" <<'EOF'
+exec "$PYTHON" - "$out/run1" "$out/run2" "$mode" <<'EOF'
 import csv, sys
 from pathlib import Path
 

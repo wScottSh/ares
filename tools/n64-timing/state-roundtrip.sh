@@ -10,9 +10,9 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$here/host.sh"
 rom="${1:?usage: state-roundtrip.sh ROM [FRAMES]}"
 frames="${2:-600}"
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 out="${OUT:-$N64_TIMING_HOME/state-roundtrip}"
 exe="${N64_RUN:-$(bash "$here/build.sh" | tail -n 1)}"
 mkdir -p "$out"
@@ -30,7 +30,7 @@ printf 'wait 30\npoke-tmem 0x123 0x5a\n' > "$out/poke.txt"
 "$exe" "$rom" --frames "$frames" --stats "$out/roundtrip.tsv" --script "$out/roundtrip.txt" 2> "$out/roundtrip.log" > /dev/null
 "$exe" "$rom" --frames "$frames" --stats "$out/poke.tsv" --script "$out/poke.txt" 2> "$out/poke.log" > /dev/null
 
-exec python - "$out" <<'EOF'
+exec "$PYTHON" - "$out" <<'EOF'
 import sys
 from pathlib import Path
 

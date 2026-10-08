@@ -8,12 +8,10 @@
 #         $N64_TIMING_HOME/results/rdpstat/summary.txt
 set -euo pipefail
 
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 romgen="$(cd "$here/../.." && pwd)"
-repo="$(cd "$romgen/../../.." && pwd)"
-runner="${N64_RUN:-$N64_TIMING_HOME/build/$(basename "$repo")/n64-run/rundir/n64-run.exe}"
-[ -x "$runner" ] || runner="${runner%.exe}"
+. "$romgen/../host.sh"
+runner="${N64_RUN:-$(n64_target n64-run)}"
 roms="${RDPSTAT_ROMS:-$N64_TIMING_HOME/roms}"
 
 sets="${*:-systemtest dpc repeater64}"
@@ -35,7 +33,7 @@ for set in $sets; do
     grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
     grep "^Test '" "$out/stdout.txt" || true
     grep -o '[A-Za-z-]*: Failed [0-9]* of [0-9]* tests.*' "$out/stdout.txt" || echo "no summary line"
-    PYTHONPATH="$(dirname "$romgen")" python -m romgen.report "${rom%.z64}.tests.tsv" "$out/stdout.txt" "$out"
+    PYTHONPATH="$(dirname "$romgen")" "$PYTHON" -m romgen.report "${rom%.z64}.tests.tsv" "$out/stdout.txt" "$out"
   } | tee "$out/summary.txt" >> "$results/summary.txt"
 done
 cat "$results/summary.txt"

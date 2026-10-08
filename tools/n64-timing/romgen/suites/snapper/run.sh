@@ -9,12 +9,10 @@
 #         $N64_TIMING_HOME/results/snapper/summary.txt
 set -euo pipefail
 
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 romgen="$(cd "$here/../.." && pwd)"
-repo="$(cd "$romgen/../../.." && pwd)"
-runner="${N64_RUN:-$N64_TIMING_HOME/build/$(basename "$repo")/n64-run/rundir/n64-run.exe}"
-[ -x "$runner" ] || runner="${runner%.exe}"
+. "$romgen/../host.sh"
+runner="${N64_RUN:-$(n64_target n64-run)}"
 roms="${SNAPPER_ROMS:-$N64_TIMING_HOME/roms}"
 
 sets="${*:-span-tri test-mode-rw fill-tri-sweep rect-nosync}"
@@ -34,7 +32,7 @@ for set in $sets; do
   {
     echo "== $set exit=$status"
     grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
-    PYTHONPATH="$(dirname "$romgen")" python -m romgen.suites.snapper.compare \
+    PYTHONPATH="$(dirname "$romgen")" "$PYTHON" -m romgen.suites.snapper.compare \
       "$set" "$out/stdout.txt" "$out" 2>&1 || true
   } | tee -a "$results/summary.txt"
 done

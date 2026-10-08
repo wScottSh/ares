@@ -581,8 +581,8 @@ def self_test(root):
             ("an unknown check id", TABLE, row_field("ri.read-hit", "verify", "bench:no-such-rom"), "check `bench:no-such-rom` is not defined in tools/n64-timing/checks.tsv. Add a row there"),
             ("an empty check list", TABLE, row_field("ri.write-hit", "verify", ""), "has no check. Name the check"),
             ("adding a timing literal", "ares/n64/cpu/memory.cpp", lambda t: t + new_function, "timing literal [7, 2, 14] in `step(7 * 2);`. Add a row to ares/n64/timing/behaviors.tsv"),
-            ("changing a legacy literal", "ares/n64/cpu/interpreter-ipu.cpp", lambda t: t.replace("step(pclk(5 - 1));", "step(pclk(6 - 1));", 1), "If the code no longer charges this cost, delete the entry"),
-            ("changing a legacy row's value", TABLE, row_field("legacy.cpu.div", "value", "38"), "Make ares/n64/timing/behaviors.tsv and the code agree"),
+            ("changing a legacy literal", "ares/n64/pi/bus.hpp", lambda t: t.replace("thread.step(pclk(250));", "thread.step(pclk(251));", 1), "If the code no longer charges this cost, delete the entry"),
+            ("changing a legacy row's value", TABLE, row_field("legacy.pi.cart-read", "value", "251"), "Make ares/n64/timing/behaviors.tsv and the code agree"),
             ("referencing a value-less row", "ares/n64/cpu/memory.cpp", lambda t: t + "\nstatic auto selfTestRule = Timing::Behavior::RiArbitration;\n", "which has no numeric value"),
             ("referencing an unknown row", "ares/n64/cpu/memory.cpp", lambda t: t + "\nstatic auto selfTestRule = Timing::Behavior::RiNoSuchRow;\n", "matches no row"),
             ("a model choice without a reason", TABLE, row_field("ri.rank.vi", "reference", ""), "or mark the basis model-choice and state the reason"),
@@ -597,7 +597,7 @@ def self_test(root):
              "but `thar0:zcmp` decides it from other data. Remove the verify-is-fit note"),
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("editing the generated header", HEADER, lambda t: t.replace("= 30;", "= 31;", 1), "ares/n64/timing/behaviors.hpp differs from the generated output"),
-            ("a legacy code site moving", "ares/n64/cpu/interpreter-ipu.cpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),
+            ("a legacy code site moving", "ares/n64/pi/bus.hpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),
         ]
         if landed:
             cases += [

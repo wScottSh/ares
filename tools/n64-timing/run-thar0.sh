@@ -6,11 +6,9 @@
 # Output: $N64_TIMING_HOME/results/thar0/{stdout.txt,stderr.txt,compare.tsv,summary.txt}
 set -euo pipefail
 
-N64_TIMING_HOME="${N64_TIMING_HOME:-$HOME/n64-timing}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(cd "$here/../.." && pwd)"
-runner="${N64_RUN:-$N64_TIMING_HOME/build/$(basename "$repo")/n64-run/rundir/n64-run.exe}"
-[ -x "$runner" ] || runner="${runner%.exe}"
+. "$here/host.sh"
+runner="${N64_RUN:-$(n64_target n64-run)}"
 
 rom="$N64_TIMING_HOME/roms/thar0-rdp.z64"
 [ -f "$rom" ] || { echo "missing $rom; run romgen/build.py --suite thar0 first" >&2; exit 1; }
@@ -22,5 +20,5 @@ status=0
 {
   echo "== thar0 exit=$status"
   grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
-  PYTHONPATH="$here" python -m romgen.suites.thar0.compare "$out/stdout.txt" --out "$out/compare.tsv"
+  PYTHONPATH="$here" "$PYTHON" -m romgen.suites.thar0.compare "$out/stdout.txt" --out "$out/compare.tsv"
 } | tee "$out/summary.txt"
