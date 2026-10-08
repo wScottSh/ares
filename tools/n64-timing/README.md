@@ -237,3 +237,26 @@ Measured 2026-10-07 on master `bf2882c3f` (harness port `feat/l0`) on the Linux 
 | MM 600 fields wall | 18.7 to 22.0 s | 11.3 to 11.8 s |
 
 Every emulated value above matches Windows, and the mmbench per-scene `rsp_busy_clocks` means match the T8 verifier's to the cycle. A gcc build and a clang 22 build on this host write byte-identical MM stats. The MM wall time is not the compiler: gcc and clang ran within 10% of each other interleaved. It moved with host load (21.7 s at load average 15, 18.7 s at 6). The rest of the gap to Windows is the host (inferred; the Windows machine's CPU is not recorded). The `--self-test` legacy cases had failed on master since T7a removed the rows they edited; `feat/l0` points them at a row that still exists. The failure depends on file content, not the host, so Windows fails the same cases on master (inferred; measured on Linux at T7a and its parent).
+
+## Run budget
+
+Map #1 sets the budget: "a 600-frame MM bench run ... takes <= 2 min" (plan T16: every `mm:*` scene at most 120 s wall). Measured 2026-10-08 on master `6dfbf7166` on the Linux host unicron: AMD Ryzen AI MAX+ 395 (16 cores, 32 threads), `amd-pstate-epp` driver, `powersave` governor with `balance_performance`, about 3.5 GHz effective on the runner's core (cycles divided by wall time). The runner is the `build.sh` build (`RelWithDebInfo`, g++ `-O2 -g`), copied to a fresh file before timing. Each scene ran alone (one runner at a time, load average 1.0 to 2.4), three times:
+
+```sh
+perf stat -e task-clock,cycles,instructions n64-run MM.z64 --script <scene>/script.txt --stats stats.tsv --frames 3000 --wall-seconds 600
+```
+
+The scripts are the ones `mmbench.py` writes. Each scene's wall time covers the whole cold-boot run: boot, the route and the window. Every run wrote a `stats.tsv` byte-identical to the bench's.
+
+| Scene | Fields run | Wall median (s) | Min to max (s) | Largest share of host time |
+|---|---|---|---|---|
+| power-on, `--frames 600` | 600 | 25.93 | 25.85 to 25.97 | CPU interpreter 37% |
+| `title` | 852 | 39.27 | 39.22 to 39.34 | CPU interpreter 35% |
+| `filesel` | 1043 | 55.95 | 55.94 to 56.09 | CPU interpreter 30% |
+| `filesel-named` | 1510 | 81.33 | 81.18 to 82.25 | CPU interpreter 30% |
+| `filesel-options` | 1220 | 67.07 | 66.85 to 67.55 | CPU interpreter 29% |
+| `filesel-rotate` | 1764 | 102.90 | 102.73 to 103.63 | CPU interpreter 28% |
+| `sct` | 906 | 63.10 | 62.92 to 63.57 | CPU interpreter 23%, RSP 22%, RI and timeline 22% |
+| `field` | 924 | 60.67 | 60.66 to 60.74 | CPU interpreter 24%, RSP 22%, RI and timeline 21% |
+
+Every scene is within the budget. `filesel-rotate` is the closest, at 103 s for 1764 fields, because its window runs eight rotations (1157 fields) instead of 600. The runner is single-threaded and runs 3.8 to 4.8 instructions per cycle, so the wall time follows the instruction count on one core. The shares come from `perf record -F 999` runs that are not part of the timing. The other subsystems are the pixel engine's shading (11 to 23%), the RDP front end's scheduling (6 to 8%), and the per-field state hash behind `trace_hash` (7 to 11%).
