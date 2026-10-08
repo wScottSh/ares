@@ -450,7 +450,8 @@ def bench(args, out, extra=()):
     out.mkdir(parents=True, exist_ok=True)
     began = time.perf_counter()
     with ThreadPoolExecutor(max_workers=args.jobs or len(names)) as pool:
-        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots, extra)
+        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots,
+                                  (*extra, "--behaviors", str(out / "behaviors.tsv")) if n == names[0] else extra)
                    for n in names}
         results = {n: f.result() for n, f in futures.items()}
     total_wall = time.perf_counter() - began

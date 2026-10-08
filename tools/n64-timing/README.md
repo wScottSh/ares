@@ -39,7 +39,7 @@ The script configures `-DARES_CORES=n64`, `RelWithDebInfo`, and Ninja on first u
 ```sh
 n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
             [--stats FILE] [--controllers N] [--script FILE]
-            [--dump-frame N FILE]...
+            [--dump-frame N FILE]... [--behaviors FILE]
 ```
 
 | Option | Meaning |
@@ -51,6 +51,7 @@ n64-run ROM [--frames N] [--emulated-seconds S] [--wall-seconds S]
 | `--dump-frame N FILE` | Writes the RDRAM image the VI samples at field N as a 640x480 binary PPM. Repeatable. See [Frame dumps](#frame-dumps). |
 | `--controllers N` | Number of gamepads connected at power-on (default 1). |
 | `--script FILE` | Runs an input script. See [Input scripts](#input-scripts). |
+| `--behaviors FILE` | Writes the timing behaviors the binary was built with (`Timing::behaviors`: id, basis, value, unit, checks) as TSV, then runs as usual. |
 
 The runner always emulates an NTSC console with the Expansion Pak, with homebrew mode (emux, ISViewer) on. The CPU and the RSP always run on their interpreters; the fork has no recompiler.
 
@@ -166,11 +167,11 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 `ares/n64/timing/behaviors.tsv` is the one source for every timing constant. Each row has an id, a value, a unit, a basis, a reference, the checks that decide it, the checks a fit was solved from (`fit-from`), and a note. `checks.tsv` defines every check id: its runner, target, selector, expectation and source.
 
 ```sh
-python tools/n64-timing/behaviors.py              # writes ares/n64/timing/behaviors.hpp and docs/spec/n64-timing.md
+python tools/n64-timing/behaviors.py              # writes behaviors.hpp, docs/spec/n64-timing.md and docs/spec/map-1-closure-draft.md
 python tools/n64-timing/behaviors.py --check      # the gen check; the CMake target n64-timing-gen runs it before every build
 python tools/n64-timing/behaviors.py --self-test  # breaks each rule once and checks that the failure names its fix
 python tools/n64-timing/behaviors.py --fix-lines  # moves each legacy row's file:line to its current code site
-python tools/n64-timing/behaviors.py --results nemu64=$N64_TIMING_HOME/results/nemu64 det=det.txt [--out FILE]
+python tools/n64-timing/behaviors.py --results RUN_DIR  # writes docs/spec/n64-timing-results.tsv from one standing run
 ```
 
 `--check` fails when:
@@ -181,7 +182,8 @@ python tools/n64-timing/behaviors.py --results nemu64=$N64_TIMING_HOME/results/n
 - a `fit` row has an empty `fit-from`, or every check in its verify column is in its `fit-from`, reports only, or is pending, and its note does not start with `verify-is-fit: <reason>`;
 - a row's note says `verify-is-fit` but another check decides it, or a row that is not `fit` has a `fit-from`;
 - code names `Timing::Behavior::X` for a row with no numeric value, or for no row;
-- `behaviors.hpp` or `docs/spec/n64-timing.md` differs from the generated output;
+- a check that a row names has no line in `docs/spec/n64-timing-results.tsv`, a line's result is not `pass`, `fail` or `pending:<gate>`, its gate is not a `pending:` row of `checks.tsv`, or a line names a check no row uses;
+- `behaviors.hpp`, `docs/spec/n64-timing.md` or `docs/spec/map-1-closure-draft.md` differs from the generated output;
 - `lint-literals.py` finds a timing literal that the allowlist does not pin to a row.
 
 To add or change a constant, edit its row and run `behaviors.py`. Code reads the value as `Timing::Behavior::<Name>`, in 750 MHz units.
@@ -189,6 +191,10 @@ To add or change a constant, edit its row and run `behaviors.py`. Code reads the
 A row with basis `legacy` is a cost that today's core still charges. Its reference is the code site. `literal-allowlist.tsv` pins the literal at that site to the row, and the row's value must appear on the line. The note names the plan unit that replaces the cost. That unit deletes the allowlist entries and the row, so the allowlist only shrinks. A row with basis `model-choice` has no published value, and its reference states the reason for the choice. A row with basis `fit` is solved from data that some checks also assert, so a pass on those checks verifies the arithmetic, not the model. Its `fit-from` column names those checks. When no other check decides the row (a check whose expectation is only a report does not), its note starts with `verify-is-fit: <reason>`, and the spec labels it **fit only, no independent check**.
 
 A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `file:<path>` to the suite's expected-value file, and its selector names the file's key column. When that file exists, each id under the prefix that the file defines resolves with no row of its own. Each explicit row whose expect is `suite` must then find its target and selector in the file. A `pending:<gate>` check names a corpus that the program cannot run yet. The spec prints it as pending, never as verified.
+
+### Results
+
+`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that can only report is `pending:calibration-16`, a pidma check is `pending:build-corpora`, and a check whose ROM the suite does not build is `pending:no-rom`. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
 
 ## Clock units
 

@@ -50,6 +50,7 @@ struct Options {
   double emulatedSeconds = 0;
   double wallSeconds = 0;
   string statsPath;
+  string behaviorsPath;
   string rdpFieldsPath;
   u32 controllers = 1;
   std::vector<FrameDump> dumps;
@@ -92,6 +93,7 @@ auto usage() -> void {
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
     "  --script FILE       run an input script (controller 1 input, memory peeks and pokes)\n"
     "  --step-cap          catch the timeline up before every CPU instruction; the stats must not change\n"
+    "  --behaviors FILE    write the timing behaviors this binary was built with (id, basis, value, unit, verify) as TSV\n"
     "stdout carries ISViewer and emux output only. The stop line goes to stderr.\n"
     "exit: 0 emux exit, script stop, or frame limit, 2 emulated-time limit, 3 wall-time limit, 1 error\n");
 }
@@ -108,6 +110,7 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--emulated-seconds") options.emulatedSeconds = value().real();
     else if(arg == "--wall-seconds") options.wallSeconds = value().real();
     else if(arg == "--stats") options.statsPath = value();
+    else if(arg == "--behaviors") options.behaviorsPath = value();
     else if(arg == "--rdp-fields") options.rdpFieldsPath = value();
     else if(arg == "--script") options.scriptPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
@@ -560,6 +563,11 @@ auto nall::main(Arguments arguments) -> void {
   N64::timeline.setStepCap(options.stepCap);
 
   file_buffer stats;
+  if(options.behaviorsPath) {
+    string table = "id\tbasis\tvalue\tunit\tverify\n";
+    for(auto& b : N64::Timing::behaviors) table.append(b.id, "\t", N64::Timing::basisNames[(u32)b.basis], "\t", b.value, "\t", b.unit, "\t", b.verify, "\n");
+    if(!file::write(options.behaviorsPath, {table.data(), table.size()})) std::fprintf(stderr, "n64-run: cannot write %s\n", options.behaviorsPath.data());
+  }
   if(options.statsPath) {
     if(!stats.open(options.statsPath, file::mode::write)) {
       std::fprintf(stderr, "n64-run: cannot write %s\n", options.statsPath.data());
