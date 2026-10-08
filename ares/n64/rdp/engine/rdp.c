@@ -51,12 +51,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Singleton renderer context.
 static struct {
     rdp_t *rdp;
-    int fence_range_check;  /* See rdp_render_set_fence_range_check in
-                               rdp.h. Not touched by init or destroy. */
-} s_ctx = { .fence_range_check = 1 };
-
-// Base of the renderer's hidden-bit plane; NULL outside init..destroy.
-static uint8_t *s_hidden_plane;
+} s_ctx;
 
 static void rdp_log_stderr(int level, const char *fmt, ...)
 {
@@ -79,77 +74,6 @@ uint64_t rdp_render_pixel_count(void)
     return s_ctx.rdp != NULL ? s_ctx.rdp->m_pixels : 0;
 }
 
-/* Emulator-facing fences (see rdp_core.h). Rendering is always
- * asynchronous in the emulator: Sync Full and the per-kick list-end
- * points raise their interrupts / return at the same emulated instant
- * as the historical synchronous renderer, while the span queue
- * completes on the workers. Every emulator path that reads or writes
- * RDRAM (CPU cache fill/writeback and uncached access, RSP/PI/SI DMA,
- * VI scanout) fences first via rdp_rdram_fence() in rdp/interface.c,
- * which pairs the unlocked check below with the DP producer lock for
- * the drain. The bare renderer core defaults to the synchronous model
- * (m_async_on = 0), which is what every test tool and golden baseline
- * runs against. */
-/* Stage-1 unlocked check of the two-stage fence protocol (see
- * rdp_rdram_fence in rdp/interface.c): a cheap query the hot RDRAM
- * paths can make on every access. Returns nonzero when queued span
- * work may overlap [addr, addr+len) and the caller must take the DP
- * producer lock and call rdp_fence(). A false positive (stale
- * pending observed while another fence is clearing it) only costs a
- * lock and an empty drain; a false negative is impossible because
- * pending is cleared strictly AFTER the drain completes. */
-int rdp_fence_needed(uint32_t addr, uint32_t len)
-{
-    const rdp_t *rdp = s_ctx.rdp;
-    uint32_t lo, hi;
-
-    if (rdp == NULL)
-        return 0;
-
-    if (!atomic_load_explicit(&rdp->m_async_pending, memory_order_acquire))
-        return 0;
-
-    if (!s_ctx.fence_range_check)
-        return 1;
-
-    lo = atomic_load_explicit(&rdp->m_async_fb_lo, memory_order_relaxed);
-    hi = atomic_load_explicit(&rdp->m_async_fb_hi, memory_order_relaxed);
-    if (!(addr >= hi || (addr + len) <= lo))
-        return 1;
-
-    lo = atomic_load_explicit(&rdp->m_async_zb_lo, memory_order_relaxed);
-    hi = atomic_load_explicit(&rdp->m_async_zb_hi, memory_order_relaxed);
-
-    return !(addr >= hi || (addr + len) <= lo);
-}
-
-void rdp_hidden_read_row(uint32_t idx16, uint32_t n, uint8_t *dst)
-{
-    rdp_t *rdp = s_ctx.rdp;
-    uint32_t i;
-
-    if (rdp == NULL) {
-        memset(dst, 0, n);
-        return;
-    }
-    /* Mask like the VI's per-texel path so a framebuffer row that
-     * wraps RDRAM reads identically. */
-    for (i = 0; i < n; i++)
-        dst[i] = HREADADDR8((idx16 + i) & 0x3FFFFFu);  /* 8MB RDRAM >> 1 */
-}
-
-void rdp_fence(uint32_t addr, uint32_t len)
-{
-    if (s_ctx.rdp != NULL)
-        rdp_async_fence(s_ctx.rdp, addr, len);
-}
-
-void rdp_fence_all(void)
-{
-    if (s_ctx.rdp != NULL)
-        rdp_async_fence_all(s_ctx.rdp);
-}
-
 void rdp_render_dps_arm(void)
 {
     if (s_ctx.rdp != NULL)
@@ -160,8 +84,6 @@ int rdp_render_dps_take(uint32_t words[32])
 {
     if (s_ctx.rdp == NULL || !s_ctx.rdp->m_dps.valid)
         return 0;
-    /* The drain orders the worker capture stores before the merge. */
-    rdp_async_fence_all(s_ctx.rdp);
     return rdp_dps_take(s_ctx.rdp, words);
 }
 
@@ -176,15 +98,13 @@ void rdp_render_quiesce(void)
         return;
 
     rdp_state_quiesce(s_ctx.rdp);
-    rdp_async_fence_all(s_ctx.rdp);
 }
 
-int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
-    uint32_t *dmem)
+int rdp_render_init(uint32_t rdram_size)
 {
     rdp_t *rdp;
 
-    if (!rdram || !hidden || !dmem || rdram_size < 4u)
+    if (rdram_size < 4u)
         return 1;
 
     // In order: construct the renderer, build internal state,
@@ -194,7 +114,7 @@ int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
     if (rdp == NULL)
         return 1;
 
-    if (rdp_construct(rdp, rdram, rdram_size, hidden, dmem)) {
+    if (rdp_construct(rdp, rdram_size)) {
         free(rdp);
         return 1;
     }
@@ -220,20 +140,15 @@ int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
     }
 
     s_ctx.rdp = rdp;
-    s_hidden_plane = rdp->m_hidden_bits;
-    /* ares port: synchronous. The host settles the renderer after every
-     * dispatch (rdp_render_engine_step), so RDRAM is current whenever
-     * another device runs and no fence is needed. RDP_WQ_THREADS=1 keeps
-     * the span work on the emulation thread (rdp_wqueue.c). */
+    /* ares port: no worker threads. Spans run when the host calls
+     * rdp_render_span_run, on the emulation thread; loads and Sync Full
+     * keep their in-handler drains, which the host makes empty by running
+     * every queued span first (rdp_render_engine_drains). */
     atomic_store(&rdp->m_async_on, 0);
 
     return 0;
 }
 
-void rdp_render_set_fence_range_check(int on)
-{
-    s_ctx.fence_range_check = (on != 0);
-}
 
 /* ---- Timed DPC engine glue ----------------------------------------------
  * Thin pass-throughs for the host's DPC front end (ares rdp/timed.cpp). */
@@ -255,19 +170,18 @@ int rdp_render_crashed(void)
     return s_ctx.rdp != NULL && rdp_crashed(s_ctx.rdp);
 }
 
-void rdp_render_engine_feed(uint32_t address, unsigned nwords, uint32_t xbus)
+void rdp_render_engine_feed(const uint64_t *words, unsigned nwords)
 {
     if (s_ctx.rdp != NULL)
-        rdp_engine_feed(s_ctx.rdp, address, nwords, xbus);
+        rdp_engine_feed(s_ctx.rdp, words, nwords);
 }
 
 /* Steps one command, then every following buffered command a held hazard
  * primitive's window still collects, so the hold resolves inside this
  * call; works[] receives one entry per command (at most `capacity`).
- * Then settles the renderer: no held primitive and no queued span
- * outlives the call, so emulated time never passes with renderer work
- * in flight and saving needs no mutation. Returns the command count, 0
- * when starved, -1 when the pipeline is crashed. */
+ * Then publishes any held hazard primitive, so its spans queue for the
+ * host. Returns the command count, 0 when starved, -1 when the pipeline
+ * is crashed. */
 int rdp_render_engine_step(rdp_engine_work *works, unsigned capacity)
 {
     rdp_t *rdp = s_ctx.rdp;
@@ -286,8 +200,81 @@ int rdp_render_engine_step(rdp_engine_work *works, unsigned capacity)
             break;
         count++;
     }
-    rdp_engine_settle(rdp);
+    rdp_engine_publish(rdp);
     return (int)count;
+}
+
+int rdp_render_span_peek(unsigned ahead, rdp_span_info *info)
+{
+    poly_span span;
+    const rdp_poly_state *o;
+    int32_t a, b;
+
+    if (s_ctx.rdp == NULL || !poly_manager_peek(&s_ctx.rdp->m_pool, ahead, &span))
+        return 0;
+    memset(info, 0, sizeof(*info));  /* the host saves it whole, padding included */
+    o = span.primitive->m_object;
+    a = span.extent->startx;
+    b = span.extent->stopx;
+    info->y = span.scanline;
+    /* The drawn width is the flip-directional difference of the clamped
+     * edges, as rdp_occ_accumulate counts it; a negative width (the slot
+     * past a primitive's last real span) draws nothing and takes no time. */
+    info->pixels = o->flip ? a - b : b - a;
+    info->phantom = info->pixels < 0 || (a == 0xfff && b == 0);
+    if (info->phantom) info->pixels = 0;
+    /* The walk touches one position past the width (the clipped end pixel). */
+    info->x0 = a < b ? a : b;
+    info->x1 = a < b ? b : a;
+    if (info->x0 < 0) info->x0 = 0;
+    if (info->x1 >= (int32_t)o->m_misc_state.m_fb_width) info->x1 = (int32_t)o->m_misc_state.m_fb_width - 1;
+    if (info->phantom) info->x1 = info->x0 - 1;
+    info->primitive = span.primitive->m_seq;
+    info->fb_address = o->m_misc_state.m_fb_address;
+    info->fb_width = o->m_misc_state.m_fb_width;
+    info->fb_size = o->m_misc_state.m_fb_size;
+    info->zb_address = o->m_misc_state.m_zb_address;
+    info->cycle_type = o->m_other_modes.cycle_type;
+    info->image_read = o->m_other_modes.image_read_en;
+    info->z_compare = o->m_other_modes.z_compare_en;
+    info->z_update = o->m_other_modes.z_update_en;
+    info->atomic = o->m_other_modes.atomic_prim;
+    return 1;
+}
+
+void rdp_render_span_run(void)
+{
+    if (s_ctx.rdp != NULL)
+        poly_manager_run_next(&s_ctx.rdp->m_pool);
+}
+
+void rdp_render_set_windows(const rdp_memwin *windows, unsigned count)
+{
+    if (s_ctx.rdp == NULL)
+        return;
+    s_ctx.rdp->m_win = windows;
+    s_ctx.rdp->m_nwin = count;
+    s_ctx.rdp->m_win_last = 0;
+}
+
+uint64_t rdp_render_mem_misses(void)
+{
+    return s_ctx.rdp != NULL ? s_ctx.rdp->m_mem_miss : 0;
+}
+
+int rdp_render_engine_next(void)
+{
+    return s_ctx.rdp != NULL ? rdp_engine_next(s_ctx.rdp) : -1;
+}
+
+int rdp_render_engine_drains(void)
+{
+    return s_ctx.rdp != NULL && rdp_engine_drains(s_ctx.rdp);
+}
+
+unsigned rdp_render_load_plan(rdp_memrange *ranges, unsigned max)
+{
+    return s_ctx.rdp != NULL ? rdp_engine_load_plan(s_ctx.rdp, ranges, max) : 0;
 }
 
 void rdp_render_destroy(void)
@@ -297,14 +284,9 @@ void rdp_render_destroy(void)
         free(s_ctx.rdp);
     }
 
-    s_hidden_plane = NULL;
     s_ctx.rdp = NULL;
 }
 
-uint8_t *rdp_hidden_plane(void)
-{
-    return s_hidden_plane;
-}
 
 uint32_t rdp_render_color_image(void)
 {
@@ -325,8 +307,8 @@ uint8_t *rdp_render_tmem(void)
  * the import). Differences: whole structs travel as blocks, so the scissor
  * fractions upstream drops survive; the hidden plane is ares' and travels
  * with RDRAM; only the live prefix of the command accumulator travels; the
- * ares pixel counter is included. Hazard holds and queued spans never
- * outlive rdp_render_engine_step, so neither needs saving. */
+ * ares pixel counter is included. Hazard holds never outlive
+ * rdp_render_engine_step; queued spans travel with the poly pools. */
 void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
 {
     rdp_t *rdp = s_ctx.rdp;
@@ -361,7 +343,6 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
     RDP_STATE(m_pipeline_crashed);
     RDP_STATE(m_primitive_counter);
     RDP_STATE(m_pixels);
-    RDP_STATE(m_rect_stale);
     RDP_STATE(m_pipe_clean);
     RDP_STATE(m_start);
     RDP_STATE(m_end);
@@ -383,5 +364,32 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
         rdp->m_tmem_cows = 0;
     }
     io(ctx, rdp->m_tmem, 0x1000);
+
+    /* Plan T13: spans wait in the poly pools across emulated time. Their
+     * aux records hold the walker's edge data; rdp_span_aux_init rebuilds
+     * the rest when each span runs. */
+    if (loading && rdp->m_aux_buf_ptr > EXTENT_AUX_COUNT)
+        rdp->m_aux_buf_ptr = 0;
+    {
+        /* the records' pointers are rebuilt per span (rdp_span_aux_init):
+         * they travel as zeros so the state bytes are the same every run */
+        uint32_t off;
+        rdp_span_aux record;
+        for (off = 0; off + sizeof(record) <= rdp->m_aux_buf_ptr; off += sizeof(record)) {
+            if (!loading) {
+                memcpy(&record, rdp->m_aux_buf + off, sizeof(record));
+                memset(&record.m_color_inputs, 0, sizeof(record.m_color_inputs));
+                record.m_tmem = NULL;
+            }
+            io(ctx, &record, sizeof(record));
+            if (loading)
+                memcpy(rdp->m_aux_buf + off, &record, sizeof(record));
+        }
+    }
+    {
+        uint32_t n;
+        poly_render_cb const *callbacks = rdp_span_callbacks(&n);
+            poly_manager_serialize(&rdp->m_pool, io, ctx, loading, rdp->m_aux_buf, rdp->m_tmem_pool, callbacks, n);
+    }
 #undef RDP_STATE
 }

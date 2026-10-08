@@ -278,6 +278,9 @@ struct RDRAM : Memory::RCP<RDRAM> {
   //serialization.cpp
   auto serialize(serializer&) -> void;
 
+  //installed bytes: 4 MiB, or 8 MiB with the Expansion Pak
+  auto installed() const -> u32 { return ram.size; }
+
   Chip chips[4];
   HiddenRAM hidden;
   n1 mapIdentity = 0;
@@ -286,13 +289,11 @@ private:
   //RDRAM data has one owner among hardware clients: the RI, which moves each
   //burst's bytes at its grant (ADR 0001 Decision 2). A device that reads or
   //writes it directly fails to compile (unit:rdram-private). MI keeps its
-  //debugger path and its repeat and EBus modes; Loader is the host's view. The
-  //RDP keeps direct access until it becomes a bus client (plan T13).
+  //debugger path and its repeat and EBus modes; Loader is the host's view.
   Writable ram{*this};
   friend struct RI;
   friend struct MI;
   friend struct Loader;
-  friend struct RDP;
 };
 
 extern RDRAM rdram;

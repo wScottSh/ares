@@ -37,15 +37,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // SW4gbm9taW5lIFBhdHJpcywgZXQgRmlsaWksIGV0IFNwaXJpdHVzIFNhbmN0aQ==
 /* Host contract.
  *
- * Memory. rdram and dmem are raw byte arrays in N64 byte order, viewed as
- * uint32_t; the renderer byteswaps on word access and applies the host
- * sub-word XOR from common/endian.h. RDP_RDRAM_SIZE bytes of RDRAM and
- * RDP_DMEM_SIZE bytes of DMEM must be mapped, and both blocks must remain
- * valid and fixed until rdp_render_destroy. A command list may legally
- * address past installed RDRAM, so accesses beyond RDP_RDRAM_SIZE are
- * range checked rather than faulted: reads return 0, writes are dropped.
- * No alignment beyond uint32_t is assumed -- doubleword fetch goes
- * through the byte view.
+ * Memory (ares port, plan T13). The renderer owns no memory view. The host
+ * installs windows (rdp_memwin) before it runs a span or a TMEM load: byte
+ * ranges an RI read grant filled, which the host's write-back bursts drain.
+ * Command words arrive through rdp_render_engine_feed.
  *
  * Registers. The renderer never reads or writes the DPC registers; the
  * host owns them and feeds command words (rdp_render_engine_feed).
@@ -57,16 +52,27 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define RDP_RDRAM_SIZE 0x800000u
 #define RDP_DMEM_SIZE  0x1000u
 
-// Initializes the renderer. The host contract above governs the lifetime,
-// size and serialization requirements on these arguments.
-//   rdram:        RDRAM block of rdram_size bytes (uint32_t view), in
-//                 ares' word-swizzled layout (rdp_core.h)
-//   hidden:       hidden-bit plane, rdram_size / 2 bytes (ares HiddenRAM)
-//   dmem:         RDP_DMEM_SIZE-byte RSP DMEM block (uint32_t view); the
-//                 command source for XBUS transfers
+// Initializes the renderer for rdram_size bytes of installed RDRAM.
 // Returns 0 on success.
-int rdp_render_init(uint32_t *rdram, uint32_t rdram_size, uint8_t *hidden,
-  uint32_t *dmem);
+int rdp_render_init(uint32_t rdram_size);
+
+/* One RDRAM byte range as the renderer sees it. lo and hi are 8-aligned
+ * byte addresses. data holds the bytes in ares' RDRAM layout (byte a at
+ * data[(a - lo) ^ 3]), hidden the ninth bits (halfword a >> 1 at
+ * hidden[(a - lo) >> 1]), written one flag per byte the renderer wrote
+ * (written[a - lo]). */
+typedef struct rdp_memwin
+{
+    uint32_t lo, hi;
+    uint8_t *data;
+    uint8_t *hidden;
+    uint8_t *written;
+} rdp_memwin;
+
+typedef struct rdp_memrange
+{
+    uint32_t lo, hi;
+} rdp_memrange;
 
 // Log sink for the renderer's cen64_log calls. Defaults to stderr.
 enum cen64_loglevel {
@@ -85,32 +91,6 @@ uint64_t rdp_render_pixel_count(void);
 // Tears down the renderer and joins its worker threads.
 void rdp_render_destroy(void);
 
-/* A fence normally skips the drain when the host's address range does not
- * overlap the range the renderer is currently writing. Passing 0 here
- * turns that range check off, so every access drains whenever any work is
- * pending -- slower, and a bisect for tearing: a tear that survives with
- * the check off means a host fence call site is missing entirely, while a
- * tear that only appears with the check on means the renderer advertised
- * a range narrower than it wrote. On by default; independent of init, so
- * a host may set it either side of rdp_render_init, and it survives
- * rdp_render_destroy. */
-void rdp_render_set_fence_range_check(int on);
-
-/* Observation fences. Rendering is asynchronous: Sync_Full raises the DP
- * interrupt without draining, so any host access to RDRAM bytes queued
- * span work may still be writing must fence first. Two stages:
- *
- *   1. rdp_fence_needed(addr, len), unlocked -- a couple of atomic loads,
- *      and the whole per-access cost when nothing overlaps.
- *   2. rdp_fence(addr, len), or rdp_fence_all() where no range applies,
- *      with the host's command producer excluded.
- *
- * Stage 2's exclusion is a precondition, not an optimization: the drain
- * resets the poly pools and consumes the pending flag, which is unsound
- * while a command walk can enqueue concurrently. */
-int  rdp_fence_needed(uint32_t addr, uint32_t len);
-void rdp_fence(uint32_t addr, uint32_t len);
-void rdp_fence_all(void);
 
 /* What one dispatched command asked of the pipeline. The engine reports
  * work, not time: the host's timing model turns it into clocks. pixels and
@@ -137,20 +117,35 @@ typedef struct rdp_engine_work {
 unsigned rdp_render_engine_need(void);
 unsigned rdp_render_engine_buffered(void);
 int      rdp_render_crashed(void);
-void     rdp_render_engine_feed(uint32_t address, unsigned nwords, uint32_t xbus);
+void     rdp_render_engine_feed(const uint64_t *words, unsigned nwords);
 int      rdp_render_engine_step(rdp_engine_work *works, unsigned capacity);
 
-/* VI scanout support: copy `n` consecutive entries of the renderer's
- * hidden coverage plane (2 bits per 16-bit framebuffer word) starting at
- * idx16 into dst. idx16 is the 16-bit-word index, i.e. (byte address >>
- * 1) -- the same convention the span writers use. The caller must have
- * fenced the framebuffer region first (the same drain that stabilizes
- * the color bytes stabilizes the hidden plane). */
-void rdp_hidden_read_row(uint32_t idx16, uint32_t n, uint8_t *dst);
+/* Plan T13: the host drives the pixel pipeline. Primitives queue their
+ * spans at dispatch; each span runs only when the host calls
+ * rdp_render_span_run, against the windows it installed. */
+typedef struct rdp_span_info {
+  int32_t  y, x0, x1;       /* pixel range the span can touch; x1 < x0 when empty */
+  int32_t  pixels;          /* pixels the pipeline draws (rdp_occ_accumulate's width) */
+  uint8_t  phantom;         /* no span at all: no pixels, no time */
+  uint32_t primitive;       /* index of the span's primitive */
+  uint32_t fb_address, fb_width, fb_size, zb_address;
+  uint32_t cycle_type;
+  uint8_t  image_read, z_compare, z_update, atomic;
+} rdp_span_info;
 
-/* Base of the hidden ("9th" bit) plane, or NULL outside init..destroy.
- * Hosts cache it once after init rather than calling per access. */
-uint8_t *rdp_hidden_plane(void);
+/* The queued span `ahead` places past the next one to run; 0 when none. */
+int      rdp_render_span_peek(unsigned ahead, rdp_span_info *info);
+/* Runs the next queued span against the installed windows. */
+void     rdp_render_span_run(void);
+void     rdp_render_set_windows(const rdp_memwin *windows, unsigned count);
+/* Accesses that fell outside every installed window (a footprint bug). */
+uint64_t rdp_render_mem_misses(void);
+/* Opcode of the next buffered complete command, or -1. */
+int      rdp_render_engine_next(void);
+/* The next command would run queued spans inside its handler. */
+int      rdp_render_engine_drains(void);
+/* RDRAM ranges the next command (a TMEM load) reads; count returned. */
+unsigned rdp_render_load_plan(rdp_memrange *ranges, unsigned max);
 
 /* DPS Test-Mode span buffer (model at rdp_dps_model_t in rdp_core.h).
  * arm: a DPS register write occurred; the renderer models the
@@ -174,8 +169,8 @@ void rdp_render_quiesce(void);
 
 /* ares port: save states. Visits every piece of renderer state that
  * outlives a command (modes, colors, tiles, scissor, TMEM, the buffered
- * command words, the held hazard primitives, the noise counter, the
- * stale-read and DPS models) in a fixed order, passing each block to io.
+ * command words, the noise counter, the DPS model, the queued spans) in a
+ * fixed order, passing each block to io.
  * With loading set, io fills the blocks and TMEM lands in pool slot zero.
  * Saving never mutates the renderer. */
 typedef void (*rdp_state_io)(void *ctx, void *data, size_t size);

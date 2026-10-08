@@ -9,6 +9,10 @@
 #include <functional>
 #include <span>
 #include <vector>
+#include <deque>
+extern "C" {
+  #include <n64/rdp/engine/rdp.h>
+}
 
 #if defined(ARCHITECTURE_AMD64)
 #include <nmmintrin.h>

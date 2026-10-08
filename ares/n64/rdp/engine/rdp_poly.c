@@ -107,7 +107,7 @@ static void poly_pool_destroy(poly_pool *pool)
 // Allocates and returns the next item. The item is zero-initialized on
 // first use of its slot (fresh chunks are calloc'd) and retains stale
 // contents on reuse; every field the RDP reads is written before use.
-static void *poly_pool_next(poly_pool *pool)
+static void *poly_pool_take(poly_pool *pool, int zero)
 {
     poly_pool_chunk *chunk = pool->chunks;
     uint32_t index = atomic_load_explicit(&pool->next, memory_order_relaxed);
@@ -137,10 +137,19 @@ static void *poly_pool_next(poly_pool *pool)
     }
 
     item = chunk->base + (size_t)index * pool->item_size;
+    // ares port, plan T13: hand out zeroed items, so the bytes a save state
+    // carries never depend on what a slot held before
+    if (zero)
+        memset(item, 0, pool->item_size);
     atomic_store_explicit(&pool->next, atomic_load_explicit(&pool->next, memory_order_relaxed) + 1, memory_order_relaxed);
     if (pool->track_last)
         pool->last = item;
     return item;
+}
+
+static void *poly_pool_next(poly_pool *pool)
+{
+    return poly_pool_take(pool, 1);
 }
 
 // Returns the item at `index` (must be < pool->next).
@@ -209,7 +218,7 @@ static void poly_pool_reset(poly_pool *pool)
     atomic_store_explicit(&pool->next, 0, memory_order_relaxed);
 
     if (old_last != NULL) {
-        void *slot0 = poly_pool_next(pool);
+        void *slot0 = poly_pool_take(pool, 0);
         if (slot0 != old_last)
             memmove(slot0, old_last, pool->item_size);
         pool->last = slot0;
@@ -246,10 +255,10 @@ int poly_manager_init(poly_manager *poly, struct rdp_t *cbarg)
     memset(poly, 0, sizeof(*poly));
     poly->m_cbarg = cbarg;
 
-    // create the work queue
-    poly->m_queue = rdp_wq_alloc();
-    if (poly->m_queue == NULL)
-        return 1;
+    // ares port, plan T13: no work queue. Spans wait in the unit pool and
+    // the host runs them one at a time (poly_manager_run_next) at the
+    // emulated time their memory arrives.
+    poly->m_queue = NULL;
 
     // initialize the buckets to empty
     for (i = 0; i < TOTAL_BUCKETS; i++)
@@ -378,14 +387,10 @@ void poly_manager_wait(poly_manager *poly)
     if (poly->m_unit.next == 0)
         return;
 
-    // wait for all pending work items to complete
-    if (poly->m_queue != NULL)
-        rdp_wq_wait(poly->m_queue);
-
-    // if we don't have a queue, just run the whole list now
-    else
-        for (unitnum = 0; unitnum < poly->m_unit.next; unitnum++)
-            poly_work_callback(poly_pool_byindex(&poly->m_unit, unitnum), 0);
+    // run whatever the host has not run yet, in order
+    (void)unitnum;
+    while (poly_manager_run_next(poly))
+        ;
 
     // clear the buckets
     for (i = 0; i < TOTAL_BUCKETS; i++)
@@ -395,6 +400,70 @@ void poly_manager_wait(poly_manager *poly)
     poly_pool_reset(&poly->m_primitive);
     poly_pool_reset(&poly->m_object);
     poly_pool_reset(&poly->m_unit);
+    poly->m_run_unit = 0;
+    poly->m_run_ext = 0;
+}
+
+//-------------------------------------------------
+//  poly_manager_peek - the span `ahead` places
+//  past the next one to run, or 0 when there is
+//  none (ares port, plan T13)
+//-------------------------------------------------
+
+int poly_manager_peek(poly_manager *poly, uint32_t ahead, poly_span *span)
+{
+    uint32_t unitnum = poly->m_run_unit, ext = poly->m_run_ext;
+
+    while (unitnum < poly->m_unit.next)
+    {
+        work_unit *unit = (work_unit *)poly_pool_byindex(&poly->m_unit, unitnum);
+        const uint32_t count = atomic_load(&unit->count_next) & 0xff;
+        if (ext >= count)
+        {
+            unitnum++;
+            ext = 0;
+            continue;
+        }
+        if (ahead == 0)
+        {
+            span->primitive = unit->primitive;
+            span->scanline = unit->scanline + (int32_t)ext;
+            span->extent = &unit->extent[ext];
+            return 1;
+        }
+        ahead--;
+        ext++;
+    }
+    return 0;
+}
+
+//-------------------------------------------------
+//  poly_manager_run_next - run the next span's
+//  callback; 0 when none is waiting
+//-------------------------------------------------
+
+int poly_manager_run_next(poly_manager *poly)
+{
+    poly_span span;
+    if (!poly_manager_peek(poly, 0, &span))
+    {
+        poly->m_run_unit = poly->m_unit.next;
+        poly->m_run_ext = 0;
+        return 0;
+    }
+    (*span.primitive->m_callback)(span.primitive->m_cbarg, span.scanline,
+        span.extent, span.primitive->m_object, 0);
+    {
+        work_unit *unit = (work_unit *)poly_pool_byindex(&poly->m_unit, poly->m_run_unit);
+        while ((atomic_load(&unit->count_next) & 0xff) <= poly->m_run_ext)
+        {
+            poly->m_run_unit++;
+            unit = (work_unit *)poly_pool_byindex(&poly->m_unit, poly->m_run_unit);
+            poly->m_run_ext = 0;
+        }
+        poly->m_run_ext++;
+    }
+    return 1;
 }
 
 //-------------------------------------------------
@@ -419,6 +488,7 @@ static primitive_info *primitive_alloc(poly_manager *poly, poly_render_cb callba
     primitive->m_object = (rdp_poly_state *)poly->m_object.last;
     primitive->m_callback = callback;
     primitive->m_cbarg = poly->m_cbarg;
+    primitive->m_seq = ++poly->m_seq;
     return primitive;
 }
 
@@ -496,4 +566,117 @@ void poly_manager_render_extents(poly_manager *poly, const poly_rect *cliprect,
 
     // enqueue the work items
     queue_items(poly, startunit);
+}
+
+//-------------------------------------------------
+//  poly_manager_serialize - ares port, plan T13:
+//  save states carry the queued spans. Pointers
+//  travel as indices (objects, primitives), offsets
+//  (span userdata into the aux buffer, TMEM into
+//  the TMEM pool) and callback ids. Saving never
+//  mutates the manager.
+//-------------------------------------------------
+
+void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int loading,
+    uint8_t *aux_base, uint8_t *tmem_base, poly_render_cb const *callbacks, uint32_t ncallbacks)
+{
+    uint32_t counts[3], i, k;
+    uint8_t object[sizeof(rdp_poly_state)];
+
+    counts[0] = poly->m_object.next;
+    counts[1] = poly->m_primitive.next;
+    counts[2] = poly->m_unit.next;
+    io(ctx, counts, sizeof(counts));
+    io(ctx, &poly->m_run_unit, sizeof(poly->m_run_unit));
+    io(ctx, &poly->m_run_ext, sizeof(poly->m_run_ext));
+    io(ctx, &poly->m_seq, sizeof(poly->m_seq));
+    io(ctx, poly->m_unit_bucket, sizeof(poly->m_unit_bucket));
+    if (loading)
+    {
+        atomic_store(&poly->m_object.next, 0);
+        atomic_store(&poly->m_primitive.next, 0);
+        atomic_store(&poly->m_unit.next, 0);
+    }
+
+    for (i = 0; i < counts[0]; i++)
+    {
+        rdp_poly_state *o = loading ? (rdp_poly_state *)poly_pool_next(&poly->m_object)
+                                    : (rdp_poly_state *)poly_pool_byindex(&poly->m_object, i);
+        uint64_t tmem = 0;
+        if (!loading)
+        {
+            memcpy(object, o, sizeof(object));
+            tmem = o->m_tmem_src ? (uint64_t)(o->m_tmem_src - tmem_base) + 1 : 0;
+            ((rdp_poly_state *)object)->m_tmem_src = NULL;
+        }
+        io(ctx, object, sizeof(object));
+        io(ctx, &tmem, sizeof(tmem));
+        if (loading)
+        {
+            memcpy(o, object, sizeof(object));
+            o->m_tmem_src = tmem ? tmem_base + (tmem - 1) : NULL;
+        }
+    }
+
+    for (i = 0; i < counts[1]; i++)
+    {
+        primitive_info *p = loading ? (primitive_info *)poly_pool_next(&poly->m_primitive)
+                                    : (primitive_info *)poly_pool_byindex(&poly->m_primitive, i);
+        uint32_t ids[3] = {0, 0, 0};
+        if (!loading)
+        {
+            ids[0] = poly_pool_indexof(&poly->m_object, p->m_object);
+            ids[2] = p->m_seq;
+            for (k = 0; k < ncallbacks; k++) if (callbacks[k] == p->m_callback) ids[1] = k;
+        }
+        io(ctx, ids, sizeof(ids));
+        if (loading)
+        {
+            p->m_owner = poly;
+            p->m_object = (rdp_poly_state *)poly_pool_byindex(&poly->m_object, ids[0]);
+            p->m_callback = callbacks[ids[1] < ncallbacks ? ids[1] : 0];
+            p->m_cbarg = poly->m_cbarg;
+            p->m_seq = ids[2];
+        }
+    }
+
+    for (i = 0; i < counts[2]; i++)
+    {
+        work_unit *u = loading ? (work_unit *)poly_pool_next(&poly->m_unit)
+                               : (work_unit *)poly_pool_byindex(&poly->m_unit, i);
+        uint32_t head[4] = {0, 0, 0, 0};
+        if (!loading)
+        {
+            head[0] = atomic_load(&u->count_next);
+            head[1] = poly_pool_indexof(&poly->m_primitive, u->primitive);
+            head[2] = (uint32_t)u->scanline;
+            head[3] = u->previtem;
+        }
+        io(ctx, head, sizeof(head));
+        if (loading)
+        {
+            atomic_store(&u->count_next, head[0]);
+            u->primitive = (primitive_info *)poly_pool_byindex(&poly->m_primitive, head[1]);
+            u->scanline = (int32_t)head[2];
+            u->previtem = head[3];
+        }
+        for (k = 0; k < (head[0] & 0xff) && k < SCANLINES_PER_BUCKET; k++)
+        {
+            extent_t e;
+            uint64_t user = 0;
+            if (!loading)
+            {
+                memcpy(&e, &u->extent[k], sizeof(e));
+                user = e.userdata ? (uint64_t)((uint8_t *)e.userdata - aux_base) + 1 : 0;
+                e.userdata = NULL;
+            }
+            io(ctx, &e, sizeof(e));
+            io(ctx, &user, sizeof(user));
+            if (loading)
+            {
+                e.userdata = user ? aux_base + (user - 1) : NULL;
+                memcpy(&u->extent[k], &e, sizeof(e));
+            }
+        }
+    }
 }

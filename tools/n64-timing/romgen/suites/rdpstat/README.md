@@ -7,6 +7,7 @@ The rdpstat suite builds three self-checking ROMs that test RDP command sequenci
 | `rdpstat-systemtest.z64` | 6 tests, 7 values: START/END masking, START_VALID, the status pattern during a run, and three XBUS (DMEM) runs | n64-systemtest `src/tests/rdp/mod.rs` | The test source |
 | `rdpstat-dpc.z64` | 2 tests: DMA_BUSY while a long list is fetched, and the START/END double buffer (END_PENDING) | Written for this suite | n64brew `Reality_Display_Processor/Interface` and MiSTer `RDP.vhd`, as cited in `docs/research/rsp-rdp-fifo.md` rows 9, 10 and 12. No console capture backs them. |
 | `rdpstat-repeater64.z64` | "RDP 1-Cycle No-Sync" (20 values) and "RDP Fill-Mode Syncs" (1 value) | repeater64 `src/demos/RDPNoSync1C.cpp`, `RDPSync.cpp`, `src/rdpDumpTest.cpp`, `src/rdp/rdp.h` | No-Sync: the 20 console framebuffer dumps `assets/10000000.test` to `10000013.test`. Fill-Mode Syncs: the repeater64 README ("on console you will see the color set after the rectangle command"). |
+| `rdpstat-1prim.z64` | 4 tests: four stacked one-row image-read rectangles, 1- and 2-cycle, 8 and 32 px wide | Written for this suite (plan T13) | cen64 jgemu `rdp_core.c:4551-4567`, which states the outcome it fit to the PRDP 12:15 and 12:16 checksums: non-atomic narrow stacks retire the two-blend value, atomic and wide (25 px or more in 1-cycle) stacks the four-blend value. The two- and four-blend values are atomic stacks of 2 and 4 in the same ROM, so each check compares two outcomes. The capture set is not public (`docs/research/1prim-cost.md`). |
 
 ## Commands
 

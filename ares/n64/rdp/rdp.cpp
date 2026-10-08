@@ -1,9 +1,6 @@
 #include <n64/n64.hpp>
 #include <chrono>
 #include <cstdarg>
-extern "C" {
-  #include "engine/rdp.h"
-}
 
 namespace ares::Nintendo64 {
 
@@ -37,6 +34,14 @@ auto RDP::power(bool reset) -> void {
   dpc = {};
   fetch = {};
   executor = {};
+  pipe = {};
+  tmemLoad.active = false;
+  tmemLoad.count = tmemLoad.reads = 0;
+  for(auto* port : {&memory, &command, &fillPort}) port->reset();
+  for(auto& slot : slots) slot.reads = slot.writes = 0, slot.shaded = false;
+  for(auto r : {RiBus::Requester::DpColor, RiBus::Requester::DpDepth, RiBus::Requester::DpTexture}) ri.attach(r, &memory);
+  ri.attach(RiBus::Requester::DpCommand, &command);
+  ri.attach(RiBus::Requester::DpFill, &fillPort);
   io.bist = {};
   io.test = {};
   if(!reset) mapIdentityWarned = 0;

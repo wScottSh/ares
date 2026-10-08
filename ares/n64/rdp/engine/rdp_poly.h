@@ -158,6 +158,7 @@ typedef struct primitive_info
         rdp_poly_state *m_object;                // object data pointer
         poly_render_cb m_callback;               // callback to handle a scanline's worth of work
         struct rdp_t *m_cbarg;                 // callback context (the rdp_t)
+        uint32_t m_seq;                          // ares port: primitive sequence number
 } primitive_info;
 
 // internal unit of work
@@ -185,7 +186,20 @@ typedef struct poly_manager
 
         // callback context for all primitives (the owning rdp_t)
         struct rdp_t *m_cbarg;
+
+        // ares port: the next span the host runs (unit index, extent index)
+        uint32_t m_run_unit;
+        uint32_t m_run_ext;
+        uint32_t m_seq;                          // primitives allocated since power-on
 } poly_manager;
+
+// one queued scanline (ares port)
+typedef struct poly_span
+{
+        primitive_info *primitive;
+        int32_t scanline;
+        const extent_t *extent;
+} poly_span;
 
 // construction/destruction
 int  poly_manager_init(poly_manager *poly, struct rdp_t *cbarg);
@@ -193,6 +207,15 @@ void poly_manager_destroy(poly_manager *poly);
 
 // synchronization: stall until all work is complete, then reset pools
 void poly_manager_wait(poly_manager *poly);
+
+// ares port: the queued span `ahead` places past the next, and running the next
+int  poly_manager_peek(poly_manager *poly, uint32_t ahead, poly_span *span);
+int  poly_manager_run_next(poly_manager *poly);
+
+// ares port: save states (see rdp_poly.c)
+typedef void (*poly_state_io)(void *ctx, void *data, size_t size);
+void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int loading,
+        uint8_t *aux_base, uint8_t *tmem_base, poly_render_cb const *callbacks, uint32_t ncallbacks);
 
 // return and default-initialize the next object (object_data().next())
 rdp_poly_state *poly_manager_object_next(poly_manager *poly);

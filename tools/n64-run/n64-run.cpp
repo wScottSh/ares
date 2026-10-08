@@ -50,6 +50,7 @@ struct Options {
   double emulatedSeconds = 0;
   double wallSeconds = 0;
   string statsPath;
+  string rdpFieldsPath;
   u32 controllers = 1;
   std::vector<FrameDump> dumps;
   string scriptPath;
@@ -85,6 +86,7 @@ auto usage() -> void {
     "  --emulated-seconds S  stop after S seconds of emulated CPU time (0 = no limit)\n"
     "  --wall-seconds S    stop after S seconds of host wall time (0 = no limit)\n"
     "  --stats FILE        write one TSV line per VI field to FILE\n"
+    "  --rdp-fields FILE   per VI field: RDP busy and pixel-pipeline RCP clocks (GCLK-off share)\n"
     "  --dump-frame N FILE write the RDRAM image the VI samples at field N as a P6 PPM\n"
     "                      (640x480; repeatable)\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
@@ -106,6 +108,7 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--emulated-seconds") options.emulatedSeconds = value().real();
     else if(arg == "--wall-seconds") options.wallSeconds = value().real();
     else if(arg == "--stats") options.statsPath = value();
+    else if(arg == "--rdp-fields") options.rdpFieldsPath = value();
     else if(arg == "--script") options.scriptPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
     else if(arg == "--step-cap") options.stepCap = true;
@@ -551,6 +554,17 @@ auto nall::main(Arguments arguments) -> void {
                 "\tdpc_start\tdpc_end\tcimg\tzimg\trdp_pixels\ttrace_hash\n");
   }
 
+  //per field: RCP clocks the RDP was busy and the part a pixel chunk ran (plan T13, GCLK-off share)
+  file_buffer rdpFields;
+  u64 rdpBusyLast = 0, rdpPipeLast = 0;
+  if(options.rdpFieldsPath) {
+    if(!rdpFields.open(options.rdpFieldsPath, file::mode::write)) {
+      std::fprintf(stderr, "n64-run: cannot write %s\n", options.rdpFieldsPath.data());
+      std::_Exit(1);
+    }
+    rdpFields.print("frame\tbusy_rclk\tpipe_rclk\n");
+  }
+
   auto wallStart = std::chrono::steady_clock::now();
   auto wallElapsed = [&] {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - wallStart).count();
@@ -578,6 +592,12 @@ auto nall::main(Arguments arguments) -> void {
                     hex(s.dpcStart, 6L), "\t", hex(s.dpcEnd, 6L), "\t", hex(s.colorImage, 7L), "\t",
                     hex(s.depthImage, 7L), "\t", s.rdpPixels, "\t", hex(s.traceHash, 16L), "\n");
       }
+      if(rdpFields) {
+        auto& st = N64::rdp.stat;
+        u64 busy = st.busy, pipe = st.pipe;
+        rdpFields.print(frames, "\t", (busy - rdpBusyLast) / N64::Timing::UnitsPerRclk, "\t", (pipe - rdpPipeLast) / N64::Timing::UnitsPerRclk, "\n");
+        rdpBusyLast = busy, rdpPipeLast = pipe;
+      }
       for(auto& dump : options.dumps) {
         if(dump.frame != frames) continue;
         if(!dumpFramebuffer(dump.path)) std::fprintf(stderr, "n64-run: cannot write %s\n", dump.path.data());
@@ -594,6 +614,7 @@ auto nall::main(Arguments arguments) -> void {
 
   auto info = stopInfo(reason);
   stats.close();
+  rdpFields.close();
   std::fflush(platform.output);
   std::fflush(stdout);
   std::fprintf(stderr, "n64-run: stop=%s frames=%llu emulated_s=%.6f wall_s=%.3f\n",
@@ -608,6 +629,21 @@ auto nall::main(Arguments arguments) -> void {
     (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
     (unsigned long long)engine.pixels(),
     engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
+  //the RDP's memory traffic (plan T13): per DP requester, and the pipeline's GCLK-off share
+  {
+    auto& counters = N64::ri.channel.counters;
+    using R = N64::RiBus::Requester;
+    std::fprintf(stderr, "n64-run: ri_dp");
+    for(auto [name, r] : {std::pair{"cmd", R::DpCommand}, {"color", R::DpColor}, {"depth", R::DpDepth}, {"texture", R::DpTexture}, {"fill", R::DpFill}}) {
+      auto& c = counters[(u32)r];
+      std::fprintf(stderr, " %s_grants=%llu %s_read=%llu %s_written=%llu %s_wait_rclk=%llu", name, (unsigned long long)c.bursts,
+        name, (unsigned long long)c.bytesRead, name, (unsigned long long)c.bytesWritten, name, (unsigned long long)(c.wait.units / N64::Timing::UnitsPerRclk));
+    }
+    auto& st = N64::rdp.stat;
+    std::fprintf(stderr, " busy_rclk=%llu pipe_rclk=%llu gclk_off_share=%.4f mem_misses=%llu\n",
+      (unsigned long long)(st.busy / N64::Timing::UnitsPerRclk), (unsigned long long)(st.pipe / N64::Timing::UnitsPerRclk), st.busy ? 1.0 - (double)st.pipe / st.busy : 0.0,
+      (unsigned long long)rdp_render_mem_misses());
+  }
   //RI grants per requester since power-on and the channel time they waited and held (plan T6)
   auto& counters = N64::ri.channel.counters;
   auto& cpuBus = counters[(u32)N64::RiBus::Requester::CpuSysAD];

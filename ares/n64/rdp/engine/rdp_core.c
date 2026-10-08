@@ -1345,26 +1345,6 @@ uint32_t rdp_get_log2(uint32_t lod_clamp)
 }
 
 /*****************************************************************************/
-static uint64_t rdp_read_data(rdp_t *rdp, uint32_t address)
-{
-    // ares port: RDRAM holds native words (see rdp_core.h) and DMEM holds
-    // big-endian bytes (ares' MSB Memory::Writable), and the renderer runs
-    // on the emulation thread, so a command is two plain word reads with no
-    // atomic doubleword load.
-    if (rdp->m_status & 0x1)     // XBUS_DMEM_DMA enabled
-    {
-        const uint32_t hi = (address & (RDP_DMEM_SIZE - 1u)) / 4;
-        const uint32_t lo = ((address + 4) & (RDP_DMEM_SIZE - 1u)) / 4;
-        return ((uint64_t)byteswap_32(rdp->m_dmem[hi]) << 32) | byteswap_32(rdp->m_dmem[lo]);
-    }
-    else
-    {
-        const uint32_t hi = (address & 0xffffff) / 4;
-        const uint32_t lo = ((address + 4) & 0xffffff) / 4;
-        return ((uint64_t)RREADIDX32(hi) << 32) | RREADIDX32(lo);
-    }
-}
-
 static int32_t const s_rdp_command_length[64] =
 {
     8,          // 0x00, No Op
@@ -1658,6 +1638,9 @@ static void rdp_pipeline_drain(rdp_t *rdp)
 static void rdp_tmem_load_gate(rdp_t *rdp, uint32_t src_lo, uint32_t src_len)
 {
     uint32_t lo, hi, idx;
+
+    if (rdp->m_mem_record)
+        return;
 
     if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
     {
@@ -3634,6 +3617,10 @@ static void rdp_draw_triangle(rdp_t *rdp, uint64_t *cmd_buf, bool shade, bool te
                 }
 
                 spans[spanidx].userdata = (void*)((uint8_t*)rdp->m_aux_buf + rdp->m_aux_buf_ptr);
+                /* ares port, plan T13: a record carved fresh is zero, so the
+                 * bytes a save state carries never depend on a slot's past */
+                memset(spans[spanidx].userdata, 0, sizeof(rdp_span_aux));
+                memset(spans[spanidx].param, 0, sizeof(spans[spanidx].param));
                 valid = true;
                 /* The aux pool is never cleared: default the fill plan off
                  * so a fill span without one (rects, non-adjudicated
@@ -4548,113 +4535,9 @@ static void rdp_cmd_set_tile(rdp_t *rdp, uint64_t *cmd_buf)
         tex_tile->format = FORMAT_CI; // Used by Exterem-G2, Madden Football 64, and Rat Attack
     }
 }
-/* Span-buffer stale-read hazard, back-to-back identical rectangles.
- *
- * Without atomic_prim the command processor runs ahead of the pixel
- * pipeline by the same lead the register-write hazard model uses (L and
- * D as defined there). When D exceeds L, a rectangle's framebuffer reads
- * precede its predecessor's commit of the same pixels and return the
- * memory image from BEFORE the predecessor, so repeated blends of one
- * pixel advance only every other primitive. atomic_prim stalls the
- * processor per primitive and restores sequential reads.
- *
- * Scope is the adjudicated shape only: identical single-live-row
- * 1-/2-cycle rectangles issued back to back with image_read_en and no
- * intervening command. Adjudicated against the PRDP 12:15 and 12:16
- * 48-bit checksums (1- and 2-cycle stacks of four), where the non-atomic
- * stacks retire the two-effective-blend value and the atomic and wide
- * (D <= L) stacks the four-blend value. The pre-image snapshot costs a
- * pipeline drain per eligible rectangle; the predicate keeps that off
- * every common path. */
-static void rdp_fill_rect_stale_read(rdp_t *rdp, uint64_t w1, int *handled)
-{
-    static const unsigned SNAP_MAX = 32;
-    rdp_rect_stale_state *const st = &rdp->m_rect_stale;
-    const uint64_t xh = (w1 >> 12) & 0xfff, xl = (w1 >> 44) & 0xfff;
-    const uint64_t yh = w1 & 0xfff, yl = (w1 >> 32) & 0xfff;
-    const unsigned W = (unsigned)((xl >> 2) - (xh >> 2));   /* live columns */
-    const unsigned H = (unsigned)((yl >> 2) - (yh >> 2));   /* live rows */
-    const int cyc = rdp->m_other_modes.cycle_type;
-    const unsigned cycn = (cyc == CYCLE_TYPE_2) ? 2u : 1u;
-    const unsigned L0 = cycn * W + cycn - 1u;
-    const unsigned L = L0 < 4u ? 4u : L0;
-    const unsigned D = (3u * L - 2u) < 25u ? (3u * L - 2u) : 25u;
-    const int eligible = (cyc == CYCLE_TYPE_1 || cyc == CYCLE_TYPE_2) &&
-        rdp->m_other_modes.image_read_en && !rdp->m_other_modes.atomic_prim &&
-        H == 1 && W >= 1 && W <= SNAP_MAX && D > L &&
-        rdp->m_misc_state.m_fb_size == 2;
-
-    *handled = 0;
-    if (!eligible)
-    {
-        st->valid = 0;
-        return;
-    }
-
-    if (st->valid && st->w1 == w1 && st->n != 0)
-    {
-        uint16_t cur[32];
-        unsigned i;
-
-        /* Predecessor's pixels land, then its footprint reverts to the
-         * pre-image so this rectangle's reads are one primitive stale. */
-        rdp_pipeline_drain(rdp);
-        for (i = 0; i < st->n; i++)
-        {
-            cur[i] = RREADIDX16(st->idx[i]);
-            RWRITEIDX16(st->idx[i], st->pre[i]);
-        }
-
-        {
-            const uint64_t xlint = (xl >> 2) & 0x3ff, xhint = (xh >> 2) & 0x3ff;
-            uint64_t *ewdata = rdp->m_temp_rect_data;
-            ewdata[0] = ((uint64_t)0x3680 << 48) | (yl << 32) | (yl << 16) | yh;
-            ewdata[1] = (xlint << 48) | ((xl & 3) << 46);
-            ewdata[2] = (xhint << 48) | ((xh & 3) << 46);
-            ewdata[3] = (xlint << 48) | ((xl & 3) << 46);
-            memset(&ewdata[4], 0, 18 * sizeof(uint64_t));
-            {
-                uint64_t buf = w1;
-                rdp_draw_triangle(rdp, &buf, false, false, false, true);
-            }
-            rdp_pipeline_drain(rdp);
-        }
-
-        /* Chain: the next stale reader sees this primitive's pre-image,
-         * which is the predecessor's output saved above. */
-        for (i = 0; i < st->n; i++)
-            st->pre[i] = cur[i];
-        *handled = 1;
-        return;
-    }
-
-    /* Capture the pre-image for a potential stale successor. The drain
-     * makes RDRAM current with everything queued before this rect. */
-    rdp_pipeline_drain(rdp);
-    {
-        const unsigned fb = rdp->m_misc_state.m_fb_address >> 1;
-        const unsigned x0 = (unsigned)(xh >> 2), y0 = (unsigned)(yh >> 2);
-        unsigned i;
-        st->n = W;
-        for (i = 0; i < W; i++)
-        {
-            st->idx[i] = fb + y0 * rdp->m_misc_state.m_fb_width + x0 + i;
-            st->pre[i] = RREADIDX16(st->idx[i]);
-        }
-    }
-    st->w1 = w1;
-    st->valid = 1;
-}
-
 static void rdp_cmd_fill_rect(rdp_t *rdp, uint64_t *cmd_buf)
 {
     const uint64_t w1 = cmd_buf[0];
-    {
-        int handled;
-        rdp_fill_rect_stale_read(rdp, w1, &handled);
-        if (handled)
-            return;
-    }
     const uint64_t xh = (w1 >> 12) & 0xfff;
     const uint64_t xl = (w1 >> 44) & 0xfff;
     const uint64_t yh = (w1 >>  0) & 0xfff;
@@ -4854,16 +4737,12 @@ int rdp_crashed(rdp_t *rdp)
     return rdp->m_pipeline_crashed;
 }
 
-/* Appends nwords 64-bit command words fetched from `address` (RDRAM, or
- * DMEM when xbus is set -- mirrored into m_status bit 0 so the shared
- * rdp_read_data source select applies). Compacts the accumulator
- * exactly as the legacy walk does when nearing capacity. */
-void rdp_engine_feed(rdp_t *rdp, uint32_t address, unsigned nwords,
-    uint32_t xbus)
+/* Appends nwords 64-bit command words the host's command DMA delivered
+ * (an RI grant, or the X bus from DMEM). Compacts the accumulator exactly
+ * as the legacy walk does when nearing capacity. */
+void rdp_engine_feed(rdp_t *rdp, const uint64_t *words, unsigned nwords)
 {
     unsigned i;
-
-    rdp->m_status = (rdp->m_status & ~1u) | (xbus & 1u);
 
     if (rdp->m_cmd_ptr + nwords > CMD_DATA_WORDS) {
         const unsigned pending = rdp->m_cmd_ptr - rdp->m_cmd_cur;
@@ -4873,11 +4752,8 @@ void rdp_engine_feed(rdp_t *rdp, uint32_t address, unsigned nwords,
         rdp->m_cmd_ptr = pending;
     }
 
-    for (i = 0; i < nwords; i++) {
-        rdp->m_cmd_data[rdp->m_cmd_ptr++] =
-            rdp_read_data(rdp, (address & 0x1fffffff));
-        address += 8;
-    }
+    for (i = 0; i < nwords; i++)
+        rdp->m_cmd_data[rdp->m_cmd_ptr++] = words[i];
 }
 
 /* Bytes a TMEM load moves (texel count by the texture image size; 4bpp
@@ -4973,11 +4849,124 @@ int rdp_engine_hold_open(rdp_t *rdp)
     return 0;
 }
 
-/* Publishes any held hazard primitive and runs every queued span, so the
- * pixels are in RDRAM and no renderer work outlives the call. */
-void rdp_engine_settle(rdp_t *rdp)
+/* Publishes any held hazard primitive into the span queue. Its spans then
+ * wait for the host like any other (plan T13). */
+void rdp_engine_publish(rdp_t *rdp)
 {
-    rdp_pipeline_drain(rdp);
+    rdp_haz_publish(rdp);
+    rdp_fill_haz_publish(rdp);
+}
+
+/* Whether the next buffered command would run queued spans to completion
+ * inside its handler (loads, Sync Full, Set Convert after a primitive, a
+ * primitive under span-aux pool pressure). The host dispatches such a
+ * command only once it has run every queued span itself. */
+int rdp_engine_drains(rdp_t *rdp)
+{
+    uint8_t cmd;
+
+    if (rdp_engine_need(rdp) != 0)
+        return 0;
+    cmd = (rdp->m_cmd_data[rdp->m_cmd_cur] >> 56) & 0x3f;
+    switch (cmd)
+    {
+    case 0x29: case 0x30: case 0x33: case 0x34:
+        return 1;
+    case 0x2c:
+        return !rdp->m_pipe_clean;
+    case 0x08: case 0x09: case 0x0a: case 0x0b: case 0x0c: case 0x0d: case 0x0e: case 0x0f:
+    case 0x24: case 0x25: case 0x36:
+        return rdp->m_aux_buf_ptr + 4096u * sizeof(rdp_span_aux) > EXTENT_AUX_COUNT;
+    }
+    return 0;
+}
+
+int rdp_engine_next(rdp_t *rdp)
+{
+    if (rdp_engine_need(rdp) != 0)
+        return -1;
+    return (int)((rdp->m_cmd_data[rdp->m_cmd_cur] >> 56) & 0x3f);
+}
+
+void rdp_mem_record(rdp_t *rdp, uint32_t a, uint32_t n)
+{
+    rdp_memrange *r;
+    if (a > MEM8_LIMIT)
+        return;
+    if (rdp->m_nrec > 0)
+    {
+        r = &rdp->m_rec[rdp->m_nrec - 1];
+        if (a + n + 8u >= r->lo && a <= r->hi + 8u)
+        {
+            if (a < r->lo) r->lo = a;
+            if (a + n > r->hi) r->hi = a + n;
+            return;
+        }
+        if (rdp->m_nrec == RDP_MEMREC_MAX)
+        {
+            if (a < r->lo) r->lo = a;
+            if (a + n > r->hi) r->hi = a + n;
+            return;
+        }
+    }
+    r = &rdp->m_rec[rdp->m_nrec++];
+    r->lo = a;
+    r->hi = a + n;
+}
+
+/* The RDRAM byte ranges the next buffered command (a TMEM load) reads, in
+ * read order, octbyte-aligned and merged where they touch. Runs the load
+ * against a scratch TMEM with reads recorded instead of performed, then
+ * restores the tile registers it set; nothing else in a load handler
+ * depends on the texel values. */
+unsigned rdp_engine_load_plan(rdp_t *rdp, rdp_memrange *out, unsigned max)
+{
+    static uint8_t scratch[0x1000];
+    rdp_tile_t tiles[8];
+    uint8_t *tmem = rdp->m_tmem;
+    uint64_t *cmd_buf;
+    unsigned i, n = 0;
+    uint8_t cmd;
+
+    if (rdp_engine_need(rdp) != 0)
+        return 0;
+    cmd_buf = &rdp->m_cmd_data[rdp->m_cmd_cur];
+    cmd = (cmd_buf[0] >> 56) & 0x3f;
+    if (cmd != 0x30 && cmd != 0x33 && cmd != 0x34)
+        return 0;
+
+    memcpy(tiles, rdp->m_tiles, sizeof(tiles));
+    memcpy(scratch, tmem, sizeof(scratch));
+    rdp->m_tmem = scratch;
+    rdp->m_rec = out;
+    rdp->m_nrec = 0;
+    rdp->m_mem_record = 1;
+    if (cmd == 0x30) rdp_cmd_load_tlut(rdp, cmd_buf);
+    if (cmd == 0x33) rdp_cmd_load_block(rdp, cmd_buf);
+    if (cmd == 0x34) rdp_cmd_load_tile(rdp, cmd_buf);
+    rdp->m_mem_record = 0;
+    rdp->m_tmem = tmem;
+    memcpy(rdp->m_tiles, tiles, sizeof(tiles));
+    if (rdp->m_nrec > max)
+        rdp->m_nrec = max;
+
+    for (i = 0; i < rdp->m_nrec; i++)
+    {
+        uint32_t lo = out[i].lo & ~7u, hi = (out[i].hi + 7u) & ~7u;
+        if (hi > MEM8_LIMIT + 1u) hi = MEM8_LIMIT + 1u;
+        if (n > 0 && lo <= out[n - 1].hi && hi >= out[n - 1].lo)
+        {
+            if (lo < out[n - 1].lo) out[n - 1].lo = lo;
+            if (hi > out[n - 1].hi) out[n - 1].hi = hi;
+            continue;
+        }
+        out[n].lo = lo;
+        out[n].hi = hi;
+        n++;
+    }
+    rdp->m_rec = NULL;
+    rdp->m_nrec = 0;
+    return n;
 }
 
 /* Executes exactly one complete command already sitting in curr_cmd_buf,
@@ -5042,20 +5031,14 @@ static void rdp_dispatch_one(rdp_t *rdp, uint64_t *curr_cmd_buf, uint8_t cmd)
 
 /*****************************************************************************/
 
-int rdp_construct(rdp_t *rdp, uint32_t* rdram, uint32_t rdram_size,
-    uint8_t* hidden, uint32_t* dmem)
+int rdp_construct(rdp_t *rdp, uint32_t rdram_size)
 {
     memset(rdp, 0, sizeof(*rdp));
     if (poly_manager_init(&rdp->m_pool, rdp))
         return 1;
     rdp->m_primitive_counter = 0;
 
-    rdp->m_rdram = rdram;
-    rdp->m_dmem = dmem;
-    rdp->m_hidden_bits = hidden;
     rdp->m_mem8_limit = rdram_size - 1u;
-    rdp->m_mem16_limit = rdram_size / 2u - 1u;
-    rdp->m_mem32_limit = rdram_size / 4u - 1u;
     rdp->m_pixels = 0;
 
     rdp->m_aux_buf_ptr = 0;
@@ -5921,7 +5904,10 @@ static inline void rdp_span_walk_init(rdp_span_walk *sw, int32_t scanline,
     sw->w.w = extent->param[SPAN_W].start;
 
     sw->zb  = object->m_misc_state.m_zb_address >> 1;
-    sw->zhb = object->m_misc_state.m_zb_address;
+    /* ares port, plan T13: the dz bits are the Z halfword's own ninth bits,
+     * halfword index (address >> 1) + pixel like the color plane; MAME's
+     * byte-address base put them in another image's bits. */
+    sw->zhb = object->m_misc_state.m_zb_address >> 1;
     sw->fb_index = object->m_misc_state.m_fb_width * scanline;
 
     /* Right-major spans walk screen-right to screen-left, so every
@@ -7315,4 +7301,13 @@ void rdp_destroy(rdp_t *rdp)
     rdp->m_tmem = NULL;
     free(rdp->m_aux_buf);
     rdp->m_aux_buf = NULL;
+}
+
+/* ares port: the span callbacks a queued primitive can name, for save states. */
+poly_render_cb const *rdp_span_callbacks(uint32_t *count)
+{
+    static poly_render_cb const table[4] = {
+        rdp_span_draw_1cycle, rdp_span_draw_2cycle, rdp_span_draw_copy, rdp_span_draw_fill };
+    *count = 4;
+    return table;
 }

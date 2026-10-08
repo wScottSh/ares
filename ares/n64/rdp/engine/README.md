@@ -8,13 +8,15 @@ every file, `LICENSE.cen64` and `LICENSES.cen64` are the fork's license
 files, and the top-level `LICENSE` carries the block.
 
 The engine is the N64 core's only rasterizer. It runs on the emulation
-thread. The DPC front end (`../timed.cpp`) feeds it command words as the
-command DMA lands them and steps one command per dispatch
-(`rdp_render_engine_step`), which leaves the command's pixels in RDRAM
-before returning. Build flag: `RDP_WQ_THREADS=1` (no worker threads; the
-span queue drains on the caller). `RDP::power`
-attaches it to `rdram.ram`, `rdram.hidden` (owned by `RDRAM`) and
-`rsp.dmem`.
+thread and touches no memory of its own (plan T13). The DPC front end
+(`../timed.cpp`) feeds it command words as the command DMA's RI grants land
+them and steps one command per dispatch (`rdp_render_engine_step`). A
+primitive's spans wait in the poly pools; the front end runs each one
+(`rdp_render_span_run`) when its snapshot reads have landed, against the
+windows it installs (`rdp_render_set_windows`), and writes the written runs
+back as RI bursts. A TMEM load runs once its source rows, planned by a dry
+run (`rdp_render_load_plan`), have landed. `RDP::power` sizes it to the
+installed RDRAM. Build flag: `RDP_WQ_THREADS=1` (no worker threads).
 
 ## Files dropped from the fork
 
@@ -46,10 +48,10 @@ against it shows every change. In summary:
   doubleword load; the renderer is single-threaded here).
 - `rdp_z_store` and the fill-rect stale-read restore use the accessor
   macros instead of casting `m_rdram`.
-- `rdp.c`: `rdp_render_init` takes the RDRAM size and hidden plane and
-  no register block or interrupt callback; `m_async_on` is 0
-  (synchronous: every dispatch settles before returning, so no fence is
-  needed); `cen64_log` is defined here
+- `rdp.c`: `rdp_render_init` takes the installed RDRAM size and no
+  register block or interrupt callback; `m_async_on` is 0 (loads and
+  Sync Full keep their in-handler drains, which the front end makes empty
+  first); `cen64_log` is defined here
   with `rdp_render_set_log`; `rdp_render_pixel_count` exposes the pixel
   counter added in `rdp_occ_accumulate`.
 - `rdp.h`: `enum cen64_loglevel` lives here.
@@ -58,8 +60,9 @@ against it shows every change. In summary:
   load bytes) instead of the fork's cycle law, which moved to
   `../timed.hpp` as behavior rows. `rdp_render_engine_step` resolves an
   unsynced-write hazard hold with the following commands already in the
-  FIFO (`rdp_engine_hold_open`) and then settles (`rdp_engine_settle`), so
-  no held primitive or queued span crosses emulated time. The untimed
+  FIFO (`rdp_engine_hold_open`) and then publishes the held primitive's
+  spans (`rdp_engine_publish`); since plan T13 queued spans cross emulated
+  time and travel in save states. The untimed
   at-END walk (`rdp_process_list`, `rdp_process_command_list`) is
   deleted.
 - Save states: `rdp_render_serialize` (`rdp.c`) visits the renderer state
@@ -68,24 +71,25 @@ against it shows every change. In summary:
   `rdp_render_color_image` and `rdp_render_mask_image` expose the last
   image addresses.
 
-## RDRAM touch sites (for the timing-core memory interface, plan unit T13)
+## RDRAM touch sites (plan T13: all redirected)
 
 Every place the renderer reads or writes RDRAM or the hidden plane goes
 through the `RREAD*`, `RWRITE*`, `HREADADDR8` and `HWRITEADDR8` macros in
-`rdp_core.h`, plus `m_dmem[]` for XBUS command fetch. The functions, all
-in `rdp_core.c`, with the macro-call line numbers at this commit:
+`rdp_core.h`. They resolve against the installed windows (`rdp_memwin`):
+snapshot bytes the RI filled at a read grant, with a written flag per byte
+the front end cuts write-back runs from. An access outside every window
+reads 0, is dropped, and counts in `rdp_render_mem_misses` (0 over the MM
+bench). The sites:
 
-| Function | Role | Lines |
+| Function | Role | Now |
 |---|---|---|
-| `rdp_read_data` | command fetch from RDRAM or DMEM (cen64's `read_rdram_pair` equivalent; the port has no bus) | 1358, 1364 |
-| `rdp_z_store` | Z write and dz hidden bits | 1129-1130 |
-| `rdp_z_decompress`, `rdp_dz_decompress`, `rdp_z_compare` | Z and dz reads | 1153, 1157-1158, 1228-1229 |
-| `rdp_read_pixel8`, `rdp_read_pixel16`, `rdp_read_pixel32` | color image read (image_read_en); `rdp_read_pixel4` reads nothing | 5862, 5868, 5894, 5908 |
-| `rdp_write_pixel4/8/16/32` | 1-cycle and 2-cycle color write with hidden coverage | 5728, 5749-5751, 5790-5798, 5819-5833 |
-| `rdp_copy_pixel4/8/16/32` | copy-mode color write | 5934-5959 |
-| `rdp_span_draw_fill`, `fill_write_word` | fill-mode writes (8/16/32 bpp runs and the byte-enabled burst law) | 7094-7095, 7321-7402 |
-| `rdp_cmd_load_tlut`, `rdp_cmd_load_block`, `rdp_cmd_load_tile` | TMEM load source reads | 4119, 4230-4334, 4422-4484 |
-| `rdp_fill_rect_stale_read` | rect pre-state capture and restore | 4609-4610, 4647 |
+| `rdp_read_data` | command fetch | deleted: `rdp_engine_feed` takes the words a DpCommand grant (or the X bus) delivered |
+| `rdp_z_store`, `rdp_z_decompress`, `rdp_dz_decompress`, `rdp_z_compare` | Z and dz | the span's Z window; dz ninth bits at the Z halfword's own index (was MAME's byte-address base) |
+| `rdp_read_pixel*`, `rdp_write_pixel*`, `rdp_copy_pixel*` | color image | the span's color window |
+| `rdp_span_draw_fill`, `fill_write_word` | fill writes | the span's color window, written back on DpFill |
+| `rdp_cmd_load_tlut`, `rdp_cmd_load_block`, `rdp_cmd_load_tile` | TMEM load sources | the load's staged rows (DpTexture); a record-mode dry run plans them |
+| `rdp_fill_rect_stale_read` | fitted stale-read restore | deleted: stale reads come from the bus order |
 
-`rdp_texpipe.c` touches TMEM only. The hidden plane is also read by
-`rdp_hidden_read_row` in `rdp.c` (VI support, unused by ares).
+Save states carry the queued spans (`poly_manager_serialize`, pointers as
+indices and offsets); pool items, aux records and span params are handed out
+zeroed so the state bytes never depend on a slot's past.
