@@ -212,6 +212,7 @@ int rdp_render_span_peek(unsigned ahead, rdp_span_info *info)
 
     if (s_ctx.rdp == NULL || !poly_manager_peek(&s_ctx.rdp->m_pool, ahead, &span))
         return 0;
+    memset(info, 0, sizeof(*info));  /* the host saves it whole, padding included */
     o = span.primitive->m_object;
     a = span.extent->startx;
     b = span.extent->stopx;
