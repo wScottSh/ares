@@ -91,6 +91,7 @@ namespace Behavior {
   constexpr s64 AiFetchBytes = 8;  //8 B
   constexpr s64 ViLinesPerOutputLine = 3;  //3 lines
   constexpr s64 ViBurst = 128;  //128 B
+  constexpr s64 ViVclkPerPixel = 4;  //4 vclk/px
   constexpr s64 RdpCmdFifoDwords = 30;  //30 dwords
   constexpr s64 RdpCmdFetchBurst = 128;  //128 B
   constexpr s64 RdpXbusFetchRate = 8;  //8 B/rclk
@@ -199,6 +200,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"vi.lines-per-output-line", Basis::Vendor, "3", "lines", "SDK pro-man s.24.4; US 6,166,748 FIG. 34 (vi-fetch.md)", "nemu64:timing/load-from-uncached-vi-on-same-bank", ""},
   {"vi.burst", Basis::ModelChoice, "128", "B", "inference from the 64-px X_SCALE erratum and the RI maximum (vi-fetch.md)", "bench:uncached-vs-hpos", ""},
   {"vi.fetch-window", Basis::Wiki, "active-line", "rule", "n64brew VI_H_VIDEO; US 6,166,748 'in synchronism with the line scanning'", "bench:uncached-vs-hpos", ""},
+  {"vi.vclk-per-pixel", Basis::Wiki, "4", "vclk/px", "VI_H_SYNC counts the line in quarter pixels and VI_H_VIDEO in pixels: NTSC H_SYNC 3093 is a 773.5-px line, H_VIDEO 108-748 its 640 active px (vi-fetch.md, MM bus-occupancy inputs; n64brew Video_Interface)", "bench:uncached-vs-hpos", ""},
   {"rdp.cmd-fifo-dwords", Basis::Wiki, "30", "dwords", "n64-systemtest rdp/mod.rs:21-23 author note: CURRENT reaches START+240 while frozen", "rdpstat:current-prefetch", "no test asserts it; MiSTer uses 64; calibration #16"},
   {"rdp.cmd-fetch-burst", Basis::ModelChoice, "128", "B", "RI maximum; MiSTer fetches <= 22 words", "rdpstat:current-prefetch", "calibration #16"},
   {"rdp.xbus-fetch-rate", Basis::ModelChoice, "8", "B/rclk", "cen64 jgemu interface.c fetches commands 64 bits per clock (rdp-command-timing.md, Command fetch row); the X bus is private to the RSP and RDP, so no RI traffic", "rdpstat:xbus", "no hardware measurement"},

@@ -9,7 +9,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | measured | a hardware measurement: a test ROM result or a console capture | 39 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 16 |
 | datasheet | a component datasheet | 8 |
-| wiki | a community reference: n64brew, or a test suite author's notes | 15 |
+| wiki | a community reference: n64brew, or a test suite author's notes | 16 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 7 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 8 |
@@ -156,6 +156,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `vi.lines-per-output-line` | 3 lines | vendor | SDK pro-man s.24.4; US 6,166,748 FIG. 34 (vi-fetch.md) | `nemu64:timing/load-from-uncached-vi-on-same-bank` |  |
 | `vi.burst` | 128 B | model-choice | inference from the 64-px X_SCALE erratum and the RI maximum (vi-fetch.md) | `bench:uncached-vs-hpos` |  |
 | `vi.fetch-window` | active-line rule | wiki | n64brew VI_H_VIDEO; US 6,166,748 'in synchronism with the line scanning' | `bench:uncached-vs-hpos` |  |
+| `vi.vclk-per-pixel` | 4 vclk/px | wiki | VI_H_SYNC counts the line in quarter pixels and VI_H_VIDEO in pixels: NTSC H_SYNC 3093 is a 773.5-px line, H_VIDEO 108-748 its 640 active px (vi-fetch.md, MM bus-occupancy inputs; n64brew Video_Interface) | `bench:uncached-vs-hpos` |  |
 
 ### rdp
 

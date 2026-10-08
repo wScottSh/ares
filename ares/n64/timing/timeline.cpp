@@ -7,6 +7,7 @@ Timing::Timeline timeline;
 auto fireEvent(const Timing::Timeline::Event& event) -> void {
   switch((EventKind)event.kind) {
   case EventKind::VI_Line:           return vi.line();
+  case EventKind::VI_Fetch:          return vi.fetchDue();
   case EventKind::AI_Sample:         return ai.sampleEvent();
   case EventKind::CPU_Compare:       return cpu.compareMatch();
   case EventKind::PIF_Poll:          return pif.mainHLE();

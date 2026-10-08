@@ -7,6 +7,7 @@ auto VI::serialize(serializer& s) -> void {
   s(io.divot);
   s(io.serrate);
   s(io.antialias);
+  s(io.dedither);
   s(io.reserved);
   s(io.dramAddress);
   s(io.width);
@@ -36,4 +37,21 @@ auto VI::serialize(serializer& s) -> void {
   s(vclk.origin.units);
   s(vclk.vclks);
   s(inactiveCounter);
+
+  s(fetch.hsync.origin.units);
+  s(fetch.hsync.vclks);
+  s(fetch.origin);
+  s(fetch.pitch);
+  s(fetch.line);
+  s(fetch.hstart);
+  s(fetch.hend);
+  s(fetch.output);
+  s(fetch.next);
+  s(fetch.inFlight);
+  s(fetch.due);
+  s(fetch.bytes);
+  if(s.reading()) {
+    fetch.hsync.period = system.vclkPeriod();
+    fetch.start(fetch.origin, fetch.pitch);
+  }
 }

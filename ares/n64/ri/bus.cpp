@@ -29,6 +29,7 @@ auto RI::move(const RiBus::Burst& b, u8* data) -> void {
   if(b.requester == RiBus::Requester::PiDma) device = RBusDevice::PI_DMA;
   if(b.requester == RiBus::Requester::SiDma) device = RBusDevice::SI_DMA;
   if(b.requester == RiBus::Requester::AiDma) device = RBusDevice::AI_DMA;
+  if(b.requester == RiBus::Requester::ViFetch) device = RBusDevice::VI_DMA;
   const bool words = (b.address & 3) == 0 && (b.bytes & 3) == 0;
   if(b.direction == RiBus::Direction::Read) {
     if(words) {
