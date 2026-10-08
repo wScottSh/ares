@@ -24,13 +24,12 @@ static auto bytesPerPixel(u32 size) -> u32 { return size == 0 ? 0 : 1 << (size -
 static auto halfPixels(u32 bpp) -> u32 { return bpp ? (u32)Timing::Behavior::RdpSpanRamHalf / bpp : ~0u; }
 
 static auto isLoad(int command) -> bool { return command == 0x30 || command == 0x33 || command == 0x34; }
+static auto isSync(int command) -> bool { return command >= 0x26 && command <= 0x28; }
 static auto isPrimitive(int command) -> bool {
   return (command >= 0x08 && command <= 0x0f) || command == 0x24 || command == 0x25 || command == 0x36;
 }
 
-static auto spanPixels(const rdp_span_info& info) -> u32 {
-  return info.x1 >= info.x0 ? info.x1 - info.x0 + 1 : 0;
-}
+static auto spanPixels(const rdp_span_info& info) -> u32 { return (u32)info.pixels; }
 
 //Cuts [lo, hi) into bursts the RI accepts (at most ri.max-burst, never across a 2 KiB row).
 template<typename F> static auto splitBursts(u32 lo, u32 hi, u32 unit, F&& emit) -> void {
@@ -136,6 +135,9 @@ auto RDP::dispatchable() const -> bool {
   bool unrun = rdp_render_span_peek(0, &info);
   //a primitive dispatches once the previous one's last span has entered the pipe
   if(isPrimitive(command) && unrun) return false;
+  //Sync Load/Pipe/Tile stall the pipeline a fixed number of GCLK (n64brew
+  //Commands), after the spans ahead of them
+  if(isSync(command) && (unrun || pipe.current >= 0)) return false;
   if(rdp_render_engine_drains()) {
     if(unrun || pipe.current >= 0) return false;
     if(isLoad(command)) return tmemLoad.active && tmemLoad.reads == 0;
@@ -325,7 +327,7 @@ auto RDP::startSpan(Clock at) -> bool {
   auto& slot = slots[pipe.prefetched];
   if(slot.reads) return false;
   Clock start = max(pipe.time, slot.ready);
-  if(start > at) return wakeAt(start), false;
+  if(start > at && !slot.info.phantom) return wakeAt(start), false;
   rdp_memwin windows[2];
   u32 n = 0;
   for(auto* w : {&slot.color, &slot.depth})
@@ -337,6 +339,12 @@ auto RDP::startSpan(Clock at) -> bool {
   rdp_render_set_windows(nullptr, 0);
   pipe.current = pipe.prefetched;
   pipe.prefetched = -1;
+  if(slot.info.phantom) {
+    slot.shaded = true;
+    pipe.current = -1;
+    retire();
+    return true;
+  }
   pipe.pixel = 0;
   pipe.time = start;
   for(auto* s : {&pipe.color, &pipe.depth}) {
@@ -370,7 +378,7 @@ auto RDP::beginChunk(Clock at) -> bool {
     if(pipe.pixel + k == pixels) clocks += RDPTimed::spanTail(info.cycle_type);
   } else {
     const u32 bpp = bytesPerPixel(info.fb_size);
-    u64 words = bpp && pixels ? ((u64)(info.x1 + 1) * bpp + 7) / 8 - (u64)info.x0 * bpp / 8 : 0;
+    u64 words = bpp && pixels ? ((u64)(info.x0 + pixels) * bpp + 7) / 8 - (u64)info.x0 * bpp / 8 : 0;
     clocks = RDPTimed::wordClocks(words);
   }
   if(start > at) return wakeAt(start), false;
@@ -461,6 +469,7 @@ auto RDP::pipeline(Clock at) -> void {
       prefetch(at);
       if(!startSpan(at)) return;
       prefetch(at);
+      if(pipe.current < 0) continue;
     }
     if(!beginChunk(at)) return;
   }
@@ -516,7 +525,9 @@ auto RDP::dispatch(Clock at) -> void {
     debugger.command(w.word);
   }
   executor.busy = true;
+  if(isSync(command) && pipe.time > at) at = pipe.time;
   executor.until = at + busy;
+  if(isSync(command)) pipe.time = executor.until;
   //a primitive's spans enter the pipeline after its setup
   if(isPrimitive(command) && pipe.time < executor.until) pipe.time = executor.until;
   if(executor.load) dpc.tmem.set(true, at);

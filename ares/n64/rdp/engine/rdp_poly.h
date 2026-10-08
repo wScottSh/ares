@@ -158,6 +158,7 @@ typedef struct primitive_info
         rdp_poly_state *m_object;                // object data pointer
         poly_render_cb m_callback;               // callback to handle a scanline's worth of work
         struct rdp_t *m_cbarg;                 // callback context (the rdp_t)
+        uint32_t m_seq;                          // ares port: primitive sequence number
 } primitive_info;
 
 // internal unit of work
@@ -189,6 +190,7 @@ typedef struct poly_manager
         // ares port: the next span the host runs (unit index, extent index)
         uint32_t m_run_unit;
         uint32_t m_run_ext;
+        uint32_t m_seq;                          // primitives allocated since power-on
 } poly_manager;
 
 // one queued scanline (ares port)

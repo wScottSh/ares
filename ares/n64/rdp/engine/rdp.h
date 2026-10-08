@@ -125,6 +125,8 @@ int      rdp_render_engine_step(rdp_engine_work *works, unsigned capacity);
  * rdp_render_span_run, against the windows it installed. */
 typedef struct rdp_span_info {
   int32_t  y, x0, x1;       /* pixel range the span can touch; x1 < x0 when empty */
+  int32_t  pixels;          /* pixels the pipeline draws (rdp_occ_accumulate's width) */
+  uint8_t  phantom;         /* no span at all: no pixels, no time */
   uint32_t primitive;       /* index of the span's primitive */
   uint32_t fb_address, fb_width, fb_size, zb_address;
   uint32_t cycle_type;

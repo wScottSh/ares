@@ -216,11 +216,19 @@ int rdp_render_span_peek(unsigned ahead, rdp_span_info *info)
     a = span.extent->startx;
     b = span.extent->stopx;
     info->y = span.scanline;
+    /* The drawn width is the flip-directional difference of the clamped
+     * edges, as rdp_occ_accumulate counts it; a negative width (the slot
+     * past a primitive's last real span) draws nothing and takes no time. */
+    info->pixels = o->flip ? a - b : b - a;
+    info->phantom = info->pixels < 0 || (a == 0xfff && b == 0);
+    if (info->phantom) info->pixels = 0;
+    /* The walk touches one position past the width (the clipped end pixel). */
     info->x0 = a < b ? a : b;
     info->x1 = a < b ? b : a;
     if (info->x0 < 0) info->x0 = 0;
     if (info->x1 >= (int32_t)o->m_misc_state.m_fb_width) info->x1 = (int32_t)o->m_misc_state.m_fb_width - 1;
-    info->primitive = o->m_primitive_offset;
+    if (info->phantom) info->x1 = info->x0 - 1;
+    info->primitive = span.primitive->m_seq;
     info->fb_address = o->m_misc_state.m_fb_address;
     info->fb_width = o->m_misc_state.m_fb_width;
     info->fb_size = o->m_misc_state.m_fb_size;

@@ -488,6 +488,7 @@ static primitive_info *primitive_alloc(poly_manager *poly, poly_render_cb callba
     primitive->m_object = (rdp_poly_state *)poly->m_object.last;
     primitive->m_callback = callback;
     primitive->m_cbarg = poly->m_cbarg;
+    primitive->m_seq = ++poly->m_seq;
     return primitive;
 }
 
@@ -588,6 +589,7 @@ void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int
     io(ctx, counts, sizeof(counts));
     io(ctx, &poly->m_run_unit, sizeof(poly->m_run_unit));
     io(ctx, &poly->m_run_ext, sizeof(poly->m_run_ext));
+    io(ctx, &poly->m_seq, sizeof(poly->m_seq));
     io(ctx, poly->m_unit_bucket, sizeof(poly->m_unit_bucket));
     if (loading)
     {
@@ -620,10 +622,11 @@ void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int
     {
         primitive_info *p = loading ? (primitive_info *)poly_pool_next(&poly->m_primitive)
                                     : (primitive_info *)poly_pool_byindex(&poly->m_primitive, i);
-        uint32_t ids[2] = {0, 0};
+        uint32_t ids[3] = {0, 0, 0};
         if (!loading)
         {
             ids[0] = poly_pool_indexof(&poly->m_object, p->m_object);
+            ids[2] = p->m_seq;
             for (k = 0; k < ncallbacks; k++) if (callbacks[k] == p->m_callback) ids[1] = k;
         }
         io(ctx, ids, sizeof(ids));
@@ -633,6 +636,7 @@ void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int
             p->m_object = (rdp_poly_state *)poly_pool_byindex(&poly->m_object, ids[0]);
             p->m_callback = callbacks[ids[1] < ncallbacks ? ids[1] : 0];
             p->m_cbarg = poly->m_cbarg;
+            p->m_seq = ids[2];
         }
     }
 
