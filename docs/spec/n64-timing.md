@@ -14,7 +14,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | derived | computed from other cited values | 6 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 14 |
 | model-choice | no published value; the reference states why the model chose this one | 15 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 25 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 23 |
 
 ## Behaviors
 
@@ -65,7 +65,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` | sysad.fixed-path is derived from this minus modeled wire |
 | `cpu.uncached-read-dword-total` | 37 pclk | measured | n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's) | `bench:uncached-sizes` |  |
 | `cpu.dfill-total` | 41 pclk | measured | nemu64-test cache.rs:193-286 median, VI off | `nemu64:timing/load-miss-vi-off` | assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost |
-| `cpu.ifill-stall` | 45 pclk | derived | NEC Table 11-2 with M from D-fill (cpu-memory-costs.md) | `bench:ifill-isolated` | no public hardware value; the bench reports |
+| `cpu.ifill-stall` | 45 pclk | derived | NEC Table 11-2 with M from D-fill (cpu-memory-costs.md) | `bench:ifill-isolated` | no public hardware value; the bench reports. M comes from the D-fill measurement, a clean row miss, so the 45 is the uncontended total at a clean row miss: the SysAD path is 45 less the modeled 32 B clean-miss wire and the mean rclk-edge wait, and the RI adds row state and contention |
 | `cpu.dcache-hit` | 1 pclk | measured | nemu64-test Cached loads and store, 19 cases | `nemu64:timing/cached-loads-and-store` |  |
 | `cpu.ldi` | 1 pclk | vendor | NEC VR4300 UM s.4.6.5; n64brew register-field overlap rule | `nemu64:timing/cpu-register-dependency` |  |
 | `cpu.dcb` | 1 pclk | vendor | NEC VR4300 UM s.4.6.7 | `nemu64:timing/cpu-register-dependency` |  |
@@ -199,8 +199,6 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:102 | `nemu64:cop0hazard/softwareinterrupt` | no plan unit: no measurement of the interrupt entry cost was found; T7c built the sampling rule (cpu.irq-sample), not this cost |
 | `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:109 | pending (no-corpus) | no plan unit: NMI entry has no timing reference (T7b) |
 | `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:114 | pending (no-corpus) | replaced by T6: SysAD port |
-| `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/sysad.hpp:60 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
-| `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/sysad.cpp:262 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
 | `legacy.pi.write-busy` | 200 pclk | ares/n64/pi/bus.hpp:77 | `bench:pi-io-write` | replaced by T8: PI I/O busy (pi.io-busy) |
 | `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:66 | pending (no-corpus) | no plan unit: the SI I/O write busy; T8 left it, no hardware reference |
