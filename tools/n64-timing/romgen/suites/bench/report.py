@@ -222,17 +222,17 @@ def main():
         for key in dict.fromkeys((r["rom"], r["point"], r["metric"]) for r in rows):
             f.write("\t".join(key + tuple(str(m.get(key)) for m in per_delay)) + "\n")
     with open(os.path.join(results, "results.tsv"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("rom\tpoint\tmetric\tvalue\tmin\tmedian\tmax\tmean\texpected\tlo\thi\tkind\trule\tverdict\tsource\n")
+        f.write("rom\tpoint\tmetric\tmin\tmedian\tmax\tmean\texpected\tlo\thi\tkind\trule\tverdict\tsource\n")
         for row in rows:
             phase = phase_of(per_delay, (row["rom"], row["point"], row["metric"]))
             v = verdict(row, phase)
             counts[v] = counts.get(v, 0) + 1
-            stats = [str(x) for x in (phase.median, round(phase.lo, 3), phase.median, round(phase.hi, 3), phase.mean)] \
-                if phase else ["None"] * 5
+            stats = [str(x) for x in (round(phase.lo, 3), phase.median, round(phase.hi, 3), phase.mean)] \
+                if phase else ["None"] * 4
             f.write("\t".join([row["rom"], row["point"], row["metric"], *stats, row["expected"],
                                row["lo"], row["hi"], row["kind"], row["rule"], v, row["source"]]) + "\n")
-            print(f"  {v:7} {row['rom']} {row['point']} {row['metric']} = {stats[1]}..{stats[3]} "
-                  f"median {stats[2]} mean {stats[4]} (expected {row['expected']}, {row['lo']}..{row['hi']}, {row['rule']})")
+            print(f"  {v:7} {row['rom']} {row['point']} {row['metric']} = {stats[0]}..{stats[2]} "
+                  f"median {stats[1]} mean {stats[3]} (expected {row['expected']}, {row['lo']}..{row['hi']}, {row['rule']})")
     print("format: " + ("ok" if format_ok else "MISSING POINTS") + "; expected rows: "
           + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     sys.exit(0 if format_ok else 1)

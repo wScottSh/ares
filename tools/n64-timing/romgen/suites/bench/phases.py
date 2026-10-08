@@ -9,8 +9,8 @@ measurement's start against the free-running VI, refresh and poll grids without 
 import os
 
 #One loop iteration is 3 pclk, and every boot-phase effect repeats with the idle VI's
-#0x800-VCLK line event, 3944 pclk = 1313 iterations (measured: the mi-memset-rspdma dips at K =
-#1-4, 1298-1311, 2611-2624, 3924-3937 over 872 delays; README.md, Phase). 32 delays 41 apart
+#0x800-VCLK line event, 3944 pclk = 1313 iterations (measured: mi-memset-rspdma dips at K = 1,
+#1300-1316 and near 2611, 3924, 5237 over 872 delays; README.md, Phase). 32 delays 41 apart
 #cover that period at 123 pclk spacing, which also lands them at 32 different phases of a
 #26 pclk poll loop (123 mod 26 = 19).
 DELAYS = [1 + 41 * i for i in range(32)]

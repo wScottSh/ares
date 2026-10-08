@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 148 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run phase/after on 172bddb00). 36 fail, 10 fit only, 3 model-choice, 67 pass, 7 pending:calibration-16, 15 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 148 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run phase/after on 48be98188). 36 fail, 10 fit only, 3 model-choice, 67 pass, 7 pending:calibration-16, 15 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 

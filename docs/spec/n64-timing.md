@@ -252,7 +252,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run phase/after on 172bddb00).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run phase/after on 48be98188).
 
 | Check | Result | Detail |
 |---|---|---|
