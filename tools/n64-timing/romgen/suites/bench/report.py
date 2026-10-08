@@ -48,10 +48,12 @@ def hpos(p):
     median = statistics.median(lats)
     outliers = [(off, lat) for off, lat in samples if lat >= median + 20]
     line = p["line_ticks"]
+    #Offset 0 is the HSYNC the sync loop saw, so the window holds one HSYNC per
+    #whole line after it. The line length is measured, so an HSYNC near the window
+    #end can sit past full_lines * line: count every outlier, not only those before it.
     full_lines = (samples[-1][0] + samples[-1][1]) // line
-    in_full = [off for off, _ in outliers if off < full_lines * line]
     out = {"median_pclk": 2 * median, "full_lines": full_lines,
-           "outliers_per_line": round(len(in_full) / full_lines, 3) if full_lines else "-",
+           "outliers_per_line": round(len(outliers) / full_lines, 3) if full_lines else "-",
            "holdoff_rclk_max": round(max((lat - median for _, lat in outliers), default=0) * 4 / 3, 2),
            "outlier_hpos_ticks": "/".join(str(off % line) for off, _ in outliers) or "-"}
     return out
