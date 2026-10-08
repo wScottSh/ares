@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 148 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench2/si-rom on 6f6e8cb26). 36 fail, 10 fit only, 3 model-choice, 67 pass, 7 pending:calibration-16, 15 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 148 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run phase/after on 172bddb00). 36 fail, 10 fit only, 3 model-choice, 67 pass, 7 pending:calibration-16, 15 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
@@ -19,20 +19,18 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 | Check | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|
-| `bench:mi-memset-cached` | vi-on pclk_per_line 72.733 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
-| `bench:mi-memset-rspdma` | vi-on b_per_rclk 6.423 (expected 6.5, 6.49..6.515) fail | `ri.overhead-write` | - |
-| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.734 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
-| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
-| `bench:si-dma-accessory` | accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail | `si.read64-base` `legacy.si.dma-read-controller` | - |
-| `bench:si-dma-empty-1b` | empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
-| `bench:si-dma-empty-32b` | empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
-| `bench:si-dma-empty-4b` | empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
-| `bench:si-dma-empty-56b` | empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
-| `bench:si-dma-empty-63b` | empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
-| `bench:si-dma-empty-8b` | empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
-| `bench:si-dma-read64-1` | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail | `si.read64-base` `legacy.si.dma-read-controller` `legacy.si.dma-read-empty-port` `legacy.si.dma-read-accessory` `legacy.si.dma-read-short-command` | - |
-| `bench:sp-dma-sweep` | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail | `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `ri.overhead-read` `ri.overhead-write` `sp.dma-burst` | `ri.overhead-read` |
-| `bench:uncached-sizes-u32-banked` | u32-banked net_pclk 131 (expected 134, 133..135) fail | `cpu.uncached-read-total` | - |
+| `bench:mi-memset-cached` | vi-on pclk_per_line 72.733..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
+| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.716..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
+| `bench:si-dma-accessory` | accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668, consistent) fail | `si.read64-base` `legacy.si.dma-read-controller` | - |
+| `bench:si-dma-empty-1b` | empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848, consistent) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-32b` | empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-4b` | empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288, consistent) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-56b` | empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34, consistent) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-63b` | empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356, consistent) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-8b` | empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-read64-1` | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail | `si.read64-base` `legacy.si.dma-read-controller` `legacy.si.dma-read-empty-port` `legacy.si.dma-read-accessory` `legacy.si.dma-read-short-command` | - |
+| `bench:sp-dma-sweep` | wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail | `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `ri.overhead-read` `ri.overhead-write` `sp.dma-burst` | `ri.overhead-read` |
+| `bench:uncached-sizes-u32-banked` | u32-banked net_pclk 131..132 median 131.0 mean 131.219 (expected 134, 133..135, consistent) fail | `cpu.uncached-read-total` | - |
 | `mm:filesel-named` | filesel-named: mean 1.6798, 68.0% of 356 game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
 | `nemu64:timing/load-miss-vi-off` | 0 of 1 tests pass | `cpu.dfill-total` | - |
@@ -57,29 +55,29 @@ None.
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.734 (expected 18.38, 18.346..18.418) fail |
-| `ri.octbyte` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
+| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.716..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail |
+| `ri.octbyte` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
-| `ri.post-read-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `ri.post-write-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
+| `ri.post-read-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
+| `ri.post-write-gap` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
 | `ri.bank-of` | wiki | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.row-of` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.arbitration` | model-choice | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19% |
 | `ri.rank.vi` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
-| `ri.overhead-read` | fit | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `ri.overhead-write` | derived | `bench:mi-memset-rspdma`: vi-on b_per_rclk 6.423 (expected 6.5, 6.49..6.515) fail; `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
+| `ri.overhead-read` | fit | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
+| `ri.overhead-write` | derived | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
 | `ri.overhead-rdp` | derived | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19%; `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
-| `cpu.uncached-read-total` | measured | `bench:uncached-sizes-u32-banked`: u32-banked net_pclk 131 (expected 134, 133..135) fail |
+| `cpu.uncached-read-total` | measured | `bench:uncached-sizes-u32-banked`: u32-banked net_pclk 131..132 median 131.0 mean 131.219 (expected 134, 133..135, consistent) fail |
 | `cpu.dfill-total` | measured | `nemu64:timing/load-miss-vi-off`: 0 of 1 tests pass |
-| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.733 (expected 71.24, 71.17..71.31) fail |
-| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.734 (expected 18.38, 18.346..18.418) fail |
-| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.733 (expected 71.24, 71.17..71.31) fail |
-| `sp.dma-burst` | model-choice | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
-| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.733..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
+| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.716..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail |
+| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.733..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
+| `sp.dma-burst` | model-choice | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
+| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures |
+| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures |
 | `pi.block-bytes` | wiki | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures |
-| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
-| `si.read64-base` | derived | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail; `bench:si-dma-empty-1b`: empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail; `bench:si-dma-empty-4b`: empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail; `bench:si-dma-empty-8b`: empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-32b`: empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-56b`: empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail; `bench:si-dma-empty-63b`: empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail; `bench:si-dma-accessory`: accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail |
+| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures |
+| `si.read64-base` | derived | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail; `bench:si-dma-empty-1b`: empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848, consistent) fail; `bench:si-dma-empty-4b`: empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288, consistent) fail; `bench:si-dma-empty-8b`: empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail; `bench:si-dma-empty-32b`: empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail; `bench:si-dma-empty-56b`: empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34, consistent) fail; `bench:si-dma-empty-63b`: empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356, consistent) fail; `bench:si-dma-accessory`: accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668, consistent) fail |
 | `vi.lines-per-output-line` | vendor | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `vi.aa-mode-lines` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `rdp.atomic-dead` | vendor | `rdpstat:1prim`: 2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px |
@@ -89,10 +87,10 @@ None.
 | `rdp.span-slots` | model-choice | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.port-lookahead` | fit | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.read-gate` | vendor | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07%; `thar0:zcmp`: model 108697 vs console 106000 (105940..106088), +2.54% |
-| `legacy.si.dma-read-controller` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail; `bench:si-dma-accessory`: accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail |
-| `legacy.si.dma-read-empty-port` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
-| `legacy.si.dma-read-accessory` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
-| `legacy.si.dma-read-short-command` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail; `bench:si-dma-empty-1b`: empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail; `bench:si-dma-empty-4b`: empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail; `bench:si-dma-empty-8b`: empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-32b`: empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-56b`: empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail; `bench:si-dma-empty-63b`: empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail |
+| `legacy.si.dma-read-controller` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail; `bench:si-dma-accessory`: accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668, consistent) fail |
+| `legacy.si.dma-read-empty-port` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail |
+| `legacy.si.dma-read-accessory` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail |
+| `legacy.si.dma-read-short-command` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail; `bench:si-dma-empty-1b`: empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848, consistent) fail; `bench:si-dma-empty-4b`: empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288, consistent) fail; `bench:si-dma-empty-8b`: empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail; `bench:si-dma-empty-32b`: empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail; `bench:si-dma-empty-56b`: empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34, consistent) fail; `bench:si-dma-empty-63b`: empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356, consistent) fail |
 
 ## Model choices that only guards check
 
