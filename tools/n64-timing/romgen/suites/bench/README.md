@@ -83,7 +83,7 @@ The delays come from two measured periods.
 - The idle VI. While VI_CONTROL selects no pixel type, the VI posts a line event every 0x800 VCLKs, 3944 pclk (`ares/n64/vi/vi.cpp` `VI::line`). The first line after `vi_init` sets a type starts on that grid, so the VI's line phase against the program is set by where the boot ends against a grid that runs from power-on. One delay iteration is 3 pclk, so the grid is 1313 iterations. Over 872 delays (K = 1 to 400, every 13th to 5991, then 40 geometric steps to 625302, about 1.2 VI fields), `mi-memset-rspdma` dips to 6.42 B/rclk at K = 1 and 1300 to 1316 (every delay), and near 2611, 3924 and 5237 (every 13th delay), and `sp-dma-sweep` `wr-4096-off0` repeats its 6.16 to 6.69 pattern on the same period. No value appears past the first period that the first period lacks. With the idle step at 1 VCLK (a scratch build), every value is the same at all 45 delays tried.
 - The CPU poll loops, 25 and 26 pclk.
 
-`phases.py` takes 32 delays 41 iterations (123 pclk) apart. They cover one grid period and land at 32 different poll phases (123 mod 26 = 19). The 32 give every check the verdict the 872 give. A standing bench run is 640 runner runs and 32 ROM builds, about 40 s with 4 runners on a loaded host.
+`phases.py` takes 32 delays 41 iterations (123 pclk) apart. They cover one grid period and land at 32 different poll phases (123 mod 26 = 19). The 32 give every check the verdict the 872 give. A standing bench run is 32 ROM builds and 640 runner runs: 19 s to build and 28 s to run with 4 runners (measured at load average 15).
 
 `N64_BENCH_DELAYS=K,K,...` replaces the list in `build.py`, `run.sh` and `report.py` alike, for a scan.
 
