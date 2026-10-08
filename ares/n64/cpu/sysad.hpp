@@ -57,8 +57,9 @@ struct SysAD : Timing::Actor, RI::Client {
   //nemu64-test's miss loop evicts with a line 8 KiB away, a clean row miss in the same bank.
   static constexpr Clock DfillPath = Timing::Behavior::CpuDfillTotal - Issue - MeanEdgeWait
       - RiBus::wire(RiBus::Direction::Read, 2, RiBus::Row::CleanMiss);
-  static constexpr Clock IfillStall = pclk(48);
-  static constexpr Clock IfillPath = IfillStall - MeanEdgeWait - hitWire(RiBus::Direction::Read, 32);
+  //cpu.ifill-stall takes M from the D-fill, so it holds at the D-fill's clean row miss.
+  static constexpr Clock IfillPath = Timing::Behavior::CpuIfillStall - MeanEdgeWait
+      - RiBus::wire(RiBus::Direction::Read, 4, RiBus::Row::CleanMiss);
   //Last data beat to EOK, from the steady-state drain period per entry.
   static constexpr Clock WritePath = Timing::Behavior::SysadRdramWritePeriod
       - Timing::Behavior::RiRequestLatency - hitWire(RiBus::Direction::Write, 8);

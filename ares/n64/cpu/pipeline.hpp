@@ -47,7 +47,7 @@ struct Pipeline {
   };
 
   auto inDelaySlot() const -> bool { return state & DelaySlot; }
-  auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; }
+  auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; flush(); }
   auto branch(u64 address) -> void { nextpc = address; nstate |= DelaySlot; }
   auto noBranch() -> void { nstate |= DelaySlot; }
   //A not-taken likely branch turns its delay slot into a bubble (nemu64-test LikelyBranchCycleCount).
@@ -97,6 +97,27 @@ struct Pipeline {
   auto fpuOperand(u32 format, u8 index, bool target) -> FpuOperand;
   auto power() -> void;
   auto serialize(serializer&) -> void;
+
+  //The word of instruction n is read in n-2's slot (cpu.fetch-ahead-slots): after
+  //n-2 has executed, so a branch's target is known and a load has been served, and
+  //before n-2's store lands, at WB (NEC VR4300 UM s.4.6.7 DCB). An older store has
+  //landed and is seen. The window holds the next two instructions in program order.
+  struct Fetched {
+    u64 vaddr;
+    u32 word;
+    u32 translated;  //0: the fetch faults, raised when the instruction issues
+  };
+  //Reads the word at nextpc, and the one at pc if a branch or a skip has moved it.
+  auto fetchAhead() -> void;
+  //The word at pc. The reference holds until the next fetchAhead().
+  auto take() -> const Fetched&;
+  //The word of the instruction after the executing one.
+  auto next() const -> const Fetched* { return window[head].vaddr == pc ? &window[head] : nullptr; }
+  auto read(Fetched& slot, u64 vaddr) -> void;
+  //An exception or ERET: no vaddr is all ones, so nothing in the window matches.
+  auto flush() -> void { for(auto& slot : window) slot.vaddr = ~0ull; }
+  Fetched window[Timing::Behavior::CpuFetchAheadSlots];
+  u8 head = 0;  //the slot of the instruction at pc
 
   Clock gprReady[32];
   Clock fprReady[32];

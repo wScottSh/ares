@@ -115,19 +115,28 @@ auto CPU::instruction() -> void {
     return;
   }
 
-  auto access = devirtualize<Read, Word>(ipu.pc);
-  if(!access) return;
-
-  auto data = fetch(access);
-  if (!data) return;
+  step(Timing::Behavior::CpuIssue);
+  auto& slot = pipeline.take();
+  u32 word = slot.word;
+  if(!slot.translated) {
+    //the fetch faulted: raise it now that the instruction issues, or read the word if the TLB has changed since
+    auto access = devirtualize<Read, Word>(ipu.pc);
+    if(!access) return;
+    word = fetch(access);
+  }
   instructionIndex++;
   pipeline.begin();
-  auto issued = pipeline.issue(*data);
+  auto issued = pipeline.issue(word);
   pipeline.inFlight = &issued;
-  instructionPrologue(ipu.pc, *data);
-  decoderEXECUTE(*data);
+  //A store or CACHE op (opcodes 0x28-0x2f, 0x38-0x3f) reads the word two ahead before it
+  //executes, every other instruction after (cpu.fetch-ahead-slots).
+  bool readFirst = (word >> 26 & 0x28) == 0x28;
+  if(readFirst) pipeline.fetchAhead();
+  instructionPrologue(ipu.pc, word);
+  decoderEXECUTE(word);
   instructionEpilogue();
   pipeline.retire(issued);
+  if(!readFirst) pipeline.fetchAhead();
   pipeline.end();
 }
 

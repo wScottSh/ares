@@ -199,7 +199,7 @@ template<u32 Size> auto SysAD::fill(u32 address, u32* words) -> bool {
   }
   //the RDRAM register space, EBus test mode and non-RDRAM space keep their device paths at the uncontended cost
   resume(free);
-  cpu.step(Size == DCache ? Timing::Behavior::CpuDfillTotal - Issue : IfillStall);
+  cpu.step(Size == DCache ? Timing::Behavior::CpuDfillTotal - Issue : Timing::Behavior::CpuIfillStall);
   free = cpu.clock;
   return bus.readBurst<Size>(address, words, cpu);
 }
@@ -259,7 +259,6 @@ auto CPU::InstructionCache::Line::fill(u32 paddr, CPU& cpu) -> void {
 }
 
 auto CPU::InstructionCache::Line::writeBack(CPU& cpu) -> void {
-  cpu.step(pclk(48));
   const u32 tag = tagKey & ~0x0000'0fffu;
   sysad.writeback<ICache>(tag | index, words);
 }
