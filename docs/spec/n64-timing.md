@@ -13,7 +13,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 9 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 12 |
-| model-choice | no published value; the reference states why the model chose this one | 15 |
+| model-choice | no published value; the reference states why the model chose this one | 20 |
 | legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 25 |
 
 ## Behaviors
@@ -159,7 +159,12 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `vi.lines-per-output-line` | 3 lines | vendor | SDK pro-man s.24.4; US 6,166,748 FIG. 34 (vi-fetch.md) | `nemu64:timing/load-from-uncached-vi-on-same-bank` |  |
 | `vi.burst` | 128 B | model-choice | inference from the 64-px X_SCALE erratum and the RI maximum (vi-fetch.md) | `bench:uncached-vs-hpos` | T11 run, MM: scanout holds the channel 293.4 rclk per HSYNC line, 7.39% of a 3972-rclk NTSC line (vi-fetch.md 6.5-9.0% frame average). Unmeasured inputs: this burst size and ri.rank.vi; calibration #16 |
 | `vi.fetch-window` | active-line rule | wiki | n64brew VI_H_VIDEO; US 6,166,748 'in synchronism with the line scanning' | `bench:uncached-vs-hpos` |  |
-| `vi.vclk-per-pixel` | 4 vclk/px | wiki | VI_H_SYNC counts the line in quarter pixels and VI_H_VIDEO in pixels: NTSC H_SYNC 3093 is a 773.5-px line, H_VIDEO 108-748 its 640 active px (vi-fetch.md, MM bus-occupancy inputs; n64brew Video_Interface) | `bench:uncached-vs-hpos` |  |
+| `vi.vclk-per-pixel` | 4 vclk/px | wiki | VI_H_TOTAL counts the line in quarter pixels and VI_H_VIDEO in pixels: NTSC H_TOTAL 3093 is a 773.5-px line, H_VIDEO 108-748 its 640 active px (vi-fetch.md, MM bus-occupancy inputs; n64brew Video_Interface) | `bench:uncached-vs-hpos` |  |
+| `vi.register-sample` | per-line rule | model-choice | inferred, none published: each line's HSYNC reads ORIGIN, WIDTH, the scales and the H/V windows afresh, with no per-field latch (vi.cpp startFetch) | `mm:south-clock-town` `det` | a mid-field register write takes effect at the next line |
+| `vi.fetch-overrun` | keep-fetching rule | model-choice | inferred, none published: a line whose bursts are still pending at the next HSYNC keeps fetching and that next line fetches nothing; only a VI whose line is shorter than its H_VIDEO window can reach it | `det` `stepcap` |  |
+| `vi.unfetched-sample` | 0 rule | model-choice | inferred, none published: a sample outside the three fetched lines (a Y_SCALE above 1 line per output line, or an X_SCALE past the line) has no fetched bytes and reads 0 | `mm:south-clock-town` | MM runs Y_SCALE 1.0 and never reaches it (vi-fetch.md, MM bus-occupancy inputs) |
+| `vi.aa-mode-lines` | ignored rule | model-choice | inferred: vi.lines-per-output-line holds in every AA mode. rcp.h and n64brew VI_CTRL say mode 1 fetches extra lines only if needed and do not state the mode 2 and 3 fetch (vi-fetch.md, AA mode semantics) | `nemu64:timing/load-miss-vi-on` `nemu64:timing/load-from-uncached-vi-on-same-bank` | MM runs mode 0 and nemu64's vi_init mode 2. verify-63 variant C: one fetched line in mode 2 fails nemu64 Load Miss VI on and the same-bank median again, so the mode 2 hardware data fit three lines |
+| `vi.display-window` | 480-rows rule | model-choice | inferred, none published for the fetch: fetch and compose follow ares's display window, 640 x 480 from H 108 and V 34 on NTSC (576 rows from V 44 on PAL), clipped to H_VIDEO and V_VIDEO (vi.cpp window()) | `mm:south-clock-town` | a line outside the window fetches nothing |
 
 ### rdp
 
