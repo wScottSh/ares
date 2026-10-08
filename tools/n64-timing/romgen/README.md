@@ -45,6 +45,7 @@ These are the places where the port is not a direct translation of the Rust sour
 - Inline-asm operands that the compiler allocates (`in(reg)`, `out(reg)`) get fixed registers in the port.
 - `dla` expands to LLVM's six-instruction sequence for the n64 ABI without `$at`. This expansion was inferred from LLVM's MIPS assembler and not checked against a rustc build. The interrupt hazard tests run it between their CP0 writes.
 - A Rust `?` ends a test at its first failed assertion, before the rest of the test runs. Where the rest has side effects, the port puts a `checkpoint()` step at the same place. An example is `CountHazards`, whose later COUNT values carry COUNT past Compare and raise IP7.
+- A set runs only its own tests, but some tests depend on CP0 state left by tests from other sets in upstream's full run. In `cop0hazard`, upstream runs the three Compare tests between `CountHazards` and the software interrupt tests. The last of them, Compare (past), writes Compare = COUNT - 2, and that write clears IP7. The first software interrupt test repeats this write before it runs. Without the write, IP7 stays set from `CountHazards` and the tests read the wrong Cause value.
 - Exception context fields are compared on their low 32 bits.
 - Heap buffers (`UncachedHeapMemory`) are at a fixed `SCRATCH_BASE` with the same alignment.
 
