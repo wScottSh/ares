@@ -189,12 +189,18 @@ auto rdramFramebufferHash() -> u64 {
 //Pixels of the field the VI just finished scanning that differ from RDRAM at
 //that moment, at the origin it scanned: the tearing of plan T11, where a line
 //was fetched before its pixels were drawn. Progressive modes only, where
-//every field composes every row.
+//every field composes every row. It compares the screen as VI::compose wrote
+//it, so a change in the bits the screen drops (16 bpp coverage, 32 bpp alpha)
+//is not a tear.
 auto scanoutTearPixels() -> u64 {
   auto& io = N64::vi.io;
   if(io.colorDepth < 2 || io.serrate) return 0;
+  const bool half = io.colorDepth == 2;
+  const auto screen = N64::vi.screen->pixels(0);
   u64 differ = 0;
-  walkFramebuffer([&](u32 x, u32 y, u32 pixel) { differ += N64::vi.scanned[y * 640 + x] != pixel; }, N64::vi.scannedOrigin);
+  walkFramebuffer([&](u32 x, u32 y, u32 pixel) {
+    differ += screen[y * 640 + x] != (half ? 1 << 24 | pixel >> 1 : pixel >> 8);
+  }, N64::vi.scannedOrigin);
   return differ;
 }
 

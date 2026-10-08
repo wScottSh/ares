@@ -153,7 +153,6 @@ auto VI::compose() -> void {
     u32 y = io.ysubpixel + io.yscale * (dy - io.vstart);
     u32 base = ((y >> 11) - fetch.line) * fetch.pitch;
     auto row = screen->pixels(0).data() + (dy - w.vscanStart) * w.hscanLen;
-    auto raw = scanned + (dy - w.vscanStart) * w.hscanLen;
     u32 x = io.xsubpixel + io.xscale * (w.dx0 - io.hstart);
     for(s32 dx = w.dx0; dx < w.dx1; dx++, x += io.xscale) {
       u32 at = base + (x >> 10) * bpp;
@@ -163,7 +162,6 @@ auto VI::compose() -> void {
         const u8* p = fetch.bytes + at;
         pixel = bpp == 2 ? p[0] << 8 | p[1] : p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
       }
-      raw[dx - w.hscanStart] = pixel;
       row[dx - w.hscanStart] = bpp == 2 ? 1 << 24 | pixel >> 1 : pixel >> 8;
     }
   }
