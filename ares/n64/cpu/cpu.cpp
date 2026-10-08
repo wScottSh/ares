@@ -91,13 +91,17 @@ auto CPU::setInterruptPending(u32 bit, bool value) -> void {
 
 
 auto CPU::instruction() -> void {
-  if(auto interrupts = scc.cause.interruptPending & scc.status.interruptMask) {
-    if(scc.status.interruptEnable && !scc.status.exceptionLevel && !scc.status.errorLevel) {
-      debugger.interrupt(scc.cause.interruptPending);
-      step(pclk(1));
-      exception.interrupt();
-      return;
-    }
+  //An interrupt is taken only when it was pending at the previous instruction boundary
+  //as well (behavior cpu.irq-sample).
+  bool interrupt = scc.cause.interruptPending & scc.status.interruptMask
+    && scc.status.interruptEnable && !scc.status.exceptionLevel && !scc.status.errorLevel;
+  bool sampled = interruptSampled;
+  interruptSampled = interrupt;
+  if(interrupt && sampled) {
+    debugger.interrupt(scc.cause.interruptPending);
+    step(pclk(1));
+    exception.interrupt();
+    return;
   }
 
   if (scc.nmiPending) {
@@ -138,6 +142,8 @@ auto CPU::instructionEpilogue() -> void {
 auto CPU::power(bool reset) -> void {
   Thread::reset();
   countClock = {};
+  countResume = {};
+  interruptSampled = false;
 
   context.endian = Context::Endian::Big;
   context.mode = Context::Mode::Kernel;
