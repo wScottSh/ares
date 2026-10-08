@@ -59,12 +59,14 @@ def hpos(p):
     median = statistics.median(lats)
     outliers = [(off, lat) for off, lat in samples if lat >= median + 20]
     line = p["line_ticks"]
-    #Offset 0 is the HSYNC the sync loop saw, so the window holds one HSYNC per
-    #whole line after it. The line length is measured, so an HSYNC near the window
-    #end can sit past full_lines * line: count every outlier, not only those before it.
+    #Offset 0 is the HSYNC the sync loop saw. The window's first and last HSYNCs sit at its
+    #edges, and the ROM's one-line estimate of `line` can be off by a refresh holdoff (2926 vs
+    #2975 ticks after a 20-byte code shift), which moves an edge HSYNC in or out. So the rate
+    #counts only the HSYNCs half a line or more inside both edges: lines 1 .. full_lines - 1.
     full_lines = (samples[-1][0] + samples[-1][1]) // line
+    interior = [off for off, _ in outliers if line / 2 <= off < (full_lines - 0.5) * line]
     out = {"median_pclk": 2 * median, "full_lines": full_lines,
-           "outliers_per_line": round(len(outliers) / full_lines, 3) if full_lines else "-",
+           "outliers_per_line": round(len(interior) / (full_lines - 1), 3) if full_lines > 1 else "-",
            "holdoff_rclk_max": round(max((lat - median for _, lat in outliers), default=0) * 4 / 3, 2),
            "outlier_hpos_ticks": "/".join(str(off % line) for off, _ in outliers) or "-"}
     return out
