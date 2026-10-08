@@ -17,6 +17,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIB = 1 << 20
 TICKS_PER_MS = 46875
+#n64-systembench xcycles (main.c:8-15): one COUNT tick is 12, one pclk 6, one rclk 9.
+XCYCLES = {"tick": 12, "pclk": 6, "rclk": 9}
+#A cached load's whole cost on hardware (nemu64-test Cached loads and store, cpu.dcache-hit), so a
+#cached-read sample less this is the harness's own overhead (research/cpu-memory-costs.md TL;DR).
+CACHED_HIT_PCLK = 1
+SYSBENCH_ROMS = ("uncached-sizes", "rcp-reg-read", "pif-ram-read", "pi-io-write", "si-dma")
 
 
 def parse(stdout_txt):
@@ -59,6 +65,13 @@ def hpos(p):
     return out
 
 
+def sysbench(p):
+    """n64-systembench's reported value: the mean without the lowest and highest rep in xcycles
+    (TIMEIT_MULTI, main.c:105-127), in whole cycles of its unit, rounded down (main.c:640-653)."""
+    x = (p["sum"] - p["min"] - p["max"]) * XCYCLES["tick"] // (p["reps"] - 2)
+    return x // XCYCLES[p["unit"]]
+
+
 def derive(rom, points):
     out = {name: {} for name in points}
 
@@ -81,6 +94,15 @@ def derive(rom, points):
             per(name, "rclk_net", (p["min"] - points["poll"]["min"]) * 4 / 3, 2)
         if rom == "uncached-vs-hpos":
             out[name].update(hpos(p))
+        if rom in SYSBENCH_ROMS:
+            per(name, f"sb_{p['unit']}", sysbench(p))
+    for name, p in points.items():
+        base = points.get(f"c{p.get('bits', 32)}")
+        if rom in ("uncached-sizes", "rcp-reg-read", "pif-ram-read") and base and p is not base:
+            overhead = sysbench(base) - CACHED_HIT_PCLK
+            per(name, "overhead_pclk", overhead)
+            if p["unit"] == "pclk":
+                per(name, "net_pclk", sysbench(p) - overhead)
     if rom in ("dirty-row-sweep", "dirty-miss-isolated"):
         for name in points:
             if name.startswith("dirty-"):

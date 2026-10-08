@@ -44,4 +44,15 @@ memset = derive("mi-memset-uncached", {"vi-on": {"bytes": 1 << 20, "min": 120468
 check("25.7 ms/MiB uncached memset", memset["ms_per_mib"], 25.7)
 check("18.38 pclk per SD", memset["pclk_per_sd"], 18.382)
 
+sb = derive("uncached-sizes", {
+    "c32": {"bits": 32, "unit": "pclk", "reps": 50, "min": 1, "max": 9, "sum": 1 + 9 + 48 * 2},
+    "u32": {"bits": 32, "unit": "pclk", "reps": 50, "min": 16, "max": 17, "sum": 16 + 17 + 24 * 16 + 24 * 17},
+})
+check("systembench drops the lowest and highest rep: 48 x 2 ticks = 4 pclk", sb["c32"]["sb_pclk"], 4)
+check("16.5 ticks = 33 pclk", sb["u32"]["sb_pclk"], 33)
+check("harness overhead is the cached sample less a 1 pclk hit", sb["u32"]["overhead_pclk"], 3)
+check("net is the sample less the overhead", sb["u32"]["net_pclk"], 30)
+rclk = derive("pi-io-write", {"rom-word": {"unit": "rclk", "reps": 50, "min": 100, "max": 200, "sum": 100 + 200 + 48 * 101}})
+check("101 ticks = 134.67 rclk rounds down to 134", rclk["rom-word"]["sb_rclk"], 134)
+
 sys.exit(1 if failures else 0)

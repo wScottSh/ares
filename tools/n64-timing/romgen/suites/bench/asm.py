@@ -473,6 +473,244 @@ bh_done:
     jr $ra
     addiu $sp, $sp, 64
 
+# a0 = {kernel, reps, flags, kernel args...}: n64-systembench's TIMEIT_MULTI (main.c:105-127),
+# which averages all reps but its lowest and highest. RES[0] = min ticks, RES[1] = max ticks,
+# RES[2] = sum of ticks over the reps; the host takes (sum - min - max) / (reps - 2). The
+# kernel gets a0 = &args and a1 = &RES[3] and returns v0 = COUNT ticks. flags as bench_run.
+bench_multi:
+    addiu $sp, $sp, -48
+    sd $ra, 0($sp)
+    sd $s0, 8($sp)
+    sd $s1, 16($sp)
+    sd $s2, 24($sp)
+    sd $s3, 32($sp)
+    move $s0, $a0
+    move $s3, $a1
+    addiu $t0, $zero, -1
+    sw $t0, 0($s3)
+    sw $zero, 4($s3)
+    sw $zero, 8($s3)
+    lw $s1, 4($s0)
+    lw $t0, 8($s0)
+    andi $t0, $t0, 1
+    beqz $t0, bm_loop
+    nop
+    jal vi_set_type
+    move $a0, $zero
+    move $s2, $v0
+bm_loop:
+    lw $t9, 0($s0)
+    addiu $a0, $s0, 12
+    jalr $t9
+    addiu $a1, $s3, 12
+    lw $t0, 8($s3)
+    addu $t0, $t0, $v0
+    sw $t0, 8($s3)
+    lw $t0, 0($s3)
+    sltu $t1, $v0, $t0
+    beqz $t1, bm_nomin
+    nop
+    sw $v0, 0($s3)
+bm_nomin:
+    lw $t0, 4($s3)
+    sltu $t1, $t0, $v0
+    beqz $t1, bm_nomax
+    nop
+    sw $v0, 4($s3)
+bm_nomax:
+    addiu $s1, $s1, -1
+    bnez $s1, bm_loop
+    nop
+    lw $t0, 8($s0)
+    andi $t0, $t0, 1
+    beqz $t0, bm_out
+    nop
+    jal vi_set_type
+    move $a0, $s2
+bm_out:
+    ld $ra, 0($sp)
+    ld $s0, 8($sp)
+    ld $s1, 16($sp)
+    ld $s2, 24($sp)
+    ld $s3, 32($sp)
+    jr $ra
+    addiu $sp, $sp, 48
+
+# Kernels. args = {addr, warm}. n64-systembench bench_ram_{cached,uncached}_r{8,16,32,64}, bench_siior
+# and bench_rcp_io_r (main.c:163-268): COUNT, one volatile load whose value is unused, COUNT.
+# warm != 0 reads the address once first, outside the timing (the cached benches' setup).
+k_sb_lbu:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    beqz $t1, ksb_lbu_time
+    nop
+    lbu $t2, 0($t0)
+ksb_lbu_time:
+    mfc0 $t3, $count
+    lbu $t2, 0($t0)
+    mfc0 $t4, $count
+    jr $ra
+    subu $v0, $t4, $t3
+
+k_sb_lhu:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    beqz $t1, ksb_lhu_time
+    nop
+    lhu $t2, 0($t0)
+ksb_lhu_time:
+    mfc0 $t3, $count
+    lhu $t2, 0($t0)
+    mfc0 $t4, $count
+    jr $ra
+    subu $v0, $t4, $t3
+
+k_sb_lw:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    beqz $t1, ksb_lw_time
+    nop
+    lw $t2, 0($t0)
+ksb_lw_time:
+    mfc0 $t3, $count
+    lw $t2, 0($t0)
+    mfc0 $t4, $count
+    jr $ra
+    subu $v0, $t4, $t3
+
+k_sb_ld:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    beqz $t1, ksb_ld_time
+    nop
+    ld $t2, 0($t0)
+ksb_ld_time:
+    mfc0 $t3, $count
+    ld $t2, 0($t0)
+    mfc0 $t4, $count
+    jr $ra
+    subu $v0, $t4, $t3
+
+# Kernel. args = {setup reg (0 = none), setup value, stmt reg, stmt value, poll reg}.
+# n64-systembench TIMEIT_WHILE (main.c:75-103), as bench_piiow and bench_sidmaw_ram (main.c:187-204) with cond `reg & (DMA_BUSY | IO_BUSY)`: the
+# setup write, COUNT, the stmt write, then a loop of 8 x (COUNT, poll read) that runs until
+# the 8th poll sees idle. The result ends at the COUNT before the first poll that saw idle.
+k_sb_while:
+    addiu $sp, $sp, -64
+    sd $s0, 0($sp)
+    sd $s1, 8($sp)
+    sd $s2, 16($sp)
+    sd $s3, 24($sp)
+    sd $s4, 32($sp)
+    sd $s5, 40($sp)
+    sd $s6, 48($sp)
+    sd $s7, 56($sp)
+    lw $a2, 0($a0)
+    lw $a3, 4($a0)
+    lw $v1, 8($a0)
+    lw $v0, 12($a0)
+    lw $t9, 16($a0)
+    beqz $a2, ksw_go
+    nop
+    sw $a3, 0($a2)
+ksw_go:
+    mfc0 $t0, $count
+    sw $v0, 0($v1)
+ksw_loop:
+    mfc0 $s0, $count
+    lw $t1, 0($t9)
+    andi $t1, $t1, 3
+    mfc0 $s1, $count
+    lw $t2, 0($t9)
+    andi $t2, $t2, 3
+    mfc0 $s2, $count
+    lw $t3, 0($t9)
+    andi $t3, $t3, 3
+    mfc0 $s3, $count
+    lw $t4, 0($t9)
+    andi $t4, $t4, 3
+    mfc0 $s4, $count
+    lw $t5, 0($t9)
+    andi $t5, $t5, 3
+    mfc0 $s5, $count
+    lw $t6, 0($t9)
+    andi $t6, $t6, 3
+    mfc0 $s6, $count
+    lw $t7, 0($t9)
+    andi $t7, $t7, 3
+    mfc0 $s7, $count
+    lw $t8, 0($t9)
+    andi $t8, $t8, 3
+    bnez $t8, ksw_loop
+    nop
+    beqz $t1, ksw_end
+    move $v0, $s0
+    beqz $t2, ksw_end
+    move $v0, $s1
+    beqz $t3, ksw_end
+    move $v0, $s2
+    beqz $t4, ksw_end
+    move $v0, $s3
+    beqz $t5, ksw_end
+    move $v0, $s4
+    beqz $t6, ksw_end
+    move $v0, $s5
+    beqz $t7, ksw_end
+    move $v0, $s6
+    move $v0, $s7
+ksw_end:
+    subu $v0, $v0, $t0
+    ld $s0, 0($sp)
+    ld $s1, 8($sp)
+    ld $s2, 16($sp)
+    ld $s3, 24($sp)
+    ld $s4, 32($sp)
+    ld $s5, 40($sp)
+    ld $s6, 48($sp)
+    ld $s7, 56($sp)
+    jr $ra
+    addiu $sp, $sp, 64
+
+# Kernel. args = {words (16, the 8 joybus dwords), buf (KSEG1), out phys}. n64-systembench
+# bench_joybus_* and joybus_write/joybus_read (main.c:294-511): the setup stores the command block to buf and runs
+# joybus_write (ack SI_STATUS, SI DMA buf -> PIF RAM, poll SI_STATUS idle, ack); the timed
+# stmt is joybus_read: SI_DRAM_ADDR = out, SI_PIF_ADDR_RD64B = PIF RAM, poll SI_STATUS idle.
+k_sb_joybus:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    lw $t2, 8($a0)
+    addiu $t3, $zero, 16
+ksj_copy:
+    lw $t4, 0($t0)
+    sw $t4, 0($t1)
+    addiu $t0, $t0, 4
+    addiu $t3, $t3, -1
+    bnez $t3, ksj_copy
+    addiu $t1, $t1, 4
+    lw $t1, 4($a0)
+    li $t5, 0xA4800000
+    li $t6, 0x1FC007C0
+    sw $zero, 0x18($t5)
+    sw $t1, 0x0($t5)
+    sw $t6, 0x10($t5)
+ksj_wpoll:
+    lw $t4, 0x18($t5)
+    andi $t4, $t4, 3
+    bnez $t4, ksj_wpoll
+    nop
+    sw $zero, 0x18($t5)
+    mfc0 $t7, $count
+    sw $t2, 0x0($t5)
+    sw $t6, 0x4($t5)
+ksj_rpoll:
+    lw $t4, 0x18($t5)
+    andi $t4, $t4, 3
+    bnez $t4, ksj_rpoll
+    nop
+    mfc0 $t8, $count
+    jr $ra
+    subu $v0, $t8, $t7
+
 str_bench_line: .asciiz " line_ticks="
 str_bench_samples: .asciiz " samples="
 str_bench_count: .asciiz " count="
