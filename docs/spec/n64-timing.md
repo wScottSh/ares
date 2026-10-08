@@ -21,9 +21,9 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Status | Meaning | Rows |
 |---|---|---|
-| fail | at least one check failed; the detail in Check results gives the residual | 34 |
+| fail | at least one check failed; the detail in Check results gives the residual | 30 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 10 |
-| pass | a check other than the row's fit data passed, and none failed | 63 |
+| pass | a check other than the row's fit data passed, and none failed | 67 |
 | pending:build-corpora | no check decided the row: build-corpora: corpus needs a libdragon or cargo build behind the build-corpora gate | 1 |
 | pending:calibration-16 | no check decided the row: calibration-16: no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it | 12 |
 | pending:no-corpus | no check decided the row: no-corpus: no corpus in the program measures this behavior; it stays pending until one does | 15 |
@@ -42,7 +42,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Behavior | Value | Basis | Reference | Checks | Result | Note |
 |---|---|---|---|---|---|---|
-| `scheduler.tie-rank` | Bus,Events,SysAD,RDP,RSP,CPU order | model-choice | none: equal-time ordering between independent RCP blocks is unpublished | `det` `stepcap` `unit:timeline` | **fail**: `det` fail; `stepcap` pass; `unit:timeline` pass | convention; cannot be observed by a test ROM except through an exact tie |
+| `scheduler.tie-rank` | Bus,Events,SysAD,RDP,RSP,CPU order | model-choice | none: equal-time ordering between independent RCP blocks is unpublished | `det` `stepcap` `unit:timeline` | **pass**: `det` pass; `stepcap` pass; `unit:timeline` pass | convention; cannot be observed by a test ROM except through an exact tie |
 
 ### ri
 
@@ -70,7 +70,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | `ri.overhead-vi` | 0 rclk | derived | vi-fetch.md MM bus-occupancy estimate: a 128 B VI read holds the channel for the NEC wire time (74 tc hit, 96 clean miss, 104 dirty miss) plus the 2 tc post-read gap; no reference charges scanout the RI overhead that ri.overhead-read fits from SP DMA throughput (B10) | `nemu64:timing/load-from-uncached-vi-on-other-bank` `nemu64:timing/load-miss-vi-on` | **pass**: `nemu64:timing/load-from-uncached-vi-on-other-bank` pass; `nemu64:timing/load-miss-vi-on` pass | ri counters on MM: VI channel share against the 6.5-9.0% band of vi-fetch.md |
 | `ri.overhead-write` | 0 rclk | derived | NEC uPD488170L: a 128 B write holds the channel 17 rclk on the wire plus the 1 rclk post-write gap (B8) and no RI overhead; with the VI fetch and refresh on the channel this gives n64brew's RSP DMA memset 2.58 ms/MiB = 6.5 B/rclk (B10) | `bench:mi-memset-rspdma` `bench:sp-dma-sweep` | **fail**: `bench:mi-memset-rspdma` pass; `bench:sp-dma-sweep` fail | The value is the datasheet's, with no term added. It assumes n64brew's memset table was measured with the VI on: the page states no video state (verify-63), and the support is circumstantial, a 128 B write at 17 wire + 1 gap = 18 rclk is 7.11 B/rclk, times (1 - 0.074 VI - 0.0125 refresh) = 6.50, the table's RSP DMA rate. Under a VI-off table the 1 rclk VI-off fit of master applies (6.56 B/rclk VI off). bench:sp-dma-sweep asserts the same n64brew rate through one 4 KiB transfer |
 | `ri.overhead-rdp` | 0 rclk | derived | NEC uPD488170L: an RDP burst holds the RDRAM channel for its wire time plus the post-transaction gap (B8), as VI scanout does (ri.overhead-vi); the RDP's own per-burst cost occupies its memory interface, not the channel (rdp.mem-overhead-read, rdp.mem-overhead-write). Thar0 VI-on configs with writes only slow 0.5-1.6% on hardware (nozb-visep/visame-noimrd, 1- and 2-cycle), which a channel-held overhead of the fitted size would raise to about 7% | `thar0:separate-bank` `thar0:imrd-1cycle` | **fail**: `thar0:separate-bank` fail; `thar0:imrd-1cycle` fail | supersedes the T12 copy of the VI-off write fit (20 units) |
-| `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` | **fail**: `det` fail; `stepcap` pass |  |
+| `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` | **pass**: `det` pass; `stepcap` pass |  |
 
 ### cpu
 
@@ -173,8 +173,8 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | `vi.burst` | 128 B | model-choice | inference from the 64-px X_SCALE erratum and the RI maximum (vi-fetch.md) | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | T11 run, MM: scanout holds the channel 293.4 rclk per HSYNC line, 7.39% of a 3972-rclk NTSC line (vi-fetch.md 6.5-9.0% frame average). Unmeasured inputs: this burst size and ri.rank.vi; calibration #16 |
 | `vi.fetch-window` | active-line rule | wiki | n64brew VI_H_VIDEO; US 6,166,748 'in synchronism with the line scanning' | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass |  |
 | `vi.vclk-per-pixel` | 4 vclk/px | wiki | VI_H_TOTAL counts the line in quarter pixels and VI_H_VIDEO in pixels: NTSC H_TOTAL 3093 is a 773.5-px line, H_VIDEO 108-748 its 640 active px (vi-fetch.md, MM bus-occupancy inputs; n64brew Video_Interface) | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass |  |
-| `vi.register-sample` | per-line rule | model-choice | inferred, none published: each line's HSYNC reads ORIGIN, WIDTH, the scales and the H/V windows afresh, with no per-field latch (vi.cpp startFetch) | `mm:south-clock-town` `det` | **fail**: `mm:south-clock-town` pending:calibration-16; `det` fail | a mid-field register write takes effect at the next line |
-| `vi.fetch-overrun` | keep-fetching rule | model-choice | inferred, none published: a line whose bursts are still pending at the next HSYNC keeps fetching and that next line fetches nothing; only a VI whose line is shorter than its H_VIDEO window can reach it | `det` `stepcap` | **fail**: `det` fail; `stepcap` pass |  |
+| `vi.register-sample` | per-line rule | model-choice | inferred, none published: each line's HSYNC reads ORIGIN, WIDTH, the scales and the H/V windows afresh, with no per-field latch (vi.cpp startFetch) | `mm:south-clock-town` `det` | **pass**: `mm:south-clock-town` pending:calibration-16; `det` pass | a mid-field register write takes effect at the next line |
+| `vi.fetch-overrun` | keep-fetching rule | model-choice | inferred, none published: a line whose bursts are still pending at the next HSYNC keeps fetching and that next line fetches nothing; only a VI whose line is shorter than its H_VIDEO window can reach it | `det` `stepcap` | **pass**: `det` pass; `stepcap` pass |  |
 | `vi.unfetched-sample` | 0 rule | model-choice | inferred, none published: a sample outside the three fetched lines (a Y_SCALE above 1 line per output line, or an X_SCALE past the line) has no fetched bytes and reads 0 | `mm:south-clock-town` | **pending:calibration-16**: `mm:south-clock-town` pending:calibration-16 | MM runs Y_SCALE 1.0 and never reaches it (vi-fetch.md, MM bus-occupancy inputs) |
 | `vi.aa-mode-lines` | ignored rule | model-choice | inferred: vi.lines-per-output-line holds in every AA mode. rcp.h and n64brew VI_CTRL say mode 1 fetches extra lines only if needed and do not state the mode 2 and 3 fetch (vi-fetch.md, AA mode semantics) | `nemu64:timing/load-miss-vi-on` `nemu64:timing/load-from-uncached-vi-on-same-bank` | **fail**: `nemu64:timing/load-miss-vi-on` pass; `nemu64:timing/load-from-uncached-vi-on-same-bank` fail | MM runs mode 0 and nemu64's vi_init mode 2. verify-63 variant C: one fetched line in mode 2 fails nemu64 Load Miss VI on and the same-bank median again, so the mode 2 hardware data fit three lines |
 | `vi.display-window` | 480-rows rule | model-choice | inferred, none published for the fetch: fetch and compose follow ares's display window, 640 x 480 from H 108 and V 34 on NTSC (576 rows from V 44 on PAL), clipped to H_VIDEO and V_VIDEO (vi.cpp window()) | `mm:south-clock-town` | **pending:calibration-16**: `mm:south-clock-town` pending:calibration-16 | a line outside the window fetches nothing |
@@ -249,12 +249,12 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run /home/wscottsh/n64-timing/results/t17/after on 40ca261fd).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run /home/wscottsh/n64-timing/results/t17/final on e336e749e).
 
 | Check | Result | Detail |
 |---|---|---|
 | `bench:dirty-miss-isolated` | pending:calibration-16 | clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 20 (expected -) report |
-| `bench:dirty-row-sweep` | pending:calibration-16 | 0 of 5 points pass; first failing dirty-8 dirty_minus_clean_pclk 0 (expected 0, -..-) |
+| `bench:dirty-row-sweep` | pending:calibration-16 | dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk 2 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points |
 | `bench:ifill-isolated` | pending:calibration-16 |  |
 | `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail |
 | `bench:mi-memset-rspdma` | pass | vi-on b_per_rclk 6.501 (expected 6.5, 6.49..6.515) pass |
@@ -273,7 +273,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:uncached-sizes` | pending:no-rom |  |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1) pass |
 | `bench:wb-fifth-store` | pending:calibration-16 |  |
-| `det` | fail | det-mm: no verdict line; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
+| `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
 | `mm:filesel-empty` | pass | filesel: mean 1.0113, 98.9% of 444 game frames at 1 field(s) |
 | `mm:filesel-named` | fail | filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) |
 | `mm:filesel-options` | pass | filesel-options: mean 1.0000, 100.0% of 598 game frames at 1 field(s) |
@@ -317,7 +317,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `rdpstat:xbus` | pass | 3 of 3 tests pass |
 | `snapper:rect-nosync` | pass | RDP Rect No-Sync-Env 1C: 20/20 match; RDP Rect No-Sync-Env 2C: 40/40 match; RDP Rect No-Sync-Fill: 20/20 match |
 | `snapper:span-tri` | pass | RDP Test-Mode - Span Tri: 432/432 match |
-| `stepcap` | pass | stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 24 fields with trace_hash |
+| `stepcap` | pass | stepcap-mm: stepcap: PASS, 29 files byte-identical, 8219 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 24 fields with trace_hash |
 | `thar0:ac-zbsame-vioff-imrd-1cyc` | fail | model 108697 vs console 105999 (105940..106092), +2.55% |
 | `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` | fail | model 170392 vs console 166352 (166182..166520), +2.43% |
 | `thar0:alpha-fail-1cycle` | pass | model 77772 vs console 77772 (77772..77772), +0.00% |

@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run /home/wscottsh/n64-timing/results/t17/after on 40ca261fd). 34 fail, 10 fit only, 63 pass, 1 pending:build-corpora, 12 pending:calibration-16, 15 pending:no-corpus, 14 pending:no-rom.
+The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run /home/wscottsh/n64-timing/results/t17/final on e336e749e). 30 fail, 10 fit only, 67 pass, 1 pending:build-corpora, 12 pending:calibration-16, 15 pending:no-corpus, 14 pending:no-rom.
 
 Every behavior is built from its reference. The rows below are the ones the program cannot decide yet, the ones whose checks fail against hardware data, and the ones checked only against their own fit data.
 
@@ -57,7 +57,6 @@ Every behavior is built from its reference. The rows below are the ones the prog
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `scheduler.tie-rank` | model-choice | `det`: det-mm: no verdict line; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
 | `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail |
 | `ri.octbyte` | datasheet | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
@@ -70,7 +69,6 @@ Every behavior is built from its reference. The rows below are the ones the prog
 | `ri.overhead-read` | fit | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.overhead-write` | derived | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `ri.overhead-rdp` | derived | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19%; `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
-| `ri.request-latency` | model-choice | `det`: det-mm: no verdict line; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
 | `cpu.dfill-total` | measured | `nemu64:timing/load-miss-vi-off`: 0 of 1 tests pass |
 | `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail |
 | `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail |
@@ -81,8 +79,6 @@ Every behavior is built from its reference. The rows below are the ones the prog
 | `pi.halfword-bias` | wiki | `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
 | `pi.block-writeback` | derived | `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
 | `vi.lines-per-output-line` | vendor | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
-| `vi.register-sample` | model-choice | `det`: det-mm: no verdict line; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
-| `vi.fetch-overrun` | model-choice | `det`: det-mm: no verdict line; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
 | `vi.aa-mode-lines` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `rdp.atomic-dead` | vendor | `rdpstat:1prim`: 2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px |
 | `rdp.span-read-latency` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181098 vs console 174059 (173832..174382), +4.04%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232652 vs console 245639 (245078..246077), -5.29%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199069 vs console 208861 (208473..209121), -4.69%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) |
@@ -119,5 +115,5 @@ These checks are gated too, but another check already decides their row.
 | `pi.page-setup` | fail | `pidma:logs` pending (build-corpora) |
 | `pi.halfword-bias` | fail | `pidma:logs` pending (build-corpora) |
 | `pi.block-writeback` | fail | `pidma:logs` pending (build-corpora) |
-| `vi.register-sample` | fail | `mm:south-clock-town` pending (calibration-16) |
+| `vi.register-sample` | pass | `mm:south-clock-town` pending (calibration-16) |
 | `rdp.primitive-base` | fit only | `bench:rdp-rectn` pending (calibration-16) |
