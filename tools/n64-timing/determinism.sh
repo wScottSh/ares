@@ -15,7 +15,7 @@ mode=determinism
 if [ "${1:-}" = "--step-cap" ]; then mode=stepcap; shift; fi
 rom="${1:?usage: determinism.sh [--step-cap] ROM [FRAMES]}"
 frames="${2:-600}"
-out="${DET_OUT:-$N64_TIMING_HOME/$mode/$(basename "$rom" | tr -c 'A-Za-z0-9._-\n' _)}"
+out="${DET_OUT:-$N64_TIMING_HOME/$mode/$(basename "$rom" | tr -c 'A-Za-z0-9._\n-' _)}"
 exe="${N64_RUN:-$(bash "$here/build.sh" | tail -n 1)}"
 
 rm -rf "$out/run1" "$out/run2"

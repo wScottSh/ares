@@ -4,7 +4,11 @@ Scripts that build this fork's headless N64 runner (`tools/n64-run`), run ROMs t
 
 All host-side state lives under `$N64_TIMING_HOME` (default `~/n64-timing`): build trees, ROMs, and results. Nothing in this directory writes into the repository, and no ROM is committed.
 
-## Prerequisites (Windows)
+## Prerequisites
+
+The scripts detect the host: `cygpath` on the PATH means Windows (MSYS2), anything else is Linux. `host.sh`, which every script sources, holds the per-host differences: the Python command and where the CMake tree puts each target.
+
+### Windows
 
 - MSYS2 at `C:\msys64` with the clang64 toolchain:
 
@@ -15,13 +19,20 @@ All host-side state lives under `$N64_TIMING_HOME` (default `~/n64-timing`): bui
 - Git Bash to run the scripts, and Python 3 for the result parser.
 - Docker Desktop, only for `build-nemu64.sh`.
 
+### Linux
+
+- A C++ compiler, CMake and Ninja. `build.sh` uses clang when `clang++` is on the PATH, else gcc. On Ubuntu: `apt install g++ cmake ninja-build`.
+- Python 3 (`python3` is enough; `python` is used when present).
+- For `romgen/suites/snapper/fetch.sh`: `7z` or `7zz` (Ubuntu `7zip`). `git-lfs` is optional.
+- Docker, only for `build-nemu64.sh`.
+
 ## Build the runner
 
 ```sh
 tools/n64-timing/build.sh
 ```
 
-The script configures `-DARES_CORES=n64`, `RelWithDebInfo`, and Ninja on first use, then builds only the `n64-run` target. It prints the binary path, `$N64_TIMING_HOME/build/<worktree name>/n64-run/rundir/n64-run.exe`. A clean build takes about 50 seconds on the reference machine.
+The script configures `-DARES_CORES=n64`, `RelWithDebInfo`, and Ninja on first use, then builds only the `n64-run` target. It prints the binary path: `$N64_TIMING_HOME/build/<worktree name>/n64-run/rundir/n64-run.exe` on Windows, `$N64_TIMING_HOME/build/<worktree name>/rundir/bin/n64-run` on Linux. `N64_BUILD_DIR` overrides the build directory. A clean build takes about 50 seconds on the Windows reference machine.
 
 ## Run a ROM
 
@@ -123,7 +134,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ### Unit tests
 
-`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` in the build directory, or `ctest` there. With no argument it runs every test; an argument names one, as the `checks.tsv` selector does (`timeline`, `ri-cost-table`). `unit:timeline` drives `Timing::Timeline` with scripted actors. `unit:ri-cost-table` drives the RI's channel model (`ares/n64/ri/bus.hpp`) alone: wire costs at row hit and miss, arbitration order and refresh. It also builds `n64-timing-dpc-regs` (`unit:dpc-regs`), which drives the DPC register block and the RDP cost model in `ares/n64/rdp/timed.hpp` without a timeline.
+`tools/n64-timing/build.sh` also builds `n64-timing-tests`, the host tests behind the `unit:` checks. Run `n64-timing-tests/rundir/n64-timing-tests.exe` (Windows) or `rundir/bin/n64-timing-tests` (Linux) in the build directory, or `ctest` there. With no argument it runs every test; an argument names one, as the `checks.tsv` selector does (`timeline`, `ri-cost-table`). `unit:timeline` drives `Timing::Timeline` with scripted actors. `unit:ri-cost-table` drives the RI's channel model (`ares/n64/ri/bus.hpp`) alone: wire costs at row hit and miss, arbitration order and refresh. It also builds `n64-timing-dpc-regs` (`unit:dpc-regs`), which drives the DPC register block and the RDP cost model in `ares/n64/rdp/timed.hpp` without a timeline.
 
 ## nemu64-test corpus
 
