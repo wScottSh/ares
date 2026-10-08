@@ -593,6 +593,22 @@ ksb_ld_time:
     jr $ra
     subu $v0, $t4, $t3
 
+# Kernel. args = {addr0, addr1, addr2, addr3}. n64-systembench bench_ram_uncached_r32_{seq,
+# random,multibank} (main.c:270-292): COUNT, four volatile LWs whose values are unused, COUNT.
+k_sb_lw4:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    lw $t2, 8($a0)
+    lw $t3, 12($a0)
+    mfc0 $t4, $count
+    lw $t5, 0($t0)
+    lw $t5, 0($t1)
+    lw $t5, 0($t2)
+    lw $t5, 0($t3)
+    mfc0 $t6, $count
+    jr $ra
+    subu $v0, $t6, $t4
+
 # Kernel. args = {setup reg (0 = none), setup value, stmt reg, stmt value, poll reg, jitter}.
 # n64-systembench TIMEIT_WHILE (main.c:75-103), as bench_piiow, bench_sidmaw_{ram,rom} and
 # bench_siiow (main.c:187-227) with cond `reg & (DMA_BUSY | IO_BUSY)`: the setup write, COUNT,

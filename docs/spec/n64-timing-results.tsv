@@ -1,12 +1,13 @@
-# standing run sysbench2/item1 on 0ee24be3c
+# standing run sysbench2/item2 on 5e2d9bfad
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 20 (expected -) report
-bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk 2 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
+bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 2 (expected 0) report; dirty-800 dirty_minus_clean_pclk 2 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
 bench:ifill-isolated	pending:report-only	
-bench:mi-memset-cached	fail	vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail
+bench:mi-memset-cached	fail	vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail
 bench:mi-memset-rspdma	pass	vi-on b_per_rclk 6.498 (expected 6.5, 6.49..6.515) pass
-bench:mi-memset-uncached	fail	vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail
-bench:pi-dma-sizes	fail	3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93)
+bench:mi-memset-uncached	fail	vi-on pclk_per_sd 17.719 (expected 18.38, 18.346..18.418) fail
+bench:pi-dma-sizes	fail	3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93)
+bench:pi-io-read	fail	rom-word sb_rclk 181 (expected 144, 142..146) fail
 bench:pi-io-write	pass	rom-word sb_rclk 133 (expected 134, 132..136) pass
 bench:pif-ram-read	pass	pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948) pass
 bench:rcp-reg-read	pass	vi-control net_pclk 21 (expected 22, 21..23) pass
@@ -16,13 +17,26 @@ bench:rdp-rectn	pending:report-only	rect-320x6 clock 2069 (expected 2021) report
 bench:rdp-setter-sweep	pass	4 of 4 points pass
 bench:rdp-sync-sweep	pass	pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5) pass; load-256 per_sync_clk 25.051 (expected 25, 24.5..25.5) pass
 bench:si-dma	pass	write64 sb_rclk 4067 (expected 4065, 4056.87..4073.13) pass
+bench:si-dma-accessory	fail	accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail
+bench:si-dma-empty-0b	pass	empty-0b sb_rclk 15060 (expected 15030, 14999.94..15060.06) pass
+bench:si-dma-empty-1b	fail	empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail
+bench:si-dma-empty-32b	fail	empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail
+bench:si-dma-empty-4b	fail	empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail
+bench:si-dma-empty-56b	fail	empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail
+bench:si-dma-empty-63b	fail	empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail
+bench:si-dma-empty-8b	fail	empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail
 bench:si-dma-read64-1	fail	read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail
 bench:si-dma-read64-2	pending:report-only	read64-2 sb_rclk 57890 (expected 57972) report
 bench:si-dma-read64-3	pending:report-only	read64-3 sb_rclk 77321 (expected 77924) report
 bench:si-dma-read64-4	pending:report-only	read64-4 sb_rclk 96734 (expected 97890) report
-bench:sp-dma-sweep	pass	wr-4096-off0 b_per_rclk 6.508 (expected 6.5, 6.49..6.515) pass
+bench:si-dma-write64-rom	fail	write64-rom sb_rclk 4068 (expected 2144, 2139.712..2148.288) fail
+bench:si-io-write	fail	pif-ram sb_rclk 2148 (expected 2158, 2153.684..2162.316) fail
+bench:sp-dma-sweep	pass	wr-4096-off0 b_per_rclk 6.495 (expected 6.5, 6.49..6.515) pass
 bench:uncached-sizes	pass	u64 net_pclk 35 (expected 35, 34..36) pass
 bench:uncached-sizes-u32	pass	u32 net_pclk 32 (expected 32, 31..33) pass
+bench:uncached-sizes-u32-banked	fail	u32-banked net_pclk 131 (expected 134, 133..135) fail
+bench:uncached-sizes-u32-rand	pass	u32-rand net_pclk 131 (expected 132, 131..133) pass
+bench:uncached-sizes-u32-seq	pass	u32-seq net_pclk 131 (expected 132, 131..133) pass
 bench:uncached-vs-hpos	pass	bank5 outliers_per_line 1.0 (expected 1, 1..1) pass
 bench:wb-fifth-store	pending:report-only	
 det	pass	det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash

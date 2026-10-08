@@ -22,7 +22,7 @@ XCYCLES = {"tick": 12, "pclk": 6, "rclk": 9}
 #A cached load's whole cost on hardware (nemu64-test Cached loads and store, cpu.dcache-hit), so a
 #cached-read sample less this is the harness's own overhead (research/cpu-memory-costs.md TL;DR).
 CACHED_HIT_PCLK = 1
-SYSBENCH_ROMS = ("uncached-sizes", "rcp-reg-read", "pif-ram-read", "pi-io-write", "si-dma")
+SYSBENCH_ROMS = ("uncached-sizes", "rcp-reg-read", "pif-ram-read", "pi-io-read", "pi-io-write", "si-io-write", "si-dma")
 
 
 def parse(stdout_txt):
@@ -98,7 +98,7 @@ def derive(rom, points):
             per(name, f"sb_{p['unit']}", sysbench(p))
     for name, p in points.items():
         base = points.get(f"c{p.get('bits', 32)}")
-        if rom in ("uncached-sizes", "rcp-reg-read", "pif-ram-read") and base and p is not base:
+        if rom in ("uncached-sizes", "rcp-reg-read", "pif-ram-read", "pi-io-read") and base and p is not base:
             overhead = sysbench(base) - CACHED_HIT_PCLK
             per(name, "overhead_pclk", overhead)
             if p["unit"] == "pclk":

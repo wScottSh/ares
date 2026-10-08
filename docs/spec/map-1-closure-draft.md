@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench2/item1 on 0ee24be3c). 29 fail, 11 fit only, 3 model-choice, 70 pass, 7 pending:calibration-16, 16 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench2/item2 on 5e2d9bfad). 33 fail, 11 fit only, 3 model-choice, 68 pass, 7 pending:calibration-16, 14 pending:no-corpus, 10 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
@@ -19,10 +19,21 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 | Check | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|
-| `bench:mi-memset-cached` | vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
-| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
-| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
+| `bench:mi-memset-cached` | vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
+| `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.719 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
+| `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
+| `bench:pi-io-read` | rom-word sb_rclk 181 (expected 144, 142..146) fail | `legacy.pi.cart-read` | - |
+| `bench:si-dma-accessory` | accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail | `si.read64-base` `legacy.si.dma-read-controller` | - |
+| `bench:si-dma-empty-1b` | empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-32b` | empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-4b` | empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-56b` | empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-63b` | empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-empty-8b` | empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail | `si.read64-base` `legacy.si.dma-read-short-command` | - |
 | `bench:si-dma-read64-1` | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail | `si.read64-base` `legacy.si.dma-read-controller` `legacy.si.dma-read-empty-port` `legacy.si.dma-read-accessory` `legacy.si.dma-read-short-command` | - |
+| `bench:si-dma-write64-rom` | write64-rom sb_rclk 4068 (expected 2144, 2139.712..2148.288) fail | `si.write64` | - |
+| `bench:si-io-write` | pif-ram sb_rclk 2148 (expected 2158, 2153.684..2162.316) fail | `legacy.si.bus-write` | - |
+| `bench:uncached-sizes-u32-banked` | u32-banked net_pclk 131 (expected 134, 133..135) fail | `cpu.uncached-read-total` | - |
 | `mm:filesel-named` | filesel-named: mean 1.6723, 67.2% of 357 game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
 | `nemu64:timing/load-miss-vi-off` | 0 of 1 tests pass | `cpu.dfill-total` | - |
@@ -47,22 +58,24 @@ None.
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail |
+| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.719 (expected 18.38, 18.346..18.418) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.bank-of` | wiki | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.row-of` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.arbitration` | model-choice | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19% |
 | `ri.rank.vi` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `ri.overhead-rdp` | derived | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19%; `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
+| `cpu.uncached-read-total` | measured | `bench:uncached-sizes-u32-banked`: u32-banked net_pclk 131 (expected 134, 133..135) fail |
 | `cpu.dfill-total` | measured | `nemu64:timing/load-miss-vi-off`: 0 of 1 tests pass |
-| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail |
-| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.72 (expected 18.38, 18.346..18.418) fail |
-| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.735 (expected 71.24, 71.17..71.31) fail |
-| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
-| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
+| `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail |
+| `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.719 (expected 18.38, 18.346..18.418) fail |
+| `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.734 (expected 71.24, 71.17..71.31) fail |
+| `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
 | `pi.block-bytes` | wiki | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures |
-| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
-| `si.read64-base` | derived | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
+| `pi.block-writeback` | derived | `pidma:logs`: replay sizes 8-382 23769..23828/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+11.76% 32-63:-5.88% 64-95:+4.47% 96-127:+2.95% 128-159:+2.55% 160-191:+2.23% 192-223:+1.83% 224-255:+1.88% 256-287:+2.25% 288-319:+3.94% 320-351:+3.30% 352-383:+2.68%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 197.33 (expected 193, 191.07..194.93) |
+| `si.write64` | measured | `bench:si-dma-write64-rom`: write64-rom sb_rclk 4068 (expected 2144, 2139.712..2148.288) fail |
+| `si.read64-base` | derived | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail; `bench:si-dma-empty-1b`: empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail; `bench:si-dma-empty-4b`: empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail; `bench:si-dma-empty-8b`: empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-32b`: empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-56b`: empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail; `bench:si-dma-empty-63b`: empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail; `bench:si-dma-accessory`: accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail |
 | `vi.lines-per-output-line` | vendor | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `vi.aa-mode-lines` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass |
 | `rdp.atomic-dead` | vendor | `rdpstat:1prim`: 2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px |
@@ -72,10 +85,12 @@ None.
 | `rdp.span-slots` | model-choice | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.port-lookahead` | fit | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.read-gate` | vendor | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07%; `thar0:zcmp`: model 108697 vs console 106000 (105940..106088), +2.54% |
-| `legacy.si.dma-read-controller` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
+| `legacy.pi.cart-read` | legacy | `bench:pi-io-read`: rom-word sb_rclk 181 (expected 144, 142..146) fail |
+| `legacy.si.bus-write` | legacy | `bench:si-io-write`: pif-ram sb_rclk 2148 (expected 2158, 2153.684..2162.316) fail |
+| `legacy.si.dma-read-controller` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail; `bench:si-dma-accessory`: accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668) fail |
 | `legacy.si.dma-read-empty-port` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
 | `legacy.si.dma-read-accessory` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
-| `legacy.si.dma-read-short-command` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail |
+| `legacy.si.dma-read-short-command` | legacy | `bench:si-dma-read64-1`: read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974) fail; `bench:si-dma-empty-1b`: empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848) fail; `bench:si-dma-empty-4b`: empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288) fail; `bench:si-dma-empty-8b`: empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-32b`: empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326) fail; `bench:si-dma-empty-56b`: empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34) fail; `bench:si-dma-empty-63b`: empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356) fail |
 
 ## Model choices that only guards check
 
@@ -117,8 +132,6 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.clock.vclk-pal` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.nmi-entry` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.sysad-frozen-step` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `legacy.pi.cart-read` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `legacy.si.bus-write` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.pif.step-quantum` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.pif.boot-timeout` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.ai.power-on-rate` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
