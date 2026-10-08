@@ -118,11 +118,12 @@ auto CPU::instruction() -> void {
   if (!data) return;
   instructionIndex++;
   pipeline.begin();
-  pipeline.issue(*data);
+  auto issued = pipeline.issue(*data);
+  pipeline.inFlight = &issued;
   instructionPrologue(ipu.pc, *data);
   decoderEXECUTE(*data);
   instructionEpilogue();
-  pipeline.retire();
+  pipeline.retire(issued);
   pipeline.end();
 }
 

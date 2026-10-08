@@ -68,7 +68,10 @@ auto CPU::fpuTiming(u32 instruction) -> OpTiming {
   if(function < 0x30) t.late = OpTiming::Late::FpuFd;  //C.cond writes only the condition bit
 
   bool d = format == 17;
-  if(format == 16 || format == 17) switch(function) {
+  //A W or L format op that has an S form raises unimplemented operation after
+  //the S form's latency (behaviors.tsv cpu.exc-fpu-detect).
+  bool sForm = format == 16 || d || ((format == 20 || format == 21) && function != 0x20 && function != 0x21);
+  if(sForm) switch(function) {
   case 0x00: case 0x01: t.cost = CpuFpuAdd; t.fast = Fast::AddSub; break;
   case 0x02: t.cost = d ? CpuFpuMulD : CpuFpuMulS; t.fast = Fast::Mul; break;
   case 0x03: t.cost = d ? CpuFpuDivD : CpuFpuDivS; t.fast = Fast::Div; break;

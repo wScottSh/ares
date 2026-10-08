@@ -58,7 +58,7 @@ struct Pipeline {
     nextpc += 4;
   }
   auto end() -> void {
-    executing = false;
+    inFlight = nullptr;
     state = nstate;
     self.ipu.pc = pc;
   }
@@ -74,14 +74,14 @@ struct Pipeline {
   //pipeline.cpp
   //Stalls until every field the instruction checks is ready. Runs after the fetch
   //has charged the issue slot, before the instruction executes.
-  auto issue(u32 word) -> void;
+  auto issue(u32 word) -> Issued;
   //Charges the instruction's cost beyond its issue slot and records its late result.
   //An instruction that raised an exception does neither: fault() charged it.
-  auto retire() -> void;
+  auto retire(const Issued&) -> void;
   //Charges the refill from the exception vector. An exception raised outside an
   //instruction (interrupt, instruction fetch) charges nothing here.
   auto fault(FaultStage) -> void;
-  auto fpuDetection(u32 word) -> Clock;
+  auto fpuDetection(const Issued&) -> Clock;
   //DCB: called on every cached D-cache access, before a hit is served.
   auto dataCacheAccess(bool store, bool hit) -> void;
   auto fastOperands(OpTiming::Fast, u32 word) -> bool;
@@ -101,6 +101,7 @@ struct Pipeline {
   Clock gprReady[32];
   Clock fprReady[32];
   u64 storeInstruction = 0;  //instructionIndex + 1 of the last cached store; 0 for none
-  Issued issued;             //the instruction between issue() and end()
-  bool executing = false;    //issue() has run and no exception has ended the instruction
+  //The instruction between issue() and end(), until an exception ends it. It lives
+  //on CPU::instruction()'s stack: an Issued member here cost 10% of MM wall time.
+  const Issued* inFlight = nullptr;
 };

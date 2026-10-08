@@ -1,4 +1,4 @@
-auto CPU::Pipeline::issue(u32 word) -> void {
+auto CPU::Pipeline::issue(u32 word) -> Issued {
   using Late = OpTiming::Late;
   auto t = opTiming(word);
   u8 rs = word >> 21 & 31, rt = word >> 16 & 31, fs = word >> 11 & 31, fd = word >> 6 & 31;
@@ -14,14 +14,13 @@ auto CPU::Pipeline::issue(u32 word) -> void {
 
   Clock cost = t.fast != OpTiming::Fast::None && fastOperands(t.fast, word) ? Timing::Behavior::CpuFpuTrivial : t.cost;
   u8 dest = t.late == Late::FpuFd ? fd : rt;
-  issued = {word, cost - Timing::Behavior::CpuIssue, t.late, dest};
-  executing = true;
+  return {word, cost - Timing::Behavior::CpuIssue, t.late, dest};
 }
 
-auto CPU::Pipeline::retire() -> void {
+auto CPU::Pipeline::retire(const Issued& issued) -> void {
   using namespace Timing::Behavior;
   using Late = OpTiming::Late;
-  if(!executing) return;
+  if(!inFlight) return;
   self.step(issued.extra);
   Clock next = self.clock + CpuIssue;
   switch(issued.late) {
@@ -33,12 +32,22 @@ auto CPU::Pipeline::retire() -> void {
   }
 }
 
+auto CPU::Pipeline::fpuOperand(u32 format, u8 index, bool target) -> FpuOperand {
+  if(format == 17) {
+    u64 bits = std::bit_cast<u64>(target ? self.fgr_t<f64>(index) : self.fgr_s<f64>(index));
+    return {bits >> 52 & 0x7ff, bits & (1ull << 52) - 1, 0x7ff, bool(bits >> 63)};
+  }
+  u32 bits = std::bit_cast<u32>(target ? self.fgr_t<f32>(index) : self.fgr_s<f32>(index));
+  return {bits >> 23 & 0xff, bits & 0x7fffff, 0xff, bool(bits >> 31)};
+}
+
 //The nemu64-test JustFire count runs from the faulting instruction's issue slot
 //through the handler's first, and fetch charges both slots.
 auto CPU::Pipeline::fault(FaultStage stage) -> void {
   using namespace Timing::Behavior;
-  if(!executing) return;
-  executing = false;
+  if(!inFlight) return;
+  auto& issued = *inFlight;
+  inFlight = nullptr;
   Clock slots = CpuIssue + CpuIssue;
   switch(stage) {
   case FaultStage::None: return;
@@ -46,7 +55,7 @@ auto CPU::Pipeline::fault(FaultStage stage) -> void {
   case FaultStage::EX:  self.step(CpuExcEx - slots); return;
   case FaultStage::FPU:
     if((issued.word >> 21 & 31) < 16) return;  //a CTC1-raised FPE has no reference
-    self.step(fpuDetection(issued.word) + CpuExcFpu - slots);
+    self.step(fpuDetection(issued) + CpuExcFpu - slots);
     return;
   }
 }
@@ -57,9 +66,10 @@ auto CPU::Pipeline::fault(FaultStage stage) -> void {
 //takes the operation's latency, trivial operands included. One raised from the
 //operands takes at most CpuFpuTrivial: a denormal or NaN operand; a conversion
 //to W of |x| >= 2^32 or Inf, to L of |x| >= 2^53, or from L of |x| >= 2^55; a
-//W or L format op that has an S form, which takes the S form's latency.
-auto CPU::Pipeline::fpuDetection(u32 word) -> Clock {
+//W or L format op that has an S form (fpuTiming gives it the S form's latency).
+auto CPU::Pipeline::fpuDetection(const Issued& issued) -> Clock {
   using namespace Timing::Behavior;
+  u32 word = issued.word;
   Clock latency = issued.extra + CpuIssue;
   u32 format = word >> 21 & 31, function = word & 0x3f;
   u8 fs = word >> 11 & 31, ft = word >> 16 & 31;
@@ -70,8 +80,6 @@ auto CPU::Pipeline::fpuDetection(u32 word) -> Clock {
       s64 x = self.fgr_s<s64>(fs);
       operands = format == 21 && (x >= 1ll << 55 || x < -(1ll << 55));
     } else {
-      u32 singleForm = (word & ~(31u << 21)) | 16u << 21;
-      latency = fpuTiming(singleForm).cost;
       operands = true;
     }
   } else if(format == 16 || format == 17) {
@@ -132,16 +140,7 @@ auto CPU::Pipeline::power() -> void {
   for(auto& ready : gprReady) ready = {};
   for(auto& ready : fprReady) ready = {};
   storeInstruction = 0;
-  executing = false;
-}
-
-auto CPU::Pipeline::fpuOperand(u32 format, u8 index, bool target) -> FpuOperand {
-  if(format == 17) {
-    u64 bits = std::bit_cast<u64>(target ? self.fgr_t<f64>(index) : self.fgr_s<f64>(index));
-    return {bits >> 52 & 0x7ff, bits & (1ull << 52) - 1, 0x7ff, bool(bits >> 63)};
-  }
-  u32 bits = std::bit_cast<u32>(target ? self.fgr_t<f32>(index) : self.fgr_s<f32>(index));
-  return {bits >> 23 & 0xff, bits & 0x7fffff, 0xff, bool(bits >> 31)};
+  inFlight = nullptr;
 }
 
 auto CPU::Pipeline::serialize(serializer& s) -> void {
