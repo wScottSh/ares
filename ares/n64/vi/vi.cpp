@@ -167,6 +167,7 @@ auto VI::compose() -> void {
       row[dx - w.hscanStart] = bpp == 2 ? 1 << 24 | pixel >> 1 : pixel >> 8;
     }
   }
+  if(2 * (s32)fetch.output + 2 >= w.dy1 && fieldScanned) fieldScanned();
 }
 
 //A line still fetching at the next HSYNC (only a VI programmed with a line

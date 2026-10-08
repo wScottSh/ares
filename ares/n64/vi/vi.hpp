@@ -125,9 +125,11 @@ struct VI : Thread, Memory::RCP<VI> {
 //unserialized:
   bool refreshed;
   //the raw pixels each screen position last composed from, for the runner's
-  //tearing count against RDRAM (n64-run vi_tear)
+  //tearing count against RDRAM (n64-run vi_tear), which it takes when the
+  //field's last line is composed
   u32 scanned[640 * 576];
   u32 scannedOrigin = 0;  //VI_ORIGIN at the field's first composed line
+  std::function<void ()> fieldScanned;
 
 };
 
