@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run t17-fix/after on b7e4d49e9). 31 fail, 10 fit only, 3 model-choice, 60 pass, 12 pending:calibration-16, 16 pending:no-corpus, 7 pending:no-rom, 10 pending:report-only.
+The spec is `docs/spec/n64-timing.md`: 147 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run t17-fix/after on b7e4d49e9). 30 fail, 10 fit only, 3 model-choice, 3 not-built, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 4 pending:no-rom, 10 pending:report-only. 3 behaviors are not built: the code does not use their value (`cpu.uncached-read-dword-total`, `cpu.pif-ram-read`, `pi.io-busy`). Behaviors not built says what the code does instead.
 
 ## Destination
 
@@ -22,7 +22,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 | `bench:mi-memset-cached` | vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
 | `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
 | `bench:pi-dma-sizes` | 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) | `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` | - |
-| `bench:sp-dma-sweep` | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail | `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `ri.overhead-read` `ri.overhead-write` `sp.dma-burst` `sp.dma-rate-check` | `ri.overhead-read` |
+| `bench:sp-dma-sweep` | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail | `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `ri.overhead-read` `ri.overhead-write` `sp.dma-burst` | `ri.overhead-read` |
 | `mm:filesel-named` | filesel-named: mean 1.6884, 68.8% of 353 game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
 | `nemu64:timing/load-miss-vi-off` | 0 of 1 tests pass | `cpu.dfill-total` | - |
@@ -38,6 +38,16 @@ Every check whose result is fail, with its residual, and the rows that name it.
 | `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | model 199069 vs console 208861 (208473..209121), -4.69% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | model 232652 vs console 245639 (245078..246077), -5.29% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:zcmp` | model 108697 vs console 106000 (105940..106088), +2.54% | `rdp.read-gate` | - |
+
+## Behaviors not built
+
+The code does not use these rows' values, so no check result says anything about them.
+
+| Behavior | Basis | Value | What the code does instead |
+|---|---|---|---|
+| `cpu.uncached-read-dword-total` | measured | 37 pclk | an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk |
+| `cpu.pif-ram-read` | measured | 1974 rclk | a PIF RAM read is charged as an RCP register read (ares/n64/memory/io.hpp:CpuRcpRegisterRead, cpu.rcp-register-read 22 pclk), not 1974 rclk |
+| `pi.io-busy` | measured | 134 rclk | a PI I/O write schedules legacy.pi.write-busy, 200 pclk = 133.3 rclk (ares/n64/pi/bus.hpp:PI::writeWord) |
 
 ## Rows whose checks fail
 
@@ -60,7 +70,6 @@ Every check whose result is fail, with its residual, and the rows that name it.
 | `sysad.rdram-write-period` | fit | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.718 (expected 18.38, 18.346..18.418) fail |
 | `sysad.rdram-block-write-period` | fit | `bench:mi-memset-cached`: vi-on pclk_per_line 72.737 (expected 71.24, 71.17..71.31) fail |
 | `sp.dma-burst` | model-choice | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
-| `sp.dma-rate-check` | measured | `bench:sp-dma-sweep`: wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `pi.page-setup` | wiki | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
 | `pi.halfword-bias` | wiki | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures; `bench:pi-dma-sizes`: 3 of 4 points pass; first failing cart-to-ram-8 rclk 196.0 (expected 193, 191.07..194.93) |
 | `pi.block-bytes` | wiki | `pidma:logs`: replay sizes 8-382 23770..23808/24000 within +-3% of hardware min..max over 384 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.78% 64-95:+5.09% 96-127:+2.49% 128-159:+2.88% 160-191:+2.62% 192-223:+2.20% 224-255:+1.91% 256-287:+1.58% 288-319:+3.26% 320-351:+3.27% 352-383:+3.28%; ROM self-check 8 failures |
@@ -104,18 +113,17 @@ No published value exists for these, and no check measures them: their checks ar
 
 | Behavior | Basis | Gate | What closes it |
 |---|---|---|---|
-| `cpu.dcb` | vendor | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `sysad.register-write` | model-choice | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `rdp.cmd-fifo-dwords` | wiki | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `rdp.cmd-fetch-burst` | model-choice | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `rdp.color-half-pixels-16bpp` | model-choice | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `rdp.noise-alpha-dither` | model-choice | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `rdp.noise-dither-bits` | model-choice | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-base` | legacy | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-controller` | legacy | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-empty-port` | legacy | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-accessory` | legacy | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
-| `legacy.si.dma-read-short-command` | legacy | calibration-16 | no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it |
+| `cpu.dcb` | vendor | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `sysad.register-write` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `rdp.cmd-fifo-dwords` | wiki | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `rdp.cmd-fetch-burst` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `rdp.color-half-pixels-16bpp` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `rdp.noise-alpha-dither` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `rdp.noise-dither-bits` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `legacy.si.dma-read-controller` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `legacy.si.dma-read-empty-port` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `legacy.si.dma-read-accessory` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `legacy.si.dma-read-short-command` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `legacy.clock.vclk-pal` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.nmi-entry` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.sysad-frozen-step` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
@@ -132,10 +140,7 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.cart.flash-mn63-sector-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-chip-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-program` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `cpu.uncached-read-dword-total` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `cpu.rcp-register-read` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `cpu.pif-ram-read` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `pi.io-busy` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `si.write64` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `si.read64-base` | derived | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `legacy.pi.write-busy` | legacy | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |

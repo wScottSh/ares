@@ -2,6 +2,8 @@
 
 namespace ares::Nintendo64 {
 
+static_assert(Timing::Behavior::ClockUnit == Timing::UnitsPerSecond, "clock.unit is the unit timing/clock.hpp counts in");
+
 Timing::Timeline timeline;
 
 auto fireEvent(const Timing::Timeline::Event& event) -> void {

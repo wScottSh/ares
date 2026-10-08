@@ -5,15 +5,15 @@ rdpstat:*	rdpstat	tools/n64-timing/romgen/suites/rdpstat	test	file:tools/n64-tim
 snapper:*	snapper	tools/n64-timing/romgen/suites/snapper	test	file:tools/n64-timing/romgen/suites/snapper/expected.tsv	plan R3; snapper64 console dumps (MIT, e1cd8a61fc43)
 pending:no-corpus	pending	-	-	gate	no corpus in the program measures this behavior; it stays pending until one does
 pending:no-rom	pending	-	-	gate	a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it
-pending:calibration-16	pending	-	-	gate	no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it
+pending:calibration-16	pending	-	-	gate	no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it
 pending:report-only	pending	-	-	gate	the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it
 det	det	tools/n64-timing/determinism.sh	every mm scene	equal	two runs byte-identical, stats and trace_hash (plan T2)
 stepcap	stepcap	tools/n64-timing/determinism.sh --step-cap	every mm scene and nemu64 ROM	equal	step-capped run equals the normal run byte for byte (plan T5)
 unit:timeline	unit	n64-timing-tests	timeline	pass	scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5)
 unit:dpc-regs	unit	n64-timing-dpc-regs	dpc-regs	pass	DPC register transitions without a timeline: n64-systemtest tests/rdp START/END masking, START_VALID, status sequencing; n64brew and MiSTer START/END double buffering, DMA_BUSY, counters (plan T12)
-gen	gen	tools/n64-timing/behaviors.py --check	-	pass	this manifest, the behavior table, the generated header and spec, and the literal lint agree (plan T3)
+gen	gen	tools/n64-timing/behaviors.py --check	-	pass	this manifest, the behavior table, the generated header and spec, and the literal lint agree, and the behaviors.py and pidma-replay.py self-tests pass (plan T3)
 mm:file-select	mm	tools/n64-timing/mmbench	file-select	report	Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench)
-mm:south-clock-town	mm	tools/n64-timing/mmbench	south-clock-town	report	Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench)
+mm:south-clock-town	mm	tools/n64-timing/mmbench	south-clock-town	report	Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench). Reports fields per game frame and RSP busy clocks per field; no hardware value is published for them
 mm:filesel-empty	mm	tools/n64-timing/mmbench	filesel_check.py row=empty	self	mm-filesel-slowdown.md acceptance (#11), primary row: empty files, main screen idle at 1 field per game frame (filesel_check.py). Fit data: it chose byte scaling for rdp.mem-overhead-read/-write
 mm:filesel-options	mm	tools/n64-timing/mmbench	filesel_check.py row=options	self	mm-filesel-slowdown.md acceptance (#11), secondary row: Options screen idle at 1 field per game frame (filesel_check.py). Fit data: it chose byte scaling for rdp.mem-overhead-read/-write
 mm:filesel-named	mm	tools/n64-timing/mmbench	filesel_check.py row=named	self	mm-filesel-slowdown.md acceptance (#11), primary row: two named files, main screen idle at 2 fields per game frame (filesel_check.py). Independent of the RDP memory fit
@@ -68,10 +68,10 @@ bench:si-dma-read64-2	bench	si-dma	direction=read64 commands=2	57972	no ROM in p
 bench:si-dma-read64-3	bench	si-dma	direction=read64 commands=3	77924	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA)
 bench:si-dma-read64-4	bench	si-dma	direction=read64 commands=4	97890	no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA)
 bench:wb-fifth-store	bench	wb-fifth-store	-	report	no ROM in plan R1 yet; no public hardware value (vr4300-wb.md)
-bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; TMEM load rate conflict (jgemu-dpc-probe.md)
+bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; reports against two published TMEM load rates that conflict: 8 B/rclk (MiSTer RTL) and the jgemu dpc_probe LOADSZ law, about 15 clocks plus 0.418 clocks per byte (jgemu-dpc-probe.md)
 thar0:alpha-fail-1cycle	thar0	ac-zbsame-vioff-noimrd-1cyc	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)
 thar0:alpha-fail-2cycle	thar0	ac-zbsame-vioff-noimrd-2cyc	-	suite	plan T12: exactly 155,052
-thar0:fill-mode	thar0	fill-mode	-	report	Thar0 hw_data has no fill-mode config among R2's 100; reports the measured value only
+thar0:fill-mode	thar0	fill-mode	-	report	Thar0 hw_data has no fill-mode config among R2's 100, so no console value; reports the model's count against the SDK fill rate, 8 B/rclk (SDK 12.1.4), without asserting it
 thar0:imrd-1cycle	thar0	nozb-vioff-imrd-1cyc	-	suite	plan T13: IM_RD 1-cycle 163,436
 thar0:zcmp	thar0	ac-zcmp-zbsame-vioff-noimrd-1cyc	-	suite	Thar0 hw_data
 thar0:separate-bank	thar0	zbrw-pass-zbsep-vioff-noimrd-1cyc	-	suite	plan T13: FB+ZB separate banks 225,518

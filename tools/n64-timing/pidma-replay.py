@@ -11,7 +11,10 @@ This script recovers every measurement from the run's PI log instead:
 in Clock units (16 per COUNT tick). READ and WRITE are the ROM's own code paths from
 those PI events to its two COUNT reads; --calibrate finds the shifts that reproduce
 every "Found:" value the ROM printed in the same run, or the least worst-case error
-in ticks when none reproduces all of them.
+in ticks when none reproduces all of them. A run that prints SUCCESS prints no value;
+then the shifts are those that keep every timed point inside the ROM's own band, which
+leaves them far wider than one tick, so the every-offset verdict of --calibrated can
+still fail a model that matches the hardware at its true shift.
 
 Log record (data/pidma_ram<off>_rom0.log, 1040 B per size 1..383): 512 B buffer,
 u16 min ticks, u16 max ticks, u32 post dram, u32 post cart, u32 post len (big
@@ -21,6 +24,7 @@ endian), 512 B buffer after an 8 B follow-up DMA.
 
 usage: pidma-replay.py PILOG LOGDIR [--stdout ROMSTDOUT] [--offset UNITS]
                        [--tolerance 0.03] [--sizes 8-382] [--calibrate | --calibrated]
+       pidma-replay.py --self-test
 """
 import argparse
 import re
@@ -94,12 +98,52 @@ def rom_mean(raws, offset):
     return sum(ticks) // len(ticks)
 
 
-def calibrate(meas, printed):
-    """The (read, write) shifts with the least worst-case error against the printed values."""
-    error = {}
-    for read in range(-UNITS_PER_TICK * 64, UNITS_PER_TICK * 64):
+def rom_band(lo, hi):
+    """The ROM's own pass band in ticks, in its float32 arithmetic (pi_dma_test.c:211, tolerance 0.1f)."""
+    f32 = lambda x: struct.unpack("f", struct.pack("f", x))[0]
+    tol = f32(0.1)
+    return f32(lo * f32(1 - tol)), f32(hi * f32(1 + tol))
+
+
+READS = range(-UNITS_PER_TICK * 64, UNITS_PER_TICK * 64)
+
+
+def first_read(raws, write, test):
+    """The least read shift in READS whose mean satisfies TEST, which is monotone in the shift; len(READS) if none."""
+    lo, hi = 0, len(READS)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if test(rom_mean(raws, (READS[mid], write))):
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+
+def calibrate(meas, printed, gold):
+    """The (read, write) shifts with the least error against what the ROM printed.
+
+    With printed values, the error is the worst-case distance in ticks from them. When the ROM
+    printed none (it reports SUCCESS), every point it timed passed its own band, so the error is
+    the number of timed points outside that band."""
+    if printed:
+        error = {(read, write): max(abs(rom_mean(meas[k], (read, write)) - v) for k, v in printed.items())
+                 for read in READS for write in range(UNITS_PER_TICK)}
+    else:
+        timed = [(meas[k], *rom_band(*gold[k][:2])) for k in meas if k in gold]
+        error = {}
         for write in range(UNITS_PER_TICK):
-            error[read, write] = max(abs(rom_mean(meas[k], (read, write)) - v) for k, v in printed.items())
+            inside = [0] * (len(READS) + 1)
+            for raws, lo, hi in timed:
+                a = first_read(raws, write, lambda m: m >= lo)
+                b = first_read(raws, write, lambda m: m > hi)
+                if a < b:
+                    inside[a] += 1
+                    inside[b] -= 1
+            count = 0
+            for i, read in enumerate(READS):
+                count += inside[i]
+                error[read, write] = len(timed) - count
     best = min(error.values())
     return best, sorted(k for k, e in error.items() if e == best)
 
@@ -130,7 +174,34 @@ def bands(worst, sizes):
                     for b in range(lo_s - lo_s % 32, hi_s + 1, 32))
 
 
+def self_test():
+    """calibrate() and score() on synthetic runs; prints one line per case."""
+    raws = [(0, 160 * UNITS_PER_TICK)] * 4
+    gold = {(0, 8): (160, 160)}
+    every = {(r, w) for r in READS for w in range(UNITS_PER_TICK)}
+    cases = []
+    cases.append(("nothing measured or printed", calibrate({}, {}, {}), (0, sorted(every))))
+    #160 ticks pass the ROM's band 144..176 for read shifts whose tick lands 144..176
+    inside = sorted((r, w) for r, w in every if 144 <= 160 + r // UNITS_PER_TICK <= 176)
+    cases.append(("a SUCCESS run (no printed values)", calibrate({(0, 8): raws}, {}, gold), (0, inside)))
+    cases.append(("a SUCCESS run with a point outside the ROM band at every shift",
+                  calibrate({(0, 8): raws, (0, 9): [(0, 0)] * 4}, {}, {**gold, (0, 9): (5000, 5000)})[0], 1))
+    exact = sorted((r, w) for r, w in every if 160 + r // UNITS_PER_TICK == 162)
+    cases.append(("a printed value", calibrate({(0, 8): raws}, {(0, 8): 162}, gold), (0, exact)))
+    cases.append(("a model at the hardware value passes at its own offset",
+                  len(score(gold, {(0, 8): raws}, (0, 0), (8, 8), 0.03)[0]), 0))
+    failures = 0
+    for name, got, want in cases:
+        ok = got == want
+        failures += not ok
+        print(f"pidma-replay: self-test: {name}: {'ok' if ok else 'FAILED'}")
+    print(f"pidma-replay: self-test: {len(cases)} cases, {failures} failed")
+    return 1 if failures else 0
+
+
 def main():
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test()
     ap = argparse.ArgumentParser()
     ap.add_argument("pilog")
     ap.add_argument("logdir")
@@ -152,9 +223,10 @@ def main():
 
     if a.calibrate or a.calibrated:
         printed = found(a.stdout)
-        best, fits = calibrate(meas, printed)
+        best, fits = calibrate(meas, printed, gold)
         print(f"printed values: {printed}")
-        print(f"best worst-case error {best} tick(s), {len(fits)} offsets (read, write), "
+        unit = "tick(s)" if printed else "point(s) outside the ROM's own band"
+        print(f"best worst-case error {best} {unit}, {len(fits)} offsets (read, write), "
               f"read {min(f[0] for f in fits)}..{max(f[0] for f in fits)}: {fits}")
         if a.calibrate:
             return 0 if best == 0 else 1
@@ -166,7 +238,7 @@ def main():
         ok = most[0] == 0 and rom_failures == 0
         print(f"pidma: {'PASS' if ok else 'FAIL'}: replay sizes {sizes[0]}-{sizes[1]} "
               f"{n - most[0]}..{n - least[0]}/{n} within +-{a.tolerance:.0%} of hardware min..max over {len(fits)} "
-              f"calibrated offsets (calibration error {best} tick); worst offset {most[1]} by size band {bands(worst, sizes)}; "
+              f"calibrated offsets (calibration error {best} {'tick' if printed else 'points outside the ROM band'}); worst offset {most[1]} by size band {bands(worst, sizes)}; "
               f"ROM self-check {'no verdict' if rom_failures is None else f'{rom_failures} failures'}")
         return 0 if ok else 1
 
