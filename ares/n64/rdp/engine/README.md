@@ -49,9 +49,9 @@ against it shows every change. In summary:
 - `rdp_z_store` and the fill-rect stale-read restore use the accessor
   macros instead of casting `m_rdram`.
 - `rdp.c`: `rdp_render_init` takes the installed RDRAM size and no
-  register block or interrupt callback; `m_async_on` is 0 (loads and
-  Sync Full keep their in-handler drains, which the front end makes empty
-  first); `cen64_log` is defined here
+  register block or interrupt callback; loads and Sync Full keep their
+  in-handler drains, which the front end makes empty first (the async
+  rendering mode, its fences and watermarks are deleted); `cen64_log` is defined here
   with `rdp_render_set_log`; `rdp_render_pixel_count` exposes the pixel
   counter added in `rdp_occ_accumulate`.
 - `rdp.h`: `enum cen64_loglevel` lives here.

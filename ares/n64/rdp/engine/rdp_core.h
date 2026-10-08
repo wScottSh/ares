@@ -332,45 +332,8 @@ struct rdp_t
     // Span scheduler; must stay first.
     poly_manager m_pool;
 
-    /* Asynchronous rendering (opt-in; default off = behavior identical
-     * to the historical synchronous model). When on, Sync Full raises
-     * the DP interrupt at the same emulated instant as before but does
-     * NOT drain the span queue; rendering completes on the workers
-     * while emulation continues, and observers call the fence entry
-     * points before touching RDRAM the queued work may write.
-     * The watermark is two independent RDRAM byte ranges -- the color
-     * image targets (m_async_fb_*) and the z-buffer targets
-     * (m_async_zb_*) of all pending span writes -- accumulated at
-     * primitive enqueue on the command-walk thread and retired (after
-     * the drain) by the fences and the walk's own pipeline drains.
-     * Keeping the two apart matters: folding them into one span
-     * bridges everything between the color image and the z-buffer,
-     * and ordinary CPU/RSP traffic in that gap then fences (and
-     * drains) constantly, serializing the emulated threads and
-     * forfeiting the async gain. Fences must exclude the producer
-     * (the emulator uses dp_lock; see rdp/interface.c). m_wait_lock
-     * serializes every poly_manager_wait so only one thread ever runs
+    /* Serializes every poly_manager_wait so only one thread ever runs
      * work items as threadid 0 (worker state is indexed by it). */
-    _Atomic uint32_t  m_async_on;
-    _Atomic uint32_t  m_async_pending;
-    _Atomic uint32_t  m_async_fb_lo;
-    _Atomic uint32_t  m_async_fb_hi;
-    _Atomic uint32_t  m_async_zb_lo;
-    _Atomic uint32_t  m_async_zb_hi;
-    /* Image geometry the pending watermark was folded under (command-
-     * walk thread; observers that reset it hold dp_lock). Span order
-     * within the queue is by scanline bucket, so RDRAM written under
-     * one (address, width, size) is only ordered against later work on
-     * the same geometry; an image switch onto pending bytes under a
-     * different geometry drains first. mixed = folds under more than
-     * one geometry since the last reset. */
-    uint32_t          m_async_fbg_addr;
-    uint32_t          m_async_fbg_width;
-    uint32_t          m_async_fbg_size;
-    uint32_t          m_async_fbg_mixed;
-    uint32_t          m_async_zbg_addr;
-    uint32_t          m_async_zbg_width;
-    uint32_t          m_async_zbg_mixed;
     pthread_mutex_t   m_wait_lock;
 
     misc_state_t m_misc_state;
@@ -480,13 +443,9 @@ struct rdp_t
 
     /* TMEM snapshot ring. m_tmem points at the CURRENT 4KB slot inside
      * m_tmem_pool; queued primitives capture it as their m_tmem_src
-     * snapshot. In async mode a load with work in flight copies the
-     * current slot to the next one and mutates the copy, so consumers
-     * keep sampling an intact snapshot with no drain (their tile
-     * descriptors are already per-object copies). m_tmem_cows counts
-     * live snapshots; the ring reclaims when the queue is observed
-     * complete or at any pipeline drain, and exhaustion falls back to
-     * a drain. Producer-thread state, like the rest of TMEM. */
+     * snapshot. Loads drain the queue first (rdp_tmem_load_gate), so
+     * only the first slot is ever current. Producer-thread state, like
+     * the rest of TMEM. */
     uint8_t*  m_tmem;
     uint8_t*  m_tmem_pool;
     uint32_t  m_tmem_cows;
@@ -508,11 +467,6 @@ struct rdp_t
 // storage and returns nonzero on allocation failure.
 int         rdp_construct(rdp_t *rdp, uint32_t rdram_size);
 void        rdp_destroy(rdp_t *rdp);
-/* Async fences: drain if pending work may have written [addr, addr+len)
- * of RDRAM (fence) or unconditionally (fence_all). Cheap no-ops when
- * async is off or nothing is pending. Safe from any thread. */
-void        rdp_async_fence(rdp_t *rdp, uint32_t addr, uint32_t len);
-void        rdp_async_fence_all(rdp_t *rdp);
 
 int         rdp_init_internal_state(rdp_t *rdp);
 
