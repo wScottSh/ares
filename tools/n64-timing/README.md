@@ -217,3 +217,23 @@ tools/n64-timing/run-thar0.sh
 python tools/n64-timing/make-emux-smoke-rom.py <libdragon>/boot/bin/ipl3_compat.z64 smoke.z64
 n64-run smoke.z64     # stdout: "emux smoke: hello", stderr ends with stop=emux-exit
 ```
+
+## Linux baseline
+
+Measured 2026-10-07 on master `bf2882c3f` (harness port `feat/l0`) on the Linux host qwen: AMD Ryzen AI MAX+ 395 (16 cores, 32 threads, `powersave` governor, about 3.46 GHz under load), Ubuntu 26.04, g++ 15.2 (`RelWithDebInfo`, the host was shared with other jobs). The Windows column is the MSYS2 clang 22 baseline from `docs/program/handoff.md` and the T8 verifier.
+
+| Check | Linux | Windows |
+|---|---|---|
+| nemu64 failed: timing / cycle / cop0hazard | 453/1604, 9/13, 5/5 | 453/1604, 9/13, 5/5 |
+| snapper64 dumps matched | 2592/2592 | 2592/2592 |
+| rdpstat failed: systemtest / dpc / repeater64 | 0/7, 0/2, 0/21 | 0/7, 0/2, 0/21 |
+| thar0 configs 84 and 92 / 85 and 93 (BUF, min=avg=max) | 77,772 / 155,052 | 77,772 / 155,052 |
+| bench pi-dma-sizes 8 B / 128 B / 1 KiB / 64 KiB (rclk) | 197.33 / 1600.0 / 12174.67 / 778498.67 | same |
+| det, stepcap (MM, every mmbench scene) | PASS, 27 files, 8158 fields | PASS, 27 files, 8158 fields |
+| det, stepcap (nemu64 ROMs) | PASS | PASS |
+| state round trip, TMEM poke | PASS, PASS | PASS, PASS |
+| ctest (5 unit checks) | 5/5 | 5/5 |
+| `behaviors.py --check`, `--self-test`, `lint-literals.py` | ok, ok, ok | ok, ok (see below), ok |
+| MM 600 fields wall | 18.7 to 22.0 s | 11.3 to 11.8 s |
+
+Every emulated value above matches Windows, and the mmbench per-scene `rsp_busy_clocks` means match the T8 verifier's to the cycle. A gcc build and a clang 22 build on this host write byte-identical MM stats. The MM wall time is not the compiler: gcc and clang ran within 10% of each other interleaved. It moved with host load (21.7 s at load average 15, 18.7 s at 6). The rest of the gap to Windows is the host (inferred; the Windows machine's CPU is not recorded). The `--self-test` legacy cases had failed on master since T7a removed the rows they edited; `feat/l0` points them at a row that still exists.
