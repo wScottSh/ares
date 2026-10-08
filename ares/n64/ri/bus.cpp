@@ -52,10 +52,38 @@ auto RI::move(const RiBus::Burst& b, u8* data) -> void {
   }
 }
 
+//An RDP burst between RDRAM and a window in RDRAM's layout, ninth bits included.
+auto RI::moveNative(const RiBus::Burst& b, const Client::Native& n) -> void {
+  const auto device = RBusDevice::DP_DRAW;
+  const u32 end = b.address + b.bytes;
+  if(b.direction == RiBus::Direction::Read) {
+    for(u32 a = b.address & ~3; a < end; a += 4)
+      *(u32*)&n.data[a - n.base] = rdram.ram.read<Word>(a, device);
+    for(u32 a = b.address & ~1; a < end; a += 2)
+      n.hidden[(a - n.base) >> 1] = a < rdram.hidden.size * 2 ? rdram.hidden.data[a >> 1] : 0;
+    return;
+  }
+  for(u32 a = b.address; a < end;) {
+    if((a & 3) == 0 && a + 4 <= end) {
+      rdram.ram.write<Word>(a, *(u32*)&n.data[a - n.base], device);
+      a += 4;
+    } else {
+      rdram.ram.write<Byte>(a, n.data[(a - n.base) ^ 3], device);
+      a += 1;
+    }
+  }
+  for(u32 a = b.address & ~1; a < end; a += 2)
+    if(a < rdram.hidden.size * 2) rdram.hidden.data[a >> 1] = n.hidden[(a - n.base) >> 1];
+}
+
 auto RI::run(Clock limit) -> void {
   auto g = channel.decide();
   if(g.burst.requester == RiBus::Requester::Refresh) return;
   auto client = clients[(u32)g.burst.requester];
+  if(Client::Native n; client->native(g.burst, n)) {
+    moveNative(g.burst, n);
+    return client->granted(g);
+  }
   void* data = client->buffer(g.burst);
   if(g.burst.requester != RiBus::Requester::CpuSysAD) {
     move(g.burst, (u8*)data);

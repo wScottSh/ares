@@ -62,6 +62,12 @@ struct Client {
   virtual auto buffer(const Burst&) -> void* = 0;
   //The bytes have moved. A client may post its next burst from here.
   virtual auto granted(const Grant&) -> void = 0;
+  //The RDP's span and load windows keep RDRAM's own layout and the ninth
+  //bits: byte a at data[(a - base) ^ 3], halfword a >> 1 at
+  //hidden[(a - base) >> 1]. A client that returns true moves that way,
+  //with buffer() unused.
+  struct Native { u8* data; u8* hidden; u32 base; };
+  virtual auto native(const Burst&, Native&) -> bool { return false; }
 };
 
 //Bytes in the first burst of a transfer of `bytes` at `address`: at most

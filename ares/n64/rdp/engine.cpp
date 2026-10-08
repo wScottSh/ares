@@ -1,6 +1,6 @@
-//cen64-jgemu pixel engine (engine/), synchronous on the emulation thread.
-//RDP::dispatch (timed.cpp) feeds it one command at a time; each dispatch
-//leaves its pixels in rdram.ram and rdram.hidden before returning.
+//cen64-jgemu pixel engine (engine/), on the emulation thread. RDP::dispatch
+//(timed.cpp) feeds it one command at a time; its spans and loads run when the
+//memory interface has their bytes (plan T13). It holds no view of RDRAM.
 
 static auto engineLog(int level, const char* format, ...) -> void {
   char buffer[512];
@@ -13,7 +13,7 @@ static auto engineLog(int level, const char* format, ...) -> void {
 }
 
 auto RDP::Engine::load() -> void {
-  if(rdp_render_init((u32*)rdram.ram.data, rdram.ram.size, rdram.hidden.data, (u32*)rsp.dmem.data)) {
+  if(rdp_render_init(rdram.installed())) {
     debug(unusual, "[RDP engine] init failed; no pixels will be drawn");
     return;
   }
@@ -22,6 +22,7 @@ auto RDP::Engine::load() -> void {
 }
 
 auto RDP::Engine::unload() -> void {
+  if(loaded && rdp_render_mem_misses()) debug(unusual, "[RDP engine] ", rdp_render_mem_misses(), " accesses outside the memory windows");
   if(loaded) rdp_render_destroy();
   loaded = false;
 }

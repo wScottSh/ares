@@ -37,6 +37,7 @@ struct RI : Memory::RCP<RI>, Timing::Actor {
   auto post(const RiBus::Burst&, Clock at) -> void;
   auto refresh(Clock at) -> void;
   auto move(const RiBus::Burst&, u8* data) -> void;
+  auto moveNative(const RiBus::Burst&, const Client::Native&) -> void;
   //Posts the burst and, when horizon() proves no other actor can act before
   //its decision, grants it at once. Else the timeline grants it later.
   auto postAndDecide(const RiBus::Burst&, Clock at) -> bool;

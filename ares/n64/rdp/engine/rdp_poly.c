@@ -246,10 +246,10 @@ int poly_manager_init(poly_manager *poly, struct rdp_t *cbarg)
     memset(poly, 0, sizeof(*poly));
     poly->m_cbarg = cbarg;
 
-    // create the work queue
-    poly->m_queue = rdp_wq_alloc();
-    if (poly->m_queue == NULL)
-        return 1;
+    // ares port, plan T13: no work queue. Spans wait in the unit pool and
+    // the host runs them one at a time (poly_manager_run_next) at the
+    // emulated time their memory arrives.
+    poly->m_queue = NULL;
 
     // initialize the buckets to empty
     for (i = 0; i < TOTAL_BUCKETS; i++)
@@ -378,14 +378,10 @@ void poly_manager_wait(poly_manager *poly)
     if (poly->m_unit.next == 0)
         return;
 
-    // wait for all pending work items to complete
-    if (poly->m_queue != NULL)
-        rdp_wq_wait(poly->m_queue);
-
-    // if we don't have a queue, just run the whole list now
-    else
-        for (unitnum = 0; unitnum < poly->m_unit.next; unitnum++)
-            poly_work_callback(poly_pool_byindex(&poly->m_unit, unitnum), 0);
+    // run whatever the host has not run yet, in order
+    (void)unitnum;
+    while (poly_manager_run_next(poly))
+        ;
 
     // clear the buckets
     for (i = 0; i < TOTAL_BUCKETS; i++)
@@ -395,6 +391,70 @@ void poly_manager_wait(poly_manager *poly)
     poly_pool_reset(&poly->m_primitive);
     poly_pool_reset(&poly->m_object);
     poly_pool_reset(&poly->m_unit);
+    poly->m_run_unit = 0;
+    poly->m_run_ext = 0;
+}
+
+//-------------------------------------------------
+//  poly_manager_peek - the span `ahead` places
+//  past the next one to run, or 0 when there is
+//  none (ares port, plan T13)
+//-------------------------------------------------
+
+int poly_manager_peek(poly_manager *poly, uint32_t ahead, poly_span *span)
+{
+    uint32_t unitnum = poly->m_run_unit, ext = poly->m_run_ext;
+
+    while (unitnum < poly->m_unit.next)
+    {
+        work_unit *unit = (work_unit *)poly_pool_byindex(&poly->m_unit, unitnum);
+        const uint32_t count = atomic_load(&unit->count_next) & 0xff;
+        if (ext >= count)
+        {
+            unitnum++;
+            ext = 0;
+            continue;
+        }
+        if (ahead == 0)
+        {
+            span->primitive = unit->primitive;
+            span->scanline = unit->scanline + (int32_t)ext;
+            span->extent = &unit->extent[ext];
+            return 1;
+        }
+        ahead--;
+        ext++;
+    }
+    return 0;
+}
+
+//-------------------------------------------------
+//  poly_manager_run_next - run the next span's
+//  callback; 0 when none is waiting
+//-------------------------------------------------
+
+int poly_manager_run_next(poly_manager *poly)
+{
+    poly_span span;
+    if (!poly_manager_peek(poly, 0, &span))
+    {
+        poly->m_run_unit = poly->m_unit.next;
+        poly->m_run_ext = 0;
+        return 0;
+    }
+    (*span.primitive->m_callback)(span.primitive->m_cbarg, span.scanline,
+        span.extent, span.primitive->m_object, 0);
+    {
+        work_unit *unit = (work_unit *)poly_pool_byindex(&poly->m_unit, poly->m_run_unit);
+        while ((atomic_load(&unit->count_next) & 0xff) <= poly->m_run_ext)
+        {
+            poly->m_run_unit++;
+            unit = (work_unit *)poly_pool_byindex(&poly->m_unit, poly->m_run_unit);
+            poly->m_run_ext = 0;
+        }
+        poly->m_run_ext++;
+    }
+    return 1;
 }
 
 //-------------------------------------------------

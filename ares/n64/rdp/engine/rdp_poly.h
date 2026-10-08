@@ -185,7 +185,19 @@ typedef struct poly_manager
 
         // callback context for all primitives (the owning rdp_t)
         struct rdp_t *m_cbarg;
+
+        // ares port: the next span the host runs (unit index, extent index)
+        uint32_t m_run_unit;
+        uint32_t m_run_ext;
 } poly_manager;
+
+// one queued scanline (ares port)
+typedef struct poly_span
+{
+        primitive_info *primitive;
+        int32_t scanline;
+        const extent_t *extent;
+} poly_span;
 
 // construction/destruction
 int  poly_manager_init(poly_manager *poly, struct rdp_t *cbarg);
@@ -193,6 +205,10 @@ void poly_manager_destroy(poly_manager *poly);
 
 // synchronization: stall until all work is complete, then reset pools
 void poly_manager_wait(poly_manager *poly);
+
+// ares port: the queued span `ahead` places past the next, and running the next
+int  poly_manager_peek(poly_manager *poly, uint32_t ahead, poly_span *span);
+int  poly_manager_run_next(poly_manager *poly);
 
 // return and default-initialize the next object (object_data().next())
 rdp_poly_state *poly_manager_object_next(poly_manager *poly);

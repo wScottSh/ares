@@ -198,9 +198,8 @@ struct Cost {
   bool  syncFull;  //raises the DP interrupt when it retires
 };
 
-//Compute clocks only: memory stalls are plan T13's. A primitive occupies the
-//command processor for its whole span time; overlap with the next command
-//(rdp-command-timing.md s.3.4) is plan T13/T15's.
+//What one command costs the command processor. A primitive costs its setup;
+//its spans run in the pixel pipeline (spanClocks), where memory stalls them.
 inline auto cost(const Work& w) -> Cost {
   using namespace Timing::Behavior;
   switch(w.command) {
@@ -213,18 +212,28 @@ inline auto cost(const Work& w) -> Cost {
     return {RdpSetter + Timing::rclk(clocks), true};
   }
   case 0x08: case 0x09: case 0x0a: case 0x0b: case 0x0c: case 0x0d: case 0x0e: case 0x0f:
-  case 0x24: case 0x25: case 0x36: {
-    u64 clocks = 0;
-    const u64 slots = w.pixels + (u64)w.lines * RdpSpanDeadPixels;
-    switch(w.cycleType) {
-    case 0: clocks = slots / RdpSpan1cycle; break;
-    case 1: clocks = slots * RdpSpan2cycle.denominator / RdpSpan2cycle.numerator; break;
-    default: clocks = (u64)w.words * sizeof(u64) / RdpFillCopyRate; break;
-    }
-    return {RdpPrimitiveBase + Timing::rclk(clocks) + Clock{(s64)w.lines * RdpSpanLineGap.units}};
-  }
+  case 0x24: case 0x25: case 0x36:
+    return {RdpPrimitiveBase};
   }
   return {RdpSetter};
+}
+
+//Pipeline clocks for `pixels` of a 1- or 2-cycle span (SDK Table 12-1), and
+//the tail every span adds after its last pixel: the dead slots at the same
+//rate, then the line gap (rdp.span-dead-pixels, rdp.span-line-gap).
+inline auto pixelClocks(u32 cycleType, u64 pixels) -> Clock {
+  using namespace Timing::Behavior;
+  if(cycleType == 1) return Timing::rclk(pixels * RdpSpan2cycle.denominator / RdpSpan2cycle.numerator);
+  return Timing::rclk(pixels / RdpSpan1cycle);
+}
+inline auto spanTail(u32 cycleType) -> Clock {
+  using namespace Timing::Behavior;
+  return pixelClocks(cycleType, RdpSpanDeadPixels) + RdpSpanLineGap;
+}
+//A fill or copy span moves its 64-bit words at the fill/copy rate (SDK 12.1.4/12.1.5).
+inline auto wordClocks(u64 words) -> Clock {
+  using namespace Timing::Behavior;
+  return Timing::rclk(words * sizeof(u64) / RdpFillCopyRate) + RdpSpanLineGap;
 }
 
 //The command DMA's next request: up to one burst, no more than the FIFO has
@@ -237,16 +246,9 @@ inline auto fetchDwords(const Dpc& dpc, u32 fifoDwords) -> u32 {
   return min(dwords, (u32)(Timing::Behavior::RdpCmdFifoDwords - fifoDwords));
 }
 
-//How long a command fetch of `dwords` takes from request to the words being
-//in the FIFO. Until the RI arbiter (plan T6) takes DpCommand requests, an
-//RDRAM fetch is one uncontended read burst: the NEC read-hit wire time,
-//4 tc per octbyte, and the RDP's per-burst RI overhead. The X bus reads DMEM
-//directly. The seam for T6/T13: replace this with an RI post whose grant
-//lands the words.
-inline auto fetchLatency(u32 dwords, bool xbus) -> Clock {
-  using namespace Timing::Behavior;
-  if(xbus) return Timing::rclk(divideRoundingUp(dwords * sizeof(u64), RdpXbusFetchRate));
-  return RiReadHit + Clock{(s64)dwords * RiOctbyte.units} + RiOverheadRdp;
+//An X-bus command fetch reads DMEM over the RSP-RDP bus, with no RI traffic.
+inline auto xbusLatency(u32 dwords) -> Clock {
+  return Timing::rclk(divideRoundingUp(dwords * sizeof(u64), Timing::Behavior::RdpXbusFetchRate));
 }
 
 }

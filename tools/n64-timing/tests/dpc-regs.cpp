@@ -136,9 +136,13 @@ auto nall::main(Arguments) -> void {
   //Compute costs: Thar0 alpha all-fail 320x240 rectangle (hardware-corpora.md), setters, syncs, loads
   {
     auto clocks = [](Work w) { return cost(w).busy.units / UnitsPerRclk; };
-    CHECK(clocks({0x36, 0, 320 * 240, 0, 240, 0}) == 77772, "1-cycle 320x240 should cost 77772, got %lld", (long long)clocks({0x36, 0, 320 * 240, 0, 240, 0}));
-    CHECK(clocks({0x36, 1, 320 * 240, 0, 240, 0}) == 155052, "2-cycle 320x240 should cost 155052, got %lld", (long long)clocks({0x36, 1, 320 * 240, 0, 240, 0}));
-    CHECK(clocks({0x36, 3, 320 * 240, 80 * 240, 240, 0}) == 12 + 240 * (80 + 2), "fill 320x240 16bpp: 80 words per line");
+    auto units = [](Clock c) { return c.units / UnitsPerRclk; };
+    //a primitive's command-processor cost is its setup; its spans run in the pipeline
+    CHECK(clocks({0x36, 0, 320 * 240, 0, 240, 0}) == 12, "a rectangle's setup costs 12");
+    auto line1 = units(pixelClocks(0, 320) + spanTail(0)), line2 = units(pixelClocks(1, 320) + spanTail(1));
+    CHECK(12 + 240 * line1 == 77772, "1-cycle 320x240 spans should cost 77772, got %lld", (long long)(12 + 240 * line1));
+    CHECK(12 + 240 * line2 == 155052, "2-cycle 320x240 spans should cost 155052, got %lld", (long long)(12 + 240 * line2));
+    CHECK(units(wordClocks(80)) == 80 + 2, "fill 320 px 16bpp: 80 words and the line gap");
     CHECK(clocks({0x2f}) == 1 && clocks({0x00}) == 1, "setters and NOP cost 1");
     CHECK(clocks({0x26}) == 25 && clocks({0x28}) == 33 && clocks({0x27}) == 50, "Sync Load/Tile/Pipe cost 25/33/50");
     CHECK(cost({0x29}).syncFull && !cost({0x27}).syncFull, "only Sync Full raises the DP interrupt");
@@ -155,8 +159,7 @@ auto nall::main(Arguments) -> void {
     CHECK(fetchDwords(d, 30) == 0, "a full FIFO fetches nothing");
     d.fetched(0x1000 - 32);
     CHECK(fetchDwords(d, 0) == 4, "the tail of a transfer is fetched whole");
-    CHECK(fetchLatency(16, false) == RiReadHit + Clock{16 * RiOctbyte.units} + RiOverheadRdp, "an RDRAM fetch is one read burst");
-    CHECK(fetchLatency(16, true) == rclk(16), "the X bus moves 8 B per clock");
+    CHECK(xbusLatency(16) == rclk(16), "the X bus moves 8 B per clock");
   }
 
   if(failures) { std::printf("dpc-regs: %u failure(s)\n", failures); std::exit(1); }
