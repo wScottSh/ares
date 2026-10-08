@@ -107,7 +107,7 @@ static void poly_pool_destroy(poly_pool *pool)
 // Allocates and returns the next item. The item is zero-initialized on
 // first use of its slot (fresh chunks are calloc'd) and retains stale
 // contents on reuse; every field the RDP reads is written before use.
-static void *poly_pool_next(poly_pool *pool)
+static void *poly_pool_take(poly_pool *pool, int zero)
 {
     poly_pool_chunk *chunk = pool->chunks;
     uint32_t index = atomic_load_explicit(&pool->next, memory_order_relaxed);
@@ -137,10 +137,19 @@ static void *poly_pool_next(poly_pool *pool)
     }
 
     item = chunk->base + (size_t)index * pool->item_size;
+    // ares port, plan T13: hand out zeroed items, so the bytes a save state
+    // carries never depend on what a slot held before
+    if (zero)
+        memset(item, 0, pool->item_size);
     atomic_store_explicit(&pool->next, atomic_load_explicit(&pool->next, memory_order_relaxed) + 1, memory_order_relaxed);
     if (pool->track_last)
         pool->last = item;
     return item;
+}
+
+static void *poly_pool_next(poly_pool *pool)
+{
+    return poly_pool_take(pool, 1);
 }
 
 // Returns the item at `index` (must be < pool->next).
@@ -209,7 +218,7 @@ static void poly_pool_reset(poly_pool *pool)
     atomic_store_explicit(&pool->next, 0, memory_order_relaxed);
 
     if (old_last != NULL) {
-        void *slot0 = poly_pool_next(pool);
+        void *slot0 = poly_pool_take(pool, 0);
         if (slot0 != old_last)
             memmove(slot0, old_last, pool->item_size);
         pool->last = slot0;
@@ -653,7 +662,7 @@ void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int
             uint64_t user = 0;
             if (!loading)
             {
-                e = u->extent[k];
+                memcpy(&e, &u->extent[k], sizeof(e));
                 user = e.userdata ? (uint64_t)((uint8_t *)e.userdata - aux_base) + 1 : 0;
                 e.userdata = NULL;
             }
@@ -662,7 +671,7 @@ void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int
             if (loading)
             {
                 e.userdata = user ? aux_base + (user - 1) : NULL;
-                u->extent[k] = e;
+                memcpy(&u->extent[k], &e, sizeof(e));
             }
         }
     }

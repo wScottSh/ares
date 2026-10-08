@@ -3617,6 +3617,10 @@ static void rdp_draw_triangle(rdp_t *rdp, uint64_t *cmd_buf, bool shade, bool te
                 }
 
                 spans[spanidx].userdata = (void*)((uint8_t*)rdp->m_aux_buf + rdp->m_aux_buf_ptr);
+                /* ares port, plan T13: a record carved fresh is zero, so the
+                 * bytes a save state carries never depend on a slot's past */
+                memset(spans[spanidx].userdata, 0, sizeof(rdp_span_aux));
+                memset(spans[spanidx].param, 0, sizeof(spans[spanidx].param));
                 valid = true;
                 /* The aux pool is never cleared: default the fill plan off
                  * so a fill span without one (rects, non-adjudicated
@@ -5900,7 +5904,10 @@ static inline void rdp_span_walk_init(rdp_span_walk *sw, int32_t scanline,
     sw->w.w = extent->param[SPAN_W].start;
 
     sw->zb  = object->m_misc_state.m_zb_address >> 1;
-    sw->zhb = object->m_misc_state.m_zb_address;
+    /* ares port, plan T13: the dz bits are the Z halfword's own ninth bits,
+     * halfword index (address >> 1) + pixel like the color plane; MAME's
+     * byte-address base put them in another image's bits. */
+    sw->zhb = object->m_misc_state.m_zb_address >> 1;
     sw->fb_index = object->m_misc_state.m_fb_width * scanline;
 
     /* Right-major spans walk screen-right to screen-left, so every

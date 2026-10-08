@@ -361,11 +361,26 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
      * the rest when each span runs. */
     if (loading && rdp->m_aux_buf_ptr > EXTENT_AUX_COUNT)
         rdp->m_aux_buf_ptr = 0;
-    io(ctx, rdp->m_aux_buf, rdp->m_aux_buf_ptr);
+    {
+        /* the records' pointers are rebuilt per span (rdp_span_aux_init):
+         * they travel as zeros so the state bytes are the same every run */
+        uint32_t off;
+        rdp_span_aux record;
+        for (off = 0; off + sizeof(record) <= rdp->m_aux_buf_ptr; off += sizeof(record)) {
+            if (!loading) {
+                memcpy(&record, rdp->m_aux_buf + off, sizeof(record));
+                memset(&record.m_color_inputs, 0, sizeof(record.m_color_inputs));
+                record.m_tmem = NULL;
+            }
+            io(ctx, &record, sizeof(record));
+            if (loading)
+                memcpy(rdp->m_aux_buf + off, &record, sizeof(record));
+        }
+    }
     {
         uint32_t n;
         poly_render_cb const *callbacks = rdp_span_callbacks(&n);
-        poly_manager_serialize(&rdp->m_pool, io, ctx, loading, rdp->m_aux_buf, rdp->m_tmem_pool, callbacks, n);
+            poly_manager_serialize(&rdp->m_pool, io, ctx, loading, rdp->m_aux_buf, rdp->m_tmem_pool, callbacks, n);
     }
 #undef RDP_STATE
 }
