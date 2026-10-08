@@ -6,13 +6,13 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 
 | Basis | Meaning | Rows |
 |---|---|---|
-| measured | a hardware measurement: a test ROM result or a console capture | 39 |
-| vendor | Nintendo, NEC or SGI documentation, or a patent | 16 |
+| measured | a hardware measurement: a test ROM result or a console capture | 37 |
+| vendor | Nintendo, NEC or SGI documentation, or a patent | 15 |
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 15 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 7 |
-| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 8 |
+| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 13 |
 | model-choice | no published value; the reference states why the model chose this one | 15 |
 | legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 25 |
 
@@ -94,8 +94,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `cpu.eret` | 3 pclk | fit | nemu64-test Exceptions Roundtrip (BREAK, SYSCALL + handler + ERET) 15, less the modeled BREAK fault (cpu.exc-rf) and handler: the ERET costs 3 including its issue slot | **fit only, no independent check:** `nemu64:timing/exception-roundtrip` (fit from `nemu64:timing/exception-roundtrip`) | verify-is-fit: the two Roundtrip values are the only measurement of ERET |
 | `cpu.mtc0-slow-regs` | 2 pclk | measured | nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5) | `nemu64:timing/individual-instructions` |  |
 | `cpu.cache-index-load-tag` | 6 pclk | measured | nemu64-test CPURegisterDependency 'LD; CACHE (DataIndexLoadTag)' 7, 8, 8: the CACHE costs 6 including its issue slot (C10) | `nemu64:timing/cache` | the other CACHE ops have no measurement and cost their issue slot |
-| `cpu.count-write-latency` | 1 instr | measured | nemu64-test cop0hazard MTC0/MFC0 COUNT | `nemu64:cop0hazard/count` |  |
-| `cpu.irq-sample-lag` | 1 instr | measured | nemu64-test cop0hazard SoftwareInterrupt | `nemu64:cop0hazard/softwareinterrupt` |  |
+| `cpu.count-write-hold` | 2 pclk | fit | nemu64-test cop0hazard CountHazards: the four MFC0 COUNT right after an MTC0 COUNT of v read v, v, v, v+1, for six values of v. One MFC0 issues per pclk and COUNT ticks every 2 pclk, so three equal reads need the counter to stop; holding the written value 2 pclk from the MTC0's execute is the only whole-pclk hold that gives all four (nemu64-timing-failures.md: counting resumes only after the write retires) | **fit only, no independent check:** `nemu64:cop0hazard/count` (fit from `nemu64:cop0hazard/count`) | verify-is-fit: the COUNT hazards test is the only measurement of the hold's length. The timing harness resets COUNT with an MTC0 and only sees the hold's parity: a 1 pclk hold fails 988 of its 1604 values, 0 and 2 pass |
+| `cpu.irq-sample` | pending-at-two-boundaries rule | fit | nemu64-test cop0hazard: SoftwareInterrupt1 (enabled, hazard) takes Int one instruction after the instruction following the MTC0 Cause that sets IP1; SoftwareInterrupt12 takes it there although that second instruction clears IP1; SoftwareInterrupt1 (enable but disable right away), where the clearing MTC0 Cause directly follows the setting one, never takes it. Taking Int before an instruction only if the interrupt condition held at the previous instruction boundary too fits all three; delaying the CP0 write by one instruction instead takes the third | **fit only, no independent check:** `nemu64:cop0hazard/softwareinterrupt` (fit from `nemu64:cop0hazard/softwareinterrupt`) | verify-is-fit: the three SoftwareInterrupt values are the only measurement. Applied to the RCP and timer lines too, inferred (one sampler for every Cause.IP bit), no test |
 | `cpu.fetch-ahead-slots` | 3 instr | derived | nemu64-test cycle set SMC: a store fewer than 3 slots ahead is not seen | `nemu64:cycle/smc` | fable chose 2; the window is sized so both readings fit, the cycle set decides |
 | `cpu.dirty-miss-order` | fill-then-writeback order | vendor | NEC s.12.5.2-12.5.3 p.304; R4300i datasheet p.8-9 (vr4300-wb.md) | `bench:dirty-miss-isolated` |  |
 | `cpu.wb-entries` | 4 entries | vendor | NEC s.4.9 p.120; R4300i datasheet p.9 | `nemu64:timing/uncached-write-buffer` |  |
@@ -103,7 +103,9 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `cpu.wb-release` | slot rule | vendor | NEC 'has a space' (s.4.9) chosen over R4300i datasheet 'emptied'; burst shape only | `bench:wb-fifth-store` | conflict recorded; no public hardware value |
 | `cpu.rcp-register-read` | 22 pclk | measured | n64-systembench VI_CONTROL read 24 minus about 2 harness (cited value) | `bench:rcp-reg-read` |  |
 | `cpu.pif-ram-read` | 1974 rclk | measured | n64-systembench PIF RAM read (cited value) | `bench:pif-ram-read` |  |
-| `cpu.random-rule` | decrement-per-pclk rule | vendor | NEC UM ch.5; nemu64-test Random (decrement), Random (masking) | `nemu64:timing/random` |  |
+| `cpu.random-rule` | decrement-per-instruction rule | fit | nemu64-test Random (decrement): Random after 1, 16, 31 and 100 instructions for Wired 0-63, from 31 down to Wired and wrapping (through 63 when Wired > 31); Random (masking): an MTC0 Random is ignored, and counting PClock cycles instead of instructions reads 11 where 27 is expected, so stall cycles do not count | `nemu64:timing/random` `nemu64:cop0hazard/random-read-early` (fit from `nemu64:timing/random`) | Random (read early) checks the decrement over 10 instructions from other code (21) |
+| `cpu.wired-write-latency` | 2 instr | fit | nemu64-test Random (decrement): Random reads 30 three instructions after an MTC0 Wired, for every Wired, so the reload to 31 lands two instructions after the write | `nemu64:timing/random` `nemu64:cop0hazard/random-read-early` (fit from `nemu64:timing/random`) | Random (read early) checks the landing independently: one instruction after the write Random still follows the previous Wired bound (29), two after it reads 31 |
+| `cpu.ctc1-fpe-ce` | following-instruction-bits-27-26 rule | fit | nemu64-test cop1 FireExceptionViaCTC1 followed by MFC1 and by MFC2: EPC is the CTC1 and Cause.CE is 1 and 2, the coprocessor of the instruction after it (nemu64-timing-failures.md, cycle set: an inference from the expected values) | **fit only, no independent check:** `nemu64:cycle/ctc1` (fit from `nemu64:cycle/ctc1`) | verify-is-fit: the two CTC1 values are the only measurement. After an instruction outside COP1-3 the field comes from the same opcode bits, inferred, no test |
 
 ### sysad
 
@@ -194,9 +196,9 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | Behavior | Value | Code site | Checks | Note |
 |---|---|---|---|---|
 | `legacy.clock.vclk-pal` | 49656530 Hz | ares/n64/system/system.cpp:88 | pending (no-corpus) | no plan unit: PAL is not the target console |
-| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:97 | `nemu64:cop0hazard/softwareinterrupt` | replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag) |
-| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:105 | pending (no-corpus) | no plan unit: NMI entry has no timing reference (T7b) |
-| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:110 | pending (no-corpus) | replaced by T6: SysAD port |
+| `legacy.cpu.interrupt-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:102 | `nemu64:cop0hazard/softwareinterrupt` | no plan unit: no measurement of the interrupt entry cost was found; T7c built the sampling rule (cpu.irq-sample), not this cost |
+| `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:109 | pending (no-corpus) | no plan unit: NMI entry has no timing reference (T7b) |
+| `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:114 | pending (no-corpus) | replaced by T6: SysAD port |
 | `legacy.cpu.icache-fill` | 48 pclk | ares/n64/cpu/sysad.hpp:60 | `bench:ifill-isolated` | replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall) |
 | `legacy.cpu.icache-writeback` | 48 pclk | ares/n64/cpu/sysad.cpp:262 | pending (no-corpus) | replaced by T7d: I-cache CACHE ops through SysAD |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
@@ -261,6 +263,8 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `nemu64:rsp_timing/sll` | nemu64 | timing | RSP Timing: SLL | self | nemu64-test timing set, ROM self-check |
 | `nemu64:cop0hazard/count` | nemu64 | cop0hazard | MTC0/MFC0 COUNT hazards | self | nemu64-test cop0hazard set, ROM self-check |
 | `nemu64:cop0hazard/softwareinterrupt` | nemu64 | cop0hazard | SoftwareInterrupt1 (enabled, hazard)\|SoftwareInterrupt1 (enable but disable right away)\|SoftwareInterrupt12 (enable and disable after one nop) | self | nemu64-test cop0hazard set, ROM self-check |
+| `nemu64:cop0hazard/random-read-early` | nemu64 | cop0hazard | Random (read early) | self | nemu64-test cop0hazard set, ROM self-check |
+| `nemu64:cycle/ctc1` | nemu64 | cycle | re:^Fire exception through CTC1 | self | nemu64-test cycle set, the two CTC1-raised FPE tests |
 | `nemu64:cycle/smc` | nemu64 | cycle | re:^icache: | self | nemu64-test cycle set, the icache self-modifying-code tests (7 values) |
 | `bench:mi-memset-uncached` | bench | mi-memset-uncached | point=vi-on metric=pclk_per_sd | suite | n64brew MIPS_Interface memset table, 25.7 ms/MiB |
 | `bench:mi-memset-cached` | bench | mi-memset-cached | point=vi-on metric=pclk_per_line | suite | n64brew MIPS_Interface memset table, 49.8 ms/MiB |

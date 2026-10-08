@@ -163,15 +163,18 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
     scc.tlb.pageMask.bit(13,24) = data.bit(13,24);
     break;
   case  6:  //wired
+    scc.wired.previousIndex = scc.wired.index;
+    scc.wired.previousEpoch = scc.wired.randomEpoch;
     scc.wired.index  = data.bit(0,5);
-    scc.wired.randomEpoch = instructionIndex + 2;
+    scc.wired.randomEpoch = instructionIndex + Timing::Behavior::CpuWiredWriteLatency;
     break;
   case  8:  //badvaddr
   //scc.badVirtualAddress = data;  //read-only
     break;
   case  9:  //count
     flushCount();
-    scc.count = data.bit(0,31) << 1;
+    countResume = Thread::clock + Timing::Behavior::CpuCountWriteHold;
+    scc.count = (data.bit(0,31) << 1) - Timing::Behavior::CpuCountWriteHold.units / Timing::UnitsPerPclk;
     scheduleCompare();
     break;
   case 10:  //entryhi
@@ -269,13 +272,14 @@ auto CPU::setControlRegister(n5 index, n64 data) -> void {
 
 //nemu64-test cop0 RandomDecrement, RandomMasking, RandomReadEarly: Random decrements once per
 //instruction, is set to 31 by a Wired write, and reloads 31 after it reaches Wired; with
-//Wired > 31 it wraps through 63 down to Wired. The reload lands two instructions after the
-//Wired write. Counting PClock cycles instead fails RandomMasking (reads 11, expects 27), so
-//stall cycles do not count. Placeholder until TimedCp0 (plan T7c): a read inside those two
-//instructions sees 31 instead of the old count.
+//Wired > 31 it wraps through 63 down to Wired. Counting PClock cycles instead fails
+//RandomMasking (reads 11, expects 27), so stall cycles do not count. The Wired write lands
+//CpuWiredWriteLatency instructions late; until then the previous sequence continues.
 auto CPU::getControlRandom() -> u8 {
-  u64 elapsed = instructionIndex > scc.wired.randomEpoch ? instructionIndex - scc.wired.randomEpoch : 0;
-  u32 wired = scc.wired.index;
+  bool landed = instructionIndex >= scc.wired.randomEpoch;
+  u64 epoch = landed ? scc.wired.randomEpoch : scc.wired.previousEpoch;
+  u64 elapsed = instructionIndex > epoch ? instructionIndex - epoch : 0;
+  u32 wired = landed ? scc.wired.index : scc.wired.previousIndex;
   u32 period = wired <= 31 ? 32 - wired : 96 - wired;
   return (31 - elapsed % period) & 63;
 }

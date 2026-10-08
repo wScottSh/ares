@@ -68,8 +68,7 @@ namespace Behavior {
   constexpr Clock CpuEret = {24};  //3 pclk
   constexpr Clock CpuMtc0SlowRegs = {16};  //2 pclk
   constexpr Clock CpuCacheIndexLoadTag = {48};  //6 pclk
-  constexpr s64 CpuCountWriteLatency = 1;  //1 instr
-  constexpr s64 CpuIrqSampleLag = 1;  //1 instr
+  constexpr Clock CpuCountWriteHold = {16};  //2 pclk
   constexpr s64 CpuFetchAheadSlots = 3;  //3 instr
   constexpr s64 CpuWbEntries = 4;  //4 entries
   constexpr s64 CpuWbBlockEntries = 2;  //2 entries
@@ -78,6 +77,7 @@ namespace Behavior {
   constexpr Clock SysadRdramWritePeriod = {144};  //12 rclk
   constexpr Clock SysadRdramBlockWritePeriod = {144};  //12 rclk
   constexpr Clock SysadRegisterWrite = {60};  //5 rclk
+  constexpr s64 CpuWiredWriteLatency = 2;  //2 instr
   constexpr s64 SpDmaBurst = 128;  //128 B
   constexpr Ratio SpDmaRateCheck = {13, 2};  //6.5 B/rclk
   constexpr Clock RspSlot = {12};  //1 rclk
@@ -172,8 +172,8 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.eret", Basis::Fit, "3", "pclk", "nemu64-test Exceptions Roundtrip (BREAK, SYSCALL + handler + ERET) 15, less the modeled BREAK fault (cpu.exc-rf) and handler: the ERET costs 3 including its issue slot", "nemu64:timing/exception-roundtrip", "verify-is-fit: the two Roundtrip values are the only measurement of ERET"},
   {"cpu.mtc0-slow-regs", Basis::Measured, "2", "pclk", "nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5)", "nemu64:timing/individual-instructions", ""},
   {"cpu.cache-index-load-tag", Basis::Measured, "6", "pclk", "nemu64-test CPURegisterDependency 'LD; CACHE (DataIndexLoadTag)' 7, 8, 8: the CACHE costs 6 including its issue slot (C10)", "nemu64:timing/cache", "the other CACHE ops have no measurement and cost their issue slot"},
-  {"cpu.count-write-latency", Basis::Measured, "1", "instr", "nemu64-test cop0hazard MTC0/MFC0 COUNT", "nemu64:cop0hazard/count", ""},
-  {"cpu.irq-sample-lag", Basis::Measured, "1", "instr", "nemu64-test cop0hazard SoftwareInterrupt", "nemu64:cop0hazard/softwareinterrupt", ""},
+  {"cpu.count-write-hold", Basis::Fit, "2", "pclk", "nemu64-test cop0hazard CountHazards: the four MFC0 COUNT right after an MTC0 COUNT of v read v, v, v, v+1, for six values of v. One MFC0 issues per pclk and COUNT ticks every 2 pclk, so three equal reads need the counter to stop; holding the written value 2 pclk from the MTC0's execute is the only whole-pclk hold that gives all four (nemu64-timing-failures.md: counting resumes only after the write retires)", "nemu64:cop0hazard/count", "verify-is-fit: the COUNT hazards test is the only measurement of the hold's length. The timing harness resets COUNT with an MTC0 and only sees the hold's parity: a 1 pclk hold fails 988 of its 1604 values, 0 and 2 pass"},
+  {"cpu.irq-sample", Basis::Fit, "pending-at-two-boundaries", "rule", "nemu64-test cop0hazard: SoftwareInterrupt1 (enabled, hazard) takes Int one instruction after the instruction following the MTC0 Cause that sets IP1; SoftwareInterrupt12 takes it there although that second instruction clears IP1; SoftwareInterrupt1 (enable but disable right away), where the clearing MTC0 Cause directly follows the setting one, never takes it. Taking Int before an instruction only if the interrupt condition held at the previous instruction boundary too fits all three; delaying the CP0 write by one instruction instead takes the third", "nemu64:cop0hazard/softwareinterrupt", "verify-is-fit: the three SoftwareInterrupt values are the only measurement. Applied to the RCP and timer lines too, inferred (one sampler for every Cause.IP bit), no test"},
   {"cpu.fetch-ahead-slots", Basis::Derived, "3", "instr", "nemu64-test cycle set SMC: a store fewer than 3 slots ahead is not seen", "nemu64:cycle/smc", "fable chose 2; the window is sized so both readings fit, the cycle set decides"},
   {"cpu.dirty-miss-order", Basis::Vendor, "fill-then-writeback", "order", "NEC s.12.5.2-12.5.3 p.304; R4300i datasheet p.8-9 (vr4300-wb.md)", "bench:dirty-miss-isolated", ""},
   {"cpu.wb-entries", Basis::Vendor, "4", "entries", "NEC s.4.9 p.120; R4300i datasheet p.9", "nemu64:timing/uncached-write-buffer", ""},
@@ -184,7 +184,9 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"sysad.rdram-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit uncached writes 25.7 ms/MiB = 18.38 pclk = 12.25 rclk per SD (vr4300-wb.md), less refresh (1.3%, rdram-bus-arbitration.md B12), on the SClock grid: 12 rclk gives 18.28 pclk, the rest is inferred, not measured, to be VI fetch contention (plan T11)", "bench:mi-memset-uncached", "verify-is-fit: the uncached memset is the only measurement of an uncached RDRAM write drain and the fit's data. Drain period of one uncached RDRAM write, request to EOK at row hit"},
   {"sysad.rdram-block-write-period", Basis::Fit, "12", "rclk", "n64brew MIPS_Interface memset, 64-bit cached writes 49.8 ms/MiB = 71.24 pclk per line (vr4300-wb.md), less the modeled fill (a dirty row miss behind the victim), the victim write (a clean row miss), the store issues and refresh, on the SClock grid: 12 rclk gives 71.0 pclk, the rest is inferred, not measured, to be VI fetch contention (plan T11)", "bench:mi-memset-cached bench:dirty-miss-isolated", "verify-is-fit: the cached memset is the fit's data and bench:dirty-miss-isolated only reports (no hardware value). Drain period of one D-cache line writeback, request to EOK at row hit; equal to the single-write period"},
   {"sysad.register-write", Basis::ModelChoice, "5", "rclk", "no hardware measurement (vr4300-wb.md, RCP register row); MiSTer memorymux.vhd:346-425 holds a register write 3 RCP clocks after the 2-SClock address and data phases", "pending:no-corpus", "a posted write to an RCP register, the PI or the PIF takes effect this long after it starts draining"},
-  {"cpu.random-rule", Basis::Vendor, "decrement-per-pclk", "rule", "NEC UM ch.5; nemu64-test Random (decrement), Random (masking)", "nemu64:timing/random", ""},
+  {"cpu.random-rule", Basis::Fit, "decrement-per-instruction", "rule", "nemu64-test Random (decrement): Random after 1, 16, 31 and 100 instructions for Wired 0-63, from 31 down to Wired and wrapping (through 63 when Wired > 31); Random (masking): an MTC0 Random is ignored, and counting PClock cycles instead of instructions reads 11 where 27 is expected, so stall cycles do not count", "nemu64:timing/random nemu64:cop0hazard/random-read-early", "Random (read early) checks the decrement over 10 instructions from other code (21)"},
+  {"cpu.wired-write-latency", Basis::Fit, "2", "instr", "nemu64-test Random (decrement): Random reads 30 three instructions after an MTC0 Wired, for every Wired, so the reload to 31 lands two instructions after the write", "nemu64:timing/random nemu64:cop0hazard/random-read-early", "Random (read early) checks the landing independently: one instruction after the write Random still follows the previous Wired bound (29), two after it reads 31"},
+  {"cpu.ctc1-fpe-ce", Basis::Fit, "following-instruction-bits-27-26", "rule", "nemu64-test cop1 FireExceptionViaCTC1 followed by MFC1 and by MFC2: EPC is the CTC1 and Cause.CE is 1 and 2, the coprocessor of the instruction after it (nemu64-timing-failures.md, cycle set: an inference from the expected values)", "nemu64:cycle/ctc1", "verify-is-fit: the two CTC1 values are the only measurement. After an instruction outside COP1-3 the field comes from the same opcode bits, inferred, no test"},
   {"sp.dma-burst", Basis::ModelChoice, "128", "B", "inference: RI maximum matches the measured ~20 rclk per 128 B (dma-timing.md)", "bench:sp-dma-sweep", ""},
   {"sp.dma-rate-check", Basis::Measured, "6.5", "B/rclk", "n64brew MI page RSP DMA memset 2.58 ms/MiB; hcs64 5.55 conflicts (direction unstated)", "bench:sp-dma-sweep", "the bench reports both directions"},
   {"rsp.slot", Basis::Wiki, "1", "rclk", "clocks.md: the RSP runs on the RCP clock (n64brew Clock_Timing; SDK pro-man ch.3 RCP 62.5 MHz); one pipeline slot, an issue or a bubble, per clock", "nemu64:rsp_timing/sll", "RSP::Pipeline charges it per issued pair and per stall bubble (ADR 0001 keeps the RSP pipeline as the RSP cost model)"},
@@ -225,9 +227,9 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.noise-reset", Basis::Measured, "all-ones", "rule", "Thar0 data reproduction (rdp-noise.md)", "noise:a", ""},
   {"rdp.noise-pixel-offset", Basis::ModelChoice, "0", "rclk", "rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured", "noise:rect-1016", "calibration #16"},
   {"legacy.clock.vclk-pal", Basis::Legacy, "49656530", "Hz", "ares/n64/system/system.cpp:88", "pending:no-corpus", "no plan unit: PAL is not the target console"},
-  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:97", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
-  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:105", "pending:no-corpus", "no plan unit: NMI entry has no timing reference (T7b)"},
-  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:110", "pending:no-corpus", "replaced by T6: SysAD port"},
+  {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:102", "nemu64:cop0hazard/softwareinterrupt", "no plan unit: no measurement of the interrupt entry cost was found; T7c built the sampling rule (cpu.irq-sample), not this cost"},
+  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:109", "pending:no-corpus", "no plan unit: NMI entry has no timing reference (T7b)"},
+  {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:114", "pending:no-corpus", "replaced by T6: SysAD port"},
   {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
   {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},

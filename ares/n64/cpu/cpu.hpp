@@ -42,7 +42,11 @@ struct CPU : Thread {
   auto compareMatch() -> void;
   auto scheduleCompare() -> void;
   auto pendingCount() const -> u64 { return (Thread::clock - countClock).units / Timing::UnitsPerPclk; }
-  auto effectiveCount() const -> u64 { return (scc.count + pendingCount()) & CountMask; }
+  //An MTC0 COUNT holds the written value until countResume (behavior cpu.count-write-hold).
+  auto effectiveCount() const -> u64 {
+    Clock at = Thread::clock < countResume ? countResume : Thread::clock;
+    return (scc.count + (at - countClock).units / Timing::UnitsPerPclk) & CountMask;
+  }
   auto setInterruptPending(u32 bit, bool value) -> void;
 
   auto gdbPoll() -> void;
@@ -508,6 +512,9 @@ struct CPU : Thread {
     struct Wired {
       n6  index;
       u64 randomEpoch;  //instruction index at which Random reads 31
+      //Random's sequence before the last Wired write landed.
+      n6  previousIndex;
+      u64 previousEpoch;
     } wired;
 
     //8
@@ -878,7 +885,9 @@ struct CPU : Thread {
   auto INVALID() -> void;
 
   Clock countClock;  //time up to which COUNT has been stepped
+  Clock countResume;  //time from which COUNT counts again after an MTC0 COUNT
   u64 instructionIndex = 0;  //instructions executed since load; CP0 Random counts these
+  bool interruptSampled = false;  //an interrupt was pending at the previous instruction boundary
 
   struct Disassembler {
     CPU& self;
