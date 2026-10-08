@@ -131,8 +131,6 @@ constexpr auto trailer(Requester requester, Direction direction) -> Clock {
 }
 
 struct Channel {
-  //post() sets the next decision no earlier than `free`, so a refresh never cuts into a granted burst
-
   //every client keeps at most one burst in flight (refresh, SysAD, each DMA engine)
   static constexpr u32 Capacity = 16;
 
@@ -159,6 +157,7 @@ struct Channel {
     if(count == Capacity) abort();
     Clock arrival = at + Timing::Behavior::RiRequestLatency;
     pending[count++] = {burst, arrival, sequences[(u32)burst.requester]++};
+    //no decision before `free`, so a refresh never cuts into a granted burst (ri.refresh-waits-for-burst)
     Clock d = Timing::nextRclkEdge(arrival > free ? arrival : free);
     if(d < cachedNext) cachedNext = d;
   }

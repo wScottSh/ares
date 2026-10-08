@@ -476,7 +476,8 @@ bh_done:
 # a0 = {kernel, reps, flags, kernel args...}: n64-systembench's TIMEIT_MULTI (main.c:105-127),
 # which averages all reps but its lowest and highest. RES[0] = min ticks, RES[1] = max ticks,
 # RES[2] = sum of ticks over the reps; the host takes (sum - min - max) / (reps - 2). The
-# kernel gets a0 = &args and a1 = &RES[3] and returns v0 = COUNT ticks. flags as bench_run.
+# kernel gets a0 = &args, a1 = &RES[3] and a2 = reps left less one (reps - 1 down to 0), and
+# returns v0 = COUNT ticks. flags as bench_run.
 bench_multi:
     addiu $sp, $sp, -48
     sd $ra, 0($sp)
@@ -501,6 +502,7 @@ bench_multi:
 bm_loop:
     lw $t9, 0($s0)
     addiu $a0, $s0, 12
+    addiu $a2, $s1, -1
     jalr $t9
     addiu $a1, $s3, 12
     lw $t0, 8($s3)
@@ -591,10 +593,32 @@ ksb_ld_time:
     jr $ra
     subu $v0, $t4, $t3
 
-# Kernel. args = {setup reg (0 = none), setup value, stmt reg, stmt value, poll reg}.
-# n64-systembench TIMEIT_WHILE (main.c:75-103), as bench_piiow and bench_sidmaw_ram (main.c:187-204) with cond `reg & (DMA_BUSY | IO_BUSY)`: the
-# setup write, COUNT, the stmt write, then a loop of 8 x (COUNT, poll read) that runs until
-# the 8th poll sees idle. The result ends at the COUNT before the first poll that saw idle.
+# Kernel. args = {addr0, addr1, addr2, addr3}. n64-systembench bench_ram_uncached_r32_{seq,
+# random,multibank} (main.c:270-292): COUNT, four volatile LWs whose values are unused, COUNT.
+k_sb_lw4:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    lw $t2, 8($a0)
+    lw $t3, 12($a0)
+    mfc0 $t4, $count
+    lw $t5, 0($t0)
+    lw $t5, 0($t1)
+    lw $t5, 0($t2)
+    lw $t5, 0($t3)
+    mfc0 $t6, $count
+    jr $ra
+    subu $v0, $t6, $t4
+
+# Kernel. args = {setup reg (0 = none), setup value, stmt reg, stmt value, poll reg, jitter}.
+# n64-systembench TIMEIT_WHILE (main.c:75-103), as bench_piiow, bench_sidmaw_{ram,rom} and
+# bench_siiow (main.c:187-227) with cond `reg & (DMA_BUSY | IO_BUSY)`: the setup write, COUNT,
+# the stmt write, then a loop of 8 x (COUNT, poll read) that runs until the 8th poll sees idle.
+# The result ends at the COUNT before the first poll that saw idle.
+# Between the stmt and the polls the kernel runs a2 x jitter nops. The result can only end on
+# a poll, and polls are about 25 pclk apart, so at one fixed phase it is the busy time plus
+# wherever that phase puts the poll grid: 0 to 42 fixed nops after a 134 rclk PI write read
+# 125.3 to 141.3 rclk. The core repeats one phase every rep, so the nops walk the grid over
+# 50 pclk, two poll periods, and the TIMEIT_MULTI mean becomes the mean over phase.
 k_sb_while:
     addiu $sp, $sp, -64
     sd $s0, 0($sp)
@@ -605,17 +629,27 @@ k_sb_while:
     sd $s5, 40($sp)
     sd $s6, 48($sp)
     sd $s7, 56($sp)
-    lw $a2, 0($a0)
     lw $a3, 4($a0)
     lw $v1, 8($a0)
     lw $v0, 12($a0)
     lw $t9, 16($a0)
+    lw $t8, 20($a0)
+    multu $a2, $t8
+    mflo $t8
+    sll $t8, $t8, 2
+    la $t7, ksw_sled_end
+    subu $t7, $t7, $t8
+    lw $a2, 0($a0)
     beqz $a2, ksw_go
     nop
     sw $a3, 0($a2)
 ksw_go:
     mfc0 $t0, $count
     sw $v0, 0($v1)
+    jr $t7
+    nop
+    .space 200
+ksw_sled_end:
 ksw_loop:
     mfc0 $s0, $count
     lw $t1, 0($t9)

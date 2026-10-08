@@ -248,7 +248,9 @@ def rdp_rectn(suite):
 SB_BUF = 0x005C0000          # bank 5, rambuf (64-byte aligned, main.c:47-48)
 SB_LOADS = [(8, "k_sb_lbu"), (16, "k_sb_lhu"), (32, "k_sb_lw"), (64, "k_sb_ld")]
 PIF_RAM = 0x1FC007C0
+PIF_ROM = 0x1FC00700         # main.c:56
 SI_BASE = 0xA4800000
+SB_JITTER_PCLK = 50          # two poll periods of k_sb_while
 
 
 def sb_point(rom, point, kernel, args, reps, unit, consts=(), pre=()):
@@ -265,11 +267,22 @@ def sb_cached(rom, bits, kernel):
     sb_point(rom, f"c{bits}", kernel, [KSEG0 | SB_BUF, 1], 50, "pclk", [("bits", bits)])
 
 
+# bench_ram_uncached_r32_{seq,random,multibank} (main.c:270-292): rambuf offsets, and the first
+# word of each of four 1 MiB banks.
+SB_LW4 = {
+    "u32-seq": [SB_BUF + o for o in (0, 4, 8, 12)],
+    "u32-rand": [SB_BUF + o for o in (1024, 12, 568, 912)],
+    "u32-banked": [0x00000000, 0x00100000, 0x00200000, 0x00300000],
+}
+
+
 def uncached_sizes(suite):
     rom = Rom(suite, "uncached-sizes")
     for bits, kernel in SB_LOADS:
         sb_cached(rom, bits, kernel)
         sb_point(rom, f"u{bits}", kernel, [KSEG1 | SB_BUF, 0], 50, "pclk", [("bits", bits)])
+    for point, addrs in SB_LW4.items():
+        sb_point(rom, point, "k_sb_lw4", [KSEG1 | a for a in addrs], 50, "pclk", [("bits", 32), ("loads", 4)])
 
 
 def rcp_reg_read(suite):
@@ -284,9 +297,37 @@ def pif_ram_read(suite):
     sb_point(rom, "pif-ram", "k_sb_lw", [KSEG1 | PIF_RAM, 0], 50, "rclk")
 
 
+def sb_while(rom, point, setup, stmt, poll, reps, consts=(), pre=()):
+    """A TIMEIT_WHILE point whose reps spread their poll phase over SB_JITTER_PCLK (asm.py k_sb_while)."""
+    sb_point(rom, point, "k_sb_while", [*setup, *stmt, poll, SB_JITTER_PCLK // reps], reps, "rclk", consts, pre)
+
+
+def pi_io_read(suite):
+    rom = Rom(suite, "pi-io-read")
+    sb_cached(rom, 32, "k_sb_lw")
+    sb_point(rom, "rom-word", "k_sb_lw", [KSEG1 | 0x10000000, 0], 50, "rclk")
+
+
+def si_io_write(suite):
+    rom = Rom(suite, "si-io-write")
+    sb_while(rom, "pif-ram", (0, 0), (KSEG1 | PIF_RAM, 0), SI_BASE + 0x18, 50)
+
+
 def pi_io_write(suite):
     rom = Rom(suite, "pi-io-write")
-    sb_point(rom, "rom-word", "k_sb_while", [0, 0, KSEG1 | 0x10000000, 0, PI_BASE + 0x10], 50, "rclk")
+    sb_while(rom, "rom-word", (0, 0), (KSEG1 | 0x10000000, 0), PI_BASE + 0x10, 50)
+
+
+# bench_joybus_empty* (main.c:307-424): the end marker after 0, 1, 4, 8, 32, 56 or 62 zero bytes.
+SB_JOY_EMPTY = {
+    "empty-0b": [0xFE00000000000000] + [0] * 6 + [1],
+    "empty-1b": [0x00FE000000000000] + [0] * 6 + [1],
+    "empty-4b": [0x00000000FE000000] + [0] * 6 + [1],
+    "empty-8b": [0, 0xFE00000000000000] + [0] * 5 + [1],
+    "empty-32b": [0] * 4 + [0xFE00000000000000] + [0] * 2 + [1],
+    "empty-56b": [0] * 7 + [0xFE00000000000001],
+    "empty-63b": [0] * 7 + [0x000000000000FE01],
+}
 
 
 def joybus_block(dwords):
@@ -296,12 +337,17 @@ def joybus_block(dwords):
 def si_dma(suite):
     rom = Rom(suite, "si-dma")
     zero = Step("bench_list_step", [suite.blob([0] * 16), 16, 0, 0, 0, 0, 0, KSEG1 | SB_BUF], 0)
-    sb_point(rom, "write64", "k_sb_while", [SI_BASE + 0x0, SB_BUF, SI_BASE + 0x10, PIF_RAM, SI_BASE + 0x18],
-             10, "rclk", [("dir", "write64")], pre=[zero])
-    for n in range(1, 5):
-        block = [0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1]
-        sb_point(rom, f"read64-{n}", "k_sb_joybus", [suite.blob(joybus_block(block)), KSEG1 | SB_BUF, SB_BUF + 64],
-                 50, "rclk", [("dir", "read64"), ("commands", n)])
+    sb_while(rom, "write64", (SI_BASE + 0x0, SB_BUF), (SI_BASE + 0x10, PIF_RAM), SI_BASE + 0x18, 10,
+             [("dir", "write64")], pre=[zero])
+    sb_while(rom, "write64-rom", (SI_BASE + 0x0, SB_BUF), (SI_BASE + 0x10, PIF_ROM), SI_BASE + 0x18, 10,
+             [("dir", "write64")])
+    blocks = {f"read64-{n}": ([0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1], n)
+              for n in range(1, 5)}
+    blocks.update({point: (block, 0) for point, block in SB_JOY_EMPTY.items()})
+    blocks["accessory"] = ([0xFF010300FFFFFFFF, 0xFE00000000000000] + [0] * 5 + [1], 1)
+    for point, (block, commands) in blocks.items():
+        sb_point(rom, point, "k_sb_joybus", [suite.blob(joybus_block(block)), KSEG1 | SB_BUF, SB_BUF + 64],
+                 50, "rclk", [("dir", "read64"), ("commands", commands)])
 
 
 ROMS = {
@@ -321,6 +367,8 @@ ROMS = {
     "uncached-sizes": uncached_sizes,
     "rcp-reg-read": rcp_reg_read,
     "pif-ram-read": pif_ram_read,
+    "pi-io-read": pi_io_read,
     "pi-io-write": pi_io_write,
+    "si-io-write": si_io_write,
     "si-dma": si_dma,
 }

@@ -68,6 +68,20 @@ bench:si-dma-read64-1	bench	si-dma	point=read64-1 metric=sb_rclk	suite	n64-syste
 bench:si-dma-read64-2	bench	si-dma	point=read64-2 metric=sb_rclk	suite	n64-systembench main.c:610 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
 bench:si-dma-read64-3	bench	si-dma	point=read64-3 metric=sb_rclk	suite	n64-systembench main.c:611 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
 bench:si-dma-read64-4	bench	si-dma	point=read64-4 metric=sb_rclk	suite	n64-systembench main.c:612 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
+bench:uncached-sizes-u32-seq	bench	uncached-sizes	point=u32-seq metric=net_pclk	suite	n64-systembench main.c:582 U32R seq, four uncached LWs, 134 pclk less its 2 pclk harness = 132; the port subtracts its own (expected.tsv)
+bench:uncached-sizes-u32-rand	bench	uncached-sizes	point=u32-rand metric=net_pclk	suite	n64-systembench main.c:583 U32R rand, four uncached LWs, 134 pclk less its 2 pclk harness = 132; the port subtracts its own (expected.tsv)
+bench:uncached-sizes-u32-banked	bench	uncached-sizes	point=u32-banked metric=net_pclk	suite	n64-systembench main.c:584 U32R banked, four uncached LWs, 136 pclk less its 2 pclk harness = 134; the port subtracts its own (expected.tsv)
+bench:pi-io-read	bench	pi-io-read	point=rom-word metric=sb_rclk	suite	n64-systembench main.c:594 PI I/O R, a cart word read, 144 rclk
+bench:si-io-write	bench	si-io-write	point=pif-ram metric=sb_rclk	suite	n64-systembench main.c:600 SI I/O W, a PIF RAM word write to SI_STATUS idle, 2158 rclk
+bench:si-dma-write64-rom	bench	si-dma	point=write64-rom metric=sb_rclk	suite	n64-systembench main.c:598 SI DMA W ROM, 64 B to the PIF ROM address, 2144 rclk
+bench:si-dma-empty-0b	bench	si-dma	point=empty-0b metric=sb_rclk	suite	n64-systembench main.c:602 JOY: Empty 0B, SI DMA RD64B with no joybus command, 15030 rclk (dma-timing.md SI DMA)
+bench:si-dma-empty-1b	bench	si-dma	point=empty-1b metric=sb_rclk	suite	n64-systembench main.c:603 JOY: Empty 1B, SI DMA RD64B with no joybus command, 16424 rclk (dma-timing.md SI DMA)
+bench:si-dma-empty-4b	bench	si-dma	point=empty-4b metric=sb_rclk	suite	n64-systembench main.c:604 JOY: Empty 4B, SI DMA RD64B with no joybus command, 20644 rclk (dma-timing.md SI DMA)
+bench:si-dma-empty-8b	bench	si-dma	point=empty-8b metric=sb_rclk	suite	n64-systembench main.c:605 JOY: Empty 8B, SI DMA RD64B with no joybus command, 21163 rclk (dma-timing.md SI DMA)
+bench:si-dma-empty-32b	bench	si-dma	point=empty-32b metric=sb_rclk	suite	n64-systembench main.c:606 JOY: Empty 32B, SI DMA RD64B with no joybus command, 21163 rclk (dma-timing.md SI DMA)
+bench:si-dma-empty-56b	bench	si-dma	point=empty-56b metric=sb_rclk	suite	n64-systembench main.c:607 JOY: Empty 56B, SI DMA RD64B with no joybus command, 21170 rclk (dma-timing.md SI DMA)
+bench:si-dma-empty-63b	bench	si-dma	point=empty-63b metric=sb_rclk	suite	n64-systembench main.c:608 JOY: Empty 63B, SI DMA RD64B with no joybus command, 21178 rclk (dma-timing.md SI DMA)
+bench:si-dma-accessory	bench	si-dma	point=accessory metric=sb_rclk	suite	n64-systembench main.c:613 JOY: Accessory, SI DMA RD64B with one info command on port 1, 36834 rclk (dma-timing.md SI DMA)
 bench:wb-fifth-store	bench	wb-fifth-store	-	report	no ROM in plan R1 yet; no public hardware value (vr4300-wb.md)
 bench:rdp-loadsz-sweep	bench	rdp-loadsz-sweep	-	report	no ROM in plan R1 yet; reports against two published TMEM load rates that conflict: 8 B/rclk (MiSTer RTL) and the jgemu dpc_probe LOADSZ law, about 15 clocks plus 0.418 clocks per byte (jgemu-dpc-probe.md)
 thar0:alpha-fail-1cycle	thar0	ac-zbsame-vioff-noimrd-1cyc	-	suite	plan T12: exactly 77,772 (pure compute, min = avg = max on hardware)

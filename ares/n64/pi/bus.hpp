@@ -60,7 +60,12 @@ inline auto PI::readWord(u32 address, Thread& thread) -> u32 {
     thread.step(writeForceFinish(thread.clock));
     return io.busLatch;
   }
-  thread.step(pclk(250));
+  //RCP::read charged a register read; a domain 1 cart read costs cpu.pi-io-read in all (n64-systembench PI I/O R)
+  if(&bsdForAddress(address) == &bsd1) {
+    thread.step(Timing::Behavior::CpuPiIoRead - Timing::Behavior::CpuRcpRegisterRead);
+  } else {
+    thread.step(pclk(250));
+  }
   busAddress(address);
   u32 data = busReadHalf() << 16;
   io.busLatch = data | busReadHalf();
