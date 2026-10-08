@@ -99,7 +99,7 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
   //TMEM load sources (DpTexture), fill writes (DpFill).
   enum Image : u8 { Color, Depth, Texture, Command };
   static constexpr u32 SpanBytes = 4096 + 16;   //a 1024-pixel 32-bpp row, octbyte-aligned
-  static constexpr u32 Slots = 4;               //spans between prefetch and their last write grant
+  static constexpr u32 Slots = Timing::Behavior::RdpSpanSlots;  //spans between prefetch and their last write grant
   static constexpr u32 LoadBytes = 64 * 1024;   //TMEM load staging (rows of a load, octbyte-aligned)
 
   //One span row of one image as the RI delivered it and as the pipeline wrote it.

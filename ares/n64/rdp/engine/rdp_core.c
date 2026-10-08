@@ -137,15 +137,16 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
  * pixel (1 or 2):
  *
  *     L    = max(cyc*W + cyc - 1, 4)      clocks per span
- *     D    = min(3*L - 2, 25) + OFF       clocks of command-processor lead
+ *     D    = min(3*L - 2, depth) + OFF    clocks of command-processor lead
  *
  *     live pixel (r,c) is emitted at clock   r*L + cyc*c
  *     the primitive's nominal end is         (H-1)*L
  *     the k'th following command executes at (H-1)*L - D + k
  *
  * and a write takes effect at the first live pixel emitted at or after its
- * clock. 3*L - 2 is a three-deep span buffer; 25 is one fixed pixel-pipeline
- * latency, the SAME constant in both cycle modes; the floor of 4 on span cost
+ * clock. 3*L - 2 is a three-deep span buffer; depth is the sampling stage's
+ * fixed pixel-pipeline latency, the SAME constant in both cycle modes (see
+ * below for where it comes from); the floor of 4 on span cost
  * bites only for very narrow spans, and is what collapses all three writes
  * onto one pixel there. Each command costs one clock (n64brew Pipeline: NOPs
  * and attribute setters execute in one pipeline cycle).
@@ -168,13 +169,13 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
  * endpoints into the clip, so raising min_x moves the left edge whichever of
  * startx/stopx happens to hold it.
  *
- * 25 is rdp.pipeline-depth (m_pipeline_depth), the depth of the combiner,
- * which samples the environment colour. Every other register in the n64brew
+ * For the combiner, which samples the environment colour, depth is
+ * rdp.pipeline-depth (m_pipeline_depth, 25). Every other register in the n64brew
  * Pipeline table "Effect of unsynced attribute changes" is sampled at its own
  * stage, and the table's offsets give each stage's depth relative to the
  * combiner's (rdp_haz_stage_offset), so a write to it lands with
  *
- *     D(stage) = min(3*L - 2, depth + offset(stage) - offset(combiner))
+ *     D(stage) = min(3*L - 2, rdp.pipeline-depth + offset(stage) - offset(combiner))
  *
  * One Set Other Modes write lands at a different pixel for each stage it
  * changes. A stage at offset 0 (the colour image, image_read_en and the Z

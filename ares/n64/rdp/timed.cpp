@@ -76,12 +76,12 @@ auto RDP::Port::granted(const RiBus::Grant& g) -> void {
   timeline.wake(Timing::ActorId::RDP);
 }
 
-//The queue entry to post next: the oldest whose image has nothing older
-//waiting, and, for a read, no read of its image in flight (one read per image).
-//Writes and reads of one image keep their order.
+//The queue entry to post next: the oldest of the first rdp.port-lookahead
+//whose image has nothing older waiting, and, for a read, no read of its image
+//in flight (one read per image). Writes and reads of one image keep their order.
 auto RDP::Port::eligible() const -> s32 {
   u32 seen = 0;
-  for(u32 i : range(min((u32)queue.size(), 8u))) {
+  for(u32 i : range(min((u32)queue.size(), (u32)Timing::Behavior::RdpPortLookahead))) {
     auto& p = queue[i];
     u32 bit = 1 << p.image;
     if(seen & bit) continue;
