@@ -11,8 +11,15 @@ usage: behaviors.py                 write ares/n64/timing/behaviors.hpp, docs/sp
                                     check, from one standing run of every suite
        behaviors.py --self-test     prove each --check failure fires and names its fix
 
-behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note.
-Every row names a reference and at least one check. A check written `~id` is a guard: it
+behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note, code.
+Every row names a reference and at least one check, and says where the code builds it. A
+row with a number is built when code reads it as Timing::Behavior::<Name>, and a legacy row
+is built at its literal's code site, so their code column is empty. A rule, order or map
+row, or a number the code implements without reading it, names the code that implements it
+in its code column: one or more `ares/n64/<path>:<symbol>`. A row whose value the code does
+not use is not built: its code column reads `not-built: <what the code does instead>` and
+names that code as `ares/n64/<path>:<symbol>`; its status is not-built whatever its checks
+say. A check written `~id` is a guard: it
 runs and can fail the row, but it never makes the row pass, because it does not measure the
 row's value. det and stepcap are always written as guards: they show a run repeats, not that
 a value is right. A row whose checks are all guards must be a model-choice row; its status is
@@ -50,7 +57,7 @@ SPEC = "docs/spec/n64-timing.md"
 RESULTS = "docs/spec/n64-timing-results.tsv"
 CLOSURE = "docs/spec/map-1-closure-draft.md"
 LINT = "tools/n64-timing/lint-literals.py"
-COLUMNS = ["id", "value", "unit", "basis", "reference", "verify", "fit-from", "note"]
+COLUMNS = ["id", "value", "unit", "basis", "reference", "verify", "fit-from", "note", "code"]
 CHECK_COLUMNS = ["id", "runner", "target", "selector", "expect", "source"]
 
 BASES = {
@@ -84,6 +91,9 @@ LEGACY_NOTE = re.compile(r"^(replaced by T(?:\d+[a-d]?|-L)|no plan unit): \S")
 ID = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9-]+)+$")
 REFERENCE_SITE = re.compile(r"^(ares/n64/\S+):(\d+)$")
 BEHAVIOR_USE = re.compile(r"\bBehavior::(\w+)")
+CODE_POINTER = re.compile(r"\b(ares/n64/[\w./-]+):([\w:.]*\w)")
+NOT_BUILT = "not-built: "
+USING_BEHAVIOR = "using namespace Timing::Behavior;"
 
 
 def lint_module():
@@ -239,16 +249,72 @@ def check_defined(cid, explicit, suite_files):
     return False
 
 
-def behavior_uses(root):
-    uses = []
+def core_sources(root):
     for path in sorted((Path(root) / "ares/n64").rglob("*")):
         rel = path.relative_to(root).as_posix()
-        if path.suffix not in (".cpp", ".hpp") or rel == HEADER:
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").split("\n"), 1):
+        if path.suffix in (".cpp", ".hpp") and rel != HEADER:
+            yield rel, path.read_text(encoding="utf-8", errors="replace")
+
+
+def behavior_uses(root):
+    uses = []
+    for rel, text in core_sources(root):
+        for number, line in enumerate(text.split("\n"), 1):
             for name in BEHAVIOR_USE.findall(line):
                 uses.append((name, f"{rel}:{number}"))
     return uses
+
+
+def constants_read(root, names):
+    """The constant names the core reads: as Timing::Behavior::<Name>, or bare in a file that says
+    `using namespace Timing::Behavior`."""
+    read = {name for name, _ in behavior_uses(root)}
+    for _, text in core_sources(root):
+        if USING_BEHAVIOR in text:
+            read |= names & set(re.findall(r"\w+", text))
+    return read
+
+
+def pointer_error(root, path, symbol):
+    """None when `symbol` names something in `path`, else the reason it does not."""
+    file = Path(root) / path
+    if not file.is_file():
+        return f"{path} does not exist"
+    if not re.search(rf"(?<!\w){re.escape(symbol)}(?!\w)", file.read_text(encoding="utf-8", errors="replace")):
+        return f"{path} has no `{symbol}`"
+    return None
+
+
+def not_built(row):
+    return row["code"].startswith(NOT_BUILT)
+
+
+def code_errors(root, row, read, where):
+    """A row's code column against what the code reads (see the module docstring)."""
+    rid, code = row["id"], row["code"]
+    name = f"Timing::Behavior::{constant_name(rid)}"
+    pointers = CODE_POINTER.findall(code)
+    errors = [f"{where}: `{rid}` code pointer {path}:{symbol} does not resolve: {reason}. Point at the function or "
+              f"name that implements it." for path, symbol in pointers for reason in [pointer_error(root, path, symbol)] if reason]
+    if row["basis"] == "legacy":
+        if code:
+            errors.append(f"{where}: legacy row `{rid}` is built at its literal-allowlist code site; clear its code column.")
+    elif read:
+        if code:
+            errors.append(f"{where}: code reads {name}, so `{rid}` is built there; clear its code column.")
+    elif not code:
+        what = f"no code reads {name}, and `{rid}` names no code" if constant(row) else \
+            f"`{rid}` ({row['value']} {row['unit']}) has no constant, and it names no code that implements it"
+        errors.append(f"{where}: {what}. Read the constant where the cost is charged, name the code that implements "
+                      f"it (ares/n64/<path>:<symbol>), or write `{NOT_BUILT}<what the code does instead, "
+                      f"ares/n64/<path>:<symbol>>`.")
+    elif not pointers:
+        errors.append(f"{where}: `{rid}` code `{code}` names no ares/n64/<path>:<symbol>. "
+                      + ("Name the code that does instead." if not_built(row) else "Name the code that implements it."))
+    elif not not_built(row) and CODE_POINTER.sub("", code).strip():
+        errors.append(f"{where}: `{rid}` code `{code}` is not a list of ares/n64/<path>:<symbol> pointers. A row whose "
+                      f"value the code does not use starts with `{NOT_BUILT}`.")
+    return errors
 
 
 def validate(root):
@@ -259,9 +325,11 @@ def validate(root):
     lint_errors, sites = lint_module().lint(root)
     errors += lint_errors
     seen = {}
+    read = constants_read(root, {constant_name(r["id"]) for r in rows if constant(r)})
     for row in rows:
         where = f"{TABLE}:{row['line']}"
         rid = row["id"]
+        errors += code_errors(root, row, constant(row) is not None and constant_name(rid) in read, where)
         if not ID.match(rid):
             errors.append(f"{where}: id `{rid}` must be lowercase dotted words, like ri.read-hit")
         if rid in seen:
@@ -416,6 +484,12 @@ def checks_cell(row):
     return text
 
 
+def code_cell(row):
+    if row["code"]:
+        return cell(row["code"])
+    return "" if row["basis"] == "legacy" else f"reads `Timing::Behavior::{constant_name(row['id'])}`"
+
+
 def value_cell(row):
     c = constant(row)
     text = f"{row['value']} {row['unit']}"
@@ -440,6 +514,8 @@ STATUS_MEANING = {
     "fit only": "only the checks the value was fitted to passed (verify-is-fit)",
     "model-choice": "a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the "
                     "same every time, not that its value is right",
+    "not-built": "the code does not use the row's value; its code column says what the code does instead. Its checks "
+                 "measure that code, not the row",
 }
 
 
@@ -462,7 +538,10 @@ def render_spec(rows, checks, found):
         "",
         "This is the timing model's specification (map [#1](https://github.com/wScottSh/ares/issues/1)). "
         "Each row is one behavior: its value, the basis of that value, the reference it comes from, the checks that decide it, and their results. "
-        "There is no unverified status. A behavior is built from its reference, or it is a model choice whose reference states the reason. "
+        "There is no unverified status. A behavior is built from its reference (or, as a model choice, from the reason its "
+        "reference states), or it is not built. The Code column says where it is built: the constant the code reads, or the "
+        "code that implements a rule. A row whose value the code does not use is not built, and its Code column says what "
+        "the code does instead. "
         "A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. "
         "A fit row names the checks its value was solved from (fit from). A pass on those verifies the arithmetic, not the model, "
         "so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why. "
@@ -491,10 +570,18 @@ def render_spec(rows, checks, found):
             groups.setdefault(row["id"].split(".")[0], []).append(row)
     out += ["", "## Behaviors"]
     for group, members in groups.items():
-        out += ["", f"### {group}", "", "| Behavior | Value | Basis | Reference | Checks | Result | Note |", "|---|---|---|---|---|---|---|"]
+        out += ["", f"### {group}", "", "| Behavior | Value | Basis | Reference | Checks | Result | Code | Note |",
+                "|---|---|---|---|---|---|---|---|"]
         for r in members:
             out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['reference'])} | "
-                       f"{checks_cell(r)} | {cell(result_cell(r, found))} | {cell(r['note'])} |")
+                       f"{checks_cell(r)} | {cell(result_cell(r, found))} | {code_cell(r)} | {cell(r['note'])} |")
+    out += ["", "## Not built", "",
+            "The code does not use these rows' values. Each says what the code does instead; their checks measure that code.", "",
+            "| Behavior | Value | Basis | What the code does instead | Checks |", "|---|---|---|---|---|"]
+    for r in rows:
+        if not_built(r):
+            out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['code'][len(NOT_BUILT):])} | "
+                       f"{cell('; '.join(result_word(c, found) for c in r['verify'].split()))} |")
     out += ["", "## Legacy costs in today's core", "",
             "Each row is a constant that today's core still charges. `tools/n64-timing/literal-allowlist.tsv` pins the literal "
             "at its code site to the row, so the code and this table cannot disagree. The plan unit in the note replaces the cost "
@@ -571,7 +658,10 @@ def render_closure(root, rows, checks, found):
         "",
         f"The spec is `{SPEC}`: {len(rows)} behaviors, each with a basis, a reference, the checks that decide it and their "
         f"results ({cell(results_source(found))}). "
-        + ", ".join(f"{n} {s}" for s, n in sorted(count.items())) + ".",
+        + ", ".join(f"{n} {s}" for s, n in sorted(count.items())) + ". "
+        + (f"{len(by_status.get('not-built', []))} behaviors are not built: the code does not use their value ("
+           + ", ".join(f"`{r['id']}`" for r in by_status.get("not-built", [])) + "). Behaviors not built says what the code "
+           "does instead." if by_status.get("not-built") else "Every behavior is built: the code reads each value or implements each rule."),
         "",
         "## Destination",
         "",
@@ -588,6 +678,11 @@ def render_closure(root, rows, checks, found):
         fit = [r["id"] for r in rows if c in r["fit-from"].split()]
         out.append(f"| `{c}` | {cell(found[c][1])} | {' '.join(f'`{x}`' for x in verify) or '-'} | "
                    f"{' '.join(f'`{x}`' for x in fit) or '-'} |")
+    out += ["", "## Behaviors not built", "",
+            "The code does not use these rows' values, so no check result says anything about them.", "",
+            "| Behavior | Basis | Value | What the code does instead |", "|---|---|---|---|"]
+    for r in by_status.get("not-built", []):
+        out.append(f"| `{r['id']}` | {r['basis']} | {value_cell(r)} | {cell(r['code'][len(NOT_BUILT):])} |")
     out += ["", "## Rows whose checks fail", "", "| Behavior | Basis | Failing checks |", "|---|---|---|"]
     for r in by_status.get("fail", []):
         bad = [c for c, _ in verify_checks(r) if found_result(found, c)[0] == "fail"]
@@ -615,7 +710,7 @@ def render_closure(root, rows, checks, found):
     for r in rows:
         s = row_status(r, found)
         pend = [c for c, _ in verify_checks(r) if (c if c.startswith("pending:") else found_result(found, c)[0]).startswith("pending:")]
-        if s in STATUS_MEANING and pend:
+        if s in STATUS_MEANING and s != "not-built" and pend:
             out.append(f"| `{r['id']}` | {s} | " + "; ".join(
                 check_cell(c) if c.startswith("pending:") else f"`{c}` pending ({found[c][0][8:]})" for c in pend) + " |")
     return "\n".join(out) + "\n"
@@ -785,8 +880,9 @@ def gen_result(run, row):
     log = text(run / "behaviors.txt")
     if log is None:
         return None
-    ok = "behaviors.py: check: ok" in log and "lint-literals: ok" in log and "FAILED" not in log
-    return ("pass" if ok else "fail"), "behaviors.py --check, --self-test and lint-literals.py"
+    ok = all(line in log for line in ("behaviors.py: check: ok", "lint-literals: ok")) and "FAILED" not in log \
+        and all(re.search(rf"^{tool}: self-test: \d+ cases, 0 failed$", log, re.M) for tool in ("behaviors.py", "pidma-replay"))
+    return ("pass" if ok else "fail"), "behaviors.py --check and --self-test, lint-literals.py, pidma-replay.py --self-test"
 
 
 MM_SCENES = {"file-select": "filesel", "south-clock-town": "sct"}
@@ -909,8 +1005,10 @@ def load_results(root, rows, checks, errors):
 
 
 def row_status(row, found):
-    """pass, fail, fit only, model-choice or pending:<gates> for one behavior, from its checks' results.
-    A guard can fail the row but never pass it."""
+    """not-built, pass, fail, fit only, model-choice or pending:<gates> for one behavior, from its code column and
+    its checks' results. A guard can fail the row but never pass it."""
+    if not_built(row):
+        return "not-built"
     fit_from = set(row["fit-from"].split())
     res = [(c, guard, c if c.startswith("pending:") else found.get(c, ("missing", ""))[0]) for c, guard in verify_checks(row)]
     if any(r == "fail" for _, _, r in res):
@@ -1008,6 +1106,19 @@ def self_test(root):
              "is pending:no-such-gate, which is not a pending row"),
             ("editing the generated header", HEADER, lambda t: t.replace("= 30;", "= 31;", 1), "ares/n64/timing/behaviors.hpp differs from the generated output"),
             ("a legacy code site moving", "ares/n64/pi/bus.hpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),
+            ("a constant no code reads", TABLE, row_field("pi.io-busy", "code", ""), "no code reads Timing::Behavior::PiIoBusy"),
+            ("removing the code that reads a constant", "ares/n64/timing/timeline.cpp",
+             lambda t: "\n".join(l for l in t.split("\n") if "ClockUnit" not in l), "no code reads Timing::Behavior::ClockUnit"),
+            ("a rule that names no code", TABLE, row_field("vi.display-window", "code", ""),
+             "has no constant, and it names no code that implements it"),
+            ("a code pointer to a missing symbol", TABLE, row_field("vi.display-window", "code", "ares/n64/vi/vi.cpp:VI::noSuchWindow"),
+             "ares/n64/vi/vi.cpp has no `VI::noSuchWindow`"),
+            ("not-built on a row the code reads", TABLE, row_field("ri.read-hit", "code", "not-built: ares/n64/ri/bus.hpp:wire"),
+             "so `ri.read-hit` is built there; clear its code column"),
+            ("not-built that names no code", TABLE, row_field("pi.io-busy", "code", "not-built: nothing charges it"),
+             "names no ares/n64/<path>:<symbol>. Name the code that does instead"),
+            ("a code column on a legacy row", TABLE, row_field("legacy.pi.cart-read", "code", "ares/n64/pi/bus.hpp:PI::writeWord"),
+             "is built at its literal-allowlist code site; clear its code column"),
         ]
         if landed:
             cases += [
@@ -1016,7 +1127,7 @@ def self_test(root):
                  lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("mi-memset-uncached")),
                  "selects rom=mi-memset-uncached point=vi-on metric=pclk_per_sd but"),
             ]
-        failures = 0
+        failures, ran = 0, 0
         for name, rel, change, expected in cases:
             restore = edit(rel, change) if rel else None
             errors = check(work) if rel is None or expected is not None else validate(work)[0]
@@ -1029,26 +1140,32 @@ def self_test(root):
                 detail = hits[0] if hits else f"no error contains `{expected}`; got {errors[:2]}"
             print(f"self-test: {name}: {'ok' if ok else 'FAILED'}: {detail}")
             failures += not ok
+            ran += 1
             if name == "a legacy code site moving" and ok:
                 fix_lines(work)
                 after = check(work)
                 drift = [e for e in after if "--fix-lines" in e]
                 print(f"self-test: --fix-lines repairs it: {'ok' if not drift else 'FAILED'}")
                 failures += bool(drift)
+                ran += 1
                 shutil.copy(root / TABLE, work / TABLE)
             if restore:
                 restore()
         found = {"det": ("pass", ""), "stepcap": ("pass", ""), "x:pass": ("pass", ""), "x:fail": ("fail", "")}
         for name, row, want in [
-            ("a model choice that passes only det and stepcap", ("model-choice", "~det ~stepcap", ""), "model-choice"),
-            ("a guard that passes beside a gate", ("vendor", "~x:pass pending:calibration-16", ""), "pending:calibration-16"),
-            ("a guard that fails", ("vendor", "~x:fail pending:calibration-16", ""), "fail"),
-            ("a fit row with a passing guard", ("fit", "x:pass ~det", "x:pass"), "fit only"),
-            ("a check that decides beside a guard", ("model-choice", "x:pass ~det", ""), "pass"),
+            ("a model choice that passes only det and stepcap", ("model-choice", "~det ~stepcap", "", ""), "model-choice"),
+            ("a guard that passes beside a gate", ("vendor", "~x:pass pending:calibration-16", "", ""), "pending:calibration-16"),
+            ("a guard that fails", ("vendor", "~x:fail pending:calibration-16", "", ""), "fail"),
+            ("a fit row with a passing guard", ("fit", "x:pass ~det", "x:pass", ""), "fit only"),
+            ("a check that decides beside a guard", ("model-choice", "x:pass ~det", "", ""), "pass"),
+            ("a not-built row whose check passes", ("measured", "x:pass", "", "not-built: ares/n64/pi/bus.hpp:PI::writeWord"),
+             "not-built"),
         ]:
-            got = row_status(dict(zip(("basis", "verify", "fit-from"), row)), found)
+            got = row_status(dict(zip(("basis", "verify", "fit-from", "code"), row)), found)
             print(f"self-test: status of {name}: {'ok' if got == want else 'FAILED'}: {got} (expected {want})")
             failures += got != want
+            ran += 1
+        print(f"behaviors.py: self-test: {ran} cases, {failures} failed")
         return failures
     finally:
         shutil.rmtree(work, ignore_errors=True)

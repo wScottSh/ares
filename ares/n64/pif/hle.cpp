@@ -200,7 +200,7 @@ auto PIF::estimateTiming() -> u32 {
     &controllerPort4,
   };
 
-  u32 cycles = 13600;
+  u32 cycles = Timing::Behavior::SiRead64Base.units / Timing::UnitsPerRclk;
   u32 short_cmds = 0;
 
   u32 offset = 0;

@@ -139,7 +139,8 @@ def main():
         "## Provenance",
         "",
         f"Rows of `{b.TABLE}` by basis and status. Status is the row's result in `{b.SPEC}`: pass, fail, fit only, "
-        "model-choice (only guards checked it), or the gates of a row no check decided. " + binary_table(args.bench, b),
+        "model-choice (only guards checked it), not-built (the code does not use its value), or the gates of a row no check "
+        "decided. " + binary_table(args.bench, b),
         "",
         *summary,
         "",

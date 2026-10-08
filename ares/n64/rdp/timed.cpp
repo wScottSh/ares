@@ -19,9 +19,12 @@ static auto dpLogActor(Timing::ActorId id) -> const char* {
 
 static auto bytesPerPixel(u32 size) -> u32 { return size == 0 ? 0 : 1 << (size - 1); }
 
-//span-ram.md rows 3-6: a half holds rdp.span-ram-half bytes, i.e. 32 pixels
-//at 16 bpp (rdp.color-half-pixels-16bpp).
-static auto halfPixels(u32 bpp) -> u32 { return bpp ? (u32)Timing::Behavior::RdpSpanRamHalf / bpp : ~0u; }
+//span-ram.md rows 3-6: a half holds rdp.span-ram-half bytes. Whether a 16 bpp
+//color half holds that many bytes or 16 positions is open (question 1).
+static auto halfPixels(u32 image, u32 bpp) -> u32 {
+  if(image == RDP::Color && bpp == 2) return Timing::Behavior::RdpColorHalfPixels16bpp;
+  return bpp ? (u32)Timing::Behavior::RdpSpanRamHalf / bpp : ~0u;
+}
 
 static auto isLoad(int command) -> bool { return command == 0x30 || command == 0x33 || command == 0x34; }
 static auto isSync(int command) -> bool { return command >= 0x26 && command <= 0x28; }
@@ -360,8 +363,9 @@ auto RDP::startSpan(Clock at) -> bool {
   pipe.pixel = 0;
   pipe.time = start;
   for(auto* s : {&pipe.color, &pipe.depth}) {
-    //each span starts at its 4-pixel phase (span-ram.md row 3)
-    s->position += ((u32)slot.info.x0 - s->position) & 3;
+    //each span starts at its segment phase (span-ram.md row 3), 4 positions of 4 B as measured
+    //at 32 bpp; the same 4 positions are applied at 16 bpp, where nothing measures them
+    s->position += ((u32)slot.info.x0 - s->position) & (u32)(Timing::Behavior::RdpSpanRamSegment / 4 - 1);
     s->halfStart = 0;
   }
   return true;
@@ -383,7 +387,7 @@ auto RDP::beginChunk(Clock at) -> bool {
       auto& s = image == Color ? pipe.color : pipe.depth;
       auto& w = image == Color ? slot.color : slot.depth;
       if(w.hi == w.lo) continue;
-      u32 h = halfPixels(image == Color ? bytesPerPixel(info.fb_size) : 2);
+      u32 h = halfPixels(image, image == Color ? bytesPerPixel(info.fb_size) : 2);
       k = min(k, h - s.position % h);
     }
     clocks = RDPTimed::pixelClocks(info.cycle_type, k);
@@ -415,7 +419,7 @@ auto RDP::endChunk(Clock at) -> void {
       auto& s = image == Color ? pipe.color : pipe.depth;
       auto& w = image == Color ? slot.color : slot.depth;
       if(w.hi == w.lo) continue;
-      u32 h = halfPixels(image == Color ? bytesPerPixel(info.fb_size) : 2);
+      u32 h = halfPixels(image, image == Color ? bytesPerPixel(info.fb_size) : 2);
       s.position += k;
       if(s.position % h == 0 || last) {
         //a full half, or the end of the span, writes back (span-ram.md row 6)
@@ -455,7 +459,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   Half* h = nullptr;
   if(!direct) {
     auto& s = image == Color ? pipe.color : pipe.depth;
-    half = ((s.position - 1) / halfPixels(bpp)) & 1;
+    half = ((s.position - 1) / halfPixels(image, bpp)) & 1;
     h = &s.halves[half];
   }
   u32 bursts = 0;
