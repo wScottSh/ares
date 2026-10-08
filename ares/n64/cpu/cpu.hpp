@@ -266,7 +266,7 @@ struct CPU : Thread {
   template<u32 Dir, u32 Size> auto devirtualize(u64 vaddr, bool raiseAlignedError = true, bool raiseExceptions = true) -> PhysAccess;
   auto devirtualizeDebug(u64 vaddr) -> u64;
 
-  auto fetch(PhysAccess access) -> maybe<u32>;
+  auto fetch(PhysAccess access) -> u32;
   template<u32 Size> auto busWrite(u32 address, u64 data) -> void;
   template<u32 Size> auto busRead(u32 address) -> u64;
   template<u32 Size> auto read(PhysAccess access) -> maybe<u64>;

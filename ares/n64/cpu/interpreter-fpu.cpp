@@ -172,7 +172,10 @@ auto CPU::setControlRegisterFPU(n5 index, n32 data) -> void {
               || fpu.csr.cause.unimplementedOperation();
     //The FPE is taken while the following instruction decodes, so Cause.CE holds that
     //instruction's coprocessor field (behavior cpu.ctc1-fpe-ce).
-    if(raise) exception.trigger(15, readDebug<Word>(pipeline.pc) >> 26 & 3);
+    if(raise) {
+      auto next = pipeline.next();
+      exception.trigger(15, (next && next->translated ? next->word : readDebug<Word>(pipeline.pc)) >> 26 & 3);
+    }
 
   } break;
   }

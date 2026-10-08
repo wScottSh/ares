@@ -115,19 +115,25 @@ auto CPU::instruction() -> void {
     return;
   }
 
-  auto access = devirtualize<Read, Word>(ipu.pc);
-  if(!access) return;
-
-  auto data = fetch(access);
-  if (!data) return;
+  step(Timing::Behavior::CpuIssue);
+  auto fetched = pipeline.take();
+  if(!fetched.translated) {
+    //raises the fetch's exception now that the instruction issues, or reads it under the TLB it changed to
+    auto access = devirtualize<Read, Word>(ipu.pc);
+    if(!access) return;
+    fetched.word = fetch(access);
+  }
+  u32 word = fetched.word;
   instructionIndex++;
   pipeline.begin();
-  auto issued = pipeline.issue(*data);
+  auto issued = pipeline.issue(word);
   pipeline.inFlight = &issued;
-  instructionPrologue(ipu.pc, *data);
-  decoderEXECUTE(*data);
+  if(issued.store) pipeline.fetchAhead();
+  instructionPrologue(ipu.pc, word);
+  decoderEXECUTE(word);
   instructionEpilogue();
   pipeline.retire(issued);
+  if(!issued.store) pipeline.fetchAhead();
   pipeline.end();
 }
 

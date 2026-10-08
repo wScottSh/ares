@@ -28,6 +28,7 @@ struct OpTiming {
   bool  fprFields = false; //fs and ft checked against pending FPR results
   Late  late = Late::None;
   Fast  fast = Fast::None;
+  bool  store = false;     //its data lands at WB, after the fetch two instructions ahead
 };
 
 //Where an exception is detected, which sets how long the refill from the
@@ -47,7 +48,7 @@ struct Pipeline {
   };
 
   auto inDelaySlot() const -> bool { return state & DelaySlot; }
-  auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; }
+  auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; fetched = 0; }
   auto branch(u64 address) -> void { nextpc = address; nstate |= DelaySlot; }
   auto noBranch() -> void { nstate |= DelaySlot; }
   //A not-taken likely branch turns its delay slot into a bubble (nemu64-test LikelyBranchCycleCount).
@@ -69,6 +70,7 @@ struct Pipeline {
     Clock extra;
     OpTiming::Late late;
     u8 dest;
+    bool store;
   };
 
   //pipeline.cpp
@@ -97,6 +99,26 @@ struct Pipeline {
   auto fpuOperand(u32 format, u8 index, bool target) -> FpuOperand;
   auto power() -> void;
   auto serialize(serializer&) -> void;
+
+  //The word of instruction n is read in n-2's slot (cpu.fetch-ahead-slots): after
+  //n-2 has executed, so a branch's target is known and a load has been served, and
+  //before n-2's store lands, at WB (NEC VR4300 UM s.4.6.7 DCB). An older store has
+  //landed and is seen. The window holds the next two instructions in program order.
+  struct Fetched {
+    u64 vaddr;
+    u32 word;
+    bool translated;  //false: the fetch faults, raised when the instruction issues
+  };
+  //Reads the words at pc and nextpc that are not in the window yet. A store calls it
+  //before it executes, every other instruction after.
+  auto fetchAhead() -> void;
+  //The word at pc, which leaves the window.
+  auto take() -> Fetched;
+  //The word of the instruction after the executing one.
+  auto next() const -> const Fetched* { return fetched && window[0].vaddr == pc ? &window[0] : nullptr; }
+  auto read(u64 vaddr) -> Fetched;
+  Fetched window[Timing::Behavior::CpuFetchAheadSlots];
+  u8 fetched = 0;
 
   Clock gprReady[32];
   Clock fprReady[32];

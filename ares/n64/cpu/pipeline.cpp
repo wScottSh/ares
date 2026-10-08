@@ -14,7 +14,31 @@ auto CPU::Pipeline::issue(u32 word) -> Issued {
 
   Clock cost = t.fast != OpTiming::Fast::None && fastOperands(t.fast, word) ? Timing::Behavior::CpuFpuTrivial : t.cost;
   u8 dest = t.late == Late::FpuFd ? fd : rt;
-  return {word, cost - Timing::Behavior::CpuIssue, t.late, dest};
+  return {word, cost - Timing::Behavior::CpuIssue, t.late, dest, t.store};
+}
+
+auto CPU::Pipeline::read(u64 vaddr) -> Fetched {
+  if(vaddr & 3) return {vaddr, 0, false};
+  auto access = self.devirtualize<Read, Word>(vaddr, false, false);
+  if(!access) return {vaddr, 0, false};
+  return {vaddr, self.fetch(access), true};
+}
+
+static_assert(Timing::Behavior::CpuFetchAheadSlots == 2, "the window holds the words at pc and nextpc");
+
+auto CPU::Pipeline::fetchAhead() -> void {
+  if(fetched && window[0].vaddr != pc) fetched = 0;
+  if(!fetched) window[fetched++] = read(pc);
+  if(fetched == 2 && window[1].vaddr != nextpc) fetched = 1;
+  if(fetched == 1) window[fetched++] = read(nextpc);
+}
+
+auto CPU::Pipeline::take() -> Fetched {
+  fetchAhead();
+  auto word = window[0];
+  window[0] = window[1];
+  fetched = 1;
+  return word;
 }
 
 auto CPU::Pipeline::retire(const Issued& issued) -> void {
@@ -141,6 +165,7 @@ auto CPU::Pipeline::power() -> void {
   for(auto& ready : fprReady) ready = {};
   storeInstruction = 0;
   inFlight = nullptr;
+  fetched = 0;
 }
 
 auto CPU::Pipeline::serialize(serializer& s) -> void {
@@ -151,4 +176,6 @@ auto CPU::Pipeline::serialize(serializer& s) -> void {
   for(auto& ready : gprReady) s(ready.units);
   for(auto& ready : fprReady) s(ready.units);
   s(storeInstruction);
+  for(auto& w : window) s(w.vaddr), s(w.word), s(w.translated);
+  s(fetched);
 }
