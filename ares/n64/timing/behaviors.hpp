@@ -70,7 +70,7 @@ namespace Behavior {
   constexpr Clock CpuMtc0SlowRegs = {16};  //2 pclk
   constexpr Clock CpuCacheIndexLoadTag = {48};  //6 pclk
   constexpr Clock CpuCountWriteHold = {16};  //2 pclk
-  constexpr s64 CpuFetchAheadSlots = 3;  //3 instr
+  constexpr s64 CpuFetchAheadSlots = 2;  //2 instr
   constexpr s64 CpuWbEntries = 4;  //4 entries
   constexpr s64 CpuWbBlockEntries = 2;  //2 entries
   constexpr Clock CpuRcpRegisterRead = {176};  //22 pclk
@@ -146,7 +146,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.uncached-read-total", Basis::Measured, "32", "pclk", "nemu64-test cache.rs:288-382 median, VI off", "nemu64:timing/load-from-uncached-vi-off", "sysad.fixed-path is derived from this minus modeled wire"},
   {"cpu.uncached-read-dword-total", Basis::Measured, "37", "pclk", "n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's)", "bench:uncached-sizes", ""},
   {"cpu.dfill-total", Basis::Measured, "41", "pclk", "nemu64-test cache.rs:193-286 median, VI off", "nemu64:timing/load-miss-vi-off", "assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost"},
-  {"cpu.ifill-stall", Basis::Derived, "45", "pclk", "NEC Table 11-2 with M from D-fill (cpu-memory-costs.md)", "bench:ifill-isolated", "no public hardware value; the bench reports"},
+  {"cpu.ifill-stall", Basis::Derived, "45", "pclk", "NEC Table 11-2 with M from D-fill (cpu-memory-costs.md)", "bench:ifill-isolated", "no public hardware value; the bench reports. M comes from the D-fill measurement, a clean row miss, so the 45 is the uncontended total at a clean row miss: the SysAD path is 45 less the modeled 32 B clean-miss wire and the mean rclk-edge wait, and the RI adds row state and contention"},
   {"cpu.dcache-hit", Basis::Measured, "1", "pclk", "nemu64-test Cached loads and store, 19 cases", "nemu64:timing/cached-loads-and-store", ""},
   {"cpu.ldi", Basis::Vendor, "1", "pclk", "NEC VR4300 UM s.4.6.5; n64brew register-field overlap rule", "nemu64:timing/cpu-register-dependency", ""},
   {"cpu.dcb", Basis::Vendor, "1", "pclk", "NEC VR4300 UM s.4.6.7", "nemu64:timing/cpu-register-dependency", ""},
@@ -177,7 +177,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.cache-index-load-tag", Basis::Measured, "6", "pclk", "nemu64-test CPURegisterDependency 'LD; CACHE (DataIndexLoadTag)' 7, 8, 8: the CACHE costs 6 including its issue slot (C10)", "nemu64:timing/cache", "the other CACHE ops have no measurement and cost their issue slot"},
   {"cpu.count-write-hold", Basis::Fit, "2", "pclk", "nemu64-test cop0hazard CountHazards: the four MFC0 COUNT right after an MTC0 COUNT of v read v, v, v, v+1, for six values of v. One MFC0 issues per pclk and COUNT ticks every 2 pclk, so three equal reads need the counter to stop; holding the written value 2 pclk from the MTC0's execute is the only whole-pclk hold that gives all four (nemu64-timing-failures.md: counting resumes only after the write retires)", "nemu64:cop0hazard/count", "verify-is-fit: the COUNT hazards test is the only measurement of the hold's length. The timing harness resets COUNT with an MTC0 and only sees the hold's parity: a 1 pclk hold fails 988 of its 1604 values, 0 and 2 pass"},
   {"cpu.irq-sample", Basis::Fit, "pending-at-two-boundaries", "rule", "nemu64-test cop0hazard: SoftwareInterrupt1 (enabled, hazard) takes Int one instruction after the instruction following the MTC0 Cause that sets IP1; SoftwareInterrupt12 takes it there although that second instruction clears IP1; SoftwareInterrupt1 (enable but disable right away), where the clearing MTC0 Cause directly follows the setting one, never takes it. Taking Int before an instruction only if the interrupt condition held at the previous instruction boundary too fits all three; delaying the CP0 write by one instruction instead takes the third", "nemu64:cop0hazard/softwareinterrupt", "verify-is-fit: the three SoftwareInterrupt values are the only measurement. Applied to the RCP and timer lines too, inferred (one sampler for every Cause.IP bit), no test"},
-  {"cpu.fetch-ahead-slots", Basis::Derived, "3", "instr", "nemu64-test cycle set SMC: a store fewer than 3 slots ahead is not seen", "nemu64:cycle/smc", "fable chose 2; the window is sized so both readings fit, the cycle set decides"},
+  {"cpu.fetch-ahead-slots", Basis::Fit, "2", "instr", "NEC VR4300 UM ch.4: IC of instruction n runs in the EX slot of n-2, and a store's data lands at WB (s.4.6.7 DCB). nemu64-test icache.rs ModifyWithinBasicBlockMultipleSW: of eight SW to the next line, its I-fill sees the first six, so a store three slots ahead is seen and one two slots ahead is not", "nemu64:cycle/smc-single-write", "single-write (7,8), a store one slot ahead, rules out 1 slot; only the multiple-writes fit separates 2 from 3, and the other SMC cases hold for both. The read follows a load or branch in the n-2 slot (RSP Timing: Clock CPU vs RDP fails if a load waits behind the I-fill two slots ahead; inferred, since that depends on where romgen's layout puts a line boundary) and precedes a CACHE op there (inferred, no test)"},
   {"cpu.dirty-miss-order", Basis::Vendor, "fill-then-writeback", "order", "NEC s.12.5.2-12.5.3 p.304; R4300i datasheet p.8-9 (vr4300-wb.md)", "bench:dirty-miss-isolated", ""},
   {"cpu.wb-entries", Basis::Vendor, "4", "entries", "NEC s.4.9 p.120; R4300i datasheet p.9", "nemu64:timing/uncached-write-buffer", ""},
   {"cpu.wb-block-entries", Basis::Vendor, "2", "entries", "R4300i datasheet p.9", "bench:mi-memset-cached", ""},
@@ -239,8 +239,6 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:102", "nemu64:cop0hazard/softwareinterrupt", "no plan unit: no measurement of the interrupt entry cost was found; T7c built the sampling rule (cpu.irq-sample), not this cost"},
   {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:109", "pending:no-corpus", "no plan unit: NMI entry has no timing reference (T7b)"},
   {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:114", "pending:no-corpus", "replaced by T6: SysAD port"},
-  {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
-  {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
   {"legacy.pi.write-busy", Basis::Legacy, "200", "pclk", "ares/n64/pi/bus.hpp:77", "bench:pi-io-write", "replaced by T8: PI I/O busy (pi.io-busy)"},
   {"legacy.si.bus-write", Basis::Legacy, "2150", "rclk", "ares/n64/si/io.cpp:66", "pending:no-corpus", "no plan unit: the SI I/O write busy; T8 left it, no hardware reference"},

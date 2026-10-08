@@ -17,6 +17,30 @@ auto CPU::Pipeline::issue(u32 word) -> Issued {
   return {word, cost - Timing::Behavior::CpuIssue, t.late, dest};
 }
 
+alwaysinline auto CPU::Pipeline::read(Fetched& slot, u64 vaddr) -> void {
+  slot.vaddr = vaddr;
+  slot.translated = false;
+  if(vaddr & 3) return;
+  auto access = self.devirtualize<Read, Word>(vaddr, false, false);
+  if(!access) return;
+  slot.word = self.fetch(access);
+  slot.translated = true;
+}
+
+static_assert(Timing::Behavior::CpuFetchAheadSlots == 2, "the window holds the words at pc and nextpc");
+
+alwaysinline auto CPU::Pipeline::fetchAhead() -> void {
+  if(window[head].vaddr != pc) read(window[head], pc);
+  read(window[head ^ 1], nextpc);
+}
+
+alwaysinline auto CPU::Pipeline::take() -> const Fetched& {
+  auto& slot = window[head];
+  if(slot.vaddr != pc) read(slot, pc);
+  head ^= 1;
+  return slot;
+}
+
 auto CPU::Pipeline::retire(const Issued& issued) -> void {
   using namespace Timing::Behavior;
   using Late = OpTiming::Late;
@@ -141,6 +165,7 @@ auto CPU::Pipeline::power() -> void {
   for(auto& ready : fprReady) ready = {};
   storeInstruction = 0;
   inFlight = nullptr;
+  flush();
 }
 
 auto CPU::Pipeline::serialize(serializer& s) -> void {
@@ -151,4 +176,6 @@ auto CPU::Pipeline::serialize(serializer& s) -> void {
   for(auto& ready : gprReady) s(ready.units);
   for(auto& ready : fprReady) s(ready.units);
   s(storeInstruction);
+  for(auto& w : window) s(w.vaddr), s(w.word), s(w.translated);
+  s(head);
 }
