@@ -30,6 +30,11 @@ struct OpTiming {
   Fast  fast = Fast::None;
 };
 
+//Where an exception is detected, which sets how long the refill from the
+//vector takes (nemu64-test Exceptions and COP1 JustFire, plan C1). None: no
+//hardware reference, the exception costs nothing beyond its issue slot.
+enum class FaultStage : u8 { None, RF, EX, FPU };
+
 struct Pipeline {
   CPU& self;
   u64 pc     = 0;  //pc after current instruction
@@ -51,15 +56,16 @@ struct Pipeline {
     nstate = 0;
     pc = nextpc;
     nextpc += 4;
-    faulted = false;
   }
   auto end() -> void {
+    executing = false;
     state = nstate;
     self.ipu.pc = pc;
   }
 
-  //What retire() needs from issue(): the cost beyond the issue slot and the late result.
+  //What retire() and fault() need from issue(): the cost beyond the issue slot and the late result.
   struct Issued {
+    u32 word;
     Clock extra;
     OpTiming::Late late;
     u8 dest;
@@ -68,19 +74,33 @@ struct Pipeline {
   //pipeline.cpp
   //Stalls until every field the instruction checks is ready. Runs after the fetch
   //has charged the issue slot, before the instruction executes.
-  auto issue(u32 word) -> Issued;
+  auto issue(u32 word) -> void;
   //Charges the instruction's cost beyond its issue slot and records its late result.
-  //An instruction that raised an exception does neither (plan T7b charges exceptions).
-  auto retire(const Issued&) -> void;
-  auto fault() -> void { faulted = true; }
+  //An instruction that raised an exception does neither: fault() charged it.
+  auto retire() -> void;
+  //Charges the refill from the exception vector. An exception raised outside an
+  //instruction (interrupt, instruction fetch) charges nothing here.
+  auto fault(FaultStage) -> void;
+  auto fpuDetection(u32 word) -> Clock;
   //DCB: called on every cached D-cache access, before a hit is served.
   auto dataCacheAccess(bool store, bool hit) -> void;
   auto fastOperands(OpTiming::Fast, u32 word) -> bool;
+  //An S or D format operand's fields; maxExponent marks Inf and NaN.
+  struct FpuOperand {
+    u64 exponent, mantissa, maxExponent;
+    bool sign;
+    auto bias() const -> u64 { return maxExponent >> 1; }
+    auto special() const -> bool { return exponent == maxExponent || (exponent == 0 && mantissa == 0); }
+    auto denormal() const -> bool { return exponent == 0 && mantissa != 0; }
+    auto nan() const -> bool { return exponent == maxExponent && mantissa != 0; }
+  };
+  auto fpuOperand(u32 format, u8 index, bool target) -> FpuOperand;
   auto power() -> void;
   auto serialize(serializer&) -> void;
 
   Clock gprReady[32];
   Clock fprReady[32];
   u64 storeInstruction = 0;  //instructionIndex + 1 of the last cached store; 0 for none
-  bool faulted = false;      //an exception ended the current instruction
+  Issued issued;             //the instruction between issue() and end()
+  bool executing = false;    //issue() has run and no exception has ended the instruction
 };

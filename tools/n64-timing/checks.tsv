@@ -18,6 +18,7 @@ nemu64:timing/just-nops	nemu64	timing	Timing: Just NOPs	self	nemu64-test timing 
 nemu64:timing/individual-instructions	nemu64	timing	Timing: Individual instructions (CPU)	self	nemu64-test timing set, ROM self-check
 nemu64:timing/mult-div-interlock	nemu64	timing	Timing: MULT/DIV to MFLO interlock	self	nemu64-test timing set, ROM self-check
 nemu64:timing/exceptions	nemu64	timing	Timing: Exceptions	self	nemu64-test timing set, ROM self-check
+nemu64:timing/exception-roundtrip	nemu64	timing	Timing: Exceptions @Roundtrip	self	nemu64-test timing set, the BREAK and SYSCALL Roundtrip values
 nemu64:timing/cached-loads-and-store	nemu64	timing	Timing: Cached loads and store (with warm cache)	self	nemu64-test timing set, ROM self-check
 nemu64:timing/cop1instructions32	nemu64	timing	Timing: COP1 instruction (32 bit)	self	nemu64-test timing set, ROM self-check
 nemu64:timing/cop1instructions64	nemu64	timing	Timing: COP1 instruction (64 bit)	self	nemu64-test timing set, ROM self-check

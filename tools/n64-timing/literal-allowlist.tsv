@@ -18,7 +18,6 @@ ares/n64/cpu/cpu.cpp	instruction#3	step(pclk(1));	legacy.cpu.sysad-frozen-step
 ares/n64/cpu/sysad.hpp	serialize#1	static constexpr Clock IfillStall = pclk(48);	legacy.cpu.icache-fill	
 ares/n64/cpu/sysad.cpp	writeBack	cpu.step(pclk(48));	legacy.cpu.icache-writeback	
 ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 - wired : 96 - wired;	-	CP0 Random wrap range (32 TLB entries, Wired), not time; plan T7c owns Random
-ares/n64/cpu/memory.cpp	vaddrAlignedError	step(pclk(1));	legacy.cpu.address-error	
 ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
 ares/n64/pi/bus.hpp	writeWord	scheduleAfter(EventKind::PI_BUS_Write, pclk(200));	legacy.pi.write-busy	
 ares/n64/pif/hle.cpp	estimateTiming	u32 cycles = 13600;	legacy.si.dma-read-base	

@@ -47,8 +47,7 @@ namespace Behavior {
   constexpr Clock CpuMci = {8};  //1 pclk
   constexpr Clock CpuExcRf = {40};  //5 pclk
   constexpr Clock CpuExcEx = {48};  //6 pclk
-  constexpr Clock CpuExcFpuUnimpl = {56};  //7 pclk
-  constexpr Clock CpuExcFpuArithExtra = {40};  //5 pclk
+  constexpr Clock CpuExcFpu = {40};  //5 pclk
   constexpr Clock CpuFpuAdd = {24};  //3 pclk
   constexpr Clock CpuFpuMulS = {40};  //5 pclk
   constexpr Clock CpuFpuMulD = {64};  //8 pclk
@@ -66,8 +65,9 @@ namespace Behavior {
   constexpr Clock CpuFpuConvert = {40};  //5 pclk
   constexpr Clock CpuFpuCvtSD = {16};  //2 pclk
   constexpr Clock CpuLikelyNullified = {8};  //1 pclk
+  constexpr Clock CpuEret = {24};  //3 pclk
   constexpr Clock CpuMtc0SlowRegs = {16};  //2 pclk
-  constexpr Clock CpuCacheIndexOp = {40};  //5 pclk
+  constexpr Clock CpuCacheIndexLoadTag = {48};  //6 pclk
   constexpr s64 CpuCountWriteLatency = 1;  //1 instr
   constexpr s64 CpuIrqSampleLag = 1;  //1 instr
   constexpr s64 CpuFetchAheadSlots = 3;  //3 instr
@@ -148,10 +148,10 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.ldi", Basis::Vendor, "1", "pclk", "NEC VR4300 UM s.4.6.5; n64brew register-field overlap rule", "nemu64:timing/cpu-register-dependency", ""},
   {"cpu.dcb", Basis::Vendor, "1", "pclk", "NEC VR4300 UM s.4.6.7", "nemu64:timing/cpu-register-dependency", ""},
   {"cpu.mci", Basis::Measured, "1", "pclk", "nemu64-test MFC0 then dependent (C9)", "nemu64:timing/cpu-register-dependency", ""},
-  {"cpu.exc-rf", Basis::Measured, "5", "pclk", "nemu64-test Exceptions (BREAK, SYSCALL, RI, CpU)", "nemu64:timing/exceptions", ""},
-  {"cpu.exc-ex", Basis::Measured, "6", "pclk", "nemu64-test Exceptions (Ov, Tr, AdEL/AdES)", "nemu64:timing/exceptions", ""},
-  {"cpu.exc-fpu-unimpl", Basis::Measured, "7", "pclk", "nemu64-test COP1 JustFire", "nemu64:timing/cop1instructions32", ""},
-  {"cpu.exc-fpu-arith-extra", Basis::Measured, "5", "pclk", "nemu64-test: FPU arithmetic exception = op latency + 5 (C1)", "nemu64:timing/cop1instructions32", ""},
+  {"cpu.exc-rf", Basis::Measured, "5", "pclk", "nemu64-test Exceptions JustFire, faulting issue slot through the handler's first: BREAK, SYSCALL, RI (_I28), CpU (COP1 and COP2 ops with CU clear)", "nemu64:timing/exceptions", ""},
+  {"cpu.exc-ex", Basis::Measured, "6", "pclk", "nemu64-test Exceptions JustFire: Ov (ADD, ADDI, DADD, DADDI, SUB, DSUB), all traps, AdEL and TLBL on every load kind", "nemu64:timing/exceptions", "AdES, TLBS and Mod have no test; inferred to share the load's stage"},
+  {"cpu.exc-fpu", Basis::Measured, "5", "pclk", "nemu64-test COP1Instructions32/64 JustFire = FPU detection latency + 5: ADD.S overflow 3+5, MUL.S inexact 5+5, DIV.S inexact 29+5, ADD.W unimplemented 2+5 (C1)", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "the detection latency is cpu.exc-fpu-detect; a CTC1-raised FPE has no reference and costs nothing beyond its slot"},
+  {"cpu.exc-fpu-detect", Basis::Measured, "operands-or-result", "rule", "nemu64-test COP1Instructions32/64 JustFire: an FPE raised from the result takes the op's latency (fast operands included; CEIL.W.S 2^31 and ROUND.W.D 0x41efffffffffffff take 5+5); one raised from the operands takes min(latency, cpu.fpu-trivial): denormal or NaN operand, conversion to W of |x| >= 2^32 or Inf (ROUND.W.D 2^32 takes 2+5), to L of |x| >= 2^53, from L of |x| >= 2^55, a W or L format op with an S form at the S form's latency (ADD.W 2+5, _F16.W 1+5)", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", "the rule is read off the same tables that check it, as cpu.fpu-trivial is"},
   {"cpu.fpu-add", Basis::Measured, "3", "pclk", "nemu64-test COP1 tables", "nemu64:timing/cop1instructions32", ""},
   {"cpu.fpu-mul-s", Basis::Measured, "5", "pclk", "nemu64-test COP1 tables", "nemu64:timing/cop1instructions32", ""},
   {"cpu.fpu-mul-d", Basis::Measured, "8", "pclk", "nemu64-test COP1 tables", "nemu64:timing/cop1instructions64", ""},
@@ -169,8 +169,9 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"cpu.fpu-convert", Basis::Measured, "5", "pclk", "nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L", "nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64", ""},
   {"cpu.fpu-cvt-s-d", Basis::Measured, "2", "pclk", "nemu64-test COP1 tables (CVT.S.D)", "nemu64:timing/cop1instructions64", ""},
   {"cpu.likely-nullified", Basis::Measured, "1", "pclk", "nemu64-test Likely branch (C8)", "nemu64:timing/likely-branch", ""},
+  {"cpu.eret", Basis::Fit, "3", "pclk", "nemu64-test Exceptions Roundtrip (BREAK, SYSCALL + handler + ERET) 15, less the modeled BREAK fault (cpu.exc-rf) and handler: the ERET costs 3 including its issue slot", "nemu64:timing/exception-roundtrip", "verify-is-fit: the two Roundtrip values are the only measurement of ERET"},
   {"cpu.mtc0-slow-regs", Basis::Measured, "2", "pclk", "nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5)", "nemu64:timing/individual-instructions", ""},
-  {"cpu.cache-index-op", Basis::Measured, "5", "pclk", "nemu64-test CACHE DataIndexLoadTag (C10)", "nemu64:timing/cache", ""},
+  {"cpu.cache-index-load-tag", Basis::Measured, "6", "pclk", "nemu64-test CPURegisterDependency 'LD; CACHE (DataIndexLoadTag)' 7, 8, 8: the CACHE costs 6 including its issue slot (C10)", "nemu64:timing/cache", "the other CACHE ops have no measurement and cost their issue slot"},
   {"cpu.count-write-latency", Basis::Measured, "1", "instr", "nemu64-test cop0hazard MTC0/MFC0 COUNT", "nemu64:cop0hazard/count", ""},
   {"cpu.irq-sample-lag", Basis::Measured, "1", "instr", "nemu64-test cop0hazard SoftwareInterrupt", "nemu64:cop0hazard/softwareinterrupt", ""},
   {"cpu.fetch-ahead-slots", Basis::Derived, "3", "instr", "nemu64-test cycle set SMC: a store fewer than 3 slots ahead is not seen", "nemu64:cycle/smc", "fable chose 2; the window is sized so both readings fit, the cycle set decides"},
@@ -225,9 +226,8 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"rdp.noise-pixel-offset", Basis::ModelChoice, "0", "rclk", "rdp-noise.md item 2: pixel-to-clock offset unknown; 0 until measured", "noise:rect-1016", "calibration #16"},
   {"legacy.clock.vclk-pal", Basis::Legacy, "49656530", "Hz", "ares/n64/system/system.cpp:88", "pending:no-corpus", "no plan unit: PAL is not the target console"},
   {"legacy.cpu.interrupt-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:97", "nemu64:cop0hazard/softwareinterrupt", "replaced by T7c: interrupt sampling lag (cpu.irq-sample-lag)"},
-  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:105", "pending:no-corpus", "replaced by T7b: exception stage costs"},
+  {"legacy.cpu.nmi-entry", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:105", "pending:no-corpus", "no plan unit: NMI entry has no timing reference (T7b)"},
   {"legacy.cpu.sysad-frozen-step", Basis::Legacy, "1", "pclk", "ares/n64/cpu/cpu.cpp:110", "pending:no-corpus", "replaced by T6: SysAD port"},
-  {"legacy.cpu.address-error", Basis::Legacy, "1", "pclk", "ares/n64/cpu/memory.cpp:202", "nemu64:timing/exceptions", "replaced by T7b: exception stage costs (cpu.exc-ex)"},
   {"legacy.cpu.icache-fill", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.hpp:60", "bench:ifill-isolated", "replaced by T7d: I-fill through SysAD::fill (cpu.ifill-stall)"},
   {"legacy.cpu.icache-writeback", Basis::Legacy, "48", "pclk", "ares/n64/cpu/sysad.cpp:262", "pending:no-corpus", "replaced by T7d: I-cache CACHE ops through SysAD"},
   {"legacy.pi.cart-read", Basis::Legacy, "250", "pclk", "ares/n64/pi/bus.hpp:63", "pending:no-corpus", "replaced by T8: PI bus timing from the BSD registers"},
