@@ -34,6 +34,7 @@ namespace Behavior {
   constexpr s64 RiRankVi = 1;  //1 rank
   constexpr s64 RiRankOther = 2;  //2 rank
   constexpr Clock RiOverheadRead = {54};  //4.5 rclk
+  constexpr Clock RiOverheadVi = {0};  //0 rclk
   constexpr Clock RiOverheadWrite = {12};  //1 rclk
   constexpr Clock RiOverheadRdp = {20};  //20 units
   constexpr Clock RiRequestLatency = {1};  //1 units
@@ -138,6 +139,7 @@ inline constexpr BehaviorInfo behaviors[] = {
   {"ri.rank.vi", Basis::ModelChoice, "1", "rank", "inference: VI is the only hard real-time client (B4)", "nemu64:timing/load-from-uncached-vi-on-same-bank", ""},
   {"ri.rank.other", Basis::ModelChoice, "2", "rank", "none published (B4): all other clients first-come first-served", "nemu64:timing/load-miss-vi-on", ""},
   {"ri.overhead-read", Basis::Fit, "4.5", "rclk", "hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10)", "bench:sp-dma-sweep", "verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated"},
+  {"ri.overhead-vi", Basis::Derived, "0", "rclk", "vi-fetch.md MM bus-occupancy estimate: a 128 B VI read holds the channel for the NEC wire time (74 tc hit, 96 clean miss, 104 dirty miss) plus the 2 tc post-read gap; no reference charges scanout the RI overhead that ri.overhead-read fits from SP DMA throughput (B10)", "nemu64:timing/load-from-uncached-vi-on-other-bank nemu64:timing/load-miss-vi-on", "ri counters on MM: VI channel share against the 6.5-9.0% band of vi-fetch.md"},
   {"ri.overhead-write", Basis::Fit, "1", "rclk", "n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B; the RI decides on rclk edges, so a 128 B write repeats every 17 wire + 1 gap + ceil(overhead) rclk: 1 gives 19, the 1.7 of the unquantized fit gives 20 (B10)", "bench:mi-memset-rspdma", "verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA"},
   {"ri.overhead-rdp", Basis::ModelChoice, "20", "units", "assumed equal to the unquantized ri.overhead-write fit (1.7 rclk, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured", "thar0:imrd-1cycle", "calibration #16"},
   {"ri.request-latency", Basis::ModelChoice, "1", "units", "none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does", "det stepcap", ""},

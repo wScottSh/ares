@@ -11,7 +11,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 16 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
-| derived | computed from other cited values | 7 |
+| derived | computed from other cited values | 8 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 13 |
 | model-choice | no published value; the reference states why the model chose this one | 15 |
 | legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 25 |
@@ -54,6 +54,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `ri.rank.vi` | 1 rank | model-choice | inference: VI is the only hard real-time client (B4) | `nemu64:timing/load-from-uncached-vi-on-same-bank` |  |
 | `ri.rank.other` | 2 rank | model-choice | none published (B4): all other clients first-come first-served | `nemu64:timing/load-miss-vi-on` |  |
 | `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | **fit only, no independent check:** `bench:sp-dma-sweep` (fit from `bench:sp-dma-sweep`) | verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated |
+| `ri.overhead-vi` | 0 rclk | derived | vi-fetch.md MM bus-occupancy estimate: a 128 B VI read holds the channel for the NEC wire time (74 tc hit, 96 clean miss, 104 dirty miss) plus the 2 tc post-read gap; no reference charges scanout the RI overhead that ri.overhead-read fits from SP DMA throughput (B10) | `nemu64:timing/load-from-uncached-vi-on-other-bank` `nemu64:timing/load-miss-vi-on` | ri counters on MM: VI channel share against the 6.5-9.0% band of vi-fetch.md |
 | `ri.overhead-write` | 1 rclk | fit | n64brew MI memset RSP DMA 2.58 ms/MiB = 19.7 rclk per 128 B; the RI decides on rclk edges, so a 128 B write repeats every 17 wire + 1 gap + ceil(overhead) rclk: 1 gives 19, the 1.7 of the unquantized fit gives 20 (B10) | **fit only, no independent check:** `bench:mi-memset-rspdma` (fit from `bench:mi-memset-rspdma` `bench:sp-dma-sweep`) | verify-is-fit: both checks assert n64brew's 2.58 ms/MiB memset (6.5 B/rclk), the data the fit solves, and no other check decides a write DMA |
 | `ri.overhead-rdp` | 20 units | model-choice | assumed equal to the unquantized ri.overhead-write fit (1.7 rclk, 20 units after rounding); span-ram.md row 10 says the RDP path is unmeasured | `thar0:imrd-1cycle` | calibration #16 |
 | `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` `stepcap` |  |
@@ -259,6 +260,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `nemu64:timing/load-miss-vi-on` | nemu64 | timing | Timing: Load Miss (with VI enabled) | self | nemu64-test timing set, ROM self-check |
 | `nemu64:timing/load-miss-vi-off` | nemu64 | timing | Timing: Load Miss (with VI disabled) | self | nemu64-test timing set, ROM self-check |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | nemu64 | timing | Timing: Load from uncached (with VI enabled) @(true, | self | nemu64-test timing set, the same-bank value (36 pclk median) |
+| `nemu64:timing/load-from-uncached-vi-on-other-bank` | nemu64 | timing | Timing: Load from uncached (with VI enabled) @(false, | self | nemu64-test timing set, the other-bank value (32.5 pclk mean) |
 | `nemu64:timing/load-from-uncached-vi-off` | nemu64 | timing | Timing: Load from uncached (with VI disabled) | self | nemu64-test timing set, ROM self-check |
 | `nemu64:rsp_timing/clock-cpu-vs-rdp` | nemu64 | timing | RSP Timing: Clock CPU vs RDP | self | nemu64-test timing set, ROM self-check (100,000 COUNT = 133,333 +- 20 DP_CLOCK) |
 | `nemu64:rsp_timing/sll` | nemu64 | timing | RSP Timing: SLL | self | nemu64-test timing set, ROM self-check |
