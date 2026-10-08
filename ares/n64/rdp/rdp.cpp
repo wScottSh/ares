@@ -25,10 +25,12 @@ auto RDP::unload() -> void {
 auto RDP::crash(const char *reason) -> void {
   debug(unusual, "[RDP] software triggered a hardware bug; RDP crashed and will stop responding. Reason: ", reason);
   dpc.crashed = 1;
+  changed();
 }
 
 auto RDP::power(bool reset) -> void {
   Thread::reset();
+  changed();
   engine.unload();
   engine.load();
   dpc = {};

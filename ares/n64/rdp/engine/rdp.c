@@ -167,7 +167,6 @@ int rdp_render_init(uint32_t rdram_size, int32_t pipeline_depth)
      * rdp_render_span_run, on the emulation thread; loads and Sync Full
      * keep their in-handler drains, which the host makes empty by running
      * every queued span first (rdp_render_engine_drains). */
-    atomic_store(&rdp->m_async_on, 0);
 
     return 0;
 }

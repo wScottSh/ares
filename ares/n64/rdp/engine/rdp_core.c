@@ -118,17 +118,6 @@ static void rdp_span_draw_copy(rdp_t *rdp, int32_t scanline, const extent_t *ext
 static void rdp_span_draw_fill(rdp_t *rdp, int32_t scanline, const extent_t *extent, const rdp_poly_state *object, int32_t threadid);
 static void rdp_fill_haz_publish(rdp_t *rdp);
 
-/* Forget the geometry the (now drained) watermark was folded under. */
-static void rdp_async_geom_reset(rdp_t *rdp)
-{
-    rdp->m_async_fbg_addr = 0xffffffffu;
-    rdp->m_async_fbg_width = 0;
-    rdp->m_async_fbg_size = 0;
-    rdp->m_async_fbg_mixed = 0;
-    rdp->m_async_zbg_addr = 0xffffffffu;
-    rdp->m_async_zbg_width = 0;
-    rdp->m_async_zbg_mixed = 0;
-}
 static void rdp_fill_haz_pre(rdp_t *rdp, int32_t cmd);
 static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
 
@@ -148,15 +137,16 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
  * pixel (1 or 2):
  *
  *     L    = max(cyc*W + cyc - 1, 4)      clocks per span
- *     D    = min(3*L - 2, 25) + OFF       clocks of command-processor lead
+ *     D    = min(3*L - 2, depth) + OFF    clocks of command-processor lead
  *
  *     live pixel (r,c) is emitted at clock   r*L + cyc*c
  *     the primitive's nominal end is         (H-1)*L
  *     the k'th following command executes at (H-1)*L - D + k
  *
  * and a write takes effect at the first live pixel emitted at or after its
- * clock. 3*L - 2 is a three-deep span buffer; 25 is one fixed pixel-pipeline
- * latency, the SAME constant in both cycle modes; the floor of 4 on span cost
+ * clock. 3*L - 2 is a three-deep span buffer; depth is the sampling stage's
+ * fixed pixel-pipeline latency, the SAME constant in both cycle modes (see
+ * below for where it comes from); the floor of 4 on span cost
  * bites only for very narrow spans, and is what collapses all three writes
  * onto one pixel there. Each command costs one clock (n64brew Pipeline: NOPs
  * and attribute setters execute in one pipeline cycle).
@@ -179,13 +169,13 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
  * endpoints into the clip, so raising min_x moves the left edge whichever of
  * startx/stopx happens to hold it.
  *
- * 25 is rdp.pipeline-depth (m_pipeline_depth), the depth of the combiner,
- * which samples the environment colour. Every other register in the n64brew
+ * For the combiner, which samples the environment colour, depth is
+ * rdp.pipeline-depth (m_pipeline_depth, 25). Every other register in the n64brew
  * Pipeline table "Effect of unsynced attribute changes" is sampled at its own
  * stage, and the table's offsets give each stage's depth relative to the
  * combiner's (rdp_haz_stage_offset), so a write to it lands with
  *
- *     D(stage) = min(3*L - 2, depth + offset(stage) - offset(combiner))
+ *     D(stage) = min(3*L - 2, rdp.pipeline-depth + offset(stage) - offset(combiner))
  *
  * One Set Other Modes write lands at a different pixel for each stage it
  * changes. A stage at offset 0 (the colour image, image_read_en and the Z
@@ -1703,11 +1693,9 @@ static void rdp_compute_cvg(rdp_t *rdp, rdp_span_aux* userdata, const int32_t* l
  * keeps consuming commands while earlier primitives are still in the
  * pixel pipeline. poly_manager_wait early-outs when nothing is queued,
  * so unconditional drains at the hazard points are cheap. */
-/* Serialized queue drain: in async mode, external fences (any thread)
- * and the command walk's own hazard drains can overlap; the lock keeps
- * a single threadid-0 waiter at a time (worker state is indexed by
- * threadid). Synchronous mode never contends, so it takes the
- * uncontended fast path. */
+/* Serialized queue drain: the lock keeps a single threadid-0 waiter at
+ * a time (worker state is indexed by threadid). The emulation thread is
+ * the only caller, so it never contends. */
 static void rdp_wait_locked(rdp_t *rdp)
 {
     pthread_mutex_lock(&rdp->m_wait_lock);
@@ -1715,151 +1703,25 @@ static void rdp_wait_locked(rdp_t *rdp)
     pthread_mutex_unlock(&rdp->m_wait_lock);
 }
 
-void rdp_async_fence_all(rdp_t *rdp)
-{
-    if (!atomic_load_explicit(&rdp->m_async_pending, memory_order_acquire))
-        return;
-    /* Callers MUST exclude the command walk (the emulator wires this
-     * through the DP producer lock, rdp/interface.c): the walk raises
-     * pending BEFORE its units become visible to the queue, so a fence
-     * running concurrently with the walk could consume the flag and
-     * drain past units that are not yet enqueued. With the producer
-     * excluded, nothing is enqueued during the drain, and the tracking
-     * state is cleared only AFTER the wait completes -- a concurrent
-     * observer's unlocked pending check therefore never reads 0 while
-     * work is still in flight (it either sees pending and serializes
-     * behind this drain, or sees the post-drain clear, which is safe). */
-    /* A primitive held for either unsynced-write hazard (1-/2-cycle
-     * rectangle, or fill) has folded its watermark but owns no pool
-     * units yet. Publish both before the wait: otherwise the reset
-     * below discards the tracking while the pixels are unwritten, and
-     * a later TMEM load from that region (render-to-texture) or a CPU
-     * read in that window observes stale RDRAM. Under the timed DPC
-     * engine a hold routinely spans the gap between two command
-     * chunks, where RSP/CPU/VI RDRAM traffic fences. Callers hold
-     * dp_lock, which serializes this with the command walk. */
-    rdp_haz_publish(rdp);
-    rdp_fill_haz_publish(rdp);
-    rdp_wait_locked(rdp);
-    atomic_store(&rdp->m_async_pending, 0);
-    atomic_store(&rdp->m_async_fb_lo, 0xffffffffu);
-    atomic_store(&rdp->m_async_fb_hi, 0);
-    atomic_store(&rdp->m_async_zb_lo, 0xffffffffu);
-    atomic_store(&rdp->m_async_zb_hi, 0);
-    rdp_async_geom_reset(rdp);
-}
-
-void rdp_async_fence(rdp_t *rdp, uint32_t addr, uint32_t len)
-{
-    if (!atomic_load_explicit(&rdp->m_async_pending, memory_order_acquire))
-        return;
-    {
-        const uint32_t fblo = atomic_load_explicit(&rdp->m_async_fb_lo, memory_order_relaxed);
-        const uint32_t fbhi = atomic_load_explicit(&rdp->m_async_fb_hi, memory_order_relaxed);
-        const uint32_t zblo = atomic_load_explicit(&rdp->m_async_zb_lo, memory_order_relaxed);
-        const uint32_t zbhi = atomic_load_explicit(&rdp->m_async_zb_hi, memory_order_relaxed);
-        if ((addr >= fbhi || (addr + len) <= fblo) &&
-            (addr >= zbhi || (addr + len) <= zblo))
-            return;
-    }
-    rdp_async_fence_all(rdp);
-}
-
 static void rdp_pipeline_drain(rdp_t *rdp)
 {
     rdp_haz_publish(rdp);
-    /* Same invariant as rdp_async_fence_all: no watermark reset while a
-     * fill-hazard primitive is held. Defensive -- every current drain
-     * site is already preceded by a publish through the hazard cost
-     * table (loads, syncs and draws all close the window). */
+    /* Defensive: every current drain site is already preceded by a
+     * publish through the hazard cost table (loads, syncs and draws all
+     * close the window). */
     rdp_fill_haz_publish(rdp);
     rdp_wait_locked(rdp);
     rdp->m_aux_buf_ptr = 0;
-    /* This runs on the command walk itself (under the DP producer
-     * lock), so the queue is empty and no producer can be mid-enqueue:
-     * retire the async tracking so observers stop fencing against
-     * work that is already complete. */
-    if (atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed)) {
-        atomic_store(&rdp->m_async_pending, 0);
-        atomic_store(&rdp->m_async_fb_lo, 0xffffffffu);
-        atomic_store(&rdp->m_async_fb_hi, 0);
-        atomic_store(&rdp->m_async_zb_lo, 0xffffffffu);
-        atomic_store(&rdp->m_async_zb_hi, 0);
-        rdp_async_geom_reset(rdp);
-        /* Every queued consumer is retired: reclaim the TMEM ring. */
-        rdp->m_tmem_cows = 0;
-    }
 }
 
-/* TMEM load gate. Synchronous mode keeps the historical unconditional
- * drain (what every tool and golden baseline runs against). Async mode
- * lets a load proceed without stalling the walk:
- *   - queue idle or observed complete: mutate the current TMEM slot in
- *     place (no consumer will read it again) and reclaim the ring;
- *   - render-to-texture: the load's RDRAM source [src_lo, +src_len)
- *     overlaps the pending span-write watermark, so the bytes read
- *     depend on the queued work -- drain (over-estimated bounds: a
- *     false positive costs one drain, a false negative would change
- *     render-to-texture output);
- *   - otherwise copy-on-write: copy the current 4KB slot to the next
- *     ring slot and mutate the copy; queued primitives keep sampling
- *     the snapshot their m_tmem_src captured. Ring exhaustion (the
- *     queue stayed busy across TMEM_POOL_SLOTS-1 loads) drains.
- * Command-walk thread only. */
-static void rdp_tmem_load_gate(rdp_t *rdp, uint32_t src_lo, uint32_t src_len)
+/* TMEM load gate: a load mutates TMEM, which queued primitives sample,
+ * and reads RDRAM they may still be writing (render-to-texture), so it
+ * drains the span queue first. Command-walk thread only. */
+static void rdp_tmem_load_gate(rdp_t *rdp)
 {
-    uint32_t lo, hi, idx;
-
     if (rdp->m_mem_record)
         return;
-
-    if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
-    {
-        rdp_pipeline_drain(rdp);
-        return;
-    }
-
-    if (atomic_load_explicit(&rdp->m_pool.m_unit.next, memory_order_relaxed) == 0)
-        return;
-
-    if (rdp->m_pool.m_queue != NULL && !rdp_wq_busy(rdp->m_pool.m_queue))
-    {
-        /* Everything queued has completed (just not yet drained):
-         * retired consumers never re-read their snapshots, so the
-         * current slot can be mutated in place and the ring reclaimed. */
-        rdp->m_tmem_cows = 0;
-        return;
-    }
-
-    src_lo &= 0x007fffffu;
-
-    lo = atomic_load_explicit(&rdp->m_async_fb_lo, memory_order_relaxed);
-    hi = atomic_load_explicit(&rdp->m_async_fb_hi, memory_order_relaxed);
-    if (!(src_lo >= hi || src_lo + src_len <= lo))
-    {
-        rdp_pipeline_drain(rdp);
-        return;
-    }
-
-    lo = atomic_load_explicit(&rdp->m_async_zb_lo, memory_order_relaxed);
-    hi = atomic_load_explicit(&rdp->m_async_zb_hi, memory_order_relaxed);
-    if (!(src_lo >= hi || src_lo + src_len <= lo))
-    {
-        rdp_pipeline_drain(rdp);
-        return;
-    }
-
-    if (rdp->m_tmem_cows + 1u >= TMEM_POOL_SLOTS)
-    {
-        rdp_pipeline_drain(rdp);
-        return;
-    }
-
-    idx = (uint32_t)((rdp->m_tmem - rdp->m_tmem_pool) >> 12);
-    idx = (idx + 1u) & (TMEM_POOL_SLOTS - 1u);
-    memcpy(rdp->m_tmem_pool + (idx << 12), rdp->m_tmem, 0x1000);
-    rdp->m_tmem = rdp->m_tmem_pool + (idx << 12);
-    rdp->m_tmem_cows++;
+    rdp_pipeline_drain(rdp);
 }
 
 /* A triangle command carries a shade / texture / Z coefficient block only when
@@ -4037,17 +3899,9 @@ static void rdp_cmd_sync_tile(rdp_t *rdp, uint64_t *cmd_buf)
 static void rdp_cmd_sync_full(rdp_t *rdp, uint64_t *cmd_buf)
 {
     (void)cmd_buf;
-    /* Sync Full is the architectural completion point. Synchronous
-     * mode drains here (rendering has zero emulated-time cost and is
-     * complete when the interrupt fires). Async mode preserves the
-     * SAME observable semantics -- the interrupt is raised at the
-     * identical emulated instant -- but leaves the span queue running
-     * on the workers; every architectural path that can observe the
-     * pixels fences against the pending watermark first. The aux
-     * buffer cursor must NOT be reset while spans are in flight (their
-     * aux records live there), so the reset rides the next drain. */
-    if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
-        rdp_pipeline_drain(rdp);
+    /* Sync Full is the architectural completion point: the queue
+     * drains here. The aux buffer cursor resets with it. */
+    rdp_pipeline_drain(rdp);
 
     /* The host raises the DP interrupt when this command retires. */
 }
@@ -4190,13 +4044,7 @@ static void rdp_cmd_load_tlut(rdp_t *rdp, uint64_t *cmd_buf)
 
     const int32_t count = ((sh >> 2) - (sl >> 2) + 1) << 2;
 
-    /* Snapshot/hazard gate (see rdp_tmem_load_gate).
-     * Conservative RDRAM source bound:
-     * one 16-bit row at ti_address + row(tl) plus the s extent. */
-    rdp_tmem_load_gate(rdp,
-        rdp->m_misc_state.m_ti_address +
-            (uint32_t)(tl >> 2) * ((uint32_t)rdp->m_misc_state.m_ti_width << 1),
-        (uint32_t)(sl >> 1) + (uint32_t)(count > 0 ? count >> 2 : 0) * 2u + 8u);
+    rdp_tmem_load_gate(rdp);
 
     // A load whose s-range is inverted (sl > sh) transfers no texels.
     // Donkey Kong 64 issues exactly such a degenerate load, with a
@@ -4309,19 +4157,7 @@ static void rdp_cmd_load_block(rdp_t *rdp, uint64_t *cmd_buf)
     tile[tilenum].sh =  sh = (int32_t)((w1 >> 12) & 0xfff);
     tile[tilenum].th = dxt = (int32_t)((w1 >>  0) & 0xfff);
 
-    /* Snapshot/hazard gate (see rdp_tmem_load_gate).
-     * Conservative RDRAM source bound:
-     * the linear texel run from row tl, padded by the tile line jumps
-     * the dxt walk can take past the nominal width. */
-    {
-        const uint32_t rowbytes = ((uint32_t)rdp->m_misc_state.m_ti_width << rdp->m_misc_state.m_ti_size) >> 1;
-        const int32_t texels = (sh - sl) + 1;
-        rdp_tmem_load_gate(rdp,
-            rdp->m_misc_state.m_ti_address + (uint32_t)tl * rowbytes +
-                (((uint32_t)sl << rdp->m_misc_state.m_ti_size) >> 1),
-            ((uint32_t)(texels > 0 ? texels : 0) << rdp->m_misc_state.m_ti_size >> 1) +
-                ((uint32_t)tile[tilenum].line << 3) + 64u);
-    }
+    rdp_tmem_load_gate(rdp);
 
     tc = ((uint16_t*)rdp->m_tmem);
 
@@ -4531,18 +4367,7 @@ static void rdp_cmd_load_tile(rdp_t *rdp, uint64_t *cmd_buf)
         default: break;
     }
 
-    /* Snapshot/hazard gate (see rdp_tmem_load_gate).
-     * Conservative RDRAM source bound:
-     * height rows of texture-image pitch from row tl, plus the final
-     * row's s extent. */
-    {
-        const uint32_t rowbytes = ((uint32_t)rdp->m_misc_state.m_ti_width << rdp->m_misc_state.m_ti_size) >> 1;
-        rdp_tmem_load_gate(rdp,
-            rdp->m_misc_state.m_ti_address + (uint32_t)tl * rowbytes +
-                (((uint32_t)sl << rdp->m_misc_state.m_ti_size) >> 1),
-            (uint32_t)(height > 0 ? height : 0) * rowbytes +
-                (((uint32_t)(width > 0 ? width : 0) << rdp->m_misc_state.m_ti_size) >> 1) + 16u);
-    }
+    rdp_tmem_load_gate(rdp);
 /*
     int32_t topad;
     if (m_misc_state.m_ti_size < 3)
@@ -4789,71 +4614,10 @@ static void rdp_cmd_set_texture_image(rdp_t *rdp, uint64_t *cmd_buf)
     rdp->m_misc_state.m_ti_width   = ((uint32_t)(w1 >> 32) & 0x3ff) + 1;
     rdp->m_misc_state.m_ti_address = (uint32_t)(w1) & 0x01ffffff;
 }
-static inline int rdp_range_overlaps(uint32_t alo, uint32_t ahi, uint32_t blo, uint32_t bhi)
-{
-    return alo < bhi && blo < ahi;
-}
-
-/* Image-switch hazard (async pipeline). Queued spans are ordered only
- * by scanline bucket, which orders RDRAM accesses correctly as long as
- * every primitive maps rows to bytes the same way. Hardware is
- * in-order, so a color or z image that lands on bytes still being
- * written under a different (address, width, size) -- a render-to-
- * texture target whose z-buffer aliases a wider image, a fill of the
- * z-buffer through a color image of another width -- must wait for
- * that work. The per-frame cases stay free: switching between two
- * color buffers does not overlap pending bytes, and clearing the
- * z-buffer through a color image at the z address with the same
- * width is the same row mapping. Spans use the current scissor
- * bottom, matching the watermark fold. */
-static void rdp_async_image_hazard(rdp_t *rdp)
-{
-    uint32_t fblo, fbhi, zblo, zbhi, lines, width, newfb, newfbend, newz, newzend;
-    int drain = 0;
-
-    if (!atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed) ||
-        !atomic_load_explicit(&rdp->m_async_pending, memory_order_acquire))
-        return;
-
-    fblo = atomic_load_explicit(&rdp->m_async_fb_lo, memory_order_relaxed);
-    fbhi = atomic_load_explicit(&rdp->m_async_fb_hi, memory_order_relaxed);
-    zblo = atomic_load_explicit(&rdp->m_async_zb_lo, memory_order_relaxed);
-    zbhi = atomic_load_explicit(&rdp->m_async_zb_hi, memory_order_relaxed);
-
-    lines = (uint32_t)(rdp->m_scissor.m_yl > 0 ? rdp->m_scissor.m_yl : 0);
-    width = (uint32_t)rdp->m_misc_state.m_fb_width;
-    newfb = rdp->m_misc_state.m_fb_address & 0x007fffffu;
-    newfbend = newfb + ((width * lines) << (rdp->m_misc_state.m_fb_size ? rdp->m_misc_state.m_fb_size - 1 : 2));
-    newz = rdp->m_misc_state.m_zb_address & 0x007fffffu;
-    newzend = newz + width * lines * 2u;
-
-    if (rdp_range_overlaps(newfb, newfbend, fblo, fbhi) &&
-        (rdp->m_async_fbg_mixed || newfb != rdp->m_async_fbg_addr ||
-         width != rdp->m_async_fbg_width ||
-         (uint32_t)rdp->m_misc_state.m_fb_size != rdp->m_async_fbg_size))
-        drain = 1;
-    if (rdp_range_overlaps(newfb, newfbend, zblo, zbhi) &&
-        (rdp->m_async_zbg_mixed || newfb != rdp->m_async_zbg_addr ||
-         width != rdp->m_async_zbg_width || (uint32_t)rdp->m_misc_state.m_fb_size != 2u))
-        drain = 1;
-    if (rdp_range_overlaps(newz, newzend, fblo, fbhi) &&
-        (rdp->m_async_fbg_mixed || newz != rdp->m_async_fbg_addr ||
-         width != rdp->m_async_fbg_width || rdp->m_async_fbg_size != 2))
-        drain = 1;
-    if (rdp_range_overlaps(newz, newzend, zblo, zbhi) &&
-        (rdp->m_async_zbg_mixed || newz != rdp->m_async_zbg_addr ||
-         width != rdp->m_async_zbg_width))
-        drain = 1;
-
-    if (drain)
-        rdp_pipeline_drain(rdp);
-}
-
 static void rdp_cmd_set_mask_image(rdp_t *rdp, uint64_t *cmd_buf)
 {
     const uint64_t w1 = cmd_buf[0];
     rdp->m_misc_state.m_zb_address = (uint32_t)(w1) & 0x01ffffff;
-    rdp_async_image_hazard(rdp);
 }
 static void rdp_cmd_set_color_image(rdp_t *rdp, uint64_t *cmd_buf)
 {
@@ -4862,7 +4626,6 @@ static void rdp_cmd_set_color_image(rdp_t *rdp, uint64_t *cmd_buf)
     rdp->m_misc_state.m_fb_size    = (uint32_t)(w1 >> 51) & 0x3;
     rdp->m_misc_state.m_fb_width   = ((uint32_t)(w1 >> 32) & 0x3ff) + 1;
     rdp->m_misc_state.m_fb_address = (uint32_t)(w1) & 0x01ffffff;
-    rdp_async_image_hazard(rdp);
 }
 
 /*****************************************************************************/
@@ -5362,7 +5125,7 @@ static void rdp_render_spans(rdp_t *rdp, int32_t start, int32_t end, int32_t til
      * the end-of-span pipelined TEXEL1 fetch can peek the next
      * scanline's first pixel (n64brew RDP Hazards RH#001; exact
      * conditions ported from ParaLLEl-RDP shading.h). Walk-thread
-     * only, before queueing: deterministic under async. */
+     * only, before queueing. */
     for (int32_t l = start; l <= end; l++) {
         extent_t *e = &spans[l - start];
         /* The peek must target the next scanline only when that line is
@@ -5384,71 +5147,6 @@ static void rdp_render_spans(rdp_t *rdp, int32_t start, int32_t end, int32_t til
         }
     }
 
-    /* Async watermark: conservative RDRAM byte ranges this primitive's
-     * spans may write, folded in BEFORE the work is queued so a fence
-     * that sees the work pending also sees the ranges. The color image
-     * and z-buffer are tracked as SEPARATE ranges with exact extents
-     * (fb_width bytes-per-line up to the scissor bottom): one folded
-     * span would bridge the RDRAM between them and turn ordinary CPU
-     * and RSP-DMA traffic in the gap into constant fence drains,
-     * serializing the emulated threads. The z range folds only when
-     * this primitive can write Z (z_update_en, 1-/2-cycle -- copy and
-     * fill never touch the z-buffer). Only the command-walk thread
-     * writes here (plain load/min/store); fences reset these only
-     * after their drain, with the producer excluded (dp_lock). */
-    if (atomic_load_explicit(&rdp->m_async_on, memory_order_relaxed))
-    {
-        const uint32_t lines = (uint32_t)(rdp->m_scissor.m_yl > 0 ? rdp->m_scissor.m_yl : 0);
-        const uint32_t fbaddr = rdp->m_misc_state.m_fb_address & 0x007fffffu;
-        const uint32_t fbshift = rdp->m_misc_state.m_fb_size ? (uint32_t)(rdp->m_misc_state.m_fb_size - 1) : 2u;
-        const uint32_t fbcount = (uint32_t)(rdp->m_misc_state.m_fb_width * lines) << fbshift;
-        const int zwrite = rdp->m_other_modes.z_update_en &&
-            (rdp->m_other_modes.cycle_type == CYCLE_TYPE_1 ||
-             rdp->m_other_modes.cycle_type == CYCLE_TYPE_2);
-
-        if (fbcount != 0)
-        {
-            uint32_t lo = atomic_load_explicit(&rdp->m_async_fb_lo, memory_order_relaxed);
-            uint32_t hi = atomic_load_explicit(&rdp->m_async_fb_hi, memory_order_relaxed);
-            if (fbaddr < lo) lo = fbaddr;
-            if (fbaddr + fbcount > hi) hi = fbaddr + fbcount;
-            atomic_store_explicit(&rdp->m_async_fb_lo, lo, memory_order_relaxed);
-            atomic_store_explicit(&rdp->m_async_fb_hi, hi, memory_order_relaxed);
-            if (rdp->m_async_fbg_addr == 0xffffffffu) {
-                rdp->m_async_fbg_addr = fbaddr;
-                rdp->m_async_fbg_width = (uint32_t)rdp->m_misc_state.m_fb_width;
-                rdp->m_async_fbg_size = (uint32_t)rdp->m_misc_state.m_fb_size;
-            } else if (rdp->m_async_fbg_addr != fbaddr ||
-                       rdp->m_async_fbg_width != (uint32_t)rdp->m_misc_state.m_fb_width ||
-                       rdp->m_async_fbg_size != (uint32_t)rdp->m_misc_state.m_fb_size) {
-                rdp->m_async_fbg_mixed = 1;
-            }
-        }
-
-        if (zwrite)
-        {
-            const uint32_t zbaddr = rdp->m_misc_state.m_zb_address & 0x007fffffu;
-            const uint32_t zbcount = (uint32_t)(rdp->m_misc_state.m_fb_width * lines) * 2u;
-            if (zbcount != 0)
-            {
-                uint32_t lo = atomic_load_explicit(&rdp->m_async_zb_lo, memory_order_relaxed);
-                uint32_t hi = atomic_load_explicit(&rdp->m_async_zb_hi, memory_order_relaxed);
-                if (zbaddr < lo) lo = zbaddr;
-                if (zbaddr + zbcount > hi) hi = zbaddr + zbcount;
-                atomic_store_explicit(&rdp->m_async_zb_lo, lo, memory_order_relaxed);
-                atomic_store_explicit(&rdp->m_async_zb_hi, hi, memory_order_relaxed);
-                if (rdp->m_async_zbg_addr == 0xffffffffu) {
-                    rdp->m_async_zbg_addr = zbaddr;
-                    rdp->m_async_zbg_width = (uint32_t)rdp->m_misc_state.m_fb_width;
-                } else if (rdp->m_async_zbg_addr != zbaddr ||
-                           rdp->m_async_zbg_width != (uint32_t)rdp->m_misc_state.m_fb_width) {
-                    rdp->m_async_zbg_mixed = 1;
-                }
-            }
-        }
-
-        atomic_store_explicit(&rdp->m_async_pending, 1, memory_order_release);
-    }
     /* The scissor's sub-pixel precision in 1-/2-cycle is per-SUBLINE, not
      * per-row: a fractional top edge renders its boundary row with the
      * quarter lines above the edge invalidated (yh_eff/yl_eff in the edge
@@ -7432,14 +7130,6 @@ int rdp_init_internal_state(rdp_t *rdp)
     }
     rdp->m_tmem = rdp->m_tmem_pool;
     rdp->m_tmem_cows = 0;
-
-    atomic_store(&rdp->m_async_on, 0);
-    atomic_store(&rdp->m_async_pending, 0);
-    atomic_store(&rdp->m_async_fb_lo, 0xffffffffu);
-    atomic_store(&rdp->m_async_fb_hi, 0);
-    atomic_store(&rdp->m_async_zb_lo, 0xffffffffu);
-    atomic_store(&rdp->m_async_zb_hi, 0);
-    rdp_async_geom_reset(rdp);
 
     rdp_tcdiv_lut_init();
 

@@ -135,6 +135,8 @@ The RDP actor follows the hardware dataflow:
 - A full half, or the end of a span or primitive, triggers write-back: one burst per contiguous written run, end-trimmed, split at 128 B and 2 KiB rows; a fully rejected half posts nothing (`rdp-write-granularity.md`). The half frees when its last burst is granted.
 - `G_PM_1PRIMITIVE` is a barrier: the next primitive's prefetch waits for the previous primitive's write-backs, plus `rdp.atomic-dead`. Without it, a prefetch can be granted before an overlapping write-back, and the stale read that the SDK warns about happens on its own.
 
+T13 (PR #67) built this dataflow with three deviations, recorded under Implementation reconciliation: halves never stall the pipeline, the RDP has one memory interface instead of per-image ports, and the `G_PM_1PRIMITIVE` dead cycles count from the last span.
+
 paraLLEl-RDP and the Vulkan path leave the N64 core and the fork's build. VI output is ares's existing software VI filter, fed from the bytes the VI fetch bursts copied at their grant times.
 
 ### CPU timing seam (#15, #5, #6, #26, #10)
@@ -254,7 +256,13 @@ What must be measured, in order of risk: (1) ported pixel engine ns/pixel single
 
 ## Implementation reconciliation
 
-(Empty until implementation starts. Each unit's worker records accepted deviations here with the acceptance source.)
+Each unit's worker records accepted deviations here with the acceptance source.
+
+### Decision 3, amended by T13 (PR #67; accepted in verify-67)
+
+1. **Halves never stall the pipeline.** Decision 3 says a segment starts only when its half is free, and a half frees when its last write-back burst is granted. T13 lets a half's write-back queue at the memory interface and the pipeline keep shading. Four span slots (`rdp.span-slots`) and the interface's occupancy bound how far shading runs ahead of memory. The evidence is one pair of Thar0 configs: on hardware, a 2-cycle IM_RD line takes about as long as a 1-cycle one (nozb-vioff-imrd-2cyc 161,978 rclk minimum over 240 lines, 675 per line; nozb-vioff-imrd-1cyc 163,436, 681 per line). If halves stalled the pipeline, the 2-cycle line would cost its shading time plus the stalls. This rests on that one data point. A console capture of a half-full stall would settle it (calibration #16).
+2. **One RDP memory interface, not per-image ports.** Decision 3 has `DpColor` and `DpDepth` post as separate clients, each burst paying `ri.overhead-rdp` on the RDRAM channel. T13 gives the RDP one interface that posts one burst at a time. Each burst holds the interface for its wire time plus `rdp.mem-overhead-read` or `rdp.mem-overhead-write`, and `ri.overhead-rdp` is 0, so that cost does not occupy the channel. The references are US 6,166,748 (memory interface 512) and SDK 12.1 ("stalled at MI"). The data is Thar0's VI-on configs with writes only: on hardware they run 0.5-1.6% slower than with VI off (nozb-visep/visame-noimrd, 1- and 2-cycle), and T13 estimated that a channel-held overhead of the fitted size would raise that to about 7%. Those VI-on configs informed this choice, so they are not a clean independent check of the fit (see the `rdp.mem-overhead-read` row).
+3. **`G_PM_1PRIMITIVE` dead cycles count from the last span.** Decision 3 says the next primitive's prefetch waits for the previous primitive's write-backs, plus `rdp.atomic-dead`. T13 waits for whichever is later: the last write-back landing, or the end of the last span plus `rdp.atomic-dead`. This follows the SDK 12.2.3 wording ("30 to 40 null cycles after the last span of a primitive is rendered"). The data cannot tell the two readings apart: bench:rdp-atomic-sweep measures 34.4 extra clocks per primitive against the SDK's 30-40.
 
 ## Open questions and risks
 

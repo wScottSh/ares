@@ -117,4 +117,5 @@ auto RDP::serialize(serializer& s) -> void {
   s(io.test.enable);
   s(io.test.address);
   for(auto& d : io.test.data) s(d);
+  changed();
 }
