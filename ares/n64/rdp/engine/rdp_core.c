@@ -7295,3 +7295,12 @@ void rdp_destroy(rdp_t *rdp)
     free(rdp->m_aux_buf);
     rdp->m_aux_buf = NULL;
 }
+
+/* ares port: the span callbacks a queued primitive can name, for save states. */
+poly_render_cb const *rdp_span_callbacks(uint32_t *count)
+{
+    static poly_render_cb const table[4] = {
+        rdp_span_draw_1cycle, rdp_span_draw_2cycle, rdp_span_draw_copy, rdp_span_draw_fill };
+    *count = 4;
+    return table;
+}

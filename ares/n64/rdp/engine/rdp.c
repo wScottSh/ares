@@ -298,8 +298,8 @@ uint8_t *rdp_render_tmem(void)
  * the import). Differences: whole structs travel as blocks, so the scissor
  * fractions upstream drops survive; the hidden plane is ares' and travels
  * with RDRAM; only the live prefix of the command accumulator travels; the
- * ares pixel counter is included. Hazard holds and queued spans never
- * outlive rdp_render_engine_step, so neither needs saving. */
+ * ares pixel counter is included. Hazard holds never outlive
+ * rdp_render_engine_step; queued spans travel with the poly pools. */
 void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
 {
     rdp_t *rdp = s_ctx.rdp;
@@ -355,5 +355,17 @@ void rdp_render_serialize(rdp_state_io io, void *ctx, int loading)
         rdp->m_tmem_cows = 0;
     }
     io(ctx, rdp->m_tmem, 0x1000);
+
+    /* Plan T13: spans wait in the poly pools across emulated time. Their
+     * aux records hold the walker's edge data; rdp_span_aux_init rebuilds
+     * the rest when each span runs. */
+    if (loading && rdp->m_aux_buf_ptr > EXTENT_AUX_COUNT)
+        rdp->m_aux_buf_ptr = 0;
+    io(ctx, rdp->m_aux_buf, rdp->m_aux_buf_ptr);
+    {
+        uint32_t n;
+        poly_render_cb const *callbacks = rdp_span_callbacks(&n);
+        poly_manager_serialize(&rdp->m_pool, io, ctx, loading, rdp->m_aux_buf, rdp->m_tmem_pool, callbacks, n);
+    }
 #undef RDP_STATE
 }

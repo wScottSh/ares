@@ -37,11 +37,11 @@ auto RDP::power(bool reset) -> void {
   pipe = {};
   tmemLoad.active = false;
   tmemLoad.count = tmemLoad.reads = 0;
-  for(auto& port : ports) port.queue.clear(), port.posted = port.landed = false;
-  fillPort.queue.clear(), fillPort.posted = fillPort.landed = false;
+  for(auto* port : {&memory, &command, &fillPort}) port->reset();
   for(auto& slot : slots) slot.reads = slot.writes = 0, slot.shaded = false;
-  for(auto& port : ports) ri.attach(port.requester, &port);
-  ri.attach(fillPort.requester, &fillPort);
+  for(auto r : {RiBus::Requester::DpColor, RiBus::Requester::DpDepth, RiBus::Requester::DpTexture}) ri.attach(r, &memory);
+  ri.attach(RiBus::Requester::DpCommand, &command);
+  ri.attach(RiBus::Requester::DpFill, &fillPort);
   io.bist = {};
   io.test = {};
   if(!reset) mapIdentityWarned = 0;

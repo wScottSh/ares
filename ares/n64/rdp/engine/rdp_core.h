@@ -481,6 +481,7 @@ void        rdp_engine_feed(rdp_t *rdp, const uint64_t *words, unsigned nwords);
 int         rdp_engine_step(rdp_t *rdp, rdp_engine_work *work);
 int         rdp_engine_hold_open(rdp_t *rdp);
 void        rdp_engine_publish(rdp_t *rdp);
+poly_render_cb const *rdp_span_callbacks(uint32_t *count);
 int         rdp_engine_drains(rdp_t *rdp);
 int         rdp_engine_next(rdp_t *rdp);
 unsigned    rdp_engine_load_plan(rdp_t *rdp, rdp_memrange *out, unsigned max);

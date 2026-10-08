@@ -126,30 +126,38 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     u8  half;
   };
 
-  //One RI requester. Each keeps one burst in flight (RiBus::Channel capacity);
-  //the rest wait here in order, so a span's snapshot read and an earlier
-  //span's write-back on the same image keep their issue order.
+  //The RDP's memory interface toward the RI. It posts one burst at a time
+  //and holds the RI request until the burst's data has moved plus the
+  //RDP's per-burst overhead (rdp.mem-overhead-read/-write). A read's data
+  //is usable rdp.span-read-latency after its last beat, and an image has
+  //one read outstanding at a time. Bursts post in the order queued, so a
+  //span's snapshot read and an earlier span's write-back keep their order
+  //(SDK 12.2.3). The command DMA and fill writes have ports of their own.
   struct Port : RI::Client {
     Port(RDP* self, RiBus::Requester requester) : self(self), requester(requester) {}
     RDP* self;
     RiBus::Requester requester;
-    std::deque<Pending> queue;
-    bool  posted = false;   //queue.front() is in the RI
-    bool  landed = false;   //its grant came; it lands at `landAt`
-    Clock landAt;
-    u8    words[128];       //DpCommand data, bus order
+    std::deque<Pending> queue;  //not yet posted
+    bool  posted = false;       //queue.front() is in the RI
+    Clock freeAt;               //takes its next post from here
+    struct Flight { Pending p; Clock landAt; };
+    std::deque<Flight> flights; //granted, data not yet landed
+    u8    words[128];           //DpCommand data, bus order
 
     auto buffer(const RiBus::Burst&) -> void* override { return words; }
     auto native(const RiBus::Burst&, Native&) -> bool override;
     auto granted(const RiBus::Grant&) -> void override;
     auto post(Clock at) -> void;
+    auto next() const -> Clock;
+    auto eligible() const -> s32;
+    auto reset() -> void { queue.clear(); flights.clear(); posted = false; freeAt = {}; }
   };
 
   //A span-RAM half (span-ram.md rows 3-6): it fills along the stream and
-  //drains through write-back bursts; the pipeline stalls on one still draining.
+  //writes back when full or at the end of a span; a TMEM load waits for the
+  //Z halves' write-backs (it stages through them).
   struct Half {
-    u32   outstanding = 0;
-    Clock freeAt;
+    u32 outstanding = 0;
   };
 
   struct Stream {
@@ -187,9 +195,17 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
 
   Slot  slots[Slots];
   Load  tmemLoad;
-  //indexed by Image; the fill port carries fill-mode writes
-  Port  ports[4] = {{this, RiBus::Requester::DpColor}, {this, RiBus::Requester::DpDepth},
-                    {this, RiBus::Requester::DpTexture}, {this, RiBus::Requester::DpCommand}};
+  //Measurement only: RCP time the RDP was busy, and the part of it a pixel
+  //chunk ran; the rest is the pipeline's GCLK off (waiting on memory or on
+  //the command processor).
+  struct Stat {
+    u64   busy = 0, pipe = 0;
+    Clock since;
+    bool  on = false;
+  } stat;
+
+  Port  memory{this, RiBus::Requester::DpColor};
+  Port  command{this, RiBus::Requester::DpCommand};
   Port  fillPort{this, RiBus::Requester::DpFill};
 
   struct IO : Memory::RCP<IO> {

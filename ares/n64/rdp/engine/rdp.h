@@ -167,8 +167,8 @@ void rdp_render_quiesce(void);
 
 /* ares port: save states. Visits every piece of renderer state that
  * outlives a command (modes, colors, tiles, scissor, TMEM, the buffered
- * command words, the held hazard primitives, the noise counter, the
- * stale-read and DPS models) in a fixed order, passing each block to io.
+ * command words, the noise counter, the DPS model, the queued spans) in a
+ * fixed order, passing each block to io.
  * With loading set, io fills the blocks and TMEM lands in pool slot zero.
  * Saving never mutates the renderer. */
 typedef void (*rdp_state_io)(void *ctx, void *data, size_t size);

@@ -608,6 +608,21 @@ auto nall::main(Arguments arguments) -> void {
     (unsigned long long)engine.renderCalls, engine.renderNanoseconds / 1e6,
     (unsigned long long)engine.pixels(),
     engine.pixels() ? (double)engine.renderNanoseconds / engine.pixels() : 0.0);
+  //the RDP's memory traffic (plan T13): per DP requester, and the pipeline's GCLK-off share
+  {
+    auto& counters = N64::ri.channel.counters;
+    using R = N64::RiBus::Requester;
+    std::fprintf(stderr, "n64-run: ri_dp");
+    for(auto [name, r] : {std::pair{"cmd", R::DpCommand}, {"color", R::DpColor}, {"depth", R::DpDepth}, {"texture", R::DpTexture}, {"fill", R::DpFill}}) {
+      auto& c = counters[(u32)r];
+      std::fprintf(stderr, " %s_grants=%llu %s_read=%llu %s_written=%llu %s_wait_rclk=%llu", name, (unsigned long long)c.bursts,
+        name, (unsigned long long)c.bytesRead, name, (unsigned long long)c.bytesWritten, name, (unsigned long long)(c.wait.units / N64::Timing::UnitsPerRclk));
+    }
+    auto& st = N64::rdp.stat;
+    std::fprintf(stderr, " busy_rclk=%llu pipe_rclk=%llu gclk_off_share=%.4f mem_misses=%llu\n",
+      (unsigned long long)(st.busy / N64::Timing::UnitsPerRclk), (unsigned long long)(st.pipe / N64::Timing::UnitsPerRclk), st.busy ? 1.0 - (double)st.pipe / st.busy : 0.0,
+      (unsigned long long)rdp_render_mem_misses());
+  }
   //RI grants per requester since power-on and the channel time they waited and held (plan T6)
   auto& counters = N64::ri.channel.counters;
   auto& cpuBus = counters[(u32)N64::RiBus::Requester::CpuSysAD];

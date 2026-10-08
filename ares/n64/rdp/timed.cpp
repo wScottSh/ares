@@ -33,9 +33,9 @@ static auto spanPixels(const rdp_span_info& info) -> u32 {
 }
 
 //Cuts [lo, hi) into bursts the RI accepts (at most ri.max-burst, never across a 2 KiB row).
-template<typename F> static auto splitBursts(u32 lo, u32 hi, F&& emit) -> void {
+template<typename F> static auto splitBursts(u32 lo, u32 hi, u32 unit, F&& emit) -> void {
   while(lo < hi) {
-    u32 n = RiBus::split(lo, hi - lo);
+    u32 n = min(RiBus::split(lo, hi - lo), unit - (lo & (unit - 1)));
     emit(lo, n);
     lo += n;
   }
@@ -60,16 +60,60 @@ auto RDP::Port::native(const RiBus::Burst& b, Native& n) -> bool {
 }
 
 auto RDP::Port::granted(const RiBus::Grant& g) -> void {
-  landed = true;
-  landAt = g.dataEnd;
+  Pending p = queue.front();
+  queue.pop_front();
+  posted = false;
+  freeAt = g.dataEnd;
+  Clock landAt = g.dataEnd;
+  if(this == &self->memory) {
+    using namespace Timing::Behavior;
+    if(p.write) freeAt = freeAt + RdpMemOverheadWrite;
+    else freeAt = freeAt + RdpMemOverheadRead, landAt = freeAt + RdpSpanReadLatency;
+  }
+  flights.push_back({p, landAt});
   timeline.wake(Timing::ActorId::RDP);
 }
 
+//The queue entry to post next: the oldest whose image has nothing older
+//waiting, and, for a read, no read of its image in flight (one read per image).
+//Writes and reads of one image keep their order.
+auto RDP::Port::eligible() const -> s32 {
+  u32 seen = 0;
+  for(u32 i : range(min((u32)queue.size(), 8u))) {
+    auto& p = queue[i];
+    u32 bit = 1 << p.image;
+    if(seen & bit) continue;
+    seen |= bit;
+    bool blocked = false;
+    if(!p.write) for(auto& f : flights) if(!f.p.write && f.p.image == p.image) blocked = true;
+    if(!blocked) return i;
+  }
+  return -1;
+}
+
 auto RDP::Port::post(Clock at) -> void {
-  if(posted || queue.empty()) return;
+  if(posted || queue.empty() || at < freeAt) return;
+  s32 i = eligible();
+  if(i < 0) return;
+  if(i) {  //the posted burst stays at the front until its grant
+    Pending p = queue[i];
+    queue.erase(queue.begin() + i);
+    queue.push_front(p);
+  }
   auto& p = queue.front();
   posted = true;
-  ri.post({p.address, p.bytes, p.write ? RiBus::Direction::Write : RiBus::Direction::Read, requester, 0}, at);
+  auto r = requester;
+  if(this == &self->memory)
+    r = p.image == Color ? RiBus::Requester::DpColor : p.image == Depth ? RiBus::Requester::DpDepth : RiBus::Requester::DpTexture;
+  ri.post({p.address, p.bytes, p.write ? RiBus::Direction::Write : RiBus::Direction::Read, r, 0}, at);
+}
+
+//When this port next has something to do: a landing, or a post it waits to make.
+auto RDP::Port::next() const -> Clock {
+  Clock t = Clock::never();
+  for(auto& f : flights) if(f.landAt < t) t = f.landAt;
+  if(!posted && !queue.empty() && freeAt < t && eligible() >= 0) t = freeAt;
+  return t;
 }
 
 //---- the actor ------------------------------------------------------------
@@ -103,8 +147,7 @@ auto RDP::readiness() const -> Timing::Readiness {
   Clock next = pipe.wake;
   if(fetch.dwords && fetch.arrival < next) next = fetch.arrival;
   if(executor.busy && executor.until < next) next = executor.until;
-  for(auto& port : ports) if(port.landed && port.landAt < next) next = port.landAt;
-  if(fillPort.landed && fillPort.landAt < next) next = fillPort.landAt;
+  for(auto* port : {&memory, &command, &fillPort}) next = min(next, port->next());
   if(pipe.chunk && pipe.chunkEnd < next) next = pipe.chunkEnd;
   if(!executor.busy && dispatchable()) next = min(next, max(executor.until, Thread::clock));
   if(next == Clock::never()) return Timing::Readiness::parked();
@@ -155,9 +198,14 @@ auto RDP::step(Clock at) -> void {
   startLoad(at);
   pipeline(at);
   startFetch(at);
-  for(auto& port : ports) port.post(at);
-  fillPort.post(at);
-  dpc.cmd.set(busy(), at);
+  for(auto* port : {&memory, &command, &fillPort}) port->post(at);
+  const bool b = busy();
+  if(b != stat.on) {
+    if(stat.on) stat.busy += (at - stat.since).units;
+    stat.on = b;
+    stat.since = at;
+  }
+  dpc.cmd.set(b, at);
 }
 
 //Frees finished slots, oldest first.
@@ -174,12 +222,9 @@ auto RDP::retire() -> void {
 //Granted bursts whose data has arrived: snapshots become ready, halves and
 //slots drain, command words reach the FIFO, staged load rows count down.
 auto RDP::land(Clock at) -> void {
-  auto landPort = [&](Port& port) {
-    if(!port.landed || port.landAt > at) return;
-    Pending p = port.queue.front();
-    port.queue.pop_front();
-    port.posted = port.landed = false;
-    const Clock t = port.landAt;
+  auto landOne = [&](Port& port, const Port::Flight& f) {
+    const Pending& p = f.p;
+    const Clock t = f.landAt;
     if(p.image == Command) {
       u64 words[16];
       for(u32 n : range(p.bytes / 8)) {
@@ -207,12 +252,22 @@ auto RDP::land(Clock at) -> void {
     if(t > pipe.lastWrite) pipe.lastWrite = t;
     if(p.half != 0xff) {
       auto& half = (p.image == Color ? pipe.color : pipe.depth).halves[p.half];
-      if(--half.outstanding == 0) half.freeAt = t;
+      half.outstanding--;
     }
-    if(executor.syncFull && !pipe.writes) executor.until = max(t, at);
+    if(executor.syncFull && !pipe.writes && executor.until == Clock::never()) executor.until = max(t, at);
   };
-  for(auto& port : ports) landPort(port);
-  landPort(fillPort);
+  for(auto* port : {&memory, &command, &fillPort}) {
+    //in landing order; a port's flights are few
+    while(true) {
+      auto best = port->flights.end();
+      for(auto f = port->flights.begin(); f != port->flights.end(); f++)
+        if(f->landAt <= at && (best == port->flights.end() || f->landAt < best->landAt)) best = f;
+      if(best == port->flights.end()) break;
+      auto f = *best;
+      port->flights.erase(best);
+      landOne(*port, f);
+    }
+  }
   retire();
 }
 
@@ -252,8 +307,8 @@ auto RDP::prefetch(Clock at) -> void {
     memory::fill<u8>(w.hidden, (w.hi - w.lo) / 2, 0);
     memory::fill<u8>(w.written, w.hi - w.lo, 0);
     if(!read) return;
-    splitBursts(w.lo, w.hi, [&](u32 a, u32 n) {
-      ports[image].queue.push_back({a, (u8)n, 0, (u8)index, (u8)image, 0xff});
+    splitBursts(w.lo, w.hi, Timing::Behavior::RdpSpanRamHalf, [&](u32 a, u32 n) {
+      memory.queue.push_back({a, (u8)n, 0, (u8)index, (u8)image, 0xff});
       slot.reads++;
     });
   };
@@ -276,7 +331,9 @@ auto RDP::startSpan(Clock at) -> bool {
   for(auto* w : {&slot.color, &slot.depth})
     if(w->hi > w->lo) windows[n++] = {w->lo, w->hi, w->data, w->hidden, w->written};
   rdp_render_set_windows(windows, n);
+  auto host = std::chrono::steady_clock::now();
   rdp_render_span_run();
+  engine.renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - host).count();
   rdp_render_set_windows(nullptr, 0);
   pipe.current = pipe.prefetched;
   pipe.prefetched = -1;
@@ -291,7 +348,10 @@ auto RDP::startSpan(Clock at) -> bool {
 }
 
 //Runs the next chunk of the current span: the pixels up to the next half
-//boundary of either image. A half still draining stalls the pipeline.
+//boundary of either image. A half's write-back queues at the memory
+//interface without stalling the pipeline; the interface's occupancy and the
+//span slots bound how far shading runs ahead of memory (fit to Thar0: 2-cycle
+//IM_RD lines take as long as 1-cycle ones, 675 vs 681 rclk per 320 px).
 auto RDP::beginChunk(Clock at) -> bool {
   auto& slot = slots[pipe.current];
   auto& info = slot.info;
@@ -305,9 +365,6 @@ auto RDP::beginChunk(Clock at) -> bool {
       if(w.hi == w.lo) continue;
       u32 h = halfPixels(image == Color ? bytesPerPixel(info.fb_size) : 2);
       k = min(k, h - s.position % h);
-      auto& half = s.halves[s.position / h & 1];
-      if(half.outstanding) return false;  //resumes when its last burst lands
-      if(half.freeAt > start) start = half.freeAt;
     }
     clocks = RDPTimed::pixelClocks(info.cycle_type, k);
     if(pipe.pixel + k == pixels) clocks += RDPTimed::spanTail(info.cycle_type);
@@ -317,6 +374,7 @@ auto RDP::beginChunk(Clock at) -> bool {
     clocks = RDPTimed::wordClocks(words);
   }
   if(start > at) return wakeAt(start), false;
+  stat.pipe += clocks.units;
   pipe.chunk = true;
   pipe.chunkPixels = k;
   pipe.chunkEnd = start + clocks;
@@ -363,7 +421,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   auto& info = slot.info;
   auto& w = image == Color ? slot.color : slot.depth;
   const bool direct = info.cycle_type >= 2;
-  auto& port = info.cycle_type == 3 ? fillPort : ports[image];
+  auto& port = info.cycle_type == 3 ? fillPort : memory;
   const u32 bpp = image == Color ? bytesPerPixel(info.fb_size) : 2;
   const u32 base = (image == Color ? info.fb_address : info.zb_address) & 0xffffff;
   const u32 row = base + ((u32)info.y * info.fb_width + (u32)info.x0) * bpp;
@@ -381,7 +439,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
     if(!w.written[a - w.lo]) { a++; continue; }
     u32 end = a;
     while(end < hi && w.written[end - w.lo]) end++;
-    splitBursts(a, end, [&](u32 b, u32 n) {
+    splitBursts(a, end, Timing::Behavior::RiMaxBurst, [&](u32 b, u32 n) {
       port.queue.push_back({b, (u8)n, 1, (u8)pipe.current, (u8)image, half});
       bursts++;
     });
@@ -389,10 +447,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   }
   slot.writes += bursts;
   pipe.writes += bursts;
-  if(h) {
-    h->outstanding += bursts;
-    if(!h->outstanding) h->freeAt = at;
-  }
+  if(h) h->outstanding += bursts;
 }
 
 auto RDP::pipeline(Clock at) -> void {
@@ -429,8 +484,8 @@ auto RDP::startLoad(Clock at) -> void {
     auto& r = tmemLoad.ranges[i];
     u32 bytes = min(r.hi - r.lo, LoadBytes - offset);
     tmemLoad.windows[i] = {r.lo, r.lo + bytes, tmemLoad.data + offset, tmemLoad.hidden + offset / 2, tmemLoad.written + offset};
-    splitBursts(r.lo, r.lo + bytes, [&](u32 a, u32 n) {
-      ports[Texture].queue.push_back({a, (u8)n, 0, 0, (u8)Texture, 0xff});
+    splitBursts(r.lo, r.lo + bytes, Timing::Behavior::RiMaxBurst, [&](u32 a, u32 n) {
+      memory.queue.push_back({a, (u8)n, 0, 0, (u8)Texture, 0xff});
       tmemLoad.reads++;
     });
     offset += bytes;
@@ -472,8 +527,8 @@ auto RDP::dispatch(Clock at) -> void {
 //has room for (RDPTimed::fetchDwords); DPC_CURRENT advances as it lands. The
 //X bus reads DMEM directly.
 auto RDP::startFetch(Clock at) -> void {
-  auto& port = ports[Command];
-  if(fetch.dwords || !port.queue.empty()) return;
+  auto& port = command;
+  if(fetch.dwords || !port.queue.empty() || !port.flights.empty()) return;
   u32 dwords = RDPTimed::fetchDwords(dpc, rdp_render_engine_buffered());
   if(!dwords) return;
   if(!mapIdentityWarned && !rdram.mapIdentity && !dpc.xbus) {

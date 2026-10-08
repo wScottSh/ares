@@ -210,6 +210,11 @@ void poly_manager_wait(poly_manager *poly);
 int  poly_manager_peek(poly_manager *poly, uint32_t ahead, poly_span *span);
 int  poly_manager_run_next(poly_manager *poly);
 
+// ares port: save states (see rdp_poly.c)
+typedef void (*poly_state_io)(void *ctx, void *data, size_t size);
+void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int loading,
+        uint8_t *aux_base, uint8_t *tmem_base, poly_render_cb const *callbacks, uint32_t ncallbacks);
+
 // return and default-initialize the next object (object_data().next())
 rdp_poly_state *poly_manager_object_next(poly_manager *poly);
 

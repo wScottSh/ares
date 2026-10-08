@@ -557,3 +557,113 @@ void poly_manager_render_extents(poly_manager *poly, const poly_rect *cliprect,
     // enqueue the work items
     queue_items(poly, startunit);
 }
+
+//-------------------------------------------------
+//  poly_manager_serialize - ares port, plan T13:
+//  save states carry the queued spans. Pointers
+//  travel as indices (objects, primitives), offsets
+//  (span userdata into the aux buffer, TMEM into
+//  the TMEM pool) and callback ids. Saving never
+//  mutates the manager.
+//-------------------------------------------------
+
+void poly_manager_serialize(poly_manager *poly, poly_state_io io, void *ctx, int loading,
+    uint8_t *aux_base, uint8_t *tmem_base, poly_render_cb const *callbacks, uint32_t ncallbacks)
+{
+    uint32_t counts[3], i, k;
+    uint8_t object[sizeof(rdp_poly_state)];
+
+    counts[0] = poly->m_object.next;
+    counts[1] = poly->m_primitive.next;
+    counts[2] = poly->m_unit.next;
+    io(ctx, counts, sizeof(counts));
+    io(ctx, &poly->m_run_unit, sizeof(poly->m_run_unit));
+    io(ctx, &poly->m_run_ext, sizeof(poly->m_run_ext));
+    io(ctx, poly->m_unit_bucket, sizeof(poly->m_unit_bucket));
+    if (loading)
+    {
+        atomic_store(&poly->m_object.next, 0);
+        atomic_store(&poly->m_primitive.next, 0);
+        atomic_store(&poly->m_unit.next, 0);
+    }
+
+    for (i = 0; i < counts[0]; i++)
+    {
+        rdp_poly_state *o = loading ? (rdp_poly_state *)poly_pool_next(&poly->m_object)
+                                    : (rdp_poly_state *)poly_pool_byindex(&poly->m_object, i);
+        uint64_t tmem = 0;
+        if (!loading)
+        {
+            memcpy(object, o, sizeof(object));
+            tmem = o->m_tmem_src ? (uint64_t)(o->m_tmem_src - tmem_base) + 1 : 0;
+            ((rdp_poly_state *)object)->m_tmem_src = NULL;
+        }
+        io(ctx, object, sizeof(object));
+        io(ctx, &tmem, sizeof(tmem));
+        if (loading)
+        {
+            memcpy(o, object, sizeof(object));
+            o->m_tmem_src = tmem ? tmem_base + (tmem - 1) : NULL;
+        }
+    }
+
+    for (i = 0; i < counts[1]; i++)
+    {
+        primitive_info *p = loading ? (primitive_info *)poly_pool_next(&poly->m_primitive)
+                                    : (primitive_info *)poly_pool_byindex(&poly->m_primitive, i);
+        uint32_t ids[2] = {0, 0};
+        if (!loading)
+        {
+            ids[0] = poly_pool_indexof(&poly->m_object, p->m_object);
+            for (k = 0; k < ncallbacks; k++) if (callbacks[k] == p->m_callback) ids[1] = k;
+        }
+        io(ctx, ids, sizeof(ids));
+        if (loading)
+        {
+            p->m_owner = poly;
+            p->m_object = (rdp_poly_state *)poly_pool_byindex(&poly->m_object, ids[0]);
+            p->m_callback = callbacks[ids[1] < ncallbacks ? ids[1] : 0];
+            p->m_cbarg = poly->m_cbarg;
+        }
+    }
+
+    for (i = 0; i < counts[2]; i++)
+    {
+        work_unit *u = loading ? (work_unit *)poly_pool_next(&poly->m_unit)
+                               : (work_unit *)poly_pool_byindex(&poly->m_unit, i);
+        uint32_t head[4] = {0, 0, 0, 0};
+        if (!loading)
+        {
+            head[0] = atomic_load(&u->count_next);
+            head[1] = poly_pool_indexof(&poly->m_primitive, u->primitive);
+            head[2] = (uint32_t)u->scanline;
+            head[3] = u->previtem;
+        }
+        io(ctx, head, sizeof(head));
+        if (loading)
+        {
+            atomic_store(&u->count_next, head[0]);
+            u->primitive = (primitive_info *)poly_pool_byindex(&poly->m_primitive, head[1]);
+            u->scanline = (int32_t)head[2];
+            u->previtem = head[3];
+        }
+        for (k = 0; k < (head[0] & 0xff) && k < SCANLINES_PER_BUCKET; k++)
+        {
+            extent_t e;
+            uint64_t user = 0;
+            if (!loading)
+            {
+                e = u->extent[k];
+                user = e.userdata ? (uint64_t)((uint8_t *)e.userdata - aux_base) + 1 : 0;
+                e.userdata = NULL;
+            }
+            io(ctx, &e, sizeof(e));
+            io(ctx, &user, sizeof(user));
+            if (loading)
+            {
+                e.userdata = user ? aux_base + (user - 1) : NULL;
+                u->extent[k] = e;
+            }
+        }
+    }
+}

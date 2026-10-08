@@ -138,10 +138,11 @@ auto nall::main(Arguments) -> void {
     auto clocks = [](Work w) { return cost(w).busy.units / UnitsPerRclk; };
     auto units = [](Clock c) { return c.units / UnitsPerRclk; };
     //a primitive's command-processor cost is its setup; its spans run in the pipeline
-    CHECK(clocks({0x36, 0, 320 * 240, 0, 240, 0}) == 12, "a rectangle's setup costs 12");
+    CHECK(clocks({0x36, 0, 320 * 240, 0, 240, 0}) == 13, "a rectangle's setup costs 13");
+    //Thar0 prints BUFBUSY - baseline - 1; the run's trailing setter overlaps the spans
     auto line1 = units(pixelClocks(0, 320) + spanTail(0)), line2 = units(pixelClocks(1, 320) + spanTail(1));
-    CHECK(12 + 240 * line1 == 77772, "1-cycle 320x240 spans should cost 77772, got %lld", (long long)(12 + 240 * line1));
-    CHECK(12 + 240 * line2 == 155052, "2-cycle 320x240 spans should cost 155052, got %lld", (long long)(12 + 240 * line2));
+    CHECK(13 + 240 * line1 - 1 == 77772, "1-cycle 320x240 should read 77772, got %lld", (long long)(13 + 240 * line1 - 1));
+    CHECK(13 + 240 * line2 - 1 == 155052, "2-cycle 320x240 should read 155052, got %lld", (long long)(13 + 240 * line2 - 1));
     CHECK(units(wordClocks(80)) == 80 + 2, "fill 320 px 16bpp: 80 words and the line gap");
     CHECK(clocks({0x2f}) == 1 && clocks({0x00}) == 1, "setters and NOP cost 1");
     CHECK(clocks({0x26}) == 25 && clocks({0x28}) == 33 && clocks({0x27}) == 50, "Sync Load/Tile/Pipe cost 25/33/50");
