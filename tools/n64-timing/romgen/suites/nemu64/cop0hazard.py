@@ -46,11 +46,19 @@ def interrupt_checks(cause, status):
     ]
 
 
+# Upstream's full run puts the Compare tests between CountHazards and the SW interrupt tests
+# (testlist.rs:588-591, :740-750), so those tests start with IP7 clear even though CountHazards
+# carried COUNT through Compare. The last Compare write is Compare (past)'s set_compare(count - 2)
+# (cop0/compare.rs:206-209); MTC0 Compare clears IP7. This set has no Compare tests, so the first
+# SW test replays that write.
+COMPARE_PAST_EFFECT = Step("step_compare_past_effect", [], 0)
+
+
 def sw1_enabled_hazard():
     """exception_instructions test_sw_interrupt(DEFAULT|IM1|IE, SW1, DEFAULT, 0, hazard=true)."""
     status_before = rt.STATUS_DEFAULT | SW1 | IE
     step = Step("step_sw_interrupt", [status_before, SW1, rt.STATUS_DEFAULT], 0)
-    return [Value("", preset_cop2_steps(20) + [step],
+    return [Value("", [COMPARE_PAST_EFFECT] + preset_cop2_steps(20) + [step],
                   interrupt_checks(SW1, 0x24000003 | (SW1 & 0x300)))]
 
 
@@ -185,6 +193,14 @@ ch_loop:
     sw $t2, 8($a1)
     jr $ra
     sw $t3, 12($a1)
+
+# cop0/compare.rs CompareInterruptsPast's set_compare(count() - 2).
+step_compare_past_effect:
+    mfc0 $t0, $count
+    addiu $t0, $t0, -2
+    mtc0 $t0, $compare
+    jr $ra
+    nop
 """,
     "# exception_instructions/mod.rs test_sw_interrupt (fire_position 0).",
     _interrupt_routine("step_sw_interrupt", """
