@@ -1,4 +1,4 @@
-# standing run not-built/after on d6f0aefaf
+# standing run not-built/after on f70b7bda5
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 20 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk 2 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -17,11 +17,12 @@ bench:rdp-setter-sweep	pass	4 of 4 points pass
 bench:rdp-sync-sweep	pass	pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5) pass; load-256 per_sync_clk 25.051 (expected 25, 24.5..25.5) pass
 bench:si-dma	pending:no-rom	
 bench:si-dma-read64-1	pending:no-rom	
-bench:si-dma-read64-2	pending:no-rom	
-bench:si-dma-read64-3	pending:no-rom	
-bench:si-dma-read64-4	pending:no-rom	
+bench:si-dma-read64-2	pending:report-only	
+bench:si-dma-read64-3	pending:report-only	
+bench:si-dma-read64-4	pending:report-only	
 bench:sp-dma-sweep	fail	wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail
 bench:uncached-sizes	pending:no-rom	
+bench:uncached-sizes-u32	pending:no-rom	
 bench:uncached-vs-hpos	pass	bank5 outliers_per_line 1.0 (expected 1, 1..1) pass
 bench:wb-fifth-store	pending:report-only	
 det	pass	det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash

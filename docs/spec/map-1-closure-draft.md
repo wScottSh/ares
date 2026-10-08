@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 147 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run not-built/after on d6f0aefaf). 30 fail, 10 fit only, 3 model-choice, 3 not-built, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 4 pending:no-rom, 10 pending:report-only. 3 behaviors are not built: the code does not use their value (`cpu.uncached-read-dword-total`, `cpu.pif-ram-read`, `pi.io-busy`). Behaviors not built says what the code does instead.
+The spec is `docs/spec/n64-timing.md`: 146 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run not-built/after on f70b7bda5). 30 fail, 10 fit only, 3 model-choice, 2 not-built, 60 pass, 11 pending:calibration-16, 16 pending:no-corpus, 3 pending:no-rom, 1 pending:no-rom pending:report-only, 10 pending:report-only. 2 behaviors are not built: the code does not use their value (`cpu.uncached-read-dword-total`, `cpu.pif-ram-read`). Behaviors not built says what the code does instead.
 
 ## Destination
 
@@ -47,7 +47,6 @@ The code does not use these rows' values, so no check result says anything about
 |---|---|---|---|
 | `cpu.uncached-read-dword-total` | measured | 37 pclk | an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk |
 | `cpu.pif-ram-read` | measured | 1974 rclk | a PIF RAM read is charged as an RCP register read (ares/n64/memory/io.hpp:CpuRcpRegisterRead, cpu.rcp-register-read 22 pclk), not 1974 rclk |
-| `pi.io-busy` | measured | 134 rclk | a PI I/O write schedules legacy.pi.write-busy, 200 pclk = 133.3 rclk (ares/n64/pi/bus.hpp:PI::writeWord) |
 
 ## Rows whose checks fail
 
@@ -141,9 +140,9 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.cart.flash-mn63-chip-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-program` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `cpu.rcp-register-read` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
+| `pi.io-busy` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `si.write64` | measured | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `si.read64-base` | derived | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
-| `legacy.pi.write-busy` | legacy | no-rom | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
+| `si.read64-base` | derived | no-rom, report-only | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `clock.vclk` | derived | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `cpu.ifill-stall` | inferred | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `cpu.dirty-miss-order` | vendor | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
@@ -162,5 +161,6 @@ These checks are gated too, but another check already decides their row.
 | Behavior | Status | Pending checks |
 |---|---|---|
 | `ri.retry-dirty` | pass | `bench:dirty-row-sweep` pending (report-only) |
+| `cpu.uncached-read-total` | pass | `bench:uncached-sizes-u32` pending (no-rom) |
 | `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only) |
 | `rdp.primitive-base` | fit only | `bench:rdp-rectn` pending (report-only) |

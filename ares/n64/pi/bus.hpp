@@ -74,7 +74,8 @@ inline auto PI::writeWord(u32 address, u32 data, Thread& thread) -> void {
   if(io.ioBusy) return;
   io.ioBusy = 1;
   io.pbusAddress = (address + 4) & ~1;
-  scheduleAfter(EventKind::PI_BUS_Write, pclk(200));
+  //pi.io-busy: n64-systembench PI I/O W, the write to PI_STATUS idle
+  scheduleAfter(EventKind::PI_BUS_Write, Timing::Behavior::PiIoBusy);
   busAddress(address);
   io.busLatch = data;
   busWriteHalf(data >> 16);

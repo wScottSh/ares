@@ -17,18 +17,19 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | inferred | reasoned from cited values with no measurement or published value of its own; the note states the inference | 1 |
 | fit | fitted to measured data; rounded to the nearest 750 MHz unit | 19 |
 | model-choice | no published value; the reference states why the model chose this one | 22 |
-| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 22 |
+| legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 21 |
 
 | Status | Meaning | Rows |
 |---|---|---|
 | fail | at least one check failed; the detail in Check results gives the residual | 30 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 10 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 3 |
-| not-built | the code does not use the row's value; its code column says what the code does instead. Its checks measure that code, not the row | 3 |
+| not-built | the code does not use the row's value; its code column says what the code does instead. Its checks measure that code, not the row | 2 |
 | pass | a check other than the row's fit data passed, and none failed | 60 |
 | pending:calibration-16 | no check decided the row: calibration-16: no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it | 11 |
 | pending:no-corpus | no check decided the row: no-corpus: no corpus in the program measures this behavior; it stays pending until one does | 16 |
-| pending:no-rom | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it | 4 |
+| pending:no-rom | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it | 3 |
+| pending:no-rom pending:report-only | no check decided the row: no-rom: a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it; report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 1 |
 | pending:report-only | no check decided the row: report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 10 |
 
 ## Behaviors
@@ -63,7 +64,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | `ri.refresh-clean` | 52 rclk | vendor | IPL3 6105 RI_REFRESH 0x007E3634 CleanRefreshDelay (B12) | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | reads `Timing::Behavior::RiRefreshClean` |  |
 | `ri.refresh-dirty` | 54 rclk | vendor | IPL3 6105 RI_REFRESH DirtyRefreshDelay (B12) | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | reads `Timing::Behavior::RiRefreshDirty` |  |
 | `ri.refresh-trigger` | hsync event | wiki | n64brew RDRAM_Interface: one SetRR per VI HSYNC (B11) | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | ares/n64/vi/vi.cpp:ri.refresh ares/n64/ri/bus.cpp:RI::refresh | SOURCE CONFLICT: rdram-bus-arbitration.md B11 says refresh runs before VI init (H_TOTAL 0x7FF, ~42 us per line); nemu64-test's VI-off loads (nemu64:timing/load-from-uncached-vi-off, nemu64:timing/load-miss-vi-off) average 32.54 pclk uncached, which a 52-rclk holdoff every line would raise by about 2. The model follows the nemu64 data: refresh runs only while the VI is active (vi.cpp VI::line). Reason: it is the only measurement of VI-off timing, and B11's pre-init claim is from n64brew prose, unmeasured. A blank VI sending no HSYNC is consistent with both; a pre-init refresh at the 0x7FF line rate remains unverified |
-| `ri.refresh-waits-for-burst` | 1 flag | model-choice | no mid-burst preemption (B5); refresh waits for the in-flight burst | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | reads `Timing::Behavior::RiRefreshWaitsForBurst` | calibration #16 |
+| `ri.refresh-waits-for-burst` | 1 flag | model-choice | no mid-burst preemption (B5); refresh waits for the in-flight burst | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | ares/n64/ri/bus.hpp:post ares/n64/ri/bus.hpp:decide | calibration #16 |
 | `ri.arbitration` | rank,arrival,requester,sequence order | model-choice | none published (B4); VI first is an inference from its hard real-time role | `nemu64:timing/load-miss-vi-on` `thar0:separate-bank` | **fail**: `nemu64:timing/load-miss-vi-on` pass; `thar0:separate-bank` fail | ares/n64/ri/bus.hpp:before | calibration #16 re-ranks via ri.rank.*; rejected alternatives recorded: fixed list VI,AI,SI,PI,CPU,SP,DP (fable), Refresh>VI>AI>CPU>SI>PI>SP>DPcmd>DPmem (sonnet), MiSTer DDR3Mux order |
 | `ri.rank.refresh` | 0 rank | wiki | n64brew: refresh holds off every client (B12) | `bench:uncached-vs-hpos` | **pass**: `bench:uncached-vs-hpos` pass | reads `Timing::Behavior::RiRankRefresh` |  |
 | `ri.rank.vi` | 1 rank | model-choice | inference: VI is the only hard real-time client (B4) | `nemu64:timing/load-from-uncached-vi-on-same-bank` | **fail**: `nemu64:timing/load-from-uncached-vi-on-same-bank` fail | reads `Timing::Behavior::RiRankVi` |  |
@@ -78,7 +79,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
-| `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` | **pass**: `nemu64:timing/load-from-uncached-vi-off` pass | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
+| `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` `bench:uncached-sizes-u32` | **pass**: `nemu64:timing/load-from-uncached-vi-off` pass; `bench:uncached-sizes-u32` pending:no-rom | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
 | `cpu.uncached-read-dword-total` | 37 pclk | measured | n64-systembench main.c:572-584 U64 (cited value; ROM is romgen's) | `bench:uncached-sizes` | **not-built**: `bench:uncached-sizes` pending:no-rom | not-built: an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk |  |
 | `cpu.dfill-total` | 41 pclk | measured | nemu64-test cache.rs:193-286 median, VI off | `nemu64:timing/load-miss-vi-off` | **fail**: `nemu64:timing/load-miss-vi-off` fail | reads `Timing::Behavior::CpuDfillTotal` | assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost. With the VI off the model charges exactly 41 per miss, and load-miss-vi-off, which expects a mean of 42.5, fails: the missing tail of about 1.5 pclk is attributed to RDRAM refresh, which the model runs only while the VI is active (ri.refresh-trigger). That cause is a hypothesis, not measured |
 | `cpu.ifill-stall` | 45 pclk | inferred | NEC Table 11-2 with M from D-fill (cpu-memory-costs.md) | `bench:ifill-isolated` | **pending:report-only**: `bench:ifill-isolated` pending:report-only | reads `Timing::Behavior::CpuIfillStall` | no public hardware value and no asserting check (bench:ifill-isolated only reports, and has no ROM). cpu-memory-costs.md takes Table 11-2's 1-2 PClock term and M = 31-32 independently and gets a 45-47 range; nemu64-test's '~43 extra cycles' is a source comment, not an assertion. Read jointly with the 41 pclk D-fill as one issue slot plus the Table 11-1 stall (40 = 7 + x + M), the two formulas give 13 + x + M = 46 for either x, so the 45 is the range's low corner, not the joint value. M comes from the D-fill measurement, a clean row miss, so the 45 is the uncontended total at a clean row miss: the SysAD path is 45 less the modeled 32 B clean-miss wire and the mean rclk-edge wait, and the RI adds row state and contention |
@@ -151,14 +152,14 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | `pi.halfword-bias` | 2 rclk | wiki | n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` fail | reads `Timing::Behavior::PiHalfwordBias` |  |
 | `pi.block-bytes` | 128 B | wiki | n64brew PI; rasky n64_pi_dma_test | `pidma:logs` | **fail**: `pidma:logs` fail | reads `Timing::Behavior::PiBlockBytes` |  |
 | `pi.block-writeback` | 28 rclk | derived | dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` fail | reads `Timing::Behavior::PiBlockWriteback` |  |
-| `pi.io-busy` | 134 rclk | measured | n64-systembench PI I/O W (cited value) | `bench:pi-io-write` | **not-built**: `bench:pi-io-write` pending:no-rom | not-built: a PI I/O write schedules legacy.pi.write-busy, 200 pclk = 133.3 rclk (ares/n64/pi/bus.hpp:PI::writeWord) |  |
+| `pi.io-busy` | 134 rclk | measured | n64-systembench @845635c main.c:595 PI I/O W 134 rclk, a cart word write until PI_STATUS idle (cited value; research/cpu-memory-costs.md) | `bench:pi-io-write` | **pending:no-rom**: `bench:pi-io-write` pending:no-rom | reads `Timing::Behavior::PiIoBusy` |  |
 
 ### si
 
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
 | `si.write64` | 4065 rclk | measured | n64-systembench SI DMA 64 B to PIF (cited value) | `bench:si-dma` | **pending:no-rom**: `bench:si-dma` pending:no-rom | reads `Timing::Behavior::SiWrite64` |  |
-| `si.read64-base` | 13600 rclk | derived | ares pif.estimateTiming (systembench-derived) | `bench:si-dma-read64-1` `bench:si-dma-read64-2` `bench:si-dma-read64-3` `bench:si-dma-read64-4` | **pending:no-rom**: `bench:si-dma-read64-1` pending:no-rom; `bench:si-dma-read64-2` pending:no-rom; `bench:si-dma-read64-3` pending:no-rom; `bench:si-dma-read64-4` pending:no-rom | reads `Timing::Behavior::SiRead64Base` | ares took it from pif.estimateTiming, which charges it as the joybus phase's base; the RD64B totals decide it together with the per-command legacy.si.dma-read-* costs |
+| `si.read64-base` | 13600 rclk | derived | ares pif.estimateTiming (systembench-derived) | `bench:si-dma-read64-1` `bench:si-dma-read64-2` `bench:si-dma-read64-3` `bench:si-dma-read64-4` | **pending:no-rom pending:report-only**: `bench:si-dma-read64-1` pending:no-rom; `bench:si-dma-read64-2` pending:report-only; `bench:si-dma-read64-3` pending:report-only; `bench:si-dma-read64-4` pending:report-only | reads `Timing::Behavior::SiRead64Base` | ares took it from pif.estimateTiming, which charges it as the joybus phase's base; the RD64B totals decide it together with the per-command legacy.si.dma-read-* costs |
 
 ### ai
 
@@ -226,7 +227,6 @@ The code does not use these rows' values. Each says what the code does instead; 
 |---|---|---|---|---|
 | `cpu.uncached-read-dword-total` | 37 pclk | measured | an uncached doubleword read takes the word read's path (ares/n64/cpu/sysad.cpp:SysAD::read, ReadPath from cpu.uncached-read-total 32 pclk; one octbyte on the wire either way), so nothing charges the extra 5 pclk | `bench:uncached-sizes` pending:no-rom |
 | `cpu.pif-ram-read` | 1974 rclk | measured | a PIF RAM read is charged as an RCP register read (ares/n64/memory/io.hpp:CpuRcpRegisterRead, cpu.rcp-register-read 22 pclk), not 1974 rclk | `bench:pif-ram-read` pending:no-rom |
-| `pi.io-busy` | 134 rclk | measured | a PI I/O write schedules legacy.pi.write-busy, 200 pclk = 133.3 rclk (ares/n64/pi/bus.hpp:PI::writeWord) | `bench:pi-io-write` pending:no-rom |
 
 ## Legacy costs in today's core
 
@@ -239,12 +239,11 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 | `legacy.cpu.nmi-entry` | 1 pclk | ares/n64/cpu/cpu.cpp:109 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: NMI entry has no timing reference (T7b) |
 | `legacy.cpu.sysad-frozen-step` | 1 pclk | ares/n64/cpu/cpu.cpp:114 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | replaced by T6: SysAD port |
 | `legacy.pi.cart-read` | 250 pclk | ares/n64/pi/bus.hpp:63 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | replaced by T8: PI bus timing from the BSD registers |
-| `legacy.pi.write-busy` | 200 pclk | ares/n64/pi/bus.hpp:77 | `bench:pi-io-write` | **pending:no-rom**: `bench:pi-io-write` pending:no-rom | no plan unit: T8 did not replace it (pi.io-busy has no code); the PI I/O write busy that pi/bus.hpp writeWord schedules |
 | `legacy.si.bus-write` | 2150 rclk | ares/n64/si/io.cpp:66 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: the SI I/O write busy; T8 left it, no hardware reference |
-| `legacy.si.dma-read-controller` | 22000 rclk | ares/n64/pif/hle.cpp:228 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:no-rom (guard); `bench:si-dma-read64-3` pending:no-rom (guard); `bench:si-dma-read64-4` pending:no-rom (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel with a device |
-| `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:no-rom (guard); `bench:si-dma-read64-3` pending:no-rom (guard); `bench:si-dma-read64-4` pending:no-rom (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel without a device |
-| `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:no-rom (guard); `bench:si-dma-read64-3` pending:no-rom (guard); `bench:si-dma-read64-4` pending:no-rom (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per cartridge channel |
-| `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:no-rom (guard); `bench:si-dma-read64-3` pending:no-rom (guard); `bench:si-dma-read64-4` pending:no-rom (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per end, skip, reset or padding byte |
+| `legacy.si.dma-read-controller` | 22000 rclk | ares/n64/pif/hle.cpp:228 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel with a device |
+| `legacy.si.dma-read-empty-port` | 18000 rclk | ares/n64/pif/hle.cpp:230 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per channel without a device |
+| `legacy.si.dma-read-accessory` | 20000 rclk | ares/n64/pif/hle.cpp:234 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per cartridge channel |
+| `legacy.si.dma-read-short-command` | 1420 rclk | ares/n64/pif/hle.cpp:240 | `bench:si-dma-read64-1` (guard) `bench:si-dma-read64-2` (guard) `bench:si-dma-read64-3` (guard) `bench:si-dma-read64-4` (guard) pending (calibration-16) | **pending:calibration-16**: `bench:si-dma-read64-1` pending:no-rom (guard); `bench:si-dma-read64-2` pending:report-only (guard); `bench:si-dma-read64-3` pending:report-only (guard); `bench:si-dma-read64-4` pending:report-only (guard); pending (calibration-16) | no plan unit: SiDma's joybus phase (T8 kept pif.estimateTiming); per end, skip, reset or padding byte |
 | `legacy.pif.step-quantum` | 40960 pclk | ares/n64/pif/hle.cpp:266 | `stepcap` (guard) pending (no-corpus) | **pending:no-corpus**: `stepcap` pass (guard); pending (no-corpus) | no plan unit: the PIF HLE boot-handshake poll period, a timeline event from T5; the CIC handshake has no timing reference |
 | `legacy.pif.boot-timeout` | 6 s | ares/n64/pif/hle.cpp:360 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: CIC boot handshake timeout |
 | `legacy.ai.power-on-rate` | 44100 Hz | ares/n64/ai/ai.cpp:92 | pending (no-corpus) | **pending:no-corpus**: pending (no-corpus) | no plan unit: the DAC rate before the first AI_DACRATE write |
@@ -259,7 +258,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run not-built/after on d6f0aefaf).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run not-built/after on f70b7bda5).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -280,11 +279,12 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:rdp-sync-sweep` | pass | pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5) pass; load-256 per_sync_clk 25.051 (expected 25, 24.5..25.5) pass |
 | `bench:si-dma` | pending:no-rom |  |
 | `bench:si-dma-read64-1` | pending:no-rom |  |
-| `bench:si-dma-read64-2` | pending:no-rom |  |
-| `bench:si-dma-read64-3` | pending:no-rom |  |
-| `bench:si-dma-read64-4` | pending:no-rom |  |
+| `bench:si-dma-read64-2` | pending:report-only |  |
+| `bench:si-dma-read64-3` | pending:report-only |  |
+| `bench:si-dma-read64-4` | pending:report-only |  |
 | `bench:sp-dma-sweep` | fail | wr-4096-off0 b_per_rclk 6.169 (expected 6.5, 6.49..6.515) fail |
 | `bench:uncached-sizes` | pending:no-rom |  |
+| `bench:uncached-sizes-u32` | pending:no-rom |  |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1) pass |
 | `bench:wb-fifth-store` | pending:report-only |  |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash |
@@ -415,15 +415,16 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `bench:rdp-atomic-sweep` | bench | rdp-atomic-sweep | - | suite | SDK pro-man 12.2.3, 30 to 40 null cycles |
 | `bench:rdp-rectn` | bench | rdp-rectn | - | suite | cen64 RECTN 2021 and DUTY 80,287 (reported, not asserted) |
 | `bench:ifill-isolated` | bench | ifill-isolated | - | report | no ROM in plan R1 yet; no public hardware value (cpu-memory-costs.md) |
-| `bench:uncached-sizes` | bench | uncached-sizes | size=8 | 37 | no ROM in plan R1 yet; n64-systembench main.c:572-584 U64 read, 37 pclk |
-| `bench:rcp-reg-read` | bench | rcp-reg-read | register=vi-control | 24 | no ROM in plan R1 yet; n64-systembench VI_CONTROL read, 24 pclk including about 2 of harness |
-| `bench:pif-ram-read` | bench | pif-ram-read | - | 1974 | no ROM in plan R1 yet; n64-systembench PIF RAM read, 1974 rclk |
-| `bench:pi-io-write` | bench | pi-io-write | - | 134 | no ROM in plan R1 yet; n64-systembench PI I/O write busy, 134 rclk |
-| `bench:si-dma` | bench | si-dma | direction=write64 | 4065 | no ROM in plan R1 yet; n64-systembench SI DMA 64 B to PIF, 4065 rclk |
-| `bench:si-dma-read64-1` | bench | si-dma | direction=read64 commands=1 | 37987 | no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 1 joybus command, 37987 rclk (dma-timing.md SI DMA) |
-| `bench:si-dma-read64-2` | bench | si-dma | direction=read64 commands=2 | 57972 | no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA) |
-| `bench:si-dma-read64-3` | bench | si-dma | direction=read64 commands=3 | 77924 | no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA) |
-| `bench:si-dma-read64-4` | bench | si-dma | direction=read64 commands=4 | 97890 | no ROM in plan R1 yet; n64-systembench main.c:597-613 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA) |
+| `bench:uncached-sizes` | bench | uncached-sizes | point=u64 metric=net_pclk | suite | n64-systembench main.c:580 U64R 37 pclk less its 2 pclk harness = 35; the port subtracts its own (expected.tsv) |
+| `bench:uncached-sizes-u32` | bench | uncached-sizes | point=u32 metric=net_pclk | suite | n64-systembench main.c:579 U32R 34 pclk less its 2 pclk harness = 32; the port subtracts its own (expected.tsv) |
+| `bench:rcp-reg-read` | bench | rcp-reg-read | point=vi-control metric=net_pclk | suite | n64-systembench main.c:586 VI_CONTROL read 24 pclk less its 2 pclk harness = 22; the port subtracts its own (expected.tsv) |
+| `bench:pif-ram-read` | bench | pif-ram-read | point=pif-ram metric=sb_rclk | suite | n64-systembench main.c:599 SI I/O R, PIF RAM read 1974 rclk |
+| `bench:pi-io-write` | bench | pi-io-write | point=rom-word metric=sb_rclk | suite | n64-systembench main.c:595 PI I/O W, write to PI_STATUS idle 134 rclk |
+| `bench:si-dma` | bench | si-dma | point=write64 metric=sb_rclk | suite | n64-systembench main.c:597 SI DMA 64 B to PIF RAM, 4065 rclk |
+| `bench:si-dma-read64-1` | bench | si-dma | point=read64-1 metric=sb_rclk | suite | n64-systembench main.c:609 SI DMA RD64B with 1 joybus command, 37987 rclk (dma-timing.md SI DMA) |
+| `bench:si-dma-read64-2` | bench | si-dma | point=read64-2 metric=sb_rclk | suite | n64-systembench main.c:610 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA) |
+| `bench:si-dma-read64-3` | bench | si-dma | point=read64-3 metric=sb_rclk | suite | n64-systembench main.c:611 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA) |
+| `bench:si-dma-read64-4` | bench | si-dma | point=read64-4 metric=sb_rclk | suite | n64-systembench main.c:612 SI DMA RD64B with 4 joybus commands, 97890 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA) |
 | `bench:wb-fifth-store` | bench | wb-fifth-store | - | report | no ROM in plan R1 yet; no public hardware value (vr4300-wb.md) |
 | `bench:rdp-loadsz-sweep` | bench | rdp-loadsz-sweep | - | report | no ROM in plan R1 yet; reports against two published TMEM load rates that conflict: 8 B/rclk (MiSTer RTL) and the jgemu dpc_probe LOADSZ law, about 15 clocks plus 0.418 clocks per byte (jgemu-dpc-probe.md) |
 | `thar0:alpha-fail-1cycle` | thar0 | ac-zbsame-vioff-noimrd-1cyc | - | suite | plan T12: exactly 77,772 (pure compute, min = avg = max on hardware) |
