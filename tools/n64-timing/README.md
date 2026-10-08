@@ -230,10 +230,10 @@ Measured 2026-10-07 on master `bf2882c3f` (harness port `feat/l0`) on the Linux 
 | thar0 configs 84 and 92 / 85 and 93 (BUF, min=avg=max) | 77,772 / 155,052 | 77,772 / 155,052 |
 | bench pi-dma-sizes 8 B / 128 B / 1 KiB / 64 KiB (rclk) | 197.33 / 1600.0 / 12174.67 / 778498.67 | same |
 | det, stepcap (MM, every mmbench scene) | PASS, 27 files, 8158 fields | PASS, 27 files, 8158 fields |
-| det, stepcap (nemu64 ROMs) | PASS | PASS |
+| det, stepcap (nemu64 ROMs) | PASS, PASS | stepcap PASS |
 | state round trip, TMEM poke | PASS, PASS | PASS, PASS |
 | ctest (5 unit checks) | 5/5 | 5/5 |
-| `behaviors.py --check`, `--self-test`, `lint-literals.py` | ok, ok, ok | ok, ok (see below), ok |
+| `behaviors.py --check`, `--self-test`, `lint-literals.py` | ok, ok, ok | ok, 3 cases FAILED (inferred, see below), ok |
 | MM 600 fields wall | 18.7 to 22.0 s | 11.3 to 11.8 s |
 
-Every emulated value above matches Windows, and the mmbench per-scene `rsp_busy_clocks` means match the T8 verifier's to the cycle. A gcc build and a clang 22 build on this host write byte-identical MM stats. The MM wall time is not the compiler: gcc and clang ran within 10% of each other interleaved. It moved with host load (21.7 s at load average 15, 18.7 s at 6). The rest of the gap to Windows is the host (inferred; the Windows machine's CPU is not recorded). The `--self-test` legacy cases had failed on master since T7a removed the rows they edited; `feat/l0` points them at a row that still exists.
+Every emulated value above matches Windows, and the mmbench per-scene `rsp_busy_clocks` means match the T8 verifier's to the cycle. A gcc build and a clang 22 build on this host write byte-identical MM stats. The MM wall time is not the compiler: gcc and clang ran within 10% of each other interleaved. It moved with host load (21.7 s at load average 15, 18.7 s at 6). The rest of the gap to Windows is the host (inferred; the Windows machine's CPU is not recorded). The `--self-test` legacy cases had failed on master since T7a removed the rows they edited; `feat/l0` points them at a row that still exists. The failure depends on file content, not the host, so Windows fails the same cases on master (inferred; measured on Linux at T7a and its parent).
