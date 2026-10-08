@@ -41,6 +41,7 @@ and every explicit row whose expect is `suite` must find its target there once
 the file exists.
 """
 import argparse
+import fnmatch
 import importlib.util
 import re
 import shutil
@@ -200,6 +201,8 @@ def load_checks(root, errors):
                           f"(columns: {' '.join(header)}). Set the suite row's selector to its key column.")
             continue
         suite_files[prefix] = (row["selector"], header, body)
+        if row["runner"] == "bench":
+            bench_rules(row["expect"][5:], header, body, errors)
     for cid, row in explicit.items():
         if row["expect"] != "suite":
             continue
@@ -212,6 +215,21 @@ def load_checks(root, errors):
                           f"but {suites[prefix]['expect'][5:]} has no such row. Fix the target and selector, "
                           f"or add the measurement to the suite.")
     return rows, explicit, suites, suite_files
+
+
+def bench_rules(path, header, body, errors):
+    """Every asserted bench row names how its value over the boot delays meets the band
+    (romgen/suites/bench/report.py verdict); a report row has none."""
+    from romgen.suites.bench.report import RULES
+    if "rule" not in header:
+        errors.append(f"{path}: no `rule` column. Name each check row's phase rule: {', '.join(RULES)}.")
+        return
+    for line, b in enumerate(body, 2):
+        if b.get("kind") == "check" and b.get("rule") not in RULES:
+            errors.append(f"{path}:{line}: check row {b.get('rom')} {b.get('point')} has rule `{b.get('rule')}`; "
+                          f"use {', '.join(RULES)} (bench README, Phase).")
+        elif b.get("kind") != "check" and b.get("rule") != "-":
+            errors.append(f"{path}:{line}: report row {b.get('rom')} {b.get('point')} has rule `{b.get('rule')}`; write `-`.")
 
 
 def suite_matches(suite_file, target, selector):
@@ -819,6 +837,13 @@ def suite_runs(run, pattern, label):
     return tally(verdicts, "runs")[0], "; ".join(parts)
 
 
+def phase_text(r):
+    """A bench value over the boot delays: the one value when every delay agrees, else its range."""
+    if r["min"] == r["max"]:
+        return r["min"]
+    return f"{r['min']}..{r['max']} median {r['median']} mean {r['mean']}"
+
+
 def bench_result(run, row):
     if not (run / "bench" / "results.tsv").exists():
         return None
@@ -829,14 +854,14 @@ def bench_result(run, row):
         return None
     checked = [r for r in picked if r["kind"] == "check"]
     shown = checked if checked else picked
-    detail = "; ".join(f"{r['point']} {r['metric']} {r['value']} (expected {r['expected']}"
-                       + (f", {r['lo']}..{r['hi']}" if r["lo"] != "-" else "") + f") {r['verdict']}" for r in shown[:3])
+    detail = "; ".join(f"{r['point']} {r['metric']} {phase_text(r)} (expected {r['expected']}"
+                       + (f", {r['lo']}..{r['hi']}, {r['rule']}" if r["lo"] != "-" else "") + f") {r['verdict']}" for r in shown[:3])
     if len(shown) > 3 and not checked:
         detail += f"; {len(shown) - 3} more report points"
     elif len(shown) > 3:
         failing = [r for r in shown if r["verdict"] != "pass"]
         detail = f"{sum(r['verdict'] == 'pass' for r in shown)} of {len(shown)} points pass" + \
-            (f"; first failing {failing[0]['point']} {failing[0]['metric']} {failing[0]['value']} "
+            (f"; first failing {failing[0]['point']} {failing[0]['metric']} {phase_text(failing[0])} "
              f"(expected {failing[0]['expected']}, {failing[0]['lo']}..{failing[0]['hi']})" if failing else "")
     return tally([r["verdict"] for r in checked], "points")[0] if checked else "report", detail
 
@@ -932,7 +957,7 @@ READERS = {"nemu64": nemu64_result, "det": lambda run, row: suite_runs(run, "det
            "bench": bench_result, "thar0": thar0_result, "rdpstat": rdpstat_result, "snapper": snapper_result,
            "unit": ctest_result, "noise": noise_result, "gen": gen_result, "mm": mm_result, "pidma": pidma_result,
            "harness": rdpstat_result}
-ROM_FILES = {"bench": "./bench/bench-{}.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
+ROM_FILES = {"bench": "./bench/boot-*/bench-{}.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
              "harness": "./rdpstat-{}.z64"}
 RESULT = re.compile(r"^(pass|fail|pending:[a-z0-9-]+)$")
 
@@ -942,7 +967,7 @@ def gate_for(row, explicit, suite_files, built):
     if not decides(row["id"], explicit, suite_files):
         return "pending:report-only"
     pattern = ROM_FILES.get(row["runner"])
-    if pattern and pattern.format(row["target"]) not in built:
+    if pattern and not fnmatch.filter(built, pattern.format(row["target"])):
         return "pending:no-rom"
     return None
 
@@ -1138,6 +1163,8 @@ def self_test(root):
              "names no ares/n64/<path>:<symbol>. Name the code that does instead"),
             ("a code column on a legacy row", TABLE, row_field("legacy.pi.cart-read", "code", "ares/n64/pi/bus.hpp:PI::writeWord"),
              "is built at its literal-allowlist code site; clear its code column"),
+            ("a bench check without a phase rule", suite_file, lambda t: t.replace("\tcheck\tmean\t", "\tcheck\t-\t", 1),
+             "has rule `-`; use consistent, mean, every"),
         ]
         if landed:
             cases += [

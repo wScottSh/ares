@@ -475,8 +475,9 @@ bh_done:
 
 # a0 = {kernel, reps, flags, kernel args...}: n64-systembench's TIMEIT_MULTI (main.c:105-127),
 # which averages all reps but its lowest and highest. RES[0] = min ticks, RES[1] = max ticks,
-# RES[2] = sum of ticks over the reps; the host takes (sum - min - max) / (reps - 2). The
-# kernel gets a0 = &args, a1 = &RES[3] and a2 = reps left less one (reps - 1 down to 0), and
+# RES[2] = sum of ticks over the reps; the host takes (sum - min - max) / (reps - 2).
+# RES[3] = the second highest rep, the highest TIMEIT_MULTI keeps (the highest is usually the
+# cold first rep). The kernel gets a0 = &args, a1 = &RES[4] and a2 = reps left less one (reps - 1 down to 0), and
 # returns v0 = COUNT ticks. flags as bench_run.
 bench_multi:
     addiu $sp, $sp, -48
@@ -491,6 +492,7 @@ bench_multi:
     sw $t0, 0($s3)
     sw $zero, 4($s3)
     sw $zero, 8($s3)
+    sw $zero, 12($s3)
     lw $s1, 4($s0)
     lw $t0, 8($s0)
     andi $t0, $t0, 1
@@ -504,7 +506,7 @@ bm_loop:
     addiu $a0, $s0, 12
     addiu $a2, $s1, -1
     jalr $t9
-    addiu $a1, $s3, 12
+    addiu $a1, $s3, 16
     lw $t0, 8($s3)
     addu $t0, $t0, $v0
     sw $t0, 8($s3)
@@ -518,8 +520,15 @@ bm_nomin:
     sltu $t1, $t0, $v0
     beqz $t1, bm_nomax
     nop
+    sw $t0, 12($s3)
+    b bm_next
     sw $v0, 4($s3)
 bm_nomax:
+    lw $t0, 12($s3)
+    sltu $t1, $t0, $v0
+    bnezl $t1, bm_next
+    sw $v0, 12($s3)
+bm_next:
     addiu $s1, $s1, -1
     bnez $s1, bm_loop
     nop

@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))
 
-from romgen.suites.bench.report import derive  # noqa: E402
+from romgen.suites.bench.report import derive, phase_of, verdict  # noqa: E402
 
 failures = 0
 
@@ -54,5 +54,25 @@ check("harness overhead is the cached sample less a 1 pclk hit", sb["u32"]["over
 check("net is the sample less the overhead", sb["u32"]["net_pclk"], 30)
 rclk = derive("pi-io-write", {"rom-word": {"unit": "rclk", "reps": 50, "min": 100, "max": 200, "sum": 100 + 200 + 48 * 101}})
 check("101 ticks = 134.67 rclk rounds down to 134", rclk["rom-word"]["sb_rclk"], 134)
+
+walked = derive("pi-io-write", {"rom-word": {"unit": "rclk", "reps": 50, "walk": "poll", "min": 94, "max": 160,
+                                             "max2": 107, "sum": 94 + 160 + 48 * 100}})["rom-word"]
+check("a poll-walked point spans its kept reps: 94 ticks = 125.33 rclk", walked["sb_rclk_rep_min"], 125.33)
+check("the second highest rep, not the cold first one: 107 ticks = 142.67 rclk", walked["sb_rclk_rep_max"], 142.67)
+
+key = ("r", "p", "m")
+delays = [{key: v} for v in (6.169, 6.169, 6.334, 6.495, 6.678)]
+phase = phase_of(delays, key)
+check("phase range over the boot delays", (phase.lo, phase.hi, phase.median, phase.mean), (6.169, 6.678, 6.334, 6.369))
+band = {"kind": "check", "lo": "6.49", "hi": "6.515"}
+check("consistent: the band overlaps the phase range", verdict({**band, "rule": "consistent"}, phase), "pass")
+check("mean: the phase mean is outside the band", verdict({**band, "rule": "mean"}, phase), "fail")
+check("every: not every phase is inside the band", verdict({**band, "rule": "every"}, phase), "fail")
+inside = phase_of([{key: 6.5}, {key: 6.51}], key)
+check("every: every phase inside the band", verdict({**band, "rule": "every"}, inside), "pass")
+check("consistent: a range wholly below the band", verdict({"kind": "check", "lo": "7", "hi": "8", "rule": "consistent"}, phase), "fail")
+poll = phase_of([{key: 133, key[:2] + ("m_rep_min",): 125.33, key[:2] + ("m_rep_max",): 142.67}], key)
+check("a poll-walked range comes from its reps", (poll.lo, poll.hi, poll.mean), (125.33, 142.67, 133))
+check("a delay that printed nothing is missing", phase_of([{key: 1}, {}], key), None)
 
 sys.exit(1 if failures else 0)

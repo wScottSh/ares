@@ -14,8 +14,8 @@ N64_RUN=<path to n64-run.exe> tools/n64-timing/romgen/suites/bench/run.sh [ROM..
 python tools/n64-timing/romgen/suites/bench/selftest.py
 ```
 
-- `build.py` writes one `bench-<rom>.z64` per ROM, and a `bench-<rom>.tests.tsv` listing that names every point. Two builds produce byte-identical files.
-- `run.sh` runs each ROM and writes `results/bench/<rom>/{stdout,stderr}.txt`. It then runs `report.py`, which writes `measurements.tsv` (every raw and derived value) and `results.tsv` (one row per `expected.tsv` entry, with a verdict). `run.sh` exits 1 only when a ROM did not print every point in its listing. A value outside its band is reported but does not change the exit code.
+- `build.py` writes one `boot-<K>/bench-<rom>.z64` per ROM and boot delay K (see [Phase](#phase)), and a `bench-<rom>.tests.tsv` listing next to each that names every point. Two builds produce byte-identical files.
+- `run.sh` runs each ROM at each delay, `BENCH_JOBS` (default 4) runners at once, and writes `results/bench/boot-<K>/<rom>/{stdout,stderr}.txt` and `runs.txt` (one stop line per run). It then runs `report.py`, which writes `measurements.tsv` (every raw and derived value per delay), `phases.tsv` (each `expected.tsv` metric at every delay) and `results.tsv` (one row per `expected.tsv` entry: the phase min, median, max and mean, the rule and a verdict). `run.sh` exits 1 only when a ROM did not print every point in its listing. A value outside its band is reported but does not change the exit code.
 - `selftest.py` checks the derived metrics in `report.py` against synthetic inputs whose answers are known.
 
 ## Output format
@@ -58,17 +58,35 @@ Each point prints one XLOG line:
 
 The n64-systembench ports run its TIMEIT_MULTI: 50 reps (10 for `write64` and `write64-rom`), and `report.py` takes the mean of all but the lowest and highest rep in its xcycle units, truncated to whole pclk or rclk (`sb_pclk`, `sb_rclk`). Its harness adds about 2 pclk, its cached read (3) less a cached hit (1). The port's harness is its own, so `net_pclk` is `sb_pclk` less the port's overhead, measured the same way from the ROM's `c<bits>` point (`overhead_pclk`). The bands are the original's pass rule: within 1 pclk or 2 rclk, or under 0.2 %.
 
-A TIMEIT_WHILE result can only end on a poll, and the polls are about 25 pclk apart. The core is deterministic, so every rep would put the poll grid at the same phase, and the result would be the busy time plus that one phase's delay. The `pi-io-write`, `si-io-write` and `si-dma` `write64*` reps therefore run 0 to 49 nops (5 per rep for the 10-rep points) between the write and the first poll. This spreads them over two poll periods, so the mean is taken over the phase.
+A TIMEIT_WHILE result can only end on a poll, and the polls are about 25 pclk apart. The core is deterministic, so every rep would put the poll grid at the same phase, and the result would be the busy time plus that one phase's delay. The `pi-io-write`, `si-io-write` and `si-dma` `write64*` reps therefore run 0 to 49 nops (5 per rep for the 10-rep points) between the write and the first poll. This spreads them over two poll periods. These points print `walk=poll` and `max2`, the second highest rep (the highest is the cold first one, which TIMEIT_MULTI drops too), and `report.py` takes `min`..`max2` as the model's range over poll phase (`sb_rclk_rep_min`, `sb_rclk_rep_max`).
 
 RDP lists use 1-cycle mode with the combiner outputting the primitive color. The blender, Z and image read are off. The color image is 320-wide RGBA5551 at 0x00700000. The VI is blanked while an RDP list runs. Each list is built in uncached RDRAM at 0x00600000, ends with `SYNC_FULL`, and is timed until the DP interrupt.
 
 Memory map (physical): the runtime owns banks 0-4. The memset buffer, the row sweep and the D-cache miss lines are in bank 5. The RDP list, the SP and PI DMA buffers and the drain address are in bank 6. The RDP color image is in bank 7.
 
+## Phase
+
+A bench value from one boot is one point on a sawtooth. The value depends on where the measurement starts against the VI line, the refresh and the CPU's poll loops, and the start moves with every byte of boot code (verify-76: `sp-dma-sweep` `wr-4096-off0` read 6.169 to 6.678 B/rclk over 49 boot offsets of one model). So no verdict rests on one boot. `phases.py` lists the boot delays. The runtime's `BOOT_DELAY_LOOP`, which only bench sets get, spins K iterations at the ROM entry, so each delay moves the start without moving code. `report.py` reads every delay and reduces each metric to its phase range (min and max, widened by the kept reps of a poll-walked point), median and mean.
+
+Each `check` row names a `rule`. The rule follows from what the hardware number is:
+
+| Rule | Passes when | Rows | Why |
+|---|---|---|---|
+| `consistent` | the band overlaps the model's phase range | n64-systembench ports | The original's reps are phase-locked (VI and interrupts off, main.c:623-624, one master clock; inferred in sysbench2 and verify-76), so its number is one unknown phase. Only consistency with the model's range can be asserted. |
+| `mean` | the model's phase mean is in the band | `mi-memset-*`, `sp-dma-sweep` | The n64brew memset times cover 41 to 780 VI lines each, so they average many refresh and fetch phases. The SP DMA rate is that memset's average over 256 transfers. |
+| `every` | every delay is in the band | `rdp-*`, `uncached-vs-hpos` | A documented fixed cost (a sync, a setter, the 1-primitive gap) or one refresh per line must hold at every phase. |
+
+`pi-dma-sizes` and the `si-dma` JOY points end on a poll the port does not walk, so their range covers boot phase only, not poll phase.
+
+The delays. The measured periods set them (phase PR report, `~/n64-timing/results/phase`). PHASE_PERIODS_PLACEHOLDER
+
+`N64_BENCH_DELAYS=K,K,...` replaces the list in `build.py`, `run.sh` and `report.py` alike, for a scan.
+
 ## expected.tsv
 
-The columns are `rom`, `point`, `metric`, `expected`, `lo`, `hi`, `kind` and `source`.
+The columns are `rom`, `point`, `metric`, `expected`, `lo`, `hi`, `kind`, `rule` and `source`.
 
-- `kind` is `check` when a timing-core unit asserts that `lo <= value <= hi`, and `report` when the value is only shown. `report` rows are values with no hardware measurement, values whose sources conflict, and values whose provenance is doubted.
+- `kind` is `check` when a timing-core unit asserts the row, under its `rule` (see [Phase](#phase)), and `report` when the value is only shown. `report` rows are values with no hardware measurement, values whose sources conflict, and values whose provenance is doubted. A `report` row's `rule` is `-`. `behaviors.py --check` rejects a check row without a rule.
 - `source` cites the hardware reference: the n64brew page, the research doc section on its `research/*` branch, or the n64-systembench line. n64-systembench has no license, so only its numbers are cited. No code is copied from it.
 - Metric names come from `report.py` `derive`. For example, `pclk_per_sd` is 2 x min ticks / (bytes / 8), and `per_sync_clk` is the DPC_CLOCK difference from the empty list, divided by N.
 

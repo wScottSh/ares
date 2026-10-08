@@ -257,7 +257,7 @@ def sb_point(rom, point, kernel, args, reps, unit, consts=(), pre=()):
     steps = list(pre) + [
         Step("bench_multi", [kernel, reps, VI_OFF, *args], 0),
         emit_step(rom.suite, rom.name, point, list(consts) + [("unit", unit), ("reps", reps)],
-                  TICK_FIELDS + [("sum", 2)]),
+                  TICK_FIELDS + [("sum", 2), ("max2", 3)]),
     ]
     rom.test.values.append(Value(point, steps, []))
 
@@ -299,7 +299,8 @@ def pif_ram_read(suite):
 
 def sb_while(rom, point, setup, stmt, poll, reps, consts=(), pre=()):
     """A TIMEIT_WHILE point whose reps spread their poll phase over SB_JITTER_PCLK (asm.py k_sb_while)."""
-    sb_point(rom, point, "k_sb_while", [*setup, *stmt, poll, SB_JITTER_PCLK // reps], reps, "rclk", consts, pre)
+    sb_point(rom, point, "k_sb_while", [*setup, *stmt, poll, SB_JITTER_PCLK // reps], reps, "rclk",
+             [*consts, ("walk", "poll")], pre)
 
 
 def pi_io_read(suite):
