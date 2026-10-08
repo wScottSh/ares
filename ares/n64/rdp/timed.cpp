@@ -339,6 +339,10 @@ auto RDP::startSpan(Clock at) -> bool {
   for(auto* w : {&slot.color, &slot.depth})
     if(w->hi > w->lo) windows[n++] = {w->lo, w->hi, w->data, w->hidden, w->written};
   rdp_render_set_windows(windows, n);
+  //each pixel samples the noise at its own pipeline clock, plus the open
+  //rdp.noise-pixel-offset; a 2-cycle pixel at its first clock
+  const u64 first = (Timing::nextRclkEdge(start) + Timing::Behavior::RdpNoisePixelOffset).units / Timing::UnitsPerRclk;
+  rdp_render_set_span_clock(first, RDPTimed::pixelClocks(slot.info.cycle_type, 1).units / Timing::UnitsPerRclk);
   auto host = std::chrono::steady_clock::now();
   rdp_render_span_run();
   engine.renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - host).count();

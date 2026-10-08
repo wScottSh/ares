@@ -74,6 +74,7 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
   } engine;
 
   RDPTimed::Dpc dpc;
+  RDPTimed::NoiseLfsr noise;
 
   //The X-bus command fetch in flight; its words land at `arrival`.
   struct Fetch {

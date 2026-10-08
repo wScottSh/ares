@@ -117,10 +117,8 @@ static bool rdp_blender_alpha_reject(rdp_span_aux* userdata, const rdp_poly_stat
                    < rgbaint_get_a(&userdata->m_blend_color);
 
         case 3:
-            /* Threshold = the shared per-pixel seeded noise, set by the span
-             * loop (ParaLLEl-RDP noise_get_blend_threshold: seeded_noise &
-             * 0xff). The previous machine-LFSR draw carried hidden state
-             * across primitives and frames. */
+            /* Threshold = the pixel's noise threshold, set by the span loop
+             * (rdp_noise_threshold). */
             return ((object->m_other_modes.cycle_type == CYCLE_TYPE_2)
                         ? userdata->m_alpha_test_ref
                         : rgbaint_get_a(&userdata->m_pixel_color))

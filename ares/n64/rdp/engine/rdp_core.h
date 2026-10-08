@@ -38,9 +38,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     first member; every operation on it is an rdp_* function taking the
     struct pointer first. The dispatch tables (m_compute_cvg,
     m_write_pixel, ...) are plain function pointers with the same
-    explicit first argument. Noise comes from the position-hashed
-    rdp_seeded_noise() in rdp_core.c, and the host is reached only
-    through the dp_full_sync callback the glue installs.
+    explicit first argument. Noise comes from the host's LFSRs through
+    rdp_noise (rdp_render_set_noise), sampled at each pixel's RDP clock.
 
 ******************************************************************************/
 
@@ -57,6 +56,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rdp_texpipe.h"
 
 /*****************************************************************************/
+
+/* The host's noise LFSRs (rdp_render_set_noise, rdp.c). */
+extern rdp_noise_bits (*rdp_noise)(uint64_t rdp_clock);
 
 #define PIXEL_SIZE_4BIT         0
 #define PIXEL_SIZE_8BIT         1
@@ -404,7 +406,10 @@ struct rdp_t
     read_pixel_t      m_read_pixel[4];
     copy_pixel_t      m_copy_pixel[4];
 
-    uint32_t          m_primitive_counter;   /* monotonic per-primitive index (noise hash) */
+    /* Plan T14: the running span's first pixel clock and clocks per pixel
+     * (rdp_render_set_span_clock). */
+    uint64_t          m_noise_clock;
+    uint32_t          m_noise_step;
 
 
 

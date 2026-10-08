@@ -18,6 +18,10 @@ auto RDP::Engine::load() -> void {
     return;
   }
   rdp_render_set_log(engineLog);
+  rdp_render_set_noise([](u64 rdpClock) -> rdp_noise_bits {
+    auto r = rdp.noise.at(rdpClock);
+    return {r.a << 3, r.b << 4, r.c << 5};
+  });
   loaded = true;
 }
 
