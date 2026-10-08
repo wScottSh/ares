@@ -72,6 +72,7 @@ auto RDP::Port::granted(const RiBus::Grant& g) -> void {
     else freeAt = freeAt + scaled(RdpMemOverheadRead), landAt = freeAt + RdpSpanReadLatency;
   }
   flights.push_back({p, landAt});
+  self->changed();
   timeline.wake(Timing::ActorId::RDP);
 }
 
@@ -148,6 +149,11 @@ auto RDP::dispatchable() const -> bool {
 }
 
 auto RDP::readiness() const -> Timing::Readiness {
+  if(!cachedReadiness) cachedReadiness = nextStep();
+  return *cachedReadiness;
+}
+
+auto RDP::nextStep() const -> Timing::Readiness {
   Clock next = pipe.wake;
   if(fetch.dwords && fetch.arrival < next) next = fetch.arrival;
   if(executor.busy && executor.until < next) next = executor.until;
@@ -171,6 +177,7 @@ auto RDP::run(Clock limit) -> void {
 }
 
 auto RDP::step(Clock at) -> void {
+  changed();
   if(pipe.wake <= at) pipe.wake = Clock::never();
   if(executor.busy && executor.until <= at) {
     if(executor.syncFull && pipe.writes) {
@@ -210,6 +217,7 @@ auto RDP::step(Clock at) -> void {
     stat.since = at;
   }
   dpc.cmd.set(b, at);
+  changed();
 }
 
 //Frees finished slots, oldest first.
@@ -572,5 +580,6 @@ auto RDP::startFetch(Clock at) -> void {
 auto RDP::kick(Clock at) -> void {
   if(!executor.busy && executor.until < Timing::nextRclkEdge(at)) executor.until = Timing::nextRclkEdge(at);
   startFetch(at);
+  changed();
   timeline.wake(Timing::ActorId::RDP);
 }

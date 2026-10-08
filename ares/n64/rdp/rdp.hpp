@@ -34,6 +34,7 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
   //timed.cpp: a timeline actor; command fetch, dispatch, the span pipeline
   //and its RDRAM traffic, SYNC_FULL retire
   auto readiness() const -> Timing::Readiness override;
+  auto nextStep() const -> Timing::Readiness;
   auto run(Clock limit) -> void override;
   auto kick(Clock at) -> void;
   auto step(Clock at) -> void;
@@ -51,6 +52,7 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
   auto startLoad(Clock at) -> void;
   auto wakeAt(Clock at) -> void;
   auto busy() const -> bool;
+  auto changed() -> void { cachedReadiness.reset(); }
 
   //serialization.cpp
   auto serialize(serializer&) -> void;
@@ -205,6 +207,11 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     Clock since;
     bool  on = false;
   } stat;
+
+  //readiness() is a pure function of RDP state, and the timeline asks for it
+  //on every scheduling decision; it is cached until changed() (a step, a kick,
+  //a grant, a DPC write, a crash, power or a load).
+  mutable std::optional<Timing::Readiness> cachedReadiness;
 
   Port  memory{this, RiBus::Requester::DpColor};
   Port  command{this, RiBus::Requester::DpCommand};

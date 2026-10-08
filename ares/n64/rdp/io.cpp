@@ -17,6 +17,7 @@ auto RDP::writeWord(u32 address, u32 data, Thread& thread) -> void {
       data, (u32)dpc.startValid, (u32)dpc.endValid, (u32)dpc.current, (u32)dpc.end);
   }
   dpc.write(address, data, thread.clock);
+  changed();
   if(address == RDPTimed::End || address == RDPTimed::Status) kick(thread.clock);
   debugger.ioDPC(Write, address, data);
 }
