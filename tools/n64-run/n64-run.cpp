@@ -623,13 +623,17 @@ auto nall::main(Arguments arguments) -> void {
   for(u32 i = 0; i < tears.size(); i++)
     std::fprintf(stderr, "%s%llu:%llu", i ? "," : "", (unsigned long long)tears[i].first, (unsigned long long)tears[i].second);
   std::fprintf(stderr, "\n");
-  //VI scanout and refresh as shares of channel time since power-on (plan T11; vi-fetch.md bands)
+  //VI scanout and refresh as shares of channel time since power-on, and per HSYNC
+  //(one refresh each) for the vi-fetch.md bands (plan T11)
   auto& viBus = counters[(u32)N64::RiBus::Requester::ViFetch];
   const double elapsed = (double)N64::cpu.clock.units;
-  std::fprintf(stderr, "n64-run: ri_vi grants_vi=%llu vi_bytes=%llu vi_row_misses=%llu vi_busy_rclk=%llu vi_wait_rclk=%llu vi_share=%.4f refresh_share=%.4f\n",
+  const double lines = (double)refresh.bursts;
+  std::fprintf(stderr, "n64-run: ri_vi grants_vi=%llu vi_bytes=%llu vi_row_misses=%llu vi_busy_rclk=%llu vi_wait_rclk=%llu"
+    " vi_share=%.4f refresh_share=%.4f vi_rclk_per_line=%.2f refresh_rclk_per_line=%.2f\n",
     (unsigned long long)viBus.bursts, (unsigned long long)viBus.bytesRead, (unsigned long long)viBus.rowMisses,
     (unsigned long long)(viBus.busy.units / N64::Timing::UnitsPerRclk), (unsigned long long)(viBus.wait.units / N64::Timing::UnitsPerRclk),
-    elapsed ? viBus.busy.units / elapsed : 0.0, elapsed ? refresh.busy.units / elapsed : 0.0);
+    elapsed ? viBus.busy.units / elapsed : 0.0, elapsed ? refresh.busy.units / elapsed : 0.0,
+    lines ? viBus.busy.units / N64::Timing::UnitsPerRclk / lines : 0.0, lines ? refresh.busy.units / N64::Timing::UnitsPerRclk / lines : 0.0);
   std::fflush(stderr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);
