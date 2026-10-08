@@ -107,7 +107,7 @@ def via_map_select(index):
 
 
 def counters(tag):
-    return [f"peek {tag}.gfx_tasks {GFX_TASKS} w"]
+    return [f"peek {tag}.gfx_tasks {GFX_TASKS} w", f"bus {tag}"]
 
 
 def play_counters(tag):
@@ -294,7 +294,7 @@ def run_scene(exe, rom, name, steps, outdir, shots, extra=()):
 
 
 def parse_events(events):
-    marks, peeks = {}, {}
+    marks, peeks, buses = {}, {}, {}
     for e in events:
         verb, name, frame, *rest = e.split(" ")
         frame = int(frame.split("=")[1])
@@ -302,9 +302,29 @@ def parse_events(events):
             marks[name] = frame
         elif verb == "peek":
             peeks[name] = (frame, rest[0])
+        elif verb == "bus":
+            buses[name] = {k: [int(n) for n in v.split(",")] for k, v in (w.split("=") for w in rest)}
         else:
             raise SystemExit(f"script failure: {e}")
-    return marks, peeks
+    return marks, peeks, buses
+
+
+BUS_FIELDS = ["bursts", "bytes_read", "bytes_written", "row_misses", "busy_rclk", "wait_rclk"]
+
+
+def bus_window(name, buses, fields):
+    # Channel counters over the window, per RI requester. One CPU PClock is 1.5 RCP clocks
+    # (clocks.md), so the window's RCP clocks are its cpu_cycles times 2/3.
+    start, end = buses.get("start"), buses.get("end")
+    if not start or not end:
+        return []
+    window_rclk = sum(f["cpu_cycles"] for f in fields) * 2 / 3
+    rows = []
+    for requester in start:
+        delta = dict(zip(BUS_FIELDS, (b - a for a, b in zip(start[requester], end[requester]))))
+        rows.append({"scene": name, "requester": requester, **delta,
+                     "busy_share": f"{delta['busy_rclk'] / window_rclk:.4f}" if window_rclk else ""})
+    return rows
 
 
 def read_stats(path):
@@ -430,14 +450,15 @@ def bench(args, out, extra=()):
     out.mkdir(parents=True, exist_ok=True)
     began = time.perf_counter()
     with ThreadPoolExecutor(max_workers=args.jobs or len(names)) as pool:
-        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots, extra)
+        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots,
+                                  (*extra, "--behaviors", str(out / "behaviors.tsv")) if n == names[0] else extra)
                    for n in names}
         results = {n: f.result() for n, f in futures.items()}
     total_wall = time.perf_counter() - began
 
-    all_fields, all_gframes, all_rotations, summary, sct = [], [], [], [], None
+    all_fields, all_gframes, all_rotations, all_bus, summary, sct = [], [], [], [], [], None
     for n in names:
-        marks, peeks = parse_events(results[n][0])
+        marks, peeks, buses = parse_events(results[n][0])
         end = marks.get("end", marks["window"] + WINDOW)
         fields, gframes = analyze(n, read_stats(out / n / "stats.tsv"), marks["window"], end)
         all_fields += fields
@@ -446,6 +467,7 @@ def bench(args, out, extra=()):
         if n == "sct":
             sct = (fields, peeks)
         all_rotations += rotation_frames(n, marks)
+        all_bus += bus_window(n, buses, fields)
 
     write_tsv(out / "fields.tsv", all_fields)
     write_tsv(out / "gframes.tsv", all_gframes)
@@ -454,6 +476,8 @@ def bench(args, out, extra=()):
         write_tsv(out / "buffer-confirmation.tsv", confirm_buffers(*sct))
     if all_rotations:
         write_tsv(out / "rotations.tsv", all_rotations)
+    if all_bus:
+        write_tsv(out / "bus.tsv", all_bus)
 
     walls = {"total": total_wall, **{n: results[n][1] for n in names}}
     (out / "wall.tsv").write_text("run\twall_s\n" + "".join(f"{k}\t{v:.3f}\n" for k, v in walls.items()),

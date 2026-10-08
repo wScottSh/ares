@@ -945,6 +945,7 @@ struct CPU : Thread {
       s64 haltedCycles;
     } rsp;
     RDRAM::Profile rdram;
+    RiBus::Counters ri[(u32)RiBus::Requester::Count] = {};
     n1 started = 0;
 
     static auto global() -> ProfileSlot;

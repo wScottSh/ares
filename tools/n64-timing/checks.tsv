@@ -4,8 +4,9 @@ thar0:*	thar0	tools/n64-timing/romgen/suites/thar0	id	file:tools/n64-timing/romg
 rdpstat:*	rdpstat	tools/n64-timing/romgen/suites/rdpstat	test	file:tools/n64-timing/romgen/suites/rdpstat/expected.tsv	plan R4; n64-systemtest tests/rdp and repeater64 references (MIT)
 snapper:*	snapper	tools/n64-timing/romgen/suites/snapper	test	file:tools/n64-timing/romgen/suites/snapper/expected.tsv	plan R3; snapper64 console dumps (MIT, e1cd8a61fc43)
 pending:build-corpora	pending	-	-	gate	corpus needs a libdragon or cargo build behind the build-corpora gate
-pending:snapper-lfs	pending	-	-	gate	snapper64 assets need git lfs pull (plan R3)
 pending:no-corpus	pending	-	-	gate	no corpus in the program measures this behavior; it stays pending until one does
+pending:no-rom	pending	-	-	gate	a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it
+pending:calibration-16	pending	-	-	gate	no public hardware value decides it; the console calibration run (#16, hardware only, open) closes it
 det	det	tools/n64-timing/determinism.sh	every mm scene	equal	two runs byte-identical, stats and trace_hash (plan T2)
 stepcap	stepcap	tools/n64-timing/determinism.sh --step-cap	every mm scene and nemu64 ROM	equal	step-capped run equals the normal run byte for byte (plan T5)
 unit:timeline	unit	n64-timing-tests	timeline	pass	scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5)
@@ -70,8 +71,8 @@ thar0:fill-mode	thar0	fill-mode	-	report	Thar0 hw_data has no fill-mode config a
 thar0:imrd-1cycle	thar0	nozb-vioff-imrd-1cyc	-	suite	plan T13: IM_RD 1-cycle 163,436
 thar0:zcmp	thar0	ac-zcmp-zbsame-vioff-noimrd-1cyc	-	suite	Thar0 hw_data
 thar0:separate-bank	thar0	zbrw-pass-zbsep-vioff-noimrd-1cyc	-	suite	plan T13: FB+ZB separate banks 225,518
-rdpstat:current-prefetch	rdpstat	current-prefetch	-	suite	n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240
-rdpstat:nosync-1cycle	rdpstat	nosync-1cycle	-	suite	repeater64 RDPNoSync1C, 20 console references (assets/10000000-10000013.test; the other 45 assets belong to other demos)
+rdpstat:current-prefetch	rdpstat	current-prefetch	-	240	n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240
+rdpstat:nosync-1cycle	rdpstat	repeater64	RDP 1-Cycle No-Sync	self	repeater64 RDPNoSync1C, 20 console references (assets/10000000-10000013.test; the other 45 assets belong to other demos)
 snapper:span-tri	snapper	span-tri	-	suite	snapper64 RDP Test-Mode Span Tri, 216 DPS dumps
 snapper:rect-nosync	snapper	rect-nosync	-	suite	snapper64 RDPRectNoSync captures
 noise:a	noise	dataset-a	-	pass	Thar0/RDP-Noise dataset A (Unlicense): ctest noise:a, NoiseLfsr's a output from power-on equals all 1016 pixels at clock 256,586,636 (plan T14)

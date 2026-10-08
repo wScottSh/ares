@@ -28,13 +28,14 @@ struct Poke  { Expr address; Width width; u32 value; };
 struct Copy  { Expr source; Expr target; u32 length; };
 struct Peek  { string name; Expr address; Width width; };
 struct Mark  { string name; };
+struct Bus   { string name; };
 struct Shot  { string path; };
 struct SaveState { string path; };
 struct LoadState { string path; };
 struct PokeTmem  { u32 offset; u8 value; };
 struct Stop  {};
 
-using Step = std::variant<Wait, Until, Input, Poke, Copy, Peek, Mark, Shot, SaveState, LoadState, PokeTmem, Stop>;
+using Step = std::variant<Wait, Until, Input, Poke, Copy, Peek, Mark, Bus, Shot, SaveState, LoadState, PokeTmem, Stop>;
 
 //Controller 1 as the script last set it. Button names are the gamepad's ares node names.
 struct Pad {
@@ -170,6 +171,8 @@ inline auto parse(const string& text) -> std::variant<std::vector<Step>, u32> {
       steps.push_back(Peek{words[1], *address, *width});
     } else if(verb == "mark" && words.size() == 2) {
       steps.push_back(Mark{words[1]});
+    } else if(verb == "bus" && words.size() == 2) {
+      steps.push_back(Bus{words[1]});
     } else if(verb == "shot" && words.size() == 2) {
       steps.push_back(Shot{words[1]});
     } else if(verb == "save-state" && words.size() == 2) {

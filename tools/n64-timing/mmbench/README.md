@@ -59,10 +59,12 @@ Every file except `wall.tsv` and `rdp.txt` (host time) is deterministic.
 | `gframes.tsv` | One row per complete game frame: first window field, length in fields, and CPU and RSP clocks over those fields. |
 | `buffer-confirmation.tsv` | The run-time confirmation from `docs/research/mm-buffer-placement.md` (#23), read in the `sct` window: expected and found values with a verdict. |
 | `rotations.tsv` | `filesel-rotate` only: one row per Main to Options rotation game frame (7 per rotation) with its length in fields. |
+| `bus.tsv` | One row per scene and RI requester (`refresh`, `vi`, `cpu`, `sp`, `dp_cmd`, `dp_color`, `dp_depth`, `dp_texture`, `dp_fill`, `pi`, `si`, `ai`): the RDRAM channel's bursts, bytes read, bytes written, row misses, RCP clocks the requester held the channel and RCP clocks it waited over the window, from the runner's `bus` script step. `busy_share` is `busy_rclk` over the window's RCP clocks, taken as its `cpu_cycles` times 2/3 (one PClock is 1.5 RCP clocks). |
+| `behaviors.tsv` | The timing behaviors the runner was built with (`n64-run --behaviors`): id, basis, value, unit, checks. |
 | `wall.tsv` | Host wall time, total and per scene. |
 | `<scene>/script.txt` | The generated input script. |
 | `<scene>/stats.tsv` | The runner's per-field stats for the whole run. |
-| `<scene>/events.txt` | The window mark and every peek the script made. |
+| `<scene>/events.txt` | The window mark, every peek the script made, and the `bus` counter lines at the window's start and end. |
 
 A game frame is the run of fields between two changes of `VI_ORIGIN`. Fields before the first change in the window and after the last change belong to frames that cross the window edge, and the bench leaves them out.
 
@@ -96,3 +98,7 @@ The exit code is 0 only when both primary rows pass. Secondary rows are printed 
 
 - The bench reads `GraphicsContext` at its fixed address in `sGraphStack` (`0x801F9CB8`) instead of through `GameState.gfxCtx`. In the title scene, `GameState.gfxCtx` reads 0 for some fields.
 - The window marks, the input, and the peeks run between VI fields. Input set at the end of field N is visible to the game from field N+1.
+
+## Report
+
+`report.py OUT [--wall WALL_TSV] [--note TEXT] [--out FILE]` writes the bench report as Markdown: per-scene field times (wall time over the fields each scene runs), the RDRAM channel per requester over each window from `bus.tsv`, and the provenance table (every row of `ares/n64/timing/behaviors.tsv` with its basis and its status in `docs/spec/n64-timing-results.tsv`). It also compares the run's `behaviors.tsv` with the repository table. The scenes of one mmbench run share the host; for field times, pass `--wall` the `wall.tsv` of a run with `--jobs 1`. `docs/spec/mm-bench.md` is one such report.
