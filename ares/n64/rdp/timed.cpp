@@ -519,10 +519,11 @@ auto RDP::dispatch(Clock at) -> void {
   if(count < 0) return crash("pixel engine pipeline crash");
   if(count == 0) return;
 
-  Clock busy;
+  Clock busy, setup;
   for(u32 n : range(count)) {
     auto& w = works[n];
     auto c = RDPTimed::cost({w.command, w.cycle_type, w.pixels, w.words, w.lines, w.load_bytes});
+    if(n == 0) setup = c.busy;
     busy += c.busy;
     executor.load |= c.load;
     executor.syncFull |= c.syncFull;
@@ -532,8 +533,9 @@ auto RDP::dispatch(Clock at) -> void {
   if(isSync(command) && pipe.time > at) at = pipe.time;
   executor.until = at + busy;
   if(isSync(command)) pipe.time = executor.until;
-  //a primitive's spans enter the pipeline after its setup
-  if(isPrimitive(command) && pipe.time < executor.until) pipe.time = executor.until;
+  //a primitive's spans enter the pipeline after its own setup; the unsynced
+  //writes its hazard window collected run in the command processor meanwhile
+  if(isPrimitive(command) && pipe.time < at + setup) pipe.time = at + setup;
   if(executor.load) dpc.tmem.set(true, at);
   if(rdp_render_crashed()) crash("pixel engine pipeline crash");
 }

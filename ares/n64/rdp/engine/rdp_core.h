@@ -171,7 +171,45 @@ typedef void (*copy_pixel_t)(rdp_t *rdp, uint32_t curpixel, rgbaint_t* color, co
  * primitive unqueued while the window is open, so it is renderer state,
  * not scratch. Command-walk thread only. Model derivation is at the
  * implementation in rdp_core.c. */
-#define HAZ_MAX_SEG 8
+#define HAZ_MAX_SEG 32
+
+/* The pipeline stage at which a register is sampled, in the order of the
+ * n64brew Pipeline table "Effect of unsynced attribute changes". Set Env
+ * Color is the combiner's input register. */
+typedef enum
+{
+    HAZ_ENV,
+    HAZ_PERSP,
+    HAZ_TILE,
+    HAZ_LOD,
+    HAZ_SAMPLE,
+    HAZ_TLUT_EN,
+    HAZ_TLUT_TYPE,
+    HAZ_MID_TEXEL,
+    HAZ_COMBINE,
+    HAZ_CVG_ALPHA,
+    HAZ_BLENDER,
+    HAZ_ZMODE,
+    HAZ_CVG_DEST,
+    HAZ_DITHER,
+    HAZ_STAGES
+} rdp_haz_stage;
+
+/* One unsynced write that reaches the held primitive: from box pixel px on,
+ * the pixels sample the new value at the write's stage. */
+typedef struct
+{
+    int32_t         px;
+    int32_t         stage;
+    int32_t         tile;
+    union
+    {
+        struct { rgbaint_t color, alpha; } env;
+        combine_modes_t combine;
+        other_modes_t   modes;
+        rdp_tile_t      tile;
+    } v;
+} rdp_haz_write;
 
 typedef struct
 {
@@ -181,12 +219,14 @@ typedef struct
     int32_t         start, end, offset;
     int32_t         lo;
     int32_t         w, h, n;
-    int32_t         span, lead;
+    int32_t         span;
+    int32_t         lead[HAZ_STAGES];
+    int32_t         lead_max;
     int32_t         cyc;
     int32_t         clock;
     int32_t         nseg;
-    int32_t         seg_px[HAZ_MAX_SEG];
-    rgbaint_t       seg_env[HAZ_MAX_SEG];
+    other_modes_t   modes_before;
+    rdp_haz_write   seg[HAZ_MAX_SEG];
 } rdp_haz_state;
 
 /* Unsynced Set Fill Color hazard state, FILL-mode rectangles.
@@ -411,8 +451,9 @@ struct rdp_t
     combine_modes_t m_combine;
     bool            m_pipe_clean;
 
-    /* See rdp_haz_state. */
+    /* See rdp_haz_state. m_pipeline_depth is rdp.pipeline-depth in GCLK. */
     rdp_haz_state   m_haz;
+    int32_t         m_pipeline_depth;
     rdp_fill_haz_state m_fill_haz;
 
     cv_mask_derivative_t cvarray[(1 << 8)];

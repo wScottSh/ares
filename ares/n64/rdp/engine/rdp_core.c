@@ -186,8 +186,118 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
  * endpoints into the clip, so raising min_x moves the left edge whichever of
  * startx/stopx happens to hold it.
  *
- * Scope is what the hardware data covers: rectangles, 1-/2-cycle, env colour.
- * Command-walk thread only; storage is rdp->m_haz (see rdp_core.h). */
+ * 25 is rdp.pipeline-depth (m_pipeline_depth), the depth of the combiner,
+ * which samples the environment colour. Every other register in the n64brew
+ * Pipeline table "Effect of unsynced attribute changes" is sampled at its own
+ * stage, and the table's offsets give each stage's depth relative to the
+ * combiner's (rdp_haz_stage_offset), so a write to it lands with
+ *
+ *     D(stage) = min(3*L - 2, depth + offset(stage) - offset(combiner))
+ *
+ * One Set Other Modes write lands at a different pixel for each stage it
+ * changes. A stage at offset 0 (the colour image, image_read_en and the Z
+ * enables) lands past the last live pixel, so it never reaches the previous
+ * primitive, as the table says.
+ *
+ * Scope: rectangles, 1-/2-cycle. The captures cover the environment colour;
+ * the other stages are built from the table alone. Set Convert (the table's
+ * "convert" at the combiner's offset) is not collected: its handler drains
+ * the span queue. Command-walk thread only; storage is rdp->m_haz (see
+ * rdp_core.h). */
+
+/* Cycles of the previous primitive an unsynced write corrupts, 1-cycle and
+ * 2-cycle, per stage: n64brew Reality_Display_Processor/Pipeline, "Effect of
+ * unsynced attribute changes" (docs/research/rdp-command-timing.md s.3.7).
+ * The environment colour sits at the combiner's offset. */
+static const int32_t rdp_haz_stage_offset[HAZ_STAGES][2] =
+{
+    [HAZ_ENV]       = { 24, 22 },
+    [HAZ_PERSP]     = {  7,  4 },
+    [HAZ_TILE]      = { 13, 10 },
+    [HAZ_LOD]       = { 13, 12 },
+    [HAZ_SAMPLE]    = { 17, 14 },
+    [HAZ_TLUT_EN]   = { 18, 16 },
+    [HAZ_TLUT_TYPE] = { 20, 18 },
+    [HAZ_MID_TEXEL] = { 21, 18 },
+    [HAZ_COMBINE]   = { 24, 22 },
+    [HAZ_CVG_ALPHA] = { 25, 24 },
+    [HAZ_BLENDER]   = { 26, 24 },
+    [HAZ_ZMODE]     = { 27, 26 },
+    [HAZ_CVG_DEST]  = { 28, 28 },
+    [HAZ_DITHER]    = { 29, 28 },
+};
+
+/* Copies the Set Other Modes fields sampled at `stage` from src into dst.
+ * The table names the fields; dither_alpha_en goes with alpha_compare_en,
+ * the alpha compare it selects the threshold of. */
+static void rdp_haz_copy_modes(other_modes_t *dst, const other_modes_t *src, int32_t stage)
+{
+    switch (stage)
+    {
+    case HAZ_PERSP:     dst->persp_tex_en = src->persp_tex_en; break;
+    case HAZ_LOD:       dst->tex_lod_en = src->tex_lod_en; break;
+    case HAZ_SAMPLE:    dst->sample_type = src->sample_type; break;
+    case HAZ_TLUT_EN:   dst->en_tlut = src->en_tlut; break;
+    case HAZ_TLUT_TYPE: dst->tlut_type = src->tlut_type; break;
+    case HAZ_MID_TEXEL: dst->mid_texel = src->mid_texel; break;
+    case HAZ_CVG_ALPHA:
+        dst->alpha_cvg_select = src->alpha_cvg_select;
+        dst->cvg_times_alpha  = src->cvg_times_alpha;
+        dst->key_en           = src->key_en;
+        dst->z_source_sel     = src->z_source_sel;
+        dst->alpha_dither_sel = src->alpha_dither_sel;
+        break;
+    case HAZ_BLENDER:
+        dst->blend_m1a_0 = src->blend_m1a_0; dst->blend_m1a_1 = src->blend_m1a_1;
+        dst->blend_m1b_0 = src->blend_m1b_0; dst->blend_m1b_1 = src->blend_m1b_1;
+        dst->blend_m2a_0 = src->blend_m2a_0; dst->blend_m2a_1 = src->blend_m2a_1;
+        dst->blend_m2b_0 = src->blend_m2b_0; dst->blend_m2b_1 = src->blend_m2b_1;
+        break;
+    case HAZ_ZMODE:
+        dst->z_mode       = src->z_mode;
+        dst->force_blend  = src->force_blend;
+        dst->blend_shift  = src->blend_shift;
+        dst->antialias_en = src->antialias_en;
+        break;
+    case HAZ_CVG_DEST:
+        dst->cvg_dest     = src->cvg_dest;
+        dst->color_on_cvg = src->color_on_cvg;
+        break;
+    case HAZ_DITHER:
+        dst->rgb_dither_sel    = src->rgb_dither_sel;
+        dst->alpha_compare_en  = src->alpha_compare_en;
+        dst->dither_alpha_en   = src->dither_alpha_en;
+        dst->alpha_dither_mode = (dst->alpha_compare_en << 1) | dst->dither_alpha_en;
+        break;
+    }
+}
+
+static int rdp_haz_modes_differ(const other_modes_t *a, const other_modes_t *b, int32_t stage)
+{
+    other_modes_t t = *a;
+    rdp_haz_copy_modes(&t, b, stage);
+    return memcmp(&t, a, sizeof(t)) != 0;
+}
+
+static void rdp_haz_apply(rdp_poly_state *o, const rdp_haz_write *w)
+{
+    switch (w->stage)
+    {
+    case HAZ_ENV:
+        o->m_env_color = w->v.env.color;
+        o->m_env_alpha = w->v.env.alpha;
+        break;
+    case HAZ_COMBINE:
+        o->m_combine = w->v.combine;
+        break;
+    case HAZ_TILE:
+        o->m_tiles[w->tile] = w->v.tile;
+        break;
+    default:
+        rdp_haz_copy_modes(&o->m_other_modes, &w->v.modes, w->stage);
+        break;
+    }
+}
 
 /* Does the given combiner cycle read the environment colour? Environment is
  * mux value 5 in every combiner input field; the 5-bit RGB multiply field
@@ -213,9 +323,10 @@ static int rdp_haz_env_in_cycle(const combine_modes_t *c, int cycle)
 static void rdp_haz_publish(rdp_t *rdp)
 {
     rdp_haz_state *const h = &rdp->m_haz;
+    const rdp_poly_state *prev;
     extent_t *spans;
     poly_render_cb cb;
-    int32_t nlines, i;
+    int32_t nlines, i, j;
 
     if (!h->active)
         return;
@@ -228,22 +339,37 @@ static void rdp_haz_publish(rdp_t *rdp)
     poly_manager_render_extents(&rdp->m_pool, &h->clip, cb,
         h->start, nlines, spans + h->offset);
 
-    for (i = 0; i < h->nseg; i++)
+    /* Stages land out of command order; a stable sort keeps the writes to
+     * one stage in order. */
+    for (i = 1; i < h->nseg; i++)
     {
-        const int32_t p   = h->seg_px[i];
+        rdp_haz_write w = h->seg[i];
+        for (j = i; j > 0 && h->seg[j - 1].px > w.px; j--)
+            h->seg[j] = h->seg[j - 1];
+        h->seg[j] = w;
+    }
+
+    prev = h->object;
+    for (i = 0; i < h->nseg;)
+    {
+        const int32_t p   = h->seg[i].px;
         const int32_t k   = p / h->w;
         const int32_t col = p - k * h->w;
+        rdp_poly_state *o;
         int32_t k2;
 
         if (p >= h->n || k >= nlines)
             break;
 
+        o = poly_manager_object_next(&rdp->m_pool);
+        memcpy(o, prev, sizeof(rdp_poly_state));
+        for (; i < h->nseg && h->seg[i].px == p; i++)
+            rdp_haz_apply(o, &h->seg[i]);
+        prev = o;
+
         if (col > 0)
         {
-            rdp_poly_state *o = poly_manager_object_next(&rdp->m_pool);
             poly_rect c2 = h->clip;
-            memcpy(o, h->object, sizeof(rdp_poly_state));
-            o->m_env_color = h->seg_env[i];
             if (h->lo + col > c2.min_x)
                 c2.min_x = h->lo + col;
             poly_manager_render_extents(&rdp->m_pool, &c2, cb,
@@ -253,9 +379,6 @@ static void rdp_haz_publish(rdp_t *rdp)
         k2 = (col > 0) ? (k + 1) : k;
         if (k2 < nlines)
         {
-            rdp_poly_state *o = poly_manager_object_next(&rdp->m_pool);
-            memcpy(o, h->object, sizeof(rdp_poly_state));
-            o->m_env_color = h->seg_env[i];
             poly_manager_render_extents(&rdp->m_pool, &h->clip, cb,
                 h->start + k2, nlines - k2, spans + h->offset + k2);
         }
@@ -268,12 +391,21 @@ void rdp_state_quiesce(rdp_t *rdp)
     rdp_fill_haz_publish(rdp);
 }
 
+/* The commands an open window collects: the register writes of the table,
+ * each one GCLK in the command processor. */
+static int rdp_haz_collects(int32_t cmd)
+{
+    return cmd == 0x3b || cmd == 0x3c || cmd == 0x2f || cmd == 0x35;
+}
+
 static void rdp_haz_pre(rdp_t *rdp, int32_t cmd)
 {
     rdp_haz_state *const h = &rdp->m_haz;
 
-    if (h->active && cmd != 0x3b)
+    if (h->active && !rdp_haz_collects(cmd))
         rdp_haz_publish(rdp);
+    if (h->active && cmd == 0x2f)
+        h->modes_before = rdp->m_other_modes;
 
     rdp_fill_haz_pre(rdp, cmd);
 }
@@ -532,30 +664,78 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd)
 }
 /*****************************************************************************/
 
-static void rdp_haz_post(rdp_t *rdp, int32_t cmd)
+/* Records a write sampled at `stage` from the pixel it lands on. Returns 0
+ * when the window is full and has been published. */
+static int rdp_haz_push(rdp_t *rdp, int32_t stage, int32_t tile)
 {
     rdp_haz_state *const h = &rdp->m_haz;
-    int32_t px;
+    rdp_haz_write *w;
+    const int32_t px = rdp_haz_land(h, (h->h - 1) * h->span - h->lead[stage] + h->clock);
 
-    if (!h->active || cmd != 0x3b)
-        return;
-
-    px = rdp_haz_land(h, (h->h - 1) * h->span - h->lead + h->clock);
-    h->clock++;
-
-    if (px < 0 || h->nseg >= HAZ_MAX_SEG)
+    if (px < 0)
+        return 1;
+    if (h->nseg >= HAZ_MAX_SEG)
     {
         rdp_haz_publish(rdp);
-        return;
+        return 0;
     }
-    h->seg_px[h->nseg]  = px;
-    h->seg_env[h->nseg] = rdp->m_env_color;
-    h->nseg++;
+    w = &h->seg[h->nseg++];
+    memset(w, 0, sizeof(*w));  /* the union's unused bytes */
+    w->px    = px;
+    w->stage = stage;
+    w->tile  = tile;
+    switch (stage)
+    {
+    case HAZ_ENV:
+        w->v.env.color = rdp->m_env_color;
+        w->v.env.alpha = rdp->m_env_alpha;
+        break;
+    case HAZ_COMBINE:
+        w->v.combine = rdp->m_combine;
+        break;
+    case HAZ_TILE:
+        w->v.tile = rdp->m_tiles[tile];
+        break;
+    default:
+        w->v.modes = rdp->m_other_modes;
+        break;
+    }
+    return 1;
 }
 
-static void rdp_haz_post_all(rdp_t *rdp, int32_t cmd)
+static void rdp_haz_post(rdp_t *rdp, int32_t cmd, const uint64_t *cmd_buf)
 {
-    rdp_haz_post(rdp, cmd);
+    rdp_haz_state *const h = &rdp->m_haz;
+    int ok = 1;
+    int32_t stage;
+
+    if (!h->active || !rdp_haz_collects(cmd))
+        return;
+
+    switch (cmd)
+    {
+    case 0x3b: ok = rdp_haz_push(rdp, HAZ_ENV, 0); break;
+    case 0x3c: ok = rdp_haz_push(rdp, HAZ_COMBINE, 0); break;
+    case 0x35: ok = rdp_haz_push(rdp, HAZ_TILE, (int32_t)(cmd_buf[0] >> 24) & 0x7); break;
+    case 0x2f:
+        for (stage = HAZ_PERSP; ok && stage < HAZ_STAGES; stage++)
+            if (stage != HAZ_TILE && stage != HAZ_COMBINE &&
+                rdp_haz_modes_differ(&h->modes_before, &rdp->m_other_modes, stage))
+                ok = rdp_haz_push(rdp, stage, 0);
+        break;
+    }
+    if (!ok)
+        return;
+    h->clock++;
+
+    /* Closed once the deepest stage's next write would miss. */
+    if (rdp_haz_land(h, (h->h - 1) * h->span - h->lead_max + h->clock) < 0)
+        rdp_haz_publish(rdp);
+}
+
+static void rdp_haz_post_all(rdp_t *rdp, int32_t cmd, const uint64_t *cmd_buf)
+{
+    rdp_haz_post(rdp, cmd, cmd_buf);
     rdp_fill_haz_post(rdp, cmd);
 }
 /*****************************************************************************/
@@ -4831,8 +5011,8 @@ int rdp_engine_step(rdp_t *rdp, rdp_engine_work *work)
 }
 
 /* Whether a held hazard primitive's window is still open for the next
- * buffered command: a 1-/2-cycle hold collects Set Env Color, a FILL hold
- * collects the commands rdp_fill_haz_cost does not fence on. False when
+ * buffered command: a 1-/2-cycle hold collects the writes rdp_haz_collects
+ * names, a FILL hold the commands rdp_fill_haz_cost does not fence on. False when
  * nothing is held or the next command is not buffered whole. */
 int rdp_engine_hold_open(rdp_t *rdp)
 {
@@ -4843,7 +5023,7 @@ int rdp_engine_hold_open(rdp_t *rdp)
 
     cmd = (rdp->m_cmd_data[rdp->m_cmd_cur] >> 56) & 0x3f;
     if (rdp->m_haz.active)
-        return cmd == 0x3b;
+        return rdp_haz_collects(cmd);
     if (rdp->m_fill_haz.active)
         return rdp_fill_haz_cost(cmd) >= 0;
     return 0;
@@ -5026,7 +5206,7 @@ static void rdp_dispatch_one(rdp_t *rdp, uint64_t *curr_cmd_buf, uint8_t cmd)
             case 0x3f:  rdp_cmd_set_color_image(rdp, curr_cmd_buf); break;
     }
 
-    rdp_haz_post_all(rdp, (int32_t)cmd);
+    rdp_haz_post_all(rdp, (int32_t)cmd, curr_cmd_buf);
 }
 
 /*****************************************************************************/
@@ -5393,7 +5573,16 @@ static void rdp_render_spans(rdp_t *rdp, int32_t start, int32_t end, int32_t til
                 h->clock  = 0;
                 h->nseg   = 0;
                 h->span   = sp;
-                h->lead   = rdp_min32(3 * sp - 2, 25) + off;
+                h->lead_max = 0;
+                for (int32_t st = 0; st < HAZ_STAGES; st++)
+                {
+                    const int32_t c = haz_cyc - 1;
+                    const int32_t depth = rdp->m_pipeline_depth +
+                        rdp_haz_stage_offset[st][c] - rdp_haz_stage_offset[HAZ_COMBINE][c];
+                    h->lead[st] = rdp_min32(3 * sp - 2, depth) + (st == HAZ_ENV ? off : 0);
+                    if (h->lead[st] > h->lead_max)
+                        h->lead_max = h->lead[st];
+                }
                 return;
             }
         }

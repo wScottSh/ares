@@ -100,7 +100,7 @@ void rdp_render_quiesce(void)
     rdp_state_quiesce(s_ctx.rdp);
 }
 
-int rdp_render_init(uint32_t rdram_size)
+int rdp_render_init(uint32_t rdram_size, int32_t pipeline_depth)
 {
     rdp_t *rdp;
 
@@ -139,6 +139,7 @@ int rdp_render_init(uint32_t rdram_size)
         return 1;
     }
 
+    rdp->m_pipeline_depth = pipeline_depth;
     s_ctx.rdp = rdp;
     /* ares port: no worker threads. Spans run when the host calls
      * rdp_render_span_run, on the emulation thread; loads and Sync Full

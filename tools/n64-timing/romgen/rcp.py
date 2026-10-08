@@ -70,8 +70,8 @@ ZMODE_OPA = 0
 RM_NOOP = 0
 
 # Combiner inputs (rdp.h G_CCMUX_* / G_ACMUX_*)
-CC = {"0": 31, "PRIMITIVE": 3}
-AC = {"0": 7, "PRIMITIVE": 3}
+CC = {"0": 31, "PRIMITIVE": 3, "ENVIRONMENT": 5}
+AC = {"0": 7, "PRIMITIVE": 3, "ENVIRONMENT": 5}
 
 IM_FMT_RGBA = 0
 IM_SIZ_16b = 2
