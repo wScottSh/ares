@@ -14,31 +14,31 @@ auto CPU::Pipeline::issue(u32 word) -> Issued {
 
   Clock cost = t.fast != OpTiming::Fast::None && fastOperands(t.fast, word) ? Timing::Behavior::CpuFpuTrivial : t.cost;
   u8 dest = t.late == Late::FpuFd ? fd : rt;
-  return {word, cost - Timing::Behavior::CpuIssue, t.late, dest, t.store};
+  return {word, cost - Timing::Behavior::CpuIssue, t.late, dest};
 }
 
-auto CPU::Pipeline::read(u64 vaddr) -> Fetched {
-  if(vaddr & 3) return {vaddr, 0, false};
+alwaysinline auto CPU::Pipeline::read(Fetched& slot, u64 vaddr) -> void {
+  slot.vaddr = vaddr;
+  slot.translated = false;
+  if(vaddr & 3) return;
   auto access = self.devirtualize<Read, Word>(vaddr, false, false);
-  if(!access) return {vaddr, 0, false};
-  return {vaddr, self.fetch(access), true};
+  if(!access) return;
+  slot.word = self.fetch(access);
+  slot.translated = true;
 }
 
 static_assert(Timing::Behavior::CpuFetchAheadSlots == 2, "the window holds the words at pc and nextpc");
 
-auto CPU::Pipeline::fetchAhead() -> void {
-  if(fetched && window[0].vaddr != pc) fetched = 0;
-  if(!fetched) window[fetched++] = read(pc);
-  if(fetched == 2 && window[1].vaddr != nextpc) fetched = 1;
-  if(fetched == 1) window[fetched++] = read(nextpc);
+alwaysinline auto CPU::Pipeline::fetchAhead() -> void {
+  if(window[head].vaddr != pc) read(window[head], pc);
+  read(window[head ^ 1], nextpc);
 }
 
-auto CPU::Pipeline::take() -> Fetched {
-  fetchAhead();
-  auto word = window[0];
-  window[0] = window[1];
-  fetched = 1;
-  return word;
+alwaysinline auto CPU::Pipeline::take() -> const Fetched& {
+  auto& slot = window[head];
+  if(slot.vaddr != pc) read(slot, pc);
+  head ^= 1;
+  return slot;
 }
 
 auto CPU::Pipeline::retire(const Issued& issued) -> void {
@@ -165,7 +165,7 @@ auto CPU::Pipeline::power() -> void {
   for(auto& ready : fprReady) ready = {};
   storeInstruction = 0;
   inFlight = nullptr;
-  fetched = 0;
+  flush();
 }
 
 auto CPU::Pipeline::serialize(serializer& s) -> void {
@@ -177,5 +177,5 @@ auto CPU::Pipeline::serialize(serializer& s) -> void {
   for(auto& ready : fprReady) s(ready.units);
   s(storeInstruction);
   for(auto& w : window) s(w.vaddr), s(w.word), s(w.translated);
-  s(fetched);
+  s(head);
 }

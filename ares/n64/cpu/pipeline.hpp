@@ -28,7 +28,6 @@ struct OpTiming {
   bool  fprFields = false; //fs and ft checked against pending FPR results
   Late  late = Late::None;
   Fast  fast = Fast::None;
-  bool  store = false;     //its data lands at WB, after the fetch two instructions ahead
 };
 
 //Where an exception is detected, which sets how long the refill from the
@@ -48,7 +47,7 @@ struct Pipeline {
   };
 
   auto inDelaySlot() const -> bool { return state & DelaySlot; }
-  auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; fetched = 0; }
+  auto setPc(u64 address) -> void { self.ipu.pc = pc = address; nextpc = address + 4; state = nstate = 0; flush(); }
   auto branch(u64 address) -> void { nextpc = address; nstate |= DelaySlot; }
   auto noBranch() -> void { nstate |= DelaySlot; }
   //A not-taken likely branch turns its delay slot into a bubble (nemu64-test LikelyBranchCycleCount).
@@ -70,7 +69,6 @@ struct Pipeline {
     Clock extra;
     OpTiming::Late late;
     u8 dest;
-    bool store;
   };
 
   //pipeline.cpp
@@ -107,18 +105,19 @@ struct Pipeline {
   struct Fetched {
     u64 vaddr;
     u32 word;
-    bool translated;  //false: the fetch faults, raised when the instruction issues
+    u32 translated;  //0: the fetch faults, raised when the instruction issues
   };
-  //Reads the words at pc and nextpc that are not in the window yet. A store calls it
-  //before it executes, every other instruction after.
+  //Reads the word at nextpc, and the one at pc if a branch or a skip has moved it.
   auto fetchAhead() -> void;
-  //The word at pc, which leaves the window.
-  auto take() -> Fetched;
+  //The word at pc. The reference holds until the next fetchAhead().
+  auto take() -> const Fetched&;
   //The word of the instruction after the executing one.
-  auto next() const -> const Fetched* { return fetched && window[0].vaddr == pc ? &window[0] : nullptr; }
-  auto read(u64 vaddr) -> Fetched;
+  auto next() const -> const Fetched* { return window[head].vaddr == pc ? &window[head] : nullptr; }
+  auto read(Fetched& slot, u64 vaddr) -> void;
+  //An exception or ERET: no vaddr is all ones, so nothing in the window matches.
+  auto flush() -> void { for(auto& slot : window) slot.vaddr = ~0ull; }
   Fetched window[Timing::Behavior::CpuFetchAheadSlots];
-  u8 fetched = 0;
+  u8 head = 0;  //the slot of the instruction at pc
 
   Clock gprReady[32];
   Clock fprReady[32];

@@ -47,13 +47,8 @@ auto CPU::opTiming(u32 instruction) -> OpTiming {
     t.gprFields = OpTiming::RS;
     t.late = Late::LoadFt;
     return t;
-  case 0x28: case 0x29: case 0x2a: case 0x2b: case 0x2c: case 0x2d: case 0x2e:
-  case 0x38: case 0x3c: case 0x3f:  //SB, SH, SWL, SW, SDL, SDR, SWR, SC, SCD, SD
-    t.store = true;
-    return t;
   case 0x39: case 0x3d:  //SWC1, SDC1
     t.gprFields = OpTiming::RS;
-    t.store = true;
     return t;
   }
   return t;
