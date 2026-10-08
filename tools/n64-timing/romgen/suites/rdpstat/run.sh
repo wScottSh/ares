@@ -2,7 +2,7 @@
 # Runs the rdpstat ROMs through n64-run and writes per-set results.
 #
 # usage: run.sh [SET...]
-# SET defaults to "systemtest dpc repeater64 1prim unsynced". ROMs come from
+# SET defaults to "systemtest dpc repeater64 1prim unsynced emux-bus". ROMs come from
 # romgen/build.py --suite rdpstat --out $N64_TIMING_HOME/roms.
 # Output: $N64_TIMING_HOME/results/rdpstat/<set>/{stdout.txt,stderr.txt,values.tsv,summary.txt}
 #         $N64_TIMING_HOME/results/rdpstat/summary.txt
@@ -14,7 +14,7 @@ romgen="$(cd "$here/../.." && pwd)"
 runner="${N64_RUN:-$(n64_target n64-run)}"
 roms="${RDPSTAT_ROMS:-$N64_TIMING_HOME/roms}"
 
-sets="${*:-systemtest dpc repeater64 1prim unsynced}"
+sets="${*:-systemtest dpc repeater64 1prim unsynced emux-bus}"
 
 results="$N64_TIMING_HOME/results/rdpstat"
 mkdir -p "$results"
