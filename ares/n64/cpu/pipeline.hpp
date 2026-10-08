@@ -123,6 +123,6 @@ struct Pipeline {
   Clock fprReady[32];
   u64 storeInstruction = 0;  //instructionIndex + 1 of the last cached store; 0 for none
   //The instruction between issue() and end(), until an exception ends it. It lives
-  //on CPU::instruction()'s stack: an Issued member here cost 10% of MM wall time.
+  //on CPU::instruction()'s stack: an Issued member here cost 11% of MM wall time.
   const Issued* inFlight = nullptr;
 };

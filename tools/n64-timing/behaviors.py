@@ -17,7 +17,9 @@ or a pending gate). A fit row with none starts its note with `verify-is-fit: <re
 and the spec labels it fit only. A legacy row is a cost today's core
 still charges: its reference is the code site, the literal lint pins the literal
 to it, and its note names the plan unit that replaces it. A model-choice row has
-no published value; its reference states the reason for the choice.
+no published value; its reference states the reason for the choice. An inferred
+row has no measurement or published value of its own; its note states the
+inference.
 
 checks.tsv columns: id, runner, target, selector, expect, source. A row whose id
 ends in `:*` is a suite row: every id under that prefix that the suite's expected
@@ -49,6 +51,7 @@ BASES = {
     "wiki": ("Wiki", "a community reference: n64brew, or a test suite author's notes"),
     "rtl": ("Rtl", "a hardware description (MiSTer RTL)"),
     "derived": ("Derived", "computed from other cited values"),
+    "inferred": ("Inferred", "reasoned from cited values with no measurement or published value of its own; the note states the inference"),
     "fit": ("Fit", "fitted to measured data; rounded to the nearest 750 MHz unit"),
     "model-choice": ("ModelChoice", "no published value; the reference states why the model chose this one"),
     "legacy": ("Legacy", "a constant today's core charges; the reference is its code site and the note names the unit that replaces it"),
@@ -299,6 +302,8 @@ def validate(root):
             elif independent and flagged:
                 errors.append(f"{where}: fit row `{rid}` says verify-is-fit, but `{independent[0]}` decides it from other data. "
                               f"Remove the verify-is-fit note.")
+        if basis == "inferred" and not row["note"]:
+            errors.append(f"{where}: inferred row `{rid}` has no note. State the inference and what it rests on.")
         if basis == "legacy":
             if not LEGACY_NOTE.match(row["note"]):
                 errors.append(f"{where}: a legacy note starts with `replaced by T<unit>: ` or `no plan unit: `")
@@ -577,6 +582,8 @@ def self_test(root):
             landed = False
         cases = [
             ("the committed tree", None, None, None),
+            ("an inferred row without its inference", TABLE, row_field("cpu.ifill-stall", "note", ""),
+             "inferred row `cpu.ifill-stall` has no note. State the inference"),
             ("removing a reference", TABLE, row_field("ri.read-hit", "reference", ""), "has no reference. Cite the hardware reference"),
             ("an unknown check id", TABLE, row_field("ri.read-hit", "verify", "bench:no-such-rom"), "check `bench:no-such-rom` is not defined in tools/n64-timing/checks.tsv. Add a row there"),
             ("an empty check list", TABLE, row_field("ri.write-hit", "verify", ""), "has no check. Name the check"),
