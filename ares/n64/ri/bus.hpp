@@ -131,8 +131,7 @@ constexpr auto trailer(Requester requester, Direction direction) -> Clock {
 }
 
 struct Channel {
-  //decide() runs only once the channel is free, so a refresh never cuts into a granted burst
-  static_assert(Timing::Behavior::RiRefreshWaitsForBurst, "preempting a burst is not built");
+  //post() sets the next decision no earlier than `free`, so a refresh never cuts into a granted burst
 
   //every client keeps at most one burst in flight (refresh, SysAD, each DMA engine)
   static constexpr u32 Capacity = 16;

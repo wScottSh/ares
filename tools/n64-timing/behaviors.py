@@ -94,6 +94,7 @@ BEHAVIOR_USE = re.compile(r"\bBehavior::(\w+)")
 CODE_POINTER = re.compile(r"\b(ares/n64/[\w./-]+):([\w:.]*\w)")
 NOT_BUILT = "not-built: "
 USING_BEHAVIOR = "using namespace Timing::Behavior;"
+COMMENT_OR_LITERAL = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|(?<!\w)\'(?:\\.|[^\'\\\n])*\'', re.S)
 
 
 def lint_module():
@@ -249,11 +250,21 @@ def check_defined(cid, explicit, suite_files):
     return False
 
 
+def uncommented(text):
+    """C++ source with each comment blanked and its newlines kept, so a name in a comment reads as no use
+    and line numbers stay put. String and character literals are kept whole: a `//` inside one is not a
+    comment, and a digit separator (0x1fc0'0000) starts no literal."""
+    def blank(m):
+        return m.group(0) if m.group(0)[0] in "\"'" else re.sub(r"[^\n]", " ", m.group(0))
+    return COMMENT_OR_LITERAL.sub(blank, text)
+
+
 def core_sources(root):
+    """(path, text) for every core source file, comments blanked (uncommented)."""
     for path in sorted((Path(root) / "ares/n64").rglob("*")):
         rel = path.relative_to(root).as_posix()
         if path.suffix in (".cpp", ".hpp") and rel != HEADER:
-            yield rel, path.read_text(encoding="utf-8", errors="replace")
+            yield rel, uncommented(path.read_text(encoding="utf-8", errors="replace"))
 
 
 def behavior_uses(root):
@@ -280,7 +291,7 @@ def pointer_error(root, path, symbol):
     file = Path(root) / path
     if not file.is_file():
         return f"{path} does not exist"
-    if not re.search(rf"(?<!\w){re.escape(symbol)}(?!\w)", file.read_text(encoding="utf-8", errors="replace")):
+    if not re.search(rf"(?<!\w){re.escape(symbol)}(?!\w)", uncommented(file.read_text(encoding="utf-8", errors="replace"))):
         return f"{path} has no `{symbol}`"
     return None
 
@@ -1050,6 +1061,9 @@ def self_test(root):
                 return "\n".join(lines)
             return change
 
+        def unread_row(code):
+            return lambda t: t.rstrip("\n") + f"\npi.self-test-unread\t1\tpclk\tmeasured\tself-test\tunit:timeline\t\t\t{code}\n"
+
         new_function = "\nauto CPU::selfTestCost() -> void {\n  step(7 * 2);\n}\n"
         suite_file = "tools/n64-timing/romgen/suites/bench/expected.tsv"
         bench_rows = [c for c in read_tsv(work, CHECKS, CHECK_COLUMNS, []) if c["expect"] == "suite" and c["runner"] == "bench"]
@@ -1106,7 +1120,10 @@ def self_test(root):
              "is pending:no-such-gate, which is not a pending row"),
             ("editing the generated header", HEADER, lambda t: t.replace("= 30;", "= 31;", 1), "ares/n64/timing/behaviors.hpp differs from the generated output"),
             ("a legacy code site moving", "ares/n64/pi/bus.hpp", lambda t: "\n" + t, "Run tools/n64-timing/behaviors.py --fix-lines"),
-            ("a constant no code reads", TABLE, row_field("pi.io-busy", "code", ""), "no code reads Timing::Behavior::PiIoBusy"),
+            ("a constant no code reads", TABLE, unread_row(""), "no code reads Timing::Behavior::PiSelfTestUnread"),
+            ("a constant named only in a comment", "ares/n64/timing/timeline.cpp",
+             lambda t: re.sub(r"static_assert\(Timing::Behavior::ClockUnit[^\n]*", "//Timing::Behavior::ClockUnit", t),
+             "no code reads Timing::Behavior::ClockUnit"),
             ("removing the code that reads a constant", "ares/n64/timing/timeline.cpp",
              lambda t: "\n".join(l for l in t.split("\n") if "ClockUnit" not in l), "no code reads Timing::Behavior::ClockUnit"),
             ("a rule that names no code", TABLE, row_field("vi.display-window", "code", ""),
@@ -1115,7 +1132,7 @@ def self_test(root):
              "ares/n64/vi/vi.cpp has no `VI::noSuchWindow`"),
             ("not-built on a row the code reads", TABLE, row_field("ri.read-hit", "code", "not-built: ares/n64/ri/bus.hpp:wire"),
              "so `ri.read-hit` is built there; clear its code column"),
-            ("not-built that names no code", TABLE, row_field("pi.io-busy", "code", "not-built: nothing charges it"),
+            ("not-built that names no code", TABLE, unread_row("not-built: nothing charges it"),
              "names no ares/n64/<path>:<symbol>. Name the code that does instead"),
             ("a code column on a legacy row", TABLE, row_field("legacy.pi.cart-read", "code", "ares/n64/pi/bus.hpp:PI::writeWord"),
              "is built at its literal-allowlist code site; clear its code column"),
