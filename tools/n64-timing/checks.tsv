@@ -69,7 +69,7 @@ thar0:imrd-1cycle	thar0	nozb-vioff-imrd-1cyc	-	suite	plan T13: IM_RD 1-cycle 163
 thar0:zcmp	thar0	ac-zcmp-zbsame-vioff-noimrd-1cyc	-	suite	Thar0 hw_data
 thar0:vi-on-separate-bank	thar0	zbrw-pass-zbsep-vioff-noimrd-1cyc	-	suite	plan T13: FB+ZB separate banks 225,518
 rdpstat:current-prefetch	rdpstat	current-prefetch	-	suite	n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240
-rdpstat:nosync-1cycle	rdpstat	nosync-1cycle	-	suite	repeater64 RDPNoSync1C, 65 references
+rdpstat:nosync-1cycle	rdpstat	nosync-1cycle	-	suite	repeater64 RDPNoSync1C, 20 console references (assets/10000000-10000013.test; the other 45 assets belong to other demos)
 snapper:span-tri	snapper	span-tri	-	suite	snapper64 RDP Test-Mode Span Tri, 216 DPS dumps
 snapper:rect-nosync	snapper	rect-nosync	-	suite	snapper64 RDPRectNoSync captures
 noise:a	noise	dataset-a	-	pass	Thar0/RDP-Noise dataset A (Unlicense): ctest noise:a, NoiseLfsr's a output from power-on equals all 1016 pixels at clock 256,586,636 (plan T14)
@@ -84,3 +84,4 @@ unit:rdram-private	unit	n64-timing-rdram-device	rdram-private	pass	ADR 0001 Deci
 rdpstat:dpc-sequencing	rdpstat	dpc	-	self	rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12)
 rdpstat:xbus	rdpstat	systemtest	RDP STATUS: Run from DMEM (xbus)	self	n64-systemtest tests/rdp run_from_dmem, three DMEM placements
 rdpstat:1prim	rdpstat	1prim	-	self	rdpstat 1prim ROM: four stacked one-row image-read rectangles, 1- and 2-cycle, 8 and 32 px; non-atomic narrow stacks retire the two-blend value, wide ones and atomic stacks the four-blend value (cen64 jgemu rdp_core.c:4551-4567, PRDP 12:15/12:16 checksums; 1prim-cost.md)
+rdpstat:unsynced-combiner	rdpstat	unsynced	-	self	rdpstat unsynced ROM: an unsynced Set Combine after a 64x4 rectangle recolors its last 24 cycles in 1-cycle, 22 in 2-cycle (n64brew Pipeline table combiner row; rdp-command-timing.md s.3.7); no console capture

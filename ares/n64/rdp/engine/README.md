@@ -65,6 +65,13 @@ against it shows every change. In summary:
   time and travel in save states. The untimed
   at-END walk (`rdp_process_list`, `rdp_process_command_list`) is
   deleted.
+- Unsynced writes (plan T15): the 1-/2-cycle rectangle hold collects
+  Set Combine, Set Other Modes and Set Tile as well as Set Env Color. Each
+  register lands at its own pipeline stage (n64brew Pipeline table,
+  `rdp_haz_stage_offset`), relative to the combiner's depth, which
+  `rdp_render_init` takes from `rdp.pipeline-depth` instead of the fork's
+  literal 25. A write records the register's new value in the hold
+  (`rdp_haz_write`); the re-renders chain one object per landing pixel.
 - Save states: `rdp_render_serialize` (`rdp.c`) visits the renderer state
   that outlives a command, after the field list of the fork's
   `src/device/state.c` `ss_render`; `../serialization.cpp` calls it.

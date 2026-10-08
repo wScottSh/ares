@@ -13,7 +13,7 @@ static auto engineLog(int level, const char* format, ...) -> void {
 }
 
 auto RDP::Engine::load() -> void {
-  if(rdp_render_init(rdram.installed())) {
+  if(rdp_render_init(rdram.installed(), Timing::Behavior::RdpPipelineDepth.units / Timing::UnitsPerRclk)) {
     debug(unusual, "[RDP engine] init failed; no pixels will be drawn");
     return;
   }

@@ -9,7 +9,7 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | measured | a hardware measurement: a test ROM result or a console capture | 35 |
 | vendor | Nintendo, NEC or SGI documentation, or a patent | 15 |
 | datasheet | a component datasheet | 8 |
-| wiki | a community reference: n64brew, or a test suite author's notes | 16 |
+| wiki | a community reference: n64brew, or a test suite author's notes | 17 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
 | derived | computed from other cited values | 8 |
 | inferred | reasoned from cited values with no measurement or published value of its own; the note states the inference | 1 |
@@ -186,7 +186,8 @@ This is the timing model's specification (map [#1](https://github.com/wScottSh/a
 | `rdp.span-2cycle` | 0.5 px/rclk | vendor | SDK Table 12-1 | `thar0:alpha-fail-2cycle` |  |
 | `rdp.fill-copy-rate` | 8 B/rclk | vendor | SDK 12.1.4/12.1.5 | `thar0:fill-mode` |  |
 | `rdp.tmem-load-rate` | 8 B/rclk | rtl | MiSTer RTL and angrylion structure; reverted cen64 law 0.418 B/clk conflicts (jgemu-dpc-probe.md) | `bench:rdp-loadsz-sweep` | conflict recorded; no vendor figure |
-| `rdp.pipeline-depth` | 25 rclk | derived | cen64 hazard fit D = min(3L-2, 25); n64brew corruption table 0-29 (rdp-command-timing.md s.3.7) | `rdpstat:nosync-1cycle` `snapper:rect-nosync` | T15 |
+| `rdp.pipeline-depth` | 25 rclk | derived | cen64 jgemu rdp_core.c:145-190 hazard fit D = min(3L-2, 25) over the snapper64 RDPRectNoSync1C/2C captures (7332/7332 rects); the combiner, which samples Set Env Color; n64brew Pipeline table combiner row 24 (1-cycle) affected cycles = D - 1 (rdp-command-timing.md s.3.7) | `rdpstat:nosync-1cycle` `snapper:rect-nosync` | T15: anchors rdp.attribute-stage; 2-cycle conflicts with the table (combiner 22 there, 24 here): the captures win |
+| `rdp.attribute-stage` | n64brew-table map | wiki | n64brew Reality_Display_Processor/Pipeline 'Effect of unsynced attribute changes', 0-29 cycles per register, 1-cycle/2-cycle (rdp-command-timing.md s.3.7); each stage lands at rdp.pipeline-depth + its offset - the combiner's (rdp_core.c rdp_haz_stage_offset) | `rdpstat:unsynced-combiner` | T15; inferred: only the combiner row and Set Env Color are checked; the 3L-2 span bound applies to every stage as cen64 fit it for the combiner; dither_alpha_en goes with alpha_compare_en; Set Convert not collected |
 | `rdp.atomic-dead` | 35 rclk | vendor | SDK pro-man 12.2.3: 30 to 40 null cycles (1prim-cost.md) | `bench:rdp-atomic-sweep` `rdpstat:1prim` | midpoint of a vendor range |
 | `rdp.span-ram-half` | 64 B | measured | snapper64 216 dumps via the cen64 DPS model (span-ram.md rows 3-5) | `snapper:span-tri` |  |
 | `rdp.span-ram-segment` | 16 B | wiki | DPS_TEST_MODE counters count 16 B segments (span-ram.md) | `snapper:span-tri` |  |
@@ -308,7 +309,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `thar0:zcmp` | thar0 | ac-zcmp-zbsame-vioff-noimrd-1cyc | - | suite | Thar0 hw_data |
 | `thar0:vi-on-separate-bank` | thar0 | zbrw-pass-zbsep-vioff-noimrd-1cyc | - | suite | plan T13: FB+ZB separate banks 225,518 |
 | `rdpstat:current-prefetch` | rdpstat | current-prefetch | - | suite | n64-systemtest rdp/mod.rs:21-23 author note, CURRENT reaches START+240 |
-| `rdpstat:nosync-1cycle` | rdpstat | nosync-1cycle | - | suite | repeater64 RDPNoSync1C, 65 references |
+| `rdpstat:nosync-1cycle` | rdpstat | nosync-1cycle | - | suite | repeater64 RDPNoSync1C, 20 console references (assets/10000000-10000013.test; the other 45 assets belong to other demos) |
 | `snapper:span-tri` | snapper | span-tri | - | suite | snapper64 RDP Test-Mode Span Tri, 216 DPS dumps |
 | `snapper:rect-nosync` | snapper | rect-nosync | - | suite | snapper64 RDPRectNoSync captures |
 | `noise:a` | noise | dataset-a | - | pass | Thar0/RDP-Noise dataset A (Unlicense): ctest noise:a, NoiseLfsr's a output from power-on equals all 1016 pixels at clock 256,586,636 (plan T14) |
@@ -323,3 +324,4 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `rdpstat:dpc-sequencing` | rdpstat | dpc | - | self | rdpstat dpc ROM: DMA_BUSY while a long list is fetched, START/END double buffer (rsp-rdp-fifo.md rows 10 and 12) |
 | `rdpstat:xbus` | rdpstat | systemtest | RDP STATUS: Run from DMEM (xbus) | self | n64-systemtest tests/rdp run_from_dmem, three DMEM placements |
 | `rdpstat:1prim` | rdpstat | 1prim | - | self | rdpstat 1prim ROM: four stacked one-row image-read rectangles, 1- and 2-cycle, 8 and 32 px; non-atomic narrow stacks retire the two-blend value, wide ones and atomic stacks the four-blend value (cen64 jgemu rdp_core.c:4551-4567, PRDP 12:15/12:16 checksums; 1prim-cost.md) |
+| `rdpstat:unsynced-combiner` | rdpstat | unsynced | - | self | rdpstat unsynced ROM: an unsynced Set Combine after a 64x4 rectangle recolors its last 24 cycles in 1-cycle, 22 in 2-cycle (n64brew Pipeline table combiner row; rdp-command-timing.md s.3.7); no console capture |

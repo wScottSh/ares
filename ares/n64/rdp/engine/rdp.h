@@ -52,9 +52,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define RDP_RDRAM_SIZE 0x800000u
 #define RDP_DMEM_SIZE  0x1000u
 
-// Initializes the renderer for rdram_size bytes of installed RDRAM.
-// Returns 0 on success.
-int rdp_render_init(uint32_t rdram_size);
+// Initializes the renderer for rdram_size bytes of installed RDRAM, with
+// pipeline_depth GCLK from the command processor to the combiner's sampling
+// of an unsynced write (rdp.pipeline-depth). Returns 0 on success.
+int rdp_render_init(uint32_t rdram_size, int32_t pipeline_depth);
 
 /* One RDRAM byte range as the renderer sees it. lo and hi are 8-aligned
  * byte addresses. data holds the bytes in ares' RDRAM layout (byte a at

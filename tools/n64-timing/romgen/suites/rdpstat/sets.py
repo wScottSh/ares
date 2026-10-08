@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass, field
 
-from . import dpc, repeater64, routines, stale, systemtest
+from . import dpc, repeater64, routines, stale, systemtest, unsynced
 
 
 @dataclass
@@ -38,4 +38,6 @@ SETS = [
            repeater64.build, repeater64.LISTS, repeater64_data),
     SetDef("1prim", "rdpstat-1prim", "RDP-1prim", "(rdpstat: span-buffer coherency, cen64 PRDP 12:15/12:16)",
            stale.build, stale.LISTS),
+    SetDef("unsynced", "rdpstat-unsynced", "RDP-unsynced", "(rdpstat: n64brew unsynced attribute table)",
+           unsynced.build, unsynced.LISTS, unsynced.data),
 ]
