@@ -6,7 +6,7 @@
 # env: N64_TIMING_HOME (ROMs go to $N64_TIMING_HOME/roms, rebuilt from this tree), N64_BUILD_DIR,
 #      REPEATER64_ASSETS (rdpstat repeater64 references), PIDMA_DIR (a rasky/n64_pi_dma_test
 #      checkout: its prebuilt pi_dma_test.z64, pinned below, and the golden logs in data/)
-#      build-systembench.sh needs docker; without it the systembench checks are pending:no-rom
+#      build-systembench-era.sh and build-systembench.sh need docker; without it the systembench checks are pending:no-rom
 set -uo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,9 +23,11 @@ for s in nemu64 rdpstat snapper thar0 noise; do
 done
 rm -rf "$roms/bench" "$results/bench"
 (cd "$n64_repo" && "$PYTHON" tools/n64-timing/romgen/build.py --suite bench --out "$roms/bench") > "$out/romgen-bench.txt" 2>&1
-rm -rf "$roms/systembench"
-OUT="$roms/systembench" SYSBENCH_STAGE="$N64_TIMING_HOME/systembench-stage" "$here/build-systembench.sh" \
+rm -rf "$roms/systembench" "$roms/systembench-845635c"
+OUT="$roms/systembench" SYSBENCH_STAGE="$N64_TIMING_HOME/systembench-stage" "$here/build-systembench-era.sh" 2023 \
   > "$out/build-systembench.txt" 2>&1 || rm -rf "$roms/systembench"
+OUT="$roms/systembench-845635c" SYSBENCH_STAGE="$N64_TIMING_HOME/systembench-845635c-stage" "$here/build-systembench.sh" \
+  > "$out/build-systembench-845635c.txt" 2>&1 || rm -rf "$roms/systembench-845635c"
 (cd "$roms" && find . -name '*.z64' | sort | xargs sha256sum) > "$out/rom-sha256.txt"
 
 uptime > "$out/load-start.txt"
@@ -38,6 +40,8 @@ uptime > "$out/load-start.txt"
 "$here/romgen/suites/noise/run.sh" > "$out/noise.txt" 2>&1
 "$here/run-thar0.sh" > "$out/thar0.txt" 2>&1
 [ -d "$roms/systembench" ] && SYSBENCH_ROMS="$roms/systembench" "$here/systembench/run.sh" > "$out/systembench.txt" 2>&1
+[ -d "$roms/systembench-845635c" ] && SYSBENCH_ROMS="$roms/systembench-845635c" SYSBENCH_RESULTS="$results/systembench-845635c" \
+  "$here/systembench/run.sh" > "$out/systembench-845635c.txt" 2>&1
 pidma="${PIDMA_DIR:-$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test}"
 mkdir -p "$out/pidma"
 if echo "1d2c999c42baa57b9c16a21c0bd75b984901ee615ab30482fdec6ed7fcf156cb  $pidma/pi_dma_test.z64" \
@@ -48,7 +52,7 @@ if echo "1d2c999c42baa57b9c16a21c0bd75b984901ee615ab30482fdec6ed7fcf156cb  $pidm
     > "$out/pidma/summary.txt" 2>&1
   rm -f "$out/pidma/pi.log"
 fi
-for suite in nemu64 bench systembench rdpstat snapper noise thar0; do
+for suite in nemu64 bench systembench systembench-845635c rdpstat snapper noise thar0; do
   rm -rf "$out/$suite"
   cp -r "$results/$suite" "$out/$suite"
 done
