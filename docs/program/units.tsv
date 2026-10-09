@@ -44,3 +44,49 @@ t8	build	landed	feat/t8	57	808e5f54
 labels-t6	tools	landed		55		
 verify-56	verify	done				
 verify-57	verify	done				
+l0	build	landed	feat/l0	60	4ee9e1bf	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-60	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t7b	build	landed	feat/t7b	61	964ef157	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-61	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t7c	build	landed	feat/t7c	62	e0be4dfd	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+t11	build	landed	feat/t11	63	020b1ce6	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-62	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t7d	build	landed	feat/t7d	65	84e19521	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+cop0order	tools	landed	feat/cop0order	64	0df9ede7	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-64	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-63	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t11-fix	build	done	feat/t11			/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-65	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-63b	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+labels-cpu	tools	landed	feat/labels-cpu	66	6fe477d2	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+t11-merge	build	done	feat/t11			/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-66	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-63c	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+labels-merge	tools	done	feat/labels-cpu			/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+t13	build	landed	feat/t13	67	22971fe0	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-66b	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-67	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t14	build	landed	feat/t14	68	8fdf76eb	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+t15	build	landed	feat/t15	69	57f995de	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+t13-fix	build	landed	feat/t13-fix	70	865ed075	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-69	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-68	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-70	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t16	build	landed	feat/t16	71	04e450e5	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-71	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t17	build	landed	feat/t17	72	ff7409b1	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-72	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+t17-fix	build	landed	feat/t17-fix	73	9c9b6e11	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-73	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+not-built	build	landed	feat/not-built	74	ec4a5fa5	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-74	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+sysbench	build	landed	feat/sysbench	75	8db33c42	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-75	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+sysbench2	build	landed	feat/sysbench2	76	1bfc59b0	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-76	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+phase	tools	landed	feat/phase	78	584b9fda	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-78	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+labels-phase	tools	landed	feat/labels-phase	79	120398a0	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-79	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+pif-joy	build	landed	feat/pif-joy	80	33ad9d4f	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-80	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
