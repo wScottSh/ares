@@ -203,8 +203,13 @@ def captures(root=ROOT):
 
 
 def result(root, run_dir, qid):
-    """The hw:<qid> check's result for behaviors.py --results: a pending gate until a capture of its
-    kit ROM is ingested, then pass or fail against the fork's run of the same ROM."""
+    """The hw:<qid> check's result for behaviors.py --results, from a standing run's calib/ directory."""
+    return result_from(root, Path(run_dir) / "calib", qid)
+
+
+def result_from(root, model_dir, qid):
+    """A pending gate until a capture of the question's kit ROM is ingested, then pass or fail against
+    the fork's run of the same ROM in model_dir (a calibration/run.sh output)."""
     q = next((q for q in questions(root) if q["id"] == qid), None)
     if q is None:
         return None
@@ -215,8 +220,8 @@ def result(root, run_dir, qid):
     logs = [log for log in hw.get(kit, []) if log.complete]
     if not logs:
         return "pending:calibration-16", f"no complete console capture of {kit} in {HARDWARE}"
-    model = [m for m in model_logs(Path(run_dir) / "calib", kit) if m.complete]
+    model = [m for m in model_logs(model_dir, kit) if m.complete]
     if not model:
-        return "missing", f"no fork run of {kit} in {Path(run_dir) / 'calib'}; run tools/n64-timing/calibration/run.sh there"
+        return "missing", f"no fork run of {kit} in {model_dir}; run tools/n64-timing/calibration/run.sh there"
     res, detail = compare(q, logs, model)
     return res, f"{detail}; capture {','.join(ids)}, {len(logs)} console and {len(model)} fork logs"

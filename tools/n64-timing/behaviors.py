@@ -11,6 +11,13 @@ usage: behaviors.py                 write ares/n64/timing/behaviors.hpp, docs/sp
                                     check, from one standing run of every suite
        behaviors.py --self-test     prove each --check failure fires and names its fix
 
+The console calibration (#16): tools/n64-timing/calibration/questions.tsv lists every question a
+console run answers, with the kit ROM that measures it. A row a console run decides names it as
+hw:<question> in its verify column; until a capture is ingested
+(tools/n64-timing/calibration/ingest.py) that check is pending:calibration-16. behaviors.py also
+writes docs/calibration/inventory.md, the question table joined with every row and check the
+hardware could decide.
+
 behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note, code.
 Every row names a reference and at least one check, and says where the code builds it. A
 row with a number is built when code reads it as Timing::Behavior::<Name>, and a legacy row
@@ -57,6 +64,8 @@ HEADER = "ares/n64/timing/behaviors.hpp"
 SPEC = "docs/spec/n64-timing.md"
 RESULTS = "docs/spec/n64-timing-results.tsv"
 CLOSURE = "docs/spec/map-1-closure-draft.md"
+INVENTORY = "docs/calibration/inventory.md"
+KIT = "tools/n64-timing/calibration/kit.py"
 LINT = "tools/n64-timing/lint-literals.py"
 COLUMNS = ["id", "value", "unit", "basis", "reference", "verify", "fit-from", "note", "code"]
 CHECK_COLUMNS = ["id", "runner", "target", "selector", "expect", "source"]
@@ -83,7 +92,7 @@ NUMBER_UNITS = {"Hz", "B", "entries", "dwords", "px", "lines", "instr", "rank", 
 FLAG_UNITS = {"flag"}
 TEXT_UNITS = {"order", "map", "rule", "event"}
 RUNNERS = {"nemu64", "bench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",
-           "mm", "det", "stepcap", "unit", "gen", "pending", "harness"}
+           "mm", "det", "stepcap", "unit", "gen", "pending", "harness", "hw"}
 BARE_RUNNERS = {"det", "stepcap", "gen"}
 GUARD_RUNNERS = {"det", "stepcap"}
 EXPECT = re.compile(r"^(self|suite|report|equal|pass|gate|file:\S+|-?[\d.]+)$")
@@ -249,9 +258,12 @@ def verify_checks(row):
 
 
 def decides(cid, explicit, suite_files):
-    """False for a check that cannot fail: a pending gate, or a report with no asserted row."""
+    """False for a check that cannot fail: a pending gate, a report with no asserted row, or a hardware
+    check, which decides nothing until a console capture is ingested."""
     row = explicit.get(cid)
     prefix, _, rest = cid.partition(":")
+    if prefix == "hw":
+        return False
     if row is None:
         rows = suite_matches(suite_files[prefix], rest, "-") if prefix in suite_files else []
     elif row["expect"] == "suite" and prefix in suite_files:
@@ -507,11 +519,16 @@ def check_cell(cid):
     return f"pending ({cid[8:]})" if cid.startswith("pending:") else f"`{cid}`"
 
 
-def checks_cell(row):
+def hw_decided(row, found):
+    """True when a hardware check of the row has a console result, which ends a verify-is-fit note."""
+    return any(c.startswith("hw:") and found.get(c, ("",))[0] in ("pass", "fail") for c, _ in verify_checks(row))
+
+
+def checks_cell(row, found=None):
     text = " ".join(check_cell(c) for c in row["verify"].split())
     if row["fit-from"]:
         text += " (fit from " + " ".join(check_cell(c) for c in row["fit-from"].split()) + ")"
-    if VERIFY_IS_FIT.match(row["note"]):
+    if VERIFY_IS_FIT.match(row["note"]) and not (found and hw_decided(row, found)):
         text = "**fit only, no independent check:** " + text
     return text
 
@@ -620,7 +637,7 @@ def render_spec(rows, checks, found):
                 "|---|---|---|---|---|---|---|---|"]
         for r in members:
             out.append(f"| `{r['id']}` | {value_cell(r)} | {r['basis']} | {cell(r['reference'])} | "
-                       f"{checks_cell(r)} | {cell(result_cell(r, found))} | {code_cell(r)} | {cell(r['note'])} |")
+                       f"{checks_cell(r, found)} | {cell(result_cell(r, found))} | {code_cell(r)} | {cell(r['note'])} |")
     unbuilt = [r for r in rows if not_built(r)]
     out += ["", "## Not built", ""] + ([
             "The code does not use these rows' values. Each says what the code does instead; their checks measure that code.", "",
@@ -786,9 +803,123 @@ def render_closure(root, rows, checks, found):
 
 def generated(root):
     errors, rows, checks, sites = validate(root)
+    errors += calibration_errors(root, rows, checks)
     found = load_results(root, rows, checks, errors)
     return errors, {HEADER: render_header(rows), SPEC: render_spec(rows, checks, found),
-                    CLOSURE: render_closure(root, rows, checks, found)}
+                    CLOSURE: render_closure(root, rows, checks, found),
+                    INVENTORY: render_inventory(root, rows, checks, found)}
+
+
+def calibration_errors(root, rows, checks):
+    """The calibration inventory's rules: no row waits on calibration #16 without a kit question that
+    measures it, every question names a kit ROM (or says why none exists), a valid rule, and only
+    rows, checks or issues in its closes column; a row's hw check is one its question closes."""
+    errors = []
+    kit = kit_module(root)
+    qs = {q["id"]: q for q in question_rows(root)}
+    _, explicit, _, suite_files = load_checks(root, [])
+    ids = {r["id"] for r in rows}
+    for r in rows:
+        where = f"{TABLE}:{r['line']}"
+        for cid, _ in verify_checks(r):
+            if cid == "pending:calibration-16":
+                errors.append(f"{where}: `{r['id']}` waits on pending:calibration-16 with no kit test. Name the "
+                              f"hw:<question> that measures it on the console; add the question to "
+                              f"tools/n64-timing/calibration/questions.tsv and its points to a kit ROM if none does.")
+            elif cid.startswith("hw:"):
+                q = qs.get(cid[3:])
+                if q is None:
+                    continue
+                if q["kit"] not in kit.KIT_ROMS:
+                    errors.append(f"{where}: `{r['id']}` names {cid}, whose kit is `{q['kit']}`, not an in-repo kit ROM "
+                                  f"({', '.join(kit.KIT_ROMS)}). A row's hardware check needs a ROM ingestion can compare.")
+                if r["id"] not in q["closes"].split():
+                    errors.append(f"{where}: `{r['id']}` names {cid}, but the question's closes column does not list it. "
+                                  f"Add `{r['id']}` there.")
+    for q in qs.values():
+        where = f"tools/n64-timing/calibration/questions.tsv:{q['line']}"
+        if q["kit"] not in kit.KIT_ROMS and not q["kit"].startswith(("ext:", "none: ")):
+            errors.append(f"{where}: kit `{q['kit']}` is not a kit ROM ({', '.join(kit.KIT_ROMS)}), `ext:<rom>` or "
+                          f"`none: <reason>`")
+        if not kit.RULE.match(q.get("rule", "")) or (q["kit"] in kit.KIT_ROMS) == (q.get("rule") == "-"):
+            errors.append(f"{where}: rule `{q.get('rule')}` must be exact or range:abs|rel:<tolerance> for a kit ROM "
+                          f"question, `-` otherwise")
+        for c in q["closes"].split():
+            if c != "-" and c not in ids and not check_defined(c, explicit, suite_files) and not re.match(r"^#\d+$", c):
+                errors.append(f"{where}: closes `{c}`, which is no behavior row, check or #issue")
+    return errors
+
+
+def question_links(root):
+    """Behavior row or check id -> the questions that close it."""
+    out = {}
+    for q in question_rows(root):
+        for c in q["closes"].split():
+            out.setdefault(c, []).append(q["id"])
+    return out
+
+
+def render_inventory(root, rows, checks, found):
+    qs = question_rows(root)
+    links = question_links(root)
+    kit = kit_module(root)
+    _, explicit, _, suite_files = load_checks(root, [])
+    asked = lambda key: ", ".join(f"`hw:{q}`" for q in links.get(key, [])) or "**no kit question**"  # noqa: E731
+    out = [
+        f"<!-- GENERATED by tools/n64-timing/behaviors.py from tools/n64-timing/calibration/questions.tsv, {TABLE}, "
+        f"{CHECKS} and {RESULTS}. Do not edit; behaviors.py --check fails on any manual change. -->",
+        "",
+        "# Calibration inventory",
+        "",
+        "Every question a console run can answer for the timing model (calibration #16), the kit ROM that measures "
+        "it, and the spec rows and checks its answer closes. [hardware-run.md](hardware-run.md) is the procedure. "
+        "A question's result is its `hw:<id>` check: pending:calibration-16 until "
+        "`tools/n64-timing/calibration/ingest.py` stores a console capture, then pass when the console's values "
+        "fall in the fork's range over its boot delays under the question's rule, fail otherwise. "
+        f"Kit ROMs: {', '.join(f'`{k}`' for k in kit.KIT_ROMS)}. `ext:` names a ROM outside the repository "
+        "that the procedure runs and a person compares; `none:` is a question with no kit ROM yet.",
+        "",
+        "## Questions",
+        "",
+        "| Question | Asks | Decided by | Kit ROM | Points | Output | Rule | Closes | Result |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for q in qs:
+        res = found.get(f"hw:{q['id']}", ("missing", ""))
+        output = f"{q['metric']} per point" if q["metric"] != "-" else "-"
+        out.append(f"| `{q['id']}` | {cell(q['question'])} | {cell(q['decides'])} | {cell(q['kit'])} | "
+                   f"{cell(q['points'])} | {cell(output)} | {cell(q['rule'])} | "
+                   f"{' '.join(f'`{c}`' for c in q['closes'].split())} | {res[0]} |")
+    status = {r["id"]: row_status(r, found) for r in rows}
+    sections = [
+        ("Rows pending calibration #16", "Rows whose checks wait on the console run.",
+         [r for r in rows if "pending:calibration-16" in status[r["id"]]]),
+        ("Fit-only rows", "Rows whose only passing checks are their own fit data.",
+         [r for r in rows if status[r["id"]] == "fit only"]),
+        ("Model-choice rows", "Rows with no published value: the console decides the choice.",
+         [r for r in rows if r["basis"] == "model-choice"]),
+        ("Rows pending a report-only check", "Rows whose deciding check reports a number and asserts none.",
+         [r for r in rows if "pending:report-only" in status[r["id"]]]),
+    ]
+    for title, intro, chosen in sections:
+        out += ["", f"## {title}", "", f"{intro} {len(chosen)} rows, {sum(1 for r in chosen if r['id'] in links)} "
+                f"with a kit question.", "", "| Behavior | Status | Checks | Question |", "|---|---|---|---|"]
+        out += [f"| `{r['id']}` | {status[r['id']]} | {cell(' '.join(r['verify'].split()))} | {asked(r['id'])} |"
+                for r in chosen]
+    weak = [(c, found[c]) for c in sorted(found) if c != "#source" and not c.startswith("hw:") and
+            (found[c][0] == "fail" or WEAK.match(found[c][0]))]
+    out += ["", "## Failing and weakly passing checks", "",
+            f"Checks that fail, pass only consistent with the console, or pass on a model choice. Each residual's "
+            f"cause is open until a console measurement isolates it. {len(weak)} checks, "
+            f"{sum(1 for c, _ in weak if c in links)} with a kit question.", "",
+            "| Check | Result | Detail | Question |", "|---|---|---|---|"]
+    out += [f"| `{c}` | {r} | {cell(d[:200])} | {asked(c)} |" for c, (r, d) in weak]
+    gaps = [q for q in qs if q["kit"].startswith(("ext:", "none"))]
+    out += ["", "## Questions without an in-repo kit ROM", "",
+            "These run outside the kit's mechanical comparison: an external ROM the procedure names, or no ROM yet.",
+            "", "| Question | Kit | Closes |", "|---|---|---|"]
+    out += [f"| `{q['id']}` | {cell(q['kit'])} | {' '.join(f'`{c}`' for c in q['closes'].split())} |" for q in gaps]
+    return "\n".join(out) + "\n"
 
 
 def check(root):
@@ -1034,7 +1165,10 @@ CONDITION = re.compile(r"^(-|#\d+)$")
 
 
 def gate_for(row, explicit, suite_files, built):
-    """The gate that keeps a check from deciding anything, or None when it can run and decide."""
+    """The gate that keeps a check from deciding anything, or None when it can run and decide. A
+    hardware check's reader returns its own gate (calibration/kit.py result)."""
+    if row["runner"] == "hw":
+        return None
     if not decides(row["id"], explicit, suite_files):
         return "pending:report-only"
     pattern = ROM_FILES.get(row["runner"])
@@ -1043,10 +1177,28 @@ def gate_for(row, explicit, suite_files, built):
     return None
 
 
-def referenced_checks(rows, checks):
-    """Every check a behavior names, and every harness check (it guards the measuring tools, not a behavior)."""
+def kit_module(root):
+    spec = importlib.util.spec_from_file_location("calibration_kit", Path(root) / KIT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def question_rows(root):
+    path = Path(root) / "tools/n64-timing/calibration/questions.tsv"
+    if not path.exists():
+        return []
+    lines = [l for l in path.read_text(encoding="utf-8").split("\n") if l]
+    head = lines[0].split("\t")
+    return [dict(zip(head, l.split("\t")), line=n) for n, l in enumerate(lines[1:], 2)]
+
+
+def referenced_checks(rows, checks, root=None):
+    """Every check a behavior names, every harness check (it guards the measuring tools, not a behavior),
+    and every hardware question (each one is a result of the calibration run, named by a row or not)."""
     named = {c.lstrip("~") for r in rows for c in (r["verify"] + " " + r["fit-from"]).split()}
-    return sorted(named | {c["id"] for c in checks if c["runner"] == "harness"})
+    hw = {f"hw:{q['id']}" for q in question_rows(root)} if root else set()
+    return sorted(named | hw | {c["id"] for c in checks if c["runner"] == "harness"})
 
 
 def results(root, run):
@@ -1056,12 +1208,14 @@ def results(root, run):
     run = Path(run)
     built = set((text(run / "rom-sha256.txt") or "").split())
     out = []
-    for cid in referenced_checks(rows, checks):
+    kit = kit_module(root)
+    readers = dict(READERS, hw=lambda run, row: kit.result(root, run, row["target"]))
+    for cid in referenced_checks(rows, checks, root):
         if cid.startswith("pending:"):
             continue
         prefix, _, rest = cid.partition(":")
         row = explicit.get(cid) or {"id": cid, "runner": prefix, "target": rest, "selector": "-", "expect": "suite"}
-        measured = READERS[row["runner"]](run, row)
+        measured = readers[row["runner"]](run, row)
         gate = gate_for(row, explicit, suite_files, built)
         if gate:
             result, detail = gate, (measured[1] if measured else "")
@@ -1103,7 +1257,7 @@ def load_results(root, rows, checks, errors):
                           f"rerun the check, or name the gate that keeps it from running.")
         elif result.startswith("pending:") and result not in gates:
             errors.append(f"{RESULTS}: `{cid}` is {result}, which is not a pending row in {CHECKS}. Add the gate there.")
-    wanted = [c for c in referenced_checks(rows, checks) if not c.startswith("pending:")]
+    wanted = [c for c in referenced_checks(rows, checks, root) if not c.startswith("pending:")]
     for cid in wanted:
         if cid not in found:
             errors.append(f"{RESULTS}: check `{cid}` has no result. Rerun tools/n64-timing/behaviors.py --results "
@@ -1143,7 +1297,8 @@ def self_test(root):
         shutil.copytree(root / "ares/n64", work / "ares/n64")
         shutil.copytree(root / "tools/n64-timing", work / "tools/n64-timing", ignore=shutil.ignore_patterns("__pycache__"))
         (work / SPEC).parent.mkdir(parents=True)
-        for rel in (SPEC, RESULTS, CLOSURE):
+        (work / INVENTORY).parent.mkdir(parents=True)
+        for rel in (SPEC, RESULTS, CLOSURE, INVENTORY):
             shutil.copy(root / rel, work / rel)
 
         def edit(rel, change):
@@ -1181,6 +1336,14 @@ def self_test(root):
             landed = False
         cases = [
             ("the committed tree", None, None, None),
+            ("a row waiting on calibration #16 with no kit test", TABLE, row_field("cpu.dcb", "verify", "pending:calibration-16"),
+             "waits on pending:calibration-16 with no kit test. Name the hw:<question>"),
+            ("a hardware check its question does not close", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:dcb"),
+             "but the question's closes column does not list it"),
+            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:ri-priority"),
+             "not an in-repo kit ROM"),
+            ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
+             lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
             ("an inferred row without its inference", TABLE, row_field("cpu.ifill-stall", "note", ""),
              "inferred row `cpu.ifill-stall` has no note. State the inference"),
             ("removing a reference", TABLE, row_field("ri.read-hit", "reference", ""), "has no reference. Cite the hardware reference"),
