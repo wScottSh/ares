@@ -39,14 +39,17 @@ def suite_sets(name):
         raise SystemExit(f"unknown suite {name}")
 
 
-def runtime_text(extra_asm):
-    return "\n".join([runtime.RUNTIME] + extra_asm)
+def runtime_text(extra_asm, consts):
+    text = runtime.RUNTIME
+    if "BOOT_DELAY" in consts:
+        text = text.replace("\nboot:\n", "\nboot:\n" + runtime.BOOT_DELAY_LOOP, 1)
+    return "\n".join([text] + extra_asm)
 
 
 def build_payload(set_def):
     suite = Suite(set_def.rom_name, set_def.category, set_def.banner_flags)
     extra = list(set_def.asm)
-    base_text = runtime_text(extra)
+    base_text = runtime_text(extra, set_def.consts)
     probe = mips.Image(runtime.PAYLOAD_BASE).asm(base_text, **runtime.CONSTS, **set_def.consts)
     suite.symbols = probe.layout()
     set_def.build(suite)
@@ -99,9 +102,10 @@ def main():
         suite, payload = build_payload(set_def)
         rom = make_rom(ipl3, payload)
         path = os.path.join(args.out, f"{set_def.rom_name}.z64")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             f.write(rom)
-        with open(os.path.join(args.out, f"{set_def.rom_name}.tests.tsv"), "w",
+        with open(path[:-len(".z64")] + ".tests.tsv", "w",
                   encoding="utf-8", newline="\n") as f:
             f.write("index\ttest\tvalue\texpected_cycles\n")
             for ti, t in enumerate(suite.tests):

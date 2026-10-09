@@ -111,6 +111,17 @@ def vector_image(exc_generic):
     return bytes(data)
 
 
+# A counted loop at the ROM entry for suites that walk boot phase (suites/bench/phases.py).
+# build.py inserts it when the set defines BOOT_DELAY. li is always two words, so every delay
+# keeps the same code layout and only the start time moves.
+BOOT_DELAY_LOOP = """
+    li $t0, BOOT_DELAY
+boot_delay:
+    addiu $t0, $t0, -1
+    bnez $t0, boot_delay
+    nop
+"""
+
 RUNTIME = r"""
 _start:
     j boot

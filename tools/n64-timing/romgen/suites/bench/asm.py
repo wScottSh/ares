@@ -475,8 +475,9 @@ bh_done:
 
 # a0 = {kernel, reps, flags, kernel args...}: n64-systembench's TIMEIT_MULTI (main.c:105-127),
 # which averages all reps but its lowest and highest. RES[0] = min ticks, RES[1] = max ticks,
-# RES[2] = sum of ticks over the reps; the host takes (sum - min - max) / (reps - 2). The
-# kernel gets a0 = &args, a1 = &RES[3] and a2 = reps left less one (reps - 1 down to 0), and
+# RES[2] = sum of ticks over the reps; the host takes (sum - min - max) / (reps - 2).
+# RES[3] = the second highest rep, the highest TIMEIT_MULTI keeps (the highest is usually the
+# cold first rep). The kernel gets a0 = &args, a1 = &RES[4] and a2 = reps left less one (reps - 1 down to 0), and
 # returns v0 = COUNT ticks. flags as bench_run.
 bench_multi:
     addiu $sp, $sp, -48
@@ -491,6 +492,7 @@ bench_multi:
     sw $t0, 0($s3)
     sw $zero, 4($s3)
     sw $zero, 8($s3)
+    sw $zero, 12($s3)
     lw $s1, 4($s0)
     lw $t0, 8($s0)
     andi $t0, $t0, 1
@@ -504,7 +506,7 @@ bm_loop:
     addiu $a0, $s0, 12
     addiu $a2, $s1, -1
     jalr $t9
-    addiu $a1, $s3, 12
+    addiu $a1, $s3, 16
     lw $t0, 8($s3)
     addu $t0, $t0, $v0
     sw $t0, 8($s3)
@@ -518,8 +520,15 @@ bm_nomin:
     sltu $t1, $t0, $v0
     beqz $t1, bm_nomax
     nop
+    sw $t0, 12($s3)
+    b bm_next
     sw $v0, 4($s3)
 bm_nomax:
+    lw $t0, 12($s3)
+    sltu $t1, $t0, $v0
+    bnezl $t1, bm_next
+    sw $v0, 12($s3)
+bm_next:
     addiu $s1, $s1, -1
     bnez $s1, bm_loop
     nop
@@ -609,9 +618,10 @@ k_sb_lw4:
     jr $ra
     subu $v0, $t6, $t4
 
-# Kernel. args = {setup reg (0 = none), setup value, stmt reg, stmt value, poll reg, jitter}.
-# n64-systembench TIMEIT_WHILE (main.c:75-103), as bench_piiow, bench_sidmaw_{ram,rom} and
-# bench_siiow (main.c:187-227) with cond `reg & (DMA_BUSY | IO_BUSY)`: the setup write, COUNT,
+# Kernel. args = {setup reg (0 = none), setup value, second setup reg (0 = none), its value,
+# stmt reg, stmt value, poll reg, jitter}.
+# n64-systembench TIMEIT_WHILE (main.c:75-103), as bench_pidma, bench_piiow, bench_sidmaw_{ram,rom} and
+# bench_siiow (main.c:172-227) with cond `reg & (DMA_BUSY | IO_BUSY)`: the setup writes, COUNT,
 # the stmt write, then a loop of 8 x (COUNT, poll read) that runs until the 8th poll sees idle.
 # The result ends at the COUNT before the first poll that saw idle.
 # Between the stmt and the polls the kernel runs a2 x jitter nops. The result can only end on
@@ -630,18 +640,23 @@ k_sb_while:
     sd $s6, 48($sp)
     sd $s7, 56($sp)
     lw $a3, 4($a0)
-    lw $v1, 8($a0)
-    lw $v0, 12($a0)
-    lw $t9, 16($a0)
-    lw $t8, 20($a0)
+    lw $v1, 16($a0)
+    lw $v0, 20($a0)
+    lw $t9, 24($a0)
+    lw $t8, 28($a0)
     multu $a2, $t8
     mflo $t8
     sll $t8, $t8, 2
     la $t7, ksw_sled_end
     subu $t7, $t7, $t8
     lw $a2, 0($a0)
-    beqz $a2, ksw_go
+    beqz $a2, ksw_setup2
     nop
+    sw $a3, 0($a2)
+ksw_setup2:
+    lw $a2, 8($a0)
+    beqz $a2, ksw_go
+    lw $a3, 12($a0)
     sw $a3, 0($a2)
 ksw_go:
     mfc0 $t0, $count
