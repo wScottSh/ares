@@ -136,7 +136,7 @@ def read_logs(paths):
     out = {}
     for path in paths:
         data = Path(path).read_bytes()
-        if b"#kit rom=" not in data and b"k#ti" in data:
+        if b"#kit rom=" not in data and b"tik#" in data:
             data = b"".join(data[i:i + 4][::-1] for i in range(0, len(data), 4))
         log = Log(data.rstrip(b"\0"))
         if log.rom:
