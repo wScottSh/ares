@@ -219,6 +219,27 @@ tools/n64-timing/run-thar0.sh
 
 `run-thar0.sh` writes `stdout.txt`, `stderr.txt`, `compare.tsv` and `summary.txt` under `$N64_TIMING_HOME/results/thar0/`. See [romgen/suites/thar0/README.md](romgen/suites/thar0/README.md).
 
+## n64-systembench, the original ROM
+
+```sh
+tools/n64-timing/build-systembench.sh      # docker; writes $N64_TIMING_HOME/systembench (OUT overrides)
+tools/n64-timing/systembench/run.sh        # SYSBENCH_ROMS overrides the ROM directory
+python tools/n64-timing/systembench/compare.py $N64_TIMING_HOME/results/systembench/results.tsv \
+  $N64_TIMING_HOME/results/bench/results.tsv   # original vs romgen port vs hardware, per row
+```
+
+`build-systembench.sh` builds rasky/n64-systembench `845635c` with libdragon `preview` `cc490afe0` in the libdragon preview toolchain image, pinned by digest (GCC 16.2). It writes `n64-systembench.z64` and `.elf`, 32 `boot-<K>/n64-systembench.z64` ROMs and `provenance.txt` with the sha256s. Two builds of the same inputs are byte-identical. n64-systembench has no license file, so its source and ROM stay outside the repo; libdragon is public domain (Unlicense). `standing.sh` builds the ROMs into `$N64_TIMING_HOME/roms/systembench`; without docker the `systembench:*` checks are `pending:no-rom`.
+
+A `boot-<K>` ROM counts down K iterations in libdragon's `_start` before `main`. It pads `_start` so that every later address moves by exactly 2 KiB at every K, so the boot-delay ROMs share one code and data layout. That layout is the unpadded ROM's moved by one RDRAM row.
+
+The ROM prints its table through ISViewer, which `n64-run` writes to stdout. `run.sh` runs the unpadded ROM and every boot-delay ROM. `report.py` parses each `*** NAME [QTY]` block and applies main.c's own rule to every run: within the sampling error (1 CPU cycle, or 2 RCP cycles) or under 0.2 % (main.c:17-18, 664-669). The expected value is the one the ROM prints, compiled into main.c. `rows.tsv` names each benchmark, its romgen port and whether it is a check. `results.tsv` gives the unpadded value, the range over every run and the verdict: `pass` when every run passes, `consistent-only` when only some do, `fail` when none do.
+
+What the comparison can and cannot show:
+
+- The hardware numbers came from 2022-08 builds (most rows) and a 2023-01 build (the SI DMA and JOY rows), made with that era's toolchain (GCC 12) and the vendored libdragon. `845635c` builds against today's libdragon and GCC 16.2. Its timed loops are fixed by volatile accesses and `TICKS_READ`, so their instruction sequence is very likely the same (inferred). Code and data addresses do differ.
+- `rambuf`'s address is one such difference. In this build it starts 0x200 bytes below a 2 KiB RDRAM row boundary, so U32R rand (+1024, +12, +568, +912) crosses rows and PI DMA 1 KiB spans two rows. A build with `rambuf` aligned to 2 KiB reads U32R rand 133 and PI DMA 1 KiB 12170, against 151 and 12185 unaligned. Where the hardware build's `rambuf` was is not known.
+- 4b538eb (2024-05) rewrote TIMEIT_MULTI's averaging after the hardware numbers were taken and left the expected values unchanged.
+
 ## Self-test without the corpus
 
 `make-emux-smoke-rom.py` builds a ROM that prints one line through emux `XLOG` and then requests an emux exit. It uses libdragon's public-domain `ipl3_compat.z64` as boot code.

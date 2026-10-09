@@ -1,4 +1,4 @@
-# standing run pif-joy/after on c4614ed03
+# standing run systembench/after on 9ed43d6ef
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -12,7 +12,6 @@ bench:pi-dma-sizes-128	pass	cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.
 bench:pi-dma-sizes-65536	pass	cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778338.0 mean 778338.375 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass
 bench:pi-dma-sizes-8	consistent-only	cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193, 191.07..194.93, consistent, window ±4.8%, mean rule fail) consistent-only
 bench:pi-io-read	pass	rom-word sb_rclk 143 (expected 144, 142..146, consistent, window ±1.4%, mean rule pass) pass
-bench:pi-io-write	pass	rom-word sb_rclk 125.33..142.67 median 133.0 mean 133.0 (expected 134, 132..136, consistent, window ±8.0%, mean rule pass) pass
 bench:pif-ram-read	pass	pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948, consistent, window ±0.2%, mean rule pass) pass
 bench:rcp-reg-read	pass	vi-control net_pclk 22 (expected 22, 21..23, consistent, window ±4.5%, mean rule pass) pass
 bench:rdp-atomic-sweep	pass	atomic1-64 per_prim_extra_clk 34.391 (expected 35, 30..40, every) pass
@@ -20,7 +19,6 @@ bench:rdp-loadsz-sweep	pending:report-only
 bench:rdp-rectn	pending:report-only	rect-320x6 clock 2069 (expected 2021) report; duty-320x240 clock 77885 (expected 80287) report
 bench:rdp-setter-sweep	pass	4 of 4 points pass
 bench:rdp-sync-sweep	pass	pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5, every) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5, every) pass; load-256 per_sync_clk 25.051..25.117 median 25.051 mean 25.053 (expected 25, 24.5..25.5, every) pass
-bench:si-dma	pass	write64 sb_rclk 4058.67..4073.33 median 4066.0 mean 4066.0 (expected 4065, 4056.87..4073.13, consistent, window ±0.4%, mean rule pass) pass
 bench:si-dma-accessory	pass	accessory sb_rclk 36865 (expected 36834, 36760.332..36907.668, consistent, window ±0.2%, mean rule pass) pass
 bench:si-dma-empty-0b	pass	empty-0b sb_rclk 15025 (expected 15030, 14999.94..15060.06, consistent, window ±0.2%, mean rule pass) pass
 bench:si-dma-empty-1b	pass	empty-1b sb_rclk 16429 (expected 16424, 16391.152..16456.848, consistent, window ±0.2%, mean rule pass) pass
@@ -33,8 +31,6 @@ bench:si-dma-read64-1	pass	read64-1 sb_rclk 37992 (expected 37987, 37911.026..38
 bench:si-dma-read64-2	pending:report-only	read64-2 sb_rclk 57977 (expected 57972) report
 bench:si-dma-read64-3	pending:report-only	read64-3 sb_rclk 77962 (expected 77924) report
 bench:si-dma-read64-4	pending:report-only	read64-4 sb_rclk 97948 (expected 97890) report
-bench:si-dma-write64-rom	pass	write64-rom sb_rclk 2136.0..2149.33 median 2143.0 mean 2143.0 (expected 2144, 2139.712..2148.288, consistent, window ±0.5%, mean rule pass) pass
-bench:si-io-write	pass	pif-ram sb_rclk 2149.33..2166.67 median 2158.0 mean 2158.0 (expected 2158, 2153.684..2162.316, consistent, window ±0.6%, mean rule pass) pass
 bench:sp-dma-sweep	fail	wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 6.5, 6.49..6.515, mean) fail
 bench:uncached-sizes	pass	u64 net_pclk 35 (expected 35, 34..36, consistent, window ±2.9%, mean rule pass) pass
 bench:uncached-sizes-u32	pass	u32 net_pclk 32 (expected 32, 31..33, consistent, window ±3.1%, mean rule pass) pass
@@ -168,6 +164,35 @@ rdpstat:xbus	pass	3 of 3 tests pass
 snapper:rect-nosync	pass	RDP Rect No-Sync-Env 1C: 20/20 match; RDP Rect No-Sync-Env 2C: 40/40 match; RDP Rect No-Sync-Fill: 20/20 match
 snapper:span-tri	pass	RDP Test-Mode - Span Tri: 432/432 match
 stepcap	pass	stepcap-mm: stepcap: PASS, 29 files byte-identical, 8219 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 25 fields with trace_hash
+systembench:joy-1j	pass	JOY: 1J [64] 37992 RCP cycles (hardware 37987, +5, +0.01%); main.c rule holds in 33 of 33 runs
+systembench:joy-2j	pending:report-only	JOY: 2J [64] 57977 RCP cycles (hardware 57972, +5, +0.01%); main.c rule holds in 33 of 33 runs
+systembench:joy-3j	pending:report-only	JOY: 3J [64] 77962 RCP cycles (hardware 77924, +38, +0.05%); main.c rule holds in 33 of 33 runs
+systembench:joy-4j	pending:report-only	JOY: 4J [64] 97948 RCP cycles (hardware 97890, +58, +0.06%); main.c rule holds in 33 of 33 runs
+systembench:joy-accessory	pass	JOY: Accessory [64] 36865 RCP cycles (hardware 36834, +31, +0.08%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-0b	pass	JOY: Empty 0B [64] 15025 RCP cycles (hardware 15030, -5, -0.03%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-1b	pass	JOY: Empty 1B [64] 16429 RCP cycles (hardware 16424, +5, +0.03%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-32b	pass	JOY: Empty 32B [64] 21161 RCP cycles (hardware 21163, -2, -0.01%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-4b	pass	JOY: Empty 4B [64] 20641 RCP cycles (hardware 20644, -3, -0.01%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-56b	pass	JOY: Empty 56B [64] 21161 RCP cycles (hardware 21170, -9, -0.04%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-63b	pass	JOY: Empty 63B [64] 21161 RCP cycles (hardware 21178, -17, -0.08%); main.c rule holds in 33 of 33 runs
+systembench:joy-empty-8b	pass	JOY: Empty 8B [64] 21161 RCP cycles (hardware 21163, -2, -0.01%); main.c rule holds in 33 of 33 runs
+systembench:pi-dma-1024	pass	PI DMA [1024] 12185 RCP cycles, 12185..12186 over the boot delays (hardware 12168, +17, +0.14%); main.c rule holds in 33 of 33 runs
+systembench:pi-dma-128	fail	PI DMA [128] 1582 RCP cycles (hardware 1591, -9, -0.57%); main.c rule holds in 0 of 33 runs
+systembench:pi-dma-65536	pass	PI DMA [65536] 778349 RCP cycles (hardware 777807, +542, +0.07%); main.c rule holds in 33 of 33 runs
+systembench:pi-dma-8	fail	PI DMA [8] 190 RCP cycles (hardware 193, -3, -1.55%); main.c rule holds in 0 of 33 runs
+systembench:pi-io-r	pass	PI I/O R [4] 144 RCP cycles (hardware 144, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:pi-io-w	fail	PI I/O W [4] 130 RCP cycles (hardware 134, -4, -2.99%); main.c rule holds in 0 of 33 runs
+systembench:rcp-io-r	pass	RCP I/O R [1] 24 CPU cycles (hardware 24, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:si-dma-w-ram	pass	SI DMA W RAM [64] 4065 RCP cycles (hardware 4065, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:si-dma-w-rom	consistent-only	SI DMA W ROM [64] 2140 RCP cycles, 2139..2140 over the boot delays (hardware 2144, -4, -0.19%); main.c rule holds in 1 of 33 runs
+systembench:si-io-r	pass	SI I/O R [4] 1974 RCP cycles (hardware 1974, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:si-io-w	fail	SI I/O W [4] 2151 RCP cycles (hardware 2158, -7, -0.32%); main.c rule holds in 0 of 33 runs
+systembench:u16r	pass	RDRAM U16R [2] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u32r	pass	RDRAM U32R [4] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u32r-banked	fail	RDRAM U32R banked [16] 133 CPU cycles (hardware 136, -3, -2.21%); main.c rule holds in 0 of 33 runs
+systembench:u32r-seq	pass	RDRAM U32R seq [16] 133 CPU cycles (hardware 134, -1, -0.75%); main.c rule holds in 33 of 33 runs
+systembench:u64r	pass	RDRAM U64R [8] 37 CPU cycles (hardware 37, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u8r	pass	RDRAM U8R [1] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
 thar0:ac-zbsame-vioff-imrd-1cyc	fail	model 108697 vs console 105999 (105940..106092), +2.55%
 thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	fail	model 170392 vs console 166352 (166182..166520), +2.43%
 thar0:alpha-fail-1cycle	pass	model 77772 vs console 77772 (77772..77772), +0.00%

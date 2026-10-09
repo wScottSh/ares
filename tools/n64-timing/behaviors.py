@@ -91,7 +91,7 @@ NUMBER_UNITS = {"Hz", "B", "entries", "dwords", "px", "lines", "instr", "rank", 
                 "B/rclk", "px/rclk", "vclk/px"}
 FLAG_UNITS = {"flag"}
 TEXT_UNITS = {"order", "map", "rule", "event"}
-RUNNERS = {"nemu64", "bench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",
+RUNNERS = {"nemu64", "bench", "systembench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",
            "mm", "det", "stepcap", "unit", "gen", "pending", "harness", "hw"}
 BARE_RUNNERS = {"det", "stepcap", "gen"}
 GUARD_RUNNERS = {"det", "stepcap"}
@@ -1147,6 +1147,21 @@ def bench_result(run, row):
     return bench_tally([r["verdict"] for r in checked]) if checked else "report", detail
 
 
+def systembench_result(run, row):
+    """The original n64-systembench on the fork, under its own rule at the unpadded ROM and every boot delay
+    (systembench/report.py)."""
+    if not (run / "systembench" / "results.tsv").exists():
+        return None
+    picked = [r for r in tsv_rows(run / "systembench" / "results.tsv") if r["row"] == row["target"]]
+    if not picked:
+        return None
+    r = picked[0]
+    spread = "" if r["min"] == r["max"] else f", {r['min']}..{r['max']} over the boot delays"
+    offset = int(r["pristine"]) - int(r["expected"])
+    return r["verdict"], (f"{r['name']} [{r['qty']}] {r['pristine']} {r['unit']} cycles{spread} (hardware {r['expected']}, "
+                          f"{offset:+d}, {offset * 100 / int(r['expected']):+.2f}%); main.c rule holds in {r['runs_pass']} of {r['runs']} runs")
+
+
 def thar0_result(run, row):
     if not (run / "thar0" / "compare.tsv").exists():
         return None
@@ -1200,9 +1215,10 @@ def gen_result(run, row):
     if log is None:
         return None
     ok = all(line in log for line in ("behaviors.py: check: ok", "lint-literals: ok")) and "FAILED" not in log \
-        and all(re.search(rf"^{tool}: self-test: \d+ cases, 0 failed$", log, re.M) for tool in ("behaviors.py", "pidma-replay", "kit.py"))
-    return ("pass" if ok else "fail"), ("behaviors.py --check and --self-test, lint-literals.py, pidma-replay.py --self-test, "
-                                        "calibration/kit.py --self-test")
+        and all(re.search(rf"^{tool}: self-test: \d+ cases, 0 failed$", log, re.M)
+                for tool in ("behaviors.py", "pidma-replay", "systembench report", "kit.py"))
+    return ("pass" if ok else "fail"), ("behaviors.py --check and --self-test, lint-literals.py, pidma-replay.py, "
+                                        "systembench/report.py and calibration/kit.py --self-test")
 
 
 MM_SCENES = {"file-select": "filesel", "south-clock-town": "sct"}
@@ -1236,10 +1252,10 @@ def pidma_result(run, row):
 
 READERS = {"nemu64": nemu64_result, "det": lambda run, row: suite_runs(run, "det-*.txt", "determinism"),
            "stepcap": lambda run, row: suite_runs(run, "stepcap-*.txt", "stepcap"),
-           "bench": bench_result, "thar0": thar0_result, "rdpstat": rdpstat_result, "snapper": snapper_result,
+           "bench": bench_result, "systembench": systembench_result, "thar0": thar0_result, "rdpstat": rdpstat_result, "snapper": snapper_result,
            "unit": ctest_result, "noise": noise_result, "gen": gen_result, "mm": mm_result, "pidma": pidma_result,
            "harness": rdpstat_result}
-ROM_FILES = {"bench": "./bench/boot-*/bench-{}.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
+ROM_FILES = {"bench": "./bench/boot-*/bench-{}.z64", "systembench": "./systembench/n64-systembench.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
              "harness": "./rdpstat-{}.z64"}
 RESULT = re.compile(r"^(pass|fail|consistent-only|pass-conditional:#\d+|pending:[a-z0-9-]+)$")
 #A check that passes, but weakly: consistent with the hardware number at some phase while the model's mean misses it,
@@ -1560,6 +1576,16 @@ def self_test(root):
         ok = got is not None and got[0] == "consistent-only"
         print(f"self-test: a consistent pass whose mean misses the band, in a results.tsv that calls it pass: "
               f"{'ok' if ok else 'FAILED'}: {got} (expected consistent-only)")
+        failures += not ok
+        ran += 1
+        (run / "systembench").mkdir()
+        cols = ["row", "name", "qty", "unit", "expected", "pristine", "min", "max", "runs", "runs_pass", "verdict", "kind", "port"]
+        sb = [["a", "A", "4", "RCP", "134", "134", "134", "134", "33", "33", "pass", "check", "r p"],
+              ["b", "B", "4", "RCP", "134", "130", "129", "130", "33", "0", "fail", "check", "r p"]]
+        (run / "systembench" / "results.tsv").write_text("\n".join("\t".join(r) for r in [cols] + sb) + "\n", encoding="utf-8")
+        got = systembench_result(run, {"target": "b"})
+        ok = got is not None and got[0] == "fail" and "130 RCP cycles, 129..130" in got[1] and "-4" in got[1]
+        print(f"self-test: a systembench row that fails at every run: {'ok' if ok else 'FAILED'}: {got} (expected fail, 130, -4)")
         failures += not ok
         ran += 1
         print(f"behaviors.py: self-test: {ran} cases, {failures} failed")
