@@ -29,7 +29,8 @@ LOG_SIZE = 0x8000         # 32 KiB SRAM
 SRAM = 0x08000000
 ISV_BUF = 0xB3FF0020
 ISV_LEN = 0xB3FF0014
-PI_STATUS = 0xA4600010
+PI_BASE = 0xA4600000
+PI_STATUS = PI_BASE + 0x10
 FB = runtime.FB0 | 0xA0000000
 PAGE_ROWS = 26           # rows and columns inside a one-glyph margin, which TV overscan keeps visible
 COLS = 38
@@ -69,6 +70,22 @@ def pi_wait(reg, label):
     nop"""
 
 
+#The log's header registers: the RI state the boot left (cold or warm boot differ) and the VI line.
+HEADER_REGS = [("ri_mode", 0xA4700000), ("ri_config", 0xA4700004), ("ri_refresh", 0xA4700010),
+               ("ri_latency", 0xA4700014), ("mi_version", 0xA4300004), ("vi_v_current", 0xA4400010)]
+#Read back before the footer: hw_out must leave the domain-1 timing the boot set from the ROM header
+#(word 0x80371240: LAT 0x40, PWD 0x12, PGS 7, RLS 3), since every PI-timed point runs under it.
+PI_REGS = [("dom1_lat", PI_BASE + 0x14), ("dom1_pwd", PI_BASE + 0x18), ("dom1_pgs", PI_BASE + 0x1C),
+           ("dom1_rls", PI_BASE + 0x20)]
+DOM1_HEADER = {"dom1_lat": 0x40, "dom1_pwd": 0x12, "dom1_pgs": 0x7, "dom1_rls": 0x3}
+
+
+def regs_asm(label, regs):
+    names = "\n".join(f'    .asciiz " {name}="' for name, _ in regs)
+    addrs = ", ".join(f"{addr:#x}" for _, addr in regs)
+    return f"{label}_names:\n{names}\n.align 4\n{label}_addrs:\n    .word {addrs}"
+
+
 def asm(rom_id, sha):
     glyphs = ",".join(f"{g >> 32:#010x},{g & 0xFFFFFFFF:#010x}" for g in font8x8.GLYPHS)
     return rf"""
@@ -77,24 +94,18 @@ hw_str_end: .asciiz {runtime.asm_string(f"#kit-end rom={rom_id} bytes=")}
 hw_str_fnv: .asciiz " fnv="
 hw_str_hex: .asciiz "#hex "
 hw_str_page: .asciiz {runtime.asm_string(f"{rom_id} page ")}
-hw_regs_names:
-    .asciiz " ri_mode="
-    .asciiz " ri_config="
-    .asciiz " ri_refresh="
-    .asciiz " ri_latency="
-    .asciiz " mi_version="
-    .asciiz " vi_v_current="
-.align 4
-hw_regs_addrs:
-    .word 0xA4700000, 0xA4700004, 0xA4700010, 0xA4700014, 0xA4300004, 0xA4400010
+hw_str_pi: .asciiz "#kit-pi"
+{regs_asm("hw_regs", HEADER_REGS)}
+{regs_asm("hw_pi_regs", PI_REGS)}
 .align 8
 hw_font:
     .word {glyphs}
 
-# PI domain 2 timing for SRAM (libdragon's values: LAT 5, PWD 12, PGS 13, RLS 2), output state, and a
-# zeroed log buffer.
+# PI domain 2 timing for SRAM (libdragon's values: LAT 5, PWD 12, PGS 13, RLS 2), output state, a
+# zeroed log buffer, and the zeroed buffer copied over all of SRAM, so no earlier save's bytes follow
+# the log.
 hw_init:
-    li $t0, 0xA4600000
+    li $t0, {PI_BASE:#x}
     li $t1, 0x05
     sw $t1, 0x24($t0)
     li $t1, 0x0C
@@ -114,34 +125,55 @@ hwi_zero:
     sd $zero, 0($t0)
     addiu $t0, $t0, 8
     bne $t0, $t1, hwi_zero
-    nop
+    nop{pi_wait("$t0", "hwi_w1")}
+    li $t0, {PI_BASE:#x}
+    li $t1, {LOG & 0x1FFFFFFF:#x}
+    sw $t1, 0($t0)
+    li $t1, {SRAM:#x}
+    sw $t1, 4($t0)
+    li $t1, {LOG_SIZE - 1:#x}
+    sw $t1, 8($t0){pi_wait("$t0", "hwi_w2")}
     jr $ra
     nop
 
 hw_header:
+    addiu $sp, $sp, -16
+    sd $ra, 0($sp)
+    la $a0, hw_str_header
+    jal pr_str
+    nop
+    la $a0, hw_regs_names
+    la $a1, hw_regs_addrs
+    jal hw_regline
+    addiu $a2, $zero, {len(HEADER_REGS)}
+    ld $ra, 0($sp)
+    jr $ra
+    addiu $sp, $sp, 16
+
+# a0 = names (consecutive NUL-terminated " key=" strings), a1 = register addresses, a2 = count:
+# appends " key=<hex>" per register to the line, then ends and flushes it.
+hw_regline:
     addiu $sp, $sp, -32
     sd $ra, 0($sp)
     sd $s0, 8($sp)
     sd $s1, 16($sp)
-    la $a0, hw_str_header
-    jal pr_str
-    nop
-    la $s0, hw_regs_names
-    la $s1, hw_regs_addrs
-hwh_loop:
+    sd $s2, 24($sp)
+    move $s0, $a0
+    move $s1, $a1
+    move $s2, $a2
+hwr_loop:
     jal pr_str
     move $a0, $s0
-hwh_skip:
+hwr_skip:
     lbu $t0, 0($s0)
-    bnez $t0, hwh_skip
+    bnez $t0, hwr_skip
     addiu $s0, $s0, 1
     lw $t0, 0($s1)
     jal pr_hex
     lw $a0, 0($t0)
-    la $t0, hw_regs_addrs + 24
+    addiu $s2, $s2, -1
+    bnez $s2, hwr_loop
     addiu $s1, $s1, 4
-    bne $s1, $t0, hwh_loop
-    nop
     la $a0, str_nl
     jal pr_str
     nop
@@ -150,6 +182,7 @@ hwh_skip:
     ld $ra, 0($sp)
     ld $s0, 8($sp)
     ld $s1, 16($sp)
+    ld $s2, 24($sp)
     jr $ra
     addiu $sp, $sp, 32
 
@@ -237,6 +270,7 @@ hwo_end_ok:
     addiu $a1, $a1, 7
     and $a1, $a1, $t6
     subu $t7, $a1, $v0{pi_wait("$a0", "hwo_w3")}
+    li $a0, {PI_BASE:#x}
     li $t3, {LOG & 0x1FFFFFFF:#x}
     addu $t3, $t3, $v0
     sw $t3, 0($a0)
@@ -335,6 +369,13 @@ hwd_done:
 
 # The footer, the done word, then the log on screen forever.
 hw_finish:
+    la $a0, hw_str_pi
+    jal pr_str
+    nop
+    la $a0, hw_pi_regs_names
+    la $a1, hw_pi_regs_addrs
+    jal hw_regline
+    addiu $a2, $zero, {len(PI_REGS)}
     la $t0, DATA_BASE
     lw $s0, {D_HW_LOGPOS}($t0)
     lw $s1, {D_HW_FNV}($t0)

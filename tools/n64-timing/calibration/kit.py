@@ -65,7 +65,7 @@ class Log:
 
     def __init__(self, data):
         self.raw = data
-        self.header, self.footer, self.records, self.complete = {}, {}, {}, False
+        self.header, self.footer, self.records, self.pi, self.complete = {}, {}, {}, {}, False
         start = data.find(b"#kit rom=")
         if start < 0:
             return
@@ -92,6 +92,8 @@ class Log:
                         fields["samples"] = fields.get("samples", []) + value.split(",")
                     else:
                         fields[key] = int(value) if value.lstrip("-").isdigit() else value
+            elif parts and parts[0] == "#kit-pi":
+                self.pi = {k: int(v, 16) for k, _, v in (kv.partition("=") for kv in parts[1:])}
             elif len(parts) == 4 and parts[0] == "@snap":
                 self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3]}
             elif parts and re.match(r"^@\d+\.\d+$", parts[0]):
@@ -225,3 +227,38 @@ def result_from(root, model_dir, qid):
         return "missing", f"no fork run of {kit} in {model_dir}; run tools/n64-timing/calibration/run.sh there"
     res, detail = compare(q, logs, model)
     return res, f"{detail}; capture {','.join(ids)}, {len(logs)} console and {len(model)} fork logs"
+
+
+def verify_run(run_dir):
+    """Errors in a calibration/run.sh output: a log without a valid footer, a cartridge SRAM copy that
+    differs from the ISViewer copy (the flashcart SD path), or domain-1 PI timing that the output
+    layer left changed (hwout.py PI_REGS)."""
+    from romgen import hwout
+    errors = []
+    for txt in sorted(Path(run_dir).glob("*/**/*.txt")):
+        if "roms" in txt.relative_to(run_dir).parts:
+            continue
+        data = txt.read_bytes()
+        log = Log(data)
+        if not log.complete:
+            errors.append(f"{txt}: no valid #kit-end footer")
+            continue
+        srm = txt.with_suffix(".srm")
+        if not srm.exists():
+            errors.append(f"{txt}: the run left no cartridge SRAM ({srm.name})")
+        elif srm.read_bytes() != data[:SRAM_BYTES].ljust(SRAM_BYTES, b"\0"):
+            errors.append(f"{srm}: the SRAM copy differs from the ISViewer copy")
+        if log.pi != hwout.DOM1_HEADER:
+            errors.append(f"{txt}: domain-1 PI timing at the end {log.pi}, the ROM header's {hwout.DOM1_HEADER}")
+    return errors
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["--verify-run"]:
+        errs = verify_run(Path(sys.argv[2]))
+        for e in errs:
+            print(e, file=sys.stderr)
+        print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
+              file=sys.stderr)
+        sys.exit(1 if errs else 0)
+    sys.exit("usage: kit.py --verify-run RUN_DIR")

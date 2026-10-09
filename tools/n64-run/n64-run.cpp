@@ -52,6 +52,7 @@ struct Options {
   string statsPath;
   string behaviorsPath;
   string rdpFieldsPath;
+  string sramPath;
   u32 controllers = 1;
   std::vector<FrameDump> dumps;
   string scriptPath;
@@ -91,6 +92,7 @@ auto usage() -> void {
     "  --dump-frame N FILE write the RDRAM image the VI samples at field N as a P6 PPM\n"
     "                      (640x480; repeatable)\n"
     "  --controllers N     gamepads connected at power-on (0-4, default 1)\n"
+    "  --dump-sram FILE    at the stop, write the cartridge SRAM in console byte order (no file if the ROM has none)\n"
     "  --script FILE       run an input script (controller 1 input, memory peeks and pokes)\n"
     "  --step-cap          catch the timeline up before every CPU instruction; the stats must not change\n"
     "  --behaviors FILE    write the timing behaviors this binary was built with (id, basis, value, unit, verify) as TSV\n"
@@ -113,6 +115,7 @@ auto parse(const Arguments& arguments) -> maybe<Options> {
     else if(arg == "--behaviors") options.behaviorsPath = value();
     else if(arg == "--rdp-fields") options.rdpFieldsPath = value();
     else if(arg == "--script") options.scriptPath = value();
+    else if(arg == "--dump-sram") options.sramPath = value();
     else if(arg == "--controllers") options.controllers = min(4u, (u32)value().natural());
     else if(arg == "--step-cap") options.stepCap = true;
     else if(arg == "--dump-frame") {
@@ -636,6 +639,12 @@ auto nall::main(Arguments arguments) -> void {
   }
 
   auto info = stopInfo(reason);
+  if(options.sramPath) {
+    auto& ram = N64::cartridge.ram;
+    std::vector<u8> bytes(ram.size);
+    for(u32 address : range(ram.size)) bytes[address] = ram.read<N64::Byte>(address);
+    if(!ram.size || !file::write(options.sramPath, {bytes.data(), bytes.size()})) std::fprintf(stderr, "n64-run: no SRAM written to %s\n", options.sramPath.data());
+  }
   stats.close();
   rdpFields.close();
   std::fflush(platform.output);

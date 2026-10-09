@@ -5,7 +5,7 @@
 # usage: tools/n64-timing/calibration/run.sh [OUT_DIR]
 # OUT_DIR defaults to $N64_TIMING_HOME/results/calib. Writes OUT_DIR/roms/{boot-<K>,single}/*.z64
 # (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log)
-# and .err, and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
+# and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
 # env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../host.sh"
@@ -31,8 +31,7 @@ find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   echo "$rom $out/${rel%.z64}"
 done | xargs -P "${CALIB_JOBS:-4}" -n 2 sh -c '
   mkdir -p "$(dirname "$2")"
-  "'"$run"'" "$1" --script "'"$out"'/stop.script" --wall-seconds 1800 > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
+  "'"$run"'" "$1" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
 ' sh
-missing=$(grep -L '^#kit-end' $(find "$out" -name '*.txt' \( -path '*/boot-*' -o -path '*/single/*' \) -not -path '*/roms/*') || true)
-[ -z "$missing" ] || { echo "no #kit-end line in: $missing" >&2; exit 1; }
+"$PYTHON" "$here/calibration/kit.py" --verify-run "$out"
 echo "$out"
