@@ -6,7 +6,7 @@
 #
 # usage: build-systembench-era.sh [2023|2022]
 #   2023 (default): 50f5066, 2023-01-25, the commit that added the SI and JOY rows and their
-#     values (blame of main.c:596-613), and the last one before 4b538eb rewrote TIMEIT_MULTI.
+#     values (blame of main.c:596-613 at 845635c), and the last one before 4b538eb rewrote TIMEIT_MULTI.
 #     Toolchain: libdragon a54ccd736 (2022-09-13), GCC 12.2.0 / binutils 2.39 / newlib
 #     4.2.0.20211231, the last toolchain change before 2023-01-25.
 #   2022: d12e8ea, 2022-08-10, the last commit of the 2022-08 series. Its RDRAM, RCP and PI values
@@ -14,7 +14,7 @@
 #     de9d9dd to 50f5066, and only the code around them grows. Toolchain: libdragon eed8ef3b7
 #     (2022-07-13), GCC 12.1.0 / binutils 2.38 / newlib 4.1.0, the versions the vendored
 #     libdragon 49e6a7d pins.
-# SYSBENCH_COMMIT and TOOLCHAIN_COMMIT override the era's pair, to build a neighbouring commit.
+# SYSBENCH_COMMIT and TOOLCHAIN_COMMIT override the era's pair, to build a neighboring commit (3c6a0ee or later; earlier ones name the ROM hello.z64).
 #
 # The toolchain image is built once from that libdragon commit's own Dockerfile, with its base
 # image pinned by digest, and reused. Output: $OUT/n64-systembench.{z64,elf}, one
