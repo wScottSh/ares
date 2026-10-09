@@ -4,7 +4,7 @@
 
 This is the timing model's specification (map [#1](https://github.com/wScottSh/ares/issues/1)). Each row is one behavior: its value, the basis of that value, the reference it comes from, the checks that decide it, and their results. There is no unverified status. A behavior is built from its reference (or, as a model choice, from the reason its reference states), or it is not built. The Code column says where it is built: the constant the code reads, or the code that implements a rule. A row whose value the code does not use is not built, and its Code column says what the code does instead. A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. A fit row names the checks its value was solved from (fit from). A pass on those verifies the arithmetic, not the model, so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why. A check marked (guard) runs and can fail its row, but it never passes it, because it does not measure the row's value: det and stepcap show a run repeats, not that a value is right.
 
-Results come from `behaviors.py --results` over one standing run of every suite, recorded in `docs/spec/n64-timing-results.tsv`. A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on report-only. A Thar0 check passes when the model's count lies inside the console's minimum..maximum over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data and its guards passes, fit only when only its fit data passes, model-choice when a model-choice row has only guards, and otherwise the gates of its pending checks.
+Results come from `behaviors.py --results` over one standing run of every suite, recorded in `docs/spec/n64-timing-results.tsv`. A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on report-only. Two results are weaker than pass and never count as one. A bench check is consistent-only when a point passes its consistent rule (the hardware band overlaps the model's phase range) but the model's mean over the boot delays misses the band: consistent with the hardware number, not agreement. Its detail gives each consistent point's acceptance window (half the band plus half the model's phase range, as a % of the hardware number) and the mean rule's verdict. A check is pass-conditional:#<issue> when it passes only through a model choice with no hardware reference, tracked in that issue. A Thar0 check passes when the model's count lies inside the console's minimum..maximum over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data and its guards passes and none passes only weakly (then it takes that weak result), fit only when only its fit data passes, model-choice when a model-choice row has only guards, and otherwise the gates of its pending checks.
 
 | Basis | Meaning | Rows |
 |---|---|---|
@@ -13,9 +13,9 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 17 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
-| derived | computed from other cited values | 11 |
+| derived | computed from other cited values | 10 |
 | inferred | reasoned from cited values with no measurement or published value of its own; the note states the inference | 1 |
-| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 19 |
+| fit | fitted to measured data; rounded to the nearest 750 MHz unit | 20 |
 | model-choice | no published value; the reference states why the model chose this one | 22 |
 | legacy | a constant today's core charges; the reference is its code site and the note names the unit that replaces it | 20 |
 
@@ -68,7 +68,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | `ri.rank.other` | 2 rank | model-choice | none published (B4): all other clients first-come first-served | `nemu64:timing/load-miss-vi-on` | **pass**: `nemu64:timing/load-miss-vi-on` pass | reads `Timing::Behavior::RiRankOther` |  |
 | `ri.overhead-read` | 4.5 rclk | fit | hcs64 SP DMA 3.7 B/pclk = 23 rclk per 128 B minus wire 18.5 (dma-timing.md, B10) | **fit only, no independent check:** `bench:sp-dma-sweep` (fit from `bench:sp-dma-sweep`) | **fail**: `bench:sp-dma-sweep` fail | reads `Timing::Behavior::RiOverheadRead` | verify-is-fit: bench:sp-dma-sweep reports hcs64's 5.55 B/rclk, the fit's own data, and asserts only the write point; no check decides a read DMA. Direction of hcs64 run unstated |
 | `ri.overhead-vi` | 0 rclk | derived | vi-fetch.md MM bus-occupancy estimate: a 128 B VI read holds the channel for the NEC wire time (74 tc hit, 96 clean miss, 104 dirty miss) plus the 2 tc post-read gap; no reference charges scanout the RI overhead that ri.overhead-read fits from SP DMA throughput (B10) | `nemu64:timing/load-from-uncached-vi-on-other-bank` `nemu64:timing/load-miss-vi-on` | **pass**: `nemu64:timing/load-from-uncached-vi-on-other-bank` pass; `nemu64:timing/load-miss-vi-on` pass | reads `Timing::Behavior::RiOverheadVi` | ri counters on MM: VI channel share against the 6.5-9.0% band of vi-fetch.md |
-| `ri.overhead-write` | 0 rclk | derived | NEC uPD488170L: a 128 B write holds the channel 17 rclk on the wire plus the 1 rclk post-write gap (B8) and no RI overhead; with the VI fetch and refresh on the channel this gives n64brew's RSP DMA memset 2.58 ms/MiB = 6.5 B/rclk (B10) | `bench:mi-memset-rspdma` `bench:sp-dma-sweep` | **fail**: `bench:mi-memset-rspdma` pass; `bench:sp-dma-sweep` fail | reads `Timing::Behavior::RiOverheadWrite` | The value is the datasheet's, with no term added. It assumes n64brew's memset table was measured with the VI on: the page states no video state (verify-63), and the support is circumstantial, a 128 B write at 17 wire + 1 gap = 18 rclk is 7.11 B/rclk, times (1 - 0.074 VI - 0.0125 refresh) = 6.50, the table's RSP DMA rate. Under a VI-off table the 1 rclk VI-off fit of master applies (6.56 B/rclk VI off). bench:sp-dma-sweep asserts the same n64brew rate through one 4 KiB transfer |
+| `ri.overhead-write` | 0 rclk | derived | NEC uPD488170L: a 128 B write holds the channel 17 rclk on the wire plus the 1 rclk post-write gap (B8) and no RI overhead; with the VI fetch and refresh on the channel this gives n64brew's RSP DMA memset 2.58 ms/MiB = 6.5 B/rclk (B10) | `bench:mi-memset-rspdma` `bench:sp-dma-sweep` | **fail**: `bench:mi-memset-rspdma` pass-conditional:#77; `bench:sp-dma-sweep` fail | reads `Timing::Behavior::RiOverheadWrite` | The value is the datasheet's, with no term added. It assumes n64brew's memset table was measured with the VI on: the page states no video state (verify-63), and the support is circumstantial, a 128 B write at 17 wire + 1 gap = 18 rclk is 7.11 B/rclk, times (1 - 0.074 VI - 0.0125 refresh) = 6.50, the table's RSP DMA rate. Under a VI-off table the 1 rclk VI-off fit of master applies (6.56 B/rclk VI off). bench:sp-dma-sweep asserts the same n64brew rate through one 4 KiB transfer |
 | `ri.overhead-rdp` | 0 rclk | derived | NEC uPD488170L: an RDP burst holds the RDRAM channel for its wire time plus the post-transaction gap (B8), as VI scanout does (ri.overhead-vi); the RDP's own per-burst cost occupies its memory interface, not the channel (rdp.mem-overhead-read, rdp.mem-overhead-write). Thar0 VI-on configs with writes only slow 0.5-1.6% on hardware (nozb-visep/visame-noimrd, 1- and 2-cycle), which a channel-held overhead of the fitted size would raise to about 7% | `thar0:separate-bank` `thar0:imrd-1cycle` | **fail**: `thar0:separate-bank` fail; `thar0:imrd-1cycle` fail | reads `Timing::Behavior::RiOverheadRdp` | supersedes the T12 copy of the VI-off write fit (20 units) |
 | `ri.request-latency` | 1 units | model-choice | none published: ADR 0001 Decision 1 needs a request to reach the arbiter after its post, so a decision never races an equal-time post; one unit is the least that does | `det` (guard) `stepcap` (guard) | **model-choice**: `det` pass (guard); `stepcap` pass (guard) | reads `Timing::Behavior::RiRequestLatency` |  |
 
@@ -146,10 +146,10 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
-| `pi.page-setup` | 15 rclk | wiki | n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` pass | reads `Timing::Behavior::PiPageSetup` |  |
-| `pi.halfword-bias` | 2 rclk | wiki | n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` pass | reads `Timing::Behavior::PiHalfwordBias` |  |
+| `pi.page-setup` | 15 rclk | wiki | n64brew PI: 14 + LAT + 1 with LAT separate (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` consistent-only | reads `Timing::Behavior::PiPageSetup` |  |
+| `pi.halfword-bias` | 2 rclk | wiki | n64brew PI domain registers: PWD and RLS hold cycles minus 1, so a halfword takes PWD + 1 + RLS + 1 RCP clocks (dma-timing.md) | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` consistent-only | reads `Timing::Behavior::PiHalfwordBias` |  |
 | `pi.block-bytes` | 128 B | wiki | n64brew PI; rasky n64_pi_dma_test | `pidma:logs` | **fail**: `pidma:logs` fail | reads `Timing::Behavior::PiBlockBytes` |  |
-| `pi.block-writeback` | 28 rclk | derived | dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part | `pidma:logs` `bench:pi-dma-sizes` | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes` pass | reads `Timing::Behavior::PiBlockWriteback` |  |
+| `pi.block-writeback` | 28 rclk | fit | dma-timing.md fit to systembench PI DMA rows; the bus model supplies the wire part | `pidma:logs` `bench:pi-dma-sizes-8` `bench:pi-dma-sizes-128` `bench:pi-dma-sizes-1024` `bench:pi-dma-sizes-65536` (fit from `bench:pi-dma-sizes-128` `bench:pi-dma-sizes-1024` `bench:pi-dma-sizes-65536`) | **fail**: `pidma:logs` fail; `bench:pi-dma-sizes-8` consistent-only; `bench:pi-dma-sizes-128` pass; `bench:pi-dma-sizes-1024` pass; `bench:pi-dma-sizes-65536` pass | reads `Timing::Behavior::PiBlockWriteback` | Fit to n64-systembench's 128 B, 1 KiB and 64 KiB PI DMA times (main.c:590-592; dma-timing.md: 64 KiB = 777807 rclk = 11.87 rclk/B), so their passes check the fit's arithmetic, not the model. The independent checks are pidma:logs (rasky n64_pi_dma_test golden logs, sizes 8-382), which fails, and the systembench 8 B point, which was not fit. |
 | `pi.io-busy` | 134 rclk | measured | n64-systembench @845635c main.c:595 PI I/O W 134 rclk, a cart word write until PI_STATUS idle (cited value; research/cpu-memory-costs.md) | `bench:pi-io-write` | **pass**: `bench:pi-io-write` pass | reads `Timing::Behavior::PiIoBusy` | The cited total is one poll phase of the original's TIMEIT_WHILE (phase-locked reps), so it carries about ±8 rclk of poll quantization (half the 25 pclk = 16.7 rclk poll period; verify-76). The value is that total, so bench:pi-io-write passes by construction: it shows the port reproduces the input, not independent agreement |
 
 ### si
@@ -252,47 +252,51 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run phase/after on 48be98188).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run labels-phase/after on b66e6e897).
 
 | Check | Result | Detail |
 |---|---|---|
-| `bench:dirty-miss-isolated` | pending:report-only | clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 20 (expected -) report |
-| `bench:dirty-row-sweep` | pending:report-only | dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk 0..2 median 2.0 mean 1.938 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points |
+| `bench:dirty-miss-isolated` | pending:report-only | clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report |
+| `bench:dirty-row-sweep` | pending:report-only | dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points |
 | `bench:ifill-isolated` | pending:report-only |  |
-| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.733..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
-| `bench:mi-memset-rspdma` | pass | vi-on b_per_rclk 6.422..6.501 median 6.498 mean 6.495 (expected 6.5, 6.49..6.515, mean) pass |
-| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.716..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail |
-| `bench:pi-dma-sizes` | pass | 4 of 4 points pass |
-| `bench:pi-io-read` | pass | rom-word sb_rclk 143 (expected 144, 142..146, consistent) pass |
-| `bench:pi-io-write` | pass | rom-word sb_rclk 125.33..142.67 median 133.0 mean 133.0 (expected 134, 132..136, consistent) pass |
-| `bench:pif-ram-read` | pass | pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948, consistent) pass |
-| `bench:rcp-reg-read` | pass | vi-control net_pclk 22 (expected 22, 21..23, consistent) pass |
+| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.735..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
+| `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.492..6.501 median 6.498 mean 6.498 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 |
+| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.716..17.718 median 17.718 mean 17.717 (expected 18.38, 18.346..18.418, mean) fail |
+| `bench:pi-dma-sizes` | consistent-only | 3 of 4 points pass, 1 consistent-only; first not passing cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193, 191.07..194.93) consistent-only; cart-to-ram-8 window ±4.8%, mean rule fail; cart-to-ram-128 window ±1.5%, mean rule pass; cart-to-ram-1024 window ±1.1%, mean rule pass; cart-to-ram-65536 window ±1.0%, mean rule pass |
+| `bench:pi-dma-sizes-1024` | pass | cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.031 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass |
+| `bench:pi-dma-sizes-128` | pass | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.0 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass |
+| `bench:pi-dma-sizes-65536` | pass | cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778338.0 mean 778338.375 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
+| `bench:pi-dma-sizes-8` | consistent-only | cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193, 191.07..194.93, consistent, window ±4.8%, mean rule fail) consistent-only |
+| `bench:pi-io-read` | pass | rom-word sb_rclk 143 (expected 144, 142..146, consistent, window ±1.4%, mean rule pass) pass |
+| `bench:pi-io-write` | pass | rom-word sb_rclk 125.33..142.67 median 133.0 mean 133.0 (expected 134, 132..136, consistent, window ±8.0%, mean rule pass) pass |
+| `bench:pif-ram-read` | pass | pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948, consistent, window ±0.2%, mean rule pass) pass |
+| `bench:rcp-reg-read` | pass | vi-control net_pclk 22 (expected 22, 21..23, consistent, window ±4.5%, mean rule pass) pass |
 | `bench:rdp-atomic-sweep` | pass | atomic1-64 per_prim_extra_clk 34.391 (expected 35, 30..40, every) pass |
 | `bench:rdp-loadsz-sweep` | pending:report-only |  |
 | `bench:rdp-rectn` | pending:report-only | rect-320x6 clock 2069 (expected 2021) report; duty-320x240 clock 77885 (expected 80287) report |
 | `bench:rdp-setter-sweep` | pass | 4 of 4 points pass |
-| `bench:rdp-sync-sweep` | pass | pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5, every) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5, every) pass; load-256 per_sync_clk 25.051..25.117 median 25.051 mean 25.067 (expected 25, 24.5..25.5, every) pass |
-| `bench:si-dma` | pass | write64 sb_rclk 4058.67..4069.33 median 4065.0 mean 4065.0 (expected 4065, 4056.87..4073.13, consistent) pass |
-| `bench:si-dma-accessory` | fail | accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668, consistent) fail |
-| `bench:si-dma-empty-0b` | pass | empty-0b sb_rclk 15060 (expected 15030, 14999.94..15060.06, consistent) pass |
-| `bench:si-dma-empty-1b` | fail | empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848, consistent) fail |
-| `bench:si-dma-empty-32b` | fail | empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail |
-| `bench:si-dma-empty-4b` | fail | empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288, consistent) fail |
-| `bench:si-dma-empty-56b` | fail | empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34, consistent) fail |
-| `bench:si-dma-empty-63b` | fail | empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356, consistent) fail |
-| `bench:si-dma-empty-8b` | fail | empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent) fail |
-| `bench:si-dma-read64-1` | fail | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent) fail |
+| `bench:rdp-sync-sweep` | pass | pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5, every) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5, every) pass; load-256 per_sync_clk 25.051..25.117 median 25.051 mean 25.053 (expected 25, 24.5..25.5, every) pass |
+| `bench:si-dma` | pass | write64 sb_rclk 4058.67..4073.33 median 4066.0 mean 4066.0 (expected 4065, 4056.87..4073.13, consistent, window ±0.4%, mean rule pass) pass |
+| `bench:si-dma-accessory` | fail | accessory sb_rclk 39898 (expected 36834, 36760.332..36907.668, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-empty-0b` | pass | empty-0b sb_rclk 15060 (expected 15030, 14999.94..15060.06, consistent, window ±0.2%, mean rule pass) pass |
+| `bench:si-dma-empty-1b` | fail | empty-1b sb_rclk 16481 (expected 16424, 16391.152..16456.848, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-empty-32b` | fail | empty-32b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-empty-4b` | fail | empty-4b sb_rclk 20728 (expected 20644, 20602.712..20685.288, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-empty-56b` | fail | empty-56b sb_rclk 20728 (expected 21170, 21127.66..21212.34, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-empty-63b` | fail | empty-63b sb_rclk 20728 (expected 21178, 21135.644..21220.356, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-empty-8b` | fail | empty-8b sb_rclk 20728 (expected 21163, 21120.674..21205.326, consistent, window ±0.2%, mean rule fail) fail |
+| `bench:si-dma-read64-1` | fail | read64-1 sb_rclk 38477 (expected 37987, 37911.026..38062.974, consistent, window ±0.2%, mean rule fail) fail |
 | `bench:si-dma-read64-2` | pending:report-only | read64-2 sb_rclk 57890 (expected 57972) report |
 | `bench:si-dma-read64-3` | pending:report-only | read64-3 sb_rclk 77321 (expected 77924) report |
 | `bench:si-dma-read64-4` | pending:report-only | read64-4 sb_rclk 96734 (expected 97890) report |
-| `bench:si-dma-write64-rom` | pass | write64-rom sb_rclk 2136.0..2149.33 median 2143.0 mean 2143.0 (expected 2144, 2139.712..2148.288, consistent) pass |
-| `bench:si-io-write` | pass | pif-ram sb_rclk 2149.33..2166.67 median 2158.0 mean 2157.562 (expected 2158, 2153.684..2162.316, consistent) pass |
-| `bench:sp-dma-sweep` | fail | wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.361 (expected 6.5, 6.49..6.515, mean) fail |
-| `bench:uncached-sizes` | pass | u64 net_pclk 35 (expected 35, 34..36, consistent) pass |
-| `bench:uncached-sizes-u32` | pass | u32 net_pclk 32 (expected 32, 31..33, consistent) pass |
-| `bench:uncached-sizes-u32-banked` | fail | u32-banked net_pclk 131..132 median 131.0 mean 131.219 (expected 134, 133..135, consistent) fail |
-| `bench:uncached-sizes-u32-rand` | pass | u32-rand net_pclk 131..132 median 132.0 mean 131.875 (expected 132, 131..133, consistent) pass |
-| `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131 (expected 132, 131..133, consistent) pass |
+| `bench:si-dma-write64-rom` | pass | write64-rom sb_rclk 2136.0..2149.33 median 2143.0 mean 2143.0 (expected 2144, 2139.712..2148.288, consistent, window ±0.5%, mean rule pass) pass |
+| `bench:si-io-write` | pass | pif-ram sb_rclk 2149.33..2166.67 median 2158.0 mean 2158.0 (expected 2158, 2153.684..2162.316, consistent, window ±0.6%, mean rule pass) pass |
+| `bench:sp-dma-sweep` | fail | wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 6.5, 6.49..6.515, mean) fail |
+| `bench:uncached-sizes` | pass | u64 net_pclk 35 (expected 35, 34..36, consistent, window ±2.9%, mean rule pass) pass |
+| `bench:uncached-sizes-u32` | pass | u32 net_pclk 32 (expected 32, 31..33, consistent, window ±3.1%, mean rule pass) pass |
+| `bench:uncached-sizes-u32-banked` | fail | u32-banked net_pclk 131..132 median 131.0 mean 131.125 (expected 134, 133..135, consistent, window ±1.1%, mean rule fail) fail |
+| `bench:uncached-sizes-u32-rand` | pass | u32-rand net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
+| `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
 | `bench:wb-fifth-store` | pending:report-only |  |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
@@ -412,9 +416,13 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `nemu64:cycle/smc-single-write` | nemu64 | cycle | icache: Self-modifying code within basic block (single write) (cycle accurate) | self | nemu64-test cycle set, icache.rs ModifyWithinBasicBlock, stores one and two slots ahead |
 | `bench:mi-memset-uncached` | bench | mi-memset-uncached | point=vi-on metric=pclk_per_sd | suite | n64brew MIPS_Interface memset table, 25.7 ms/MiB |
 | `bench:mi-memset-cached` | bench | mi-memset-cached | point=vi-on metric=pclk_per_line | suite | n64brew MIPS_Interface memset table, 49.8 ms/MiB |
-| `bench:mi-memset-rspdma` | bench | mi-memset-rspdma | point=vi-on metric=b_per_rclk | suite | n64brew MIPS_Interface memset table, 2.58 ms/MiB |
+| `bench:mi-memset-rspdma` | bench | mi-memset-rspdma | point=vi-on metric=b_per_rclk | suite | n64brew MIPS_Interface memset table, 2.58 ms/MiB; its pass is conditional on #77: the model's mean is in the band only on the idle VI's 0x800-VCLK grid, which has no hardware reference (a 1-VCLK idle step reads 6.422 B/rclk, a fail, at every delay; verify-78), so it is not independent hardware agreement |
 | `bench:sp-dma-sweep` | bench | sp-dma-sweep | - | suite | n64brew memset 6.5 B/rclk (check); hcs64 5.55 (report) |
 | `bench:pi-dma-sizes` | bench | pi-dma-sizes | metric=sb_rclk | suite | n64-systembench main.c:589-592, cited values; TIMEIT_WHILE_MULTI port (main.c:171-180) |
+| `bench:pi-dma-sizes-8` | bench | pi-dma-sizes | point=cart-to-ram-8 metric=sb_rclk | suite | n64-systembench main.c:589 PI DMA cart to RDRAM 8 B, one point of bench:pi-dma-sizes |
+| `bench:pi-dma-sizes-128` | bench | pi-dma-sizes | point=cart-to-ram-128 metric=sb_rclk | suite | n64-systembench main.c:590 PI DMA cart to RDRAM 128 B, one point of bench:pi-dma-sizes |
+| `bench:pi-dma-sizes-1024` | bench | pi-dma-sizes | point=cart-to-ram-1024 metric=sb_rclk | suite | n64-systembench main.c:591 PI DMA cart to RDRAM 1 KiB, one point of bench:pi-dma-sizes |
+| `bench:pi-dma-sizes-65536` | bench | pi-dma-sizes | point=cart-to-ram-65536 metric=sb_rclk | suite | n64-systembench main.c:592 PI DMA cart to RDRAM 64 KiB, one point of bench:pi-dma-sizes |
 | `bench:uncached-vs-hpos` | bench | uncached-vs-hpos | - | suite | rdram-bus-arbitration.md B11-B12; vi-fetch.md |
 | `bench:dirty-row-sweep` | bench | dirty-row-sweep | - | suite | report only; NEC uPD488170L datasheet inference, a dirty row miss 3 pclk over a clean one (expected.tsv), no console measurement |
 | `bench:dirty-miss-isolated` | bench | dirty-miss-isolated | - | suite | report only; nemu64-test clean fill 41 pclk reported (the sample also holds its harness), no hardware value for the dirty cases (plan T6) |

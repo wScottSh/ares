@@ -230,6 +230,9 @@ def bench_rules(path, header, body, errors):
                           f"use {', '.join(RULES)} (bench README, Phase).")
         elif b.get("kind") != "check" and b.get("rule") != "-":
             errors.append(f"{path}:{line}: report row {b.get('rom')} {b.get('point')} has rule `{b.get('rule')}`; write `-`.")
+        if not CONDITION.match(b.get("condition", "")) or (b.get("kind") != "check" and b.get("condition") != "-"):
+            errors.append(f"{path}:{line}: row {b.get('rom')} {b.get('point')} has condition `{b.get('condition')}`; write `-`, "
+                          f"or on a check row the `#<issue>` of the model choice its pass rests on.")
 
 
 def suite_matches(suite_file, target, selector):
@@ -541,11 +544,20 @@ STATUS_MEANING = {
     "pass": "a check other than the row's fit data passed, and none failed",
     "fail": "at least one check failed; the detail in Check results gives the residual",
     "fit only": "only the checks the value was fitted to passed (verify-is-fit)",
+    "consistent-only": "no check failed, but a check passed its consistent rule while the model's phase mean missed the band: "
+                       "some phase of the model agrees with the hardware number, the average does not. Consistent with the "
+                       "hardware, not agreement",
+    "pass-conditional": "no check failed, but a check passes only through a model choice with no hardware reference (the "
+                        "issue named); it is not independent hardware agreement until the issue resolves",
     "model-choice": "a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the "
                     "same every time, not that its value is right",
     "not-built": "the code does not use the row's value; its code column says what the code does instead. Its checks "
                  "measure that code, not the row",
 }
+
+
+def status_meaning(status):
+    return STATUS_MEANING.get(status.split(":")[0] if status.startswith("pass-conditional:") else status)
 
 
 def statuses(rows, found):
@@ -579,9 +591,14 @@ def render_spec(rows, checks, found):
         "",
         f"Results come from `behaviors.py --results` over one standing run of every suite, recorded in `{RESULTS}`. "
         "A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on "
-        "report-only. A Thar0 check passes when the model's count lies inside the console's minimum..maximum "
+        "report-only. Two results are weaker than pass and never count as one. A bench check is consistent-only when a point "
+        "passes its consistent rule (the hardware band overlaps the model's phase range) but the model's mean over the boot "
+        "delays misses the band: consistent with the hardware number, not agreement. Its detail gives each consistent "
+        "point's acceptance window (half the band plus half the model's phase range, as a % of the hardware number) and the "
+        "mean rule's verdict. A check is pass-conditional:#<issue> when it passes only through a model choice with no "
+        "hardware reference, tracked in that issue. A Thar0 check passes when the model's count lies inside the console's minimum..maximum "
         "over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data and "
-        "its guards passes, fit only when only its fit data passes, model-choice when a model-choice row has only guards, "
+        "its guards passes and none passes only weakly (then it takes that weak result), fit only when only its fit data passes, model-choice when a model-choice row has only guards, "
         "and otherwise the gates of its pending checks.",
         "",
         "| Basis | Meaning | Rows |",
@@ -590,7 +607,7 @@ def render_spec(rows, checks, found):
     out += [f"| {b} | {meaning} | {count[b]} |" for b, (_, meaning) in BASES.items()]
     out += ["", "| Status | Meaning | Rows |", "|---|---|---|"]
     for s, n in sorted(statuses(rows, found).items()):
-        meaning = STATUS_MEANING.get(s) or "no check decided the row: " + "; ".join(
+        meaning = status_meaning(s) or "no check decided the row: " + "; ".join(
             f"{g[8:]}: {gates[g]['source']}" for g in s.split() if g in gates)
         out.append(f"| {s} | {cell(meaning)} | {n} |")
     groups = {}
@@ -708,6 +725,26 @@ def render_closure(root, rows, checks, found):
         fit = [r["id"] for r in rows if c in r["fit-from"].split()]
         out.append(f"| `{c}` | {cell(found[c][1])} | {' '.join(f'`{x}`' for x in verify) or '-'} | "
                    f"{' '.join(f'`{x}`' for x in fit) or '-'} |")
+    weak = sorted(c for c, (result, _) in found.items() if WEAK.match(result))
+    results_count = {}
+    for c, (result, _) in found.items():
+        if c != "#source":
+            kind = result if result in ("pass", "fail") or WEAK.match(result) else "pending"
+            results_count[kind] = results_count.get(kind, 0) + 1
+    out += ["", "## Checks that pass only weakly", "",
+            "Check results: " + ", ".join(f"{n} {k}" for k, n in sorted(results_count.items())) + ". "
+            "A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean "
+            "misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the "
+            "pass rests on a model choice with no hardware reference.", ""]
+    if weak:
+        out += ["| Check | Result | Detail | Rows (verify) | Rows (fit from) |", "|---|---|---|---|---|"]
+    else:
+        out.append("None.")
+    for c in weak:
+        verify = [r["id"] for r in rows if c in (x for x, _ in verify_checks(r))]
+        fit = [r["id"] for r in rows if c in r["fit-from"].split()]
+        out.append(f"| `{c}` | {found[c][0]} | {cell(found[c][1])} | {' '.join(f'`{x}`' for x in verify) or '-'} | "
+                   f"{' '.join(f'`{x}`' for x in fit) or '-'} |")
     out += ["", "## Behaviors not built", ""] + ([
             "The code does not use these rows' values, so no check result says anything about them.", "",
             "| Behavior | Basis | Value | What the code does instead |", "|---|---|---|---|"]
@@ -730,7 +767,7 @@ def render_closure(root, rows, checks, found):
             "| Behavior | Basis | Gate | What closes it |",
             "|---|---|---|---|"]
     for s, members in sorted(by_status.items()):
-        if s in STATUS_MEANING:
+        if status_meaning(s):
             continue
         for r in members:
             out.append(f"| `{r['id']}` | {r['basis']} | {', '.join(g[8:] for g in s.split())} | "
@@ -741,7 +778,7 @@ def render_closure(root, rows, checks, found):
     for r in rows:
         s = row_status(r, found)
         pend = [c for c, _ in verify_checks(r) if (c if c.startswith("pending:") else found_result(found, c)[0]).startswith("pending:")]
-        if s in STATUS_MEANING and s != "not-built" and pend:
+        if status_meaning(s) and s != "not-built" and pend:
             out.append(f"| `{r['id']}` | {s} | " + "; ".join(
                 check_cell(c) if c.startswith("pending:") else f"`{c}` pending ({found[c][0][8:]})" for c in pend) + " |")
     return "\n".join(out) + "\n"
@@ -844,26 +881,56 @@ def phase_text(r):
     return f"{r['min']}..{r['max']} median {r['median']} mean {r['mean']}"
 
 
+def window_text(r):
+    """A consistent row's acceptance window and the mean rule's verdict (bench README, Phase)."""
+    return f"window ±{r['window_pct']}%, mean rule {r['mean_verdict']}" if r.get("window_pct", "-") != "-" else ""
+
+
+def bench_label(r):
+    """The row's verdict, recomputed from its phase range and mean with report.py's label, so a
+    results.tsv that calls a consistent-only point pass cannot pass it here."""
+    from romgen.suites.bench.report import label
+    if r["kind"] != "check" or r["min"] == "None":
+        return r["verdict"]
+    return label(r, float(r["min"]), float(r["max"]), float(r["mean"]))
+
+
+def bench_tally(verdicts):
+    """fail over any weak pass over pass: one consistent-only point keeps the check from passing."""
+    for v in verdicts:
+        if v != "pass" and not WEAK.match(v):
+            return "fail"
+    weak = [v for v in verdicts if WEAK.match(v)]
+    return weak[0] if weak else "pass"
+
+
 def bench_result(run, row):
     if not (run / "bench" / "results.tsv").exists():
         return None
     wanted = dict(p.split("=", 1) for p in row["selector"].split() if "=" in p)
-    picked = [r for r in tsv_rows(run / "bench" / "results.tsv")
+    picked = [{**r, "verdict": bench_label(r)} for r in tsv_rows(run / "bench" / "results.tsv")
               if r["rom"] == row["target"] and all(r.get(k) == v for k, v in wanted.items())]
     if not picked:
         return None
     checked = [r for r in picked if r["kind"] == "check"]
     shown = checked if checked else picked
     detail = "; ".join(f"{r['point']} {r['metric']} {phase_text(r)} (expected {r['expected']}"
-                       + (f", {r['lo']}..{r['hi']}, {r['rule']}" if r["lo"] != "-" else "") + f") {r['verdict']}" for r in shown[:3])
+                       + (f", {r['lo']}..{r['hi']}, {r['rule']}" if r["lo"] != "-" else "")
+                       + (f", {window_text(r)}" if window_text(r) else "") + f") {r['verdict']}" for r in shown[:3])
     if len(shown) > 3 and not checked:
         detail += f"; {len(shown) - 3} more report points"
     elif len(shown) > 3:
         failing = [r for r in shown if r["verdict"] != "pass"]
-        detail = f"{sum(r['verdict'] == 'pass' for r in shown)} of {len(shown)} points pass" + \
-            (f"; first failing {failing[0]['point']} {failing[0]['metric']} {phase_text(failing[0])} "
-             f"(expected {failing[0]['expected']}, {failing[0]['lo']}..{failing[0]['hi']})" if failing else "")
-    return tally([r["verdict"] for r in checked], "points")[0] if checked else "report", detail
+        counts = {}
+        for r in shown:
+            counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
+        detail = f"{counts.pop('pass', 0)} of {len(shown)} points pass" + "".join(f", {n} {v}" for v, n in sorted(counts.items())) + \
+            (f"; first not passing {failing[0]['point']} {failing[0]['metric']} {phase_text(failing[0])} "
+             f"(expected {failing[0]['expected']}, {failing[0]['lo']}..{failing[0]['hi']}) {failing[0]['verdict']}" if failing else "")
+        windows = [f"{r['point']} {window_text(r)}" for r in shown if window_text(r)]
+        if windows:
+            detail += "; " + "; ".join(windows)
+    return bench_tally([r["verdict"] for r in checked]) if checked else "report", detail
 
 
 def thar0_result(run, row):
@@ -959,7 +1026,11 @@ READERS = {"nemu64": nemu64_result, "det": lambda run, row: suite_runs(run, "det
            "harness": rdpstat_result}
 ROM_FILES = {"bench": "./bench/boot-*/bench-{}.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
              "harness": "./rdpstat-{}.z64"}
-RESULT = re.compile(r"^(pass|fail|pending:[a-z0-9-]+)$")
+RESULT = re.compile(r"^(pass|fail|consistent-only|pass-conditional:#\d+|pending:[a-z0-9-]+)$")
+#A check that passes, but weakly: consistent with the hardware number at some phase while the model's mean misses it,
+#or passing only through a model choice with no hardware reference (bench README, Phase). Never counted as pass.
+WEAK = re.compile(r"^(consistent-only|pass-conditional:#\d+)$")
+CONDITION = re.compile(r"^(-|#\d+)$")
 
 
 def gate_for(row, explicit, suite_files, built):
@@ -1043,14 +1114,18 @@ def load_results(root, rows, checks, errors):
 
 
 def row_status(row, found):
-    """not-built, pass, fail, fit only, model-choice or pending:<gates> for one behavior, from its code column and
-    its checks' results. A guard can fail the row but never pass it."""
+    """not-built, pass, fail, consistent-only, pass-conditional:#<issue>, fit only, model-choice or pending:<gates> for
+    one behavior, from its code column and its checks' results. A guard can fail the row but never pass it. A weak
+    pass (WEAK) of any check other than the fit data keeps the row from passing."""
     if not_built(row):
         return "not-built"
     fit_from = set(row["fit-from"].split())
     res = [(c, guard, c if c.startswith("pending:") else found.get(c, ("missing", ""))[0]) for c, guard in verify_checks(row)]
     if any(r == "fail" for _, _, r in res):
         return "fail"
+    weak = [r for c, guard, r in res if WEAK.match(r) and not guard and c not in fit_from]
+    if weak:
+        return weak[0]
     passed = [c for c, guard, r in res if r == "pass" and not guard]
     if any(c not in fit_from for c in passed):
         return "pass"
@@ -1165,6 +1240,8 @@ def self_test(root):
              "is built at its literal-allowlist code site; clear its code column"),
             ("a bench check without a phase rule", suite_file, lambda t: t.replace("\tcheck\tmean\t", "\tcheck\t-\t", 1),
              "has rule `-`; use consistent, mean, every"),
+            ("a bench condition that names no issue", suite_file, lambda t: t.replace("\tcheck\tmean\t#77\t", "\tcheck\tmean\tidle-vi\t", 1),
+             "has condition `idle-vi`; write `-`"),
         ]
         if landed:
             cases += [
@@ -1197,7 +1274,8 @@ def self_test(root):
                 shutil.copy(root / TABLE, work / TABLE)
             if restore:
                 restore()
-        found = {"det": ("pass", ""), "stepcap": ("pass", ""), "x:pass": ("pass", ""), "x:fail": ("fail", "")}
+        found = {"det": ("pass", ""), "stepcap": ("pass", ""), "x:pass": ("pass", ""), "x:fail": ("fail", ""),
+                 "x:pass2": ("pass", ""), "x:consistent": ("consistent-only", ""), "x:cond": ("pass-conditional:#77", "")}
         for name, row, want in [
             ("a model choice that passes only det and stepcap", ("model-choice", "~det ~stepcap", "", ""), "model-choice"),
             ("a guard that passes beside a gate", ("vendor", "~x:pass pending:calibration-16", "", ""), "pending:calibration-16"),
@@ -1206,11 +1284,28 @@ def self_test(root):
             ("a check that decides beside a guard", ("model-choice", "x:pass ~det", "", ""), "pass"),
             ("a not-built row whose check passes", ("measured", "x:pass", "", "not-built: ares/n64/pi/bus.hpp:PI::writeWord"),
              "not-built"),
+            ("a consistent-only check beside a pass", ("measured", "x:pass x:consistent", "", ""), "consistent-only"),
+            ("a conditional pass", ("wiki", "x:cond", "", ""), "pass-conditional:#77"),
+            ("a fail beside a weak pass", ("wiki", "x:consistent x:fail", "", ""), "fail"),
+            ("a fit row whose weak check is its fit data", ("fit", "x:pass x:consistent", "x:consistent", ""), "pass"),
         ]:
             got = row_status(dict(zip(("basis", "verify", "fit-from", "code"), row)), found)
             print(f"self-test: status of {name}: {'ok' if got == want else 'FAILED'}: {got} (expected {want})")
             failures += got != want
             ran += 1
+        run = work / "self-test-run"
+        (run / "bench").mkdir(parents=True)
+        cols = ["rom", "point", "metric", "min", "median", "max", "mean", "expected", "lo", "hi", "kind", "rule", "condition",
+                "verdict", "mean_verdict", "window_pct", "source"]
+        stale = ["r", "p8", "m", "180.0", "189.0", "194.67", "189.0", "193", "191.07", "194.93", "check", "consistent", "-",
+                 "pass", "-", "-", "s"]
+        (run / "bench" / "results.tsv").write_text("\t".join(cols) + "\n" + "\t".join(stale) + "\n", encoding="utf-8")
+        got = bench_result(run, {"target": "r", "selector": "point=p8"})
+        ok = got is not None and got[0] == "consistent-only"
+        print(f"self-test: a consistent pass whose mean misses the band, in a results.tsv that calls it pass: "
+              f"{'ok' if ok else 'FAILED'}: {got} (expected consistent-only)")
+        failures += not ok
+        ran += 1
         print(f"behaviors.py: self-test: {ran} cases, {failures} failed")
         return failures
     finally:
