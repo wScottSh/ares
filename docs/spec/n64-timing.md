@@ -261,7 +261,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run sysbench-era/after on 8c652711f).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run calib-kit-merge/standing on 214c46421).
 
 | Check | Result | Detail |
 |---|---|---|

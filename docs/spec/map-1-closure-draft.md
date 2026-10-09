@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench-era/after on 8c652711f). 1 consistent-only, 33 fail, 10 fit only, 3 model-choice, 69 pass, 7 pending:calibration-16, 2 pending:calibration-16 pending:no-corpus, 10 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run calib-kit-merge/standing on 214c46421). 1 consistent-only, 33 fail, 10 fit only, 3 model-choice, 69 pass, 7 pending:calibration-16, 2 pending:calibration-16 pending:no-corpus, 10 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
