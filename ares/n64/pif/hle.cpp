@@ -192,7 +192,13 @@ auto PIF::joyRun() -> void {
   }
 }
 
-auto PIF::estimateTiming() -> u32 {
+//The RD64B joybus phase (n64brew PIF-NUS "Joybus frame"): the PIF walks the
+//frame over at most 5 channels until 0xFE, then runs each handshake on the
+//wire at 4 us per bit (n64brew Joybus Protocol). An empty port takes the tx
+//bytes and times out. The costs are solved from the n64-systembench RD64B
+//totals by tools/n64-timing/joybus-fit.py.
+auto PIF::estimateTiming() -> Clock {
+  using namespace Timing::Behavior;
   ControllerPort* controllers[4] = {
     &controllerPort1,
     &controllerPort2,
@@ -200,44 +206,27 @@ auto PIF::estimateTiming() -> u32 {
     &controllerPort4,
   };
 
-  u32 cycles = Timing::Behavior::SiRead64Base.units / Timing::UnitsPerRclk;
-  u32 short_cmds = 0;
-
+  Clock cycles = SiRead64Base;
   u32 offset = 0;
   u32 channel = 0;
   while(offset < 64 && channel < 5) {
     n8 send = ram.read<Byte>(offset++);
-    if(send == 0xfe) { short_cmds++; break; }     //end of packets
-    if(send == 0x00) { short_cmds++; channel++; continue; }
-    if(send == 0xfd) { short_cmds++; channel++; continue;  } //channel reset
-    if(send == 0xff) { short_cmds++; continue;  } //alignment padding
+    if(send == 0xfe) { cycles += PifJoybusEscape; break; }
+    if(send == 0xff) { cycles += PifJoybusEscape; continue; }
+    if(send == 0x00 || send == 0xfd) { cycles += PifJoybusSkip; channel++; continue; }
 
     n8 recv = ram.read<Byte>(offset++);
+    u32 tx = send & 0x3f;
+    u32 rx = recv & 0x3f;
+    offset += tx + rx;
 
-    //clear flags from lengths
-    send &= 0x3f;
-    recv &= 0x3f;
-    n8 input[64];
-    for(u32 index : range(send)) {
-      input[index] = ram.read<Byte>(offset++);
-    }
-    offset += recv;
-
-    if (channel < 4) {
-      if (controllers[channel]->device) {
-        cycles += 22000;
-      } else {
-        cycles += 18000;
-      }
-    } else {
-      //accessories(TBD)
-      cycles += 20000;
-    }
-
+    bool present = channel < 4 ? (bool)controllers[channel]->device
+                 : cartridge.eeprom.size == 512 || cartridge.eeprom.size == 2048 || cartridge.rtc.present;
+    if(send & 0xc0) cycles += PifJoybusSkip;
+    else if(present) cycles += PifJoybusHandshake + Clock{PifJoybusByte.units * (tx + rx)};
+    else cycles += PifJoybusNoDevice + Clock{PifJoybusByte.units * tx};
     channel++;
   }
-
-  cycles += 1420 * short_cmds;
   return cycles;
 }
 

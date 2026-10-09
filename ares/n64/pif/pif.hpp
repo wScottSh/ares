@@ -38,7 +38,7 @@ struct PIF : Thread, Memory::SI<PIF> {
   auto load(Node::Object) -> void;
   auto unload() -> void;
   auto power(bool reset) -> void;
-  auto estimateTiming() -> u32;
+  auto estimateTiming() -> Clock;
 
   //hle.cpp
   auto mainHLE() -> void;
