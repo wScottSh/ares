@@ -1117,8 +1117,9 @@ def gen_result(run, row):
     if log is None:
         return None
     ok = all(line in log for line in ("behaviors.py: check: ok", "lint-literals: ok")) and "FAILED" not in log \
-        and all(re.search(rf"^{tool}: self-test: \d+ cases, 0 failed$", log, re.M) for tool in ("behaviors.py", "pidma-replay"))
-    return ("pass" if ok else "fail"), "behaviors.py --check and --self-test, lint-literals.py, pidma-replay.py --self-test"
+        and all(re.search(rf"^{tool}: self-test: \d+ cases, 0 failed$", log, re.M) for tool in ("behaviors.py", "pidma-replay", "kit.py"))
+    return ("pass" if ok else "fail"), ("behaviors.py --check and --self-test, lint-literals.py, pidma-replay.py --self-test, "
+                                        "calibration/kit.py --self-test")
 
 
 MM_SCENES = {"file-select": "filesel", "south-clock-town": "sct"}

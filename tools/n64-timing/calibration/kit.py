@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """The calibration kit's data model: kit ROMs, questions, logs, and the hardware-vs-model comparison.
 
 A kit log is what a kit ROM prints (romgen hwout.py): a `#kit` header, records, a `#kit-end`
@@ -132,15 +133,31 @@ def derive(records):
             records[("span-width", f"half-b{bpp}")] = {"half_px": min(w for e, w in excess if e >= top / 2)}
 
 
+ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def normalize(data):
+    """A capture's bytes as the ROM printed them. A kit log is printable ASCII and LF only, so what
+    capture tools add can be undone without touching a real byte: an SRAM dump in the other byte
+    order, UTF-16 from a PowerShell redirect, a UTF-8 BOM, CRLF or CR line ends from a Windows tee,
+    a text-mode copy or a serial terminal, and terminal color codes."""
+    if b"#kit rom=" not in data and b"tik#" in data:
+        data = b"".join(data[i:i + 4][::-1] for i in range(0, len(data), 4))
+    wide = data.find(b"#\0k\0i\0t")
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff") or wide >= 0:
+        le = data[:2] == b"\xff\xfe" or (data[:2] != b"\xfe\xff" and wide % 2 == 0)
+        text = data.decode("utf-16-le" if le else "utf-16-be", errors="replace").lstrip("\ufeff")
+        data = text.encode("ascii", errors="replace")
+    data = data.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return ANSI.sub(b"", data).rstrip(b"\0")
+
+
 def read_logs(paths):
     """Kit logs by ROM id from files: ISViewer text, SRAM dumps (.srm/.sra/.sav, either byte order)
-    and transcribed screen text."""
+    and transcribed screen text, each normalized first."""
     out = {}
     for path in paths:
-        data = Path(path).read_bytes()
-        if b"#kit rom=" not in data and b"tik#" in data:
-            data = b"".join(data[i:i + 4][::-1] for i in range(0, len(data), 4))
-        log = Log(data.rstrip(b"\0"))
+        log = Log(normalize(Path(path).read_bytes()))
         if log.rom:
             out.setdefault(log.rom, []).append((Path(path), log))
     return out
@@ -253,7 +270,48 @@ def verify_run(run_dir):
     return errors
 
 
+def sample_log(body="#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n"):
+    text = f"#kit rom=kit-cpu sha=0 fmt=1 ri_mode=0xe\n{body}".encode()
+    return text + f"#kit-end rom=kit-cpu bytes={len(text)} fnv={fnv(text):08x}\n".encode()
+
+
+def self_test():
+    """Each capture mangling read_logs must undo, and the damage it must not accept."""
+    import tempfile
+    log = sample_log()
+    padded = log + b"\0" * (-len(log) % 4)
+    swapped = b"".join(padded[i:i + 4][::-1] for i in range(0, len(padded), 4)) + b"\0" * 64
+    ansi = b"".join(b"\x1b[32m" + line + b"\x1b[0m\n" for line in log.split(b"\n") if line)
+    cases = [
+        ("as printed", log, True),
+        ("CRLF (Windows tee, text-mode copy)", log.replace(b"\n", b"\r\n"), True),
+        ("CR line ends (serial terminal)", log.replace(b"\n", b"\r"), True),
+        ("UTF-16LE with BOM (PowerShell > redirect)", "\ufeff".encode("utf-16-le") + log.decode().encode("utf-16-le"), True),
+        ("UTF-16BE", log.decode().encode("utf-16-be"), True),
+        ("UTF-8 BOM and a listener banner line first", b"\xef\xbb\xbfsc64deployer: listening\n" + log, True),
+        ("terminal color codes", ansi, True),
+        ("SRAM dump, byte-swapped, zero padded", swapped, True),
+        ("a value edited under the old footer", log.replace(b"min=24", b"min=25"), False),
+        ("a cut log", log[:len(log) // 2], False),
+        ("CRLF with a value edited", log.replace(b"min=24", b"min=25").replace(b"\n", b"\r\n"), False),
+    ]
+    failed = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, (name, data, want) in enumerate(cases):
+            path = Path(tmp) / f"case{i}.log"
+            path.write_bytes(data)
+            logs = read_logs([path]).get("kit-cpu", [])
+            got = bool(logs) and logs[0][1].complete and logs[0][1].records.get(("dcb", "sw-lw"), {}).get("min") == 24
+            ok = got == want
+            failed += not ok
+            print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (complete={got}, want {want})")
+    print(f"kit.py: self-test: {len(cases)} cases, {failed} failed")
+    return failed
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--self-test"]:
+        sys.exit(1 if self_test() else 0)
     if sys.argv[1:2] == ["--verify-run"]:
         errs = verify_run(Path(sys.argv[2]))
         for e in errs:
@@ -261,4 +319,4 @@ if __name__ == "__main__":
         print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
               file=sys.stderr)
         sys.exit(1 if errs else 0)
-    sys.exit("usage: kit.py --verify-run RUN_DIR")
+    sys.exit("usage: kit.py --verify-run RUN_DIR | --self-test")

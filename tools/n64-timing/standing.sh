@@ -49,7 +49,9 @@ for suite in nemu64 bench rdpstat snapper noise thar0; do
 done
 (cd "$n64_build" && ctest > "$out/ctest.txt" 2>&1)
 (cd "$n64_repo" && "$PYTHON" tools/n64-timing/behaviors.py --check && "$PYTHON" tools/n64-timing/behaviors.py --self-test \
-  && "$PYTHON" tools/n64-timing/lint-literals.py && "$PYTHON" tools/n64-timing/pidma-replay.py --self-test) > "$out/behaviors.txt" 2>&1
+  && "$PYTHON" tools/n64-timing/lint-literals.py && "$PYTHON" tools/n64-timing/pidma-replay.py --self-test \
+  && "$PYTHON" tools/n64-timing/calibration/kit.py --self-test) > "$out/behaviors.txt" 2>&1
+"$here/calibration/run.sh" "$out/calib" > "$out/calib.txt" 2>&1 || echo "calibration/run.sh failed (see $out/calib.txt)" >&2
 for set in timing cycle cop0hazard; do
   DET_OUT="$out/det-nemu64-$set" "$here/determinism.sh" "$roms/nemu64-$set.z64" > "$out/det-nemu64-$set.txt" 2>&1
   DET_OUT="$out/stepcap-nemu64-$set" "$here/determinism.sh" --step-cap "$roms/nemu64-$set.z64" > "$out/stepcap-nemu64-$set.txt" 2>&1
