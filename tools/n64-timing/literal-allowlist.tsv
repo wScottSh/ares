@@ -17,10 +17,6 @@ ares/n64/cpu/cpu.cpp	instruction#2	step(pclk(1));	legacy.cpu.nmi-entry
 ares/n64/cpu/cpu.cpp	instruction#3	step(pclk(1));	legacy.cpu.sysad-frozen-step	
 ares/n64/cpu/interpreter-scc.cpp	getControlRandom	u32 period = wired <= 31 ? 32 - wired : 96 - wired;	-	CP0 Random wrap range (32 TLB entries, Wired), not time; plan T7c owns Random
 ares/n64/pi/bus.hpp	readWord	thread.step(pclk(250));	legacy.pi.cart-read	
-ares/n64/pif/hle.cpp	estimateTiming	cycles += 22000;	legacy.si.dma-read-controller	
-ares/n64/pif/hle.cpp	estimateTiming	cycles += 18000;	legacy.si.dma-read-empty-port	
-ares/n64/pif/hle.cpp	estimateTiming	cycles += 20000;	legacy.si.dma-read-accessory	
-ares/n64/pif/hle.cpp	estimateTiming	cycles += 1420 * short_cmds;	legacy.si.dma-read-short-command	
 ares/n64/pif/hle.cpp	mainHLE	constexpr Clock clocks = pclk(10240 * 4);	legacy.pif.step-quantum	
 ares/n64/pif/hle.cpp	pollHLE	intram.bootTimeout = Timing::seconds(6).units;  //6 seconds	legacy.pif.boot-timeout	
 ares/n64/rdram/rdram.cpp	power	chip.delay = 0x0000'0023;  //WriteDelay=4, WriteBits=3	-	RDRAM Delay register reset value and field decode; stored, never charged as time (plan T6 owns RDRAM timing)

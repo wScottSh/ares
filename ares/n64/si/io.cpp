@@ -85,10 +85,9 @@ auto SI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     io.dmaBusy = 1;
     io.dmaState = 1;
     io.pchState = 4;
-    int cycles = pif.estimateTiming();
     dma.toRdram = 1;
     dma.phase = DMA::Phase::Joybus;
-    scheduleAfter(EventKind::SI_DMA_Read, rclk(cycles));
+    scheduleAfter(EventKind::SI_DMA_Read, pif.estimateTiming());
   }
 
   if(address == 2) {
