@@ -23,3 +23,8 @@ pr	sha	verdict	evidence	verifier	ts
 78	584b9fdac76f6bf4a34fe4dc8a34a4735b5dd99a	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-78.md	sonnet-verify-78	2026-10-09T00:27:53.356Z
 79	120398a0f76c3af8c1692a3183a8426179ddc64f	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-79.md	sonnet-verify-79	2026-10-09T01:06:37.397Z
 80	33ad9d4fa9e257fbb4233a855c7bb0f319f10432	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-80.md	sonnet-verify-80	2026-10-09T01:52:01.426Z
+85	6febf9e7d8ba95cef9daa4227c42a8b71d48a20e	verifier-failed	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-85.md	sonnet-verify-85	2026-10-09T09:07:43.105Z
+83	6145930ba3b5233df457cd4fc3004332857444c3	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-83.md	sonnet-verify-83	2026-10-09T09:36:11.527Z
+85	17729ddfabea4d33e912e940a7a110844c7a71d9	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-85b.md	sonnet-verify-85b	2026-10-09T10:13:38.088Z
+88	7d70ee3a5073c525ccbcc92b74b03a8d3a36ec38	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-88.md	sonnet-verify-88	2026-10-09T10:39:33.266Z
+85	aba69902e81f0d84c446a8ebb028f44a81d72ddb	unit-test-verified	/home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-85c.md	sonnet-verify-85c	2026-10-09T11:25:09.472Z

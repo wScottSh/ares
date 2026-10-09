@@ -1,10 +1,10 @@
 # Orchestrate status
 
-Generated: 2026-10-09T01:52:44.984Z
+Generated: 2026-10-09T11:25:20.795Z
 
 ## Units
 
-States: done=45, landed=46
+States: done=53, landed=49, verified-held=1
 
 | ID | Track | State | Branch | PR | SHA | Brief |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -99,10 +99,22 @@ States: done=45, landed=46
 | verify-79 | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
 | pif-joy | build | landed | feat/pif-joy | 80 | 33ad9d4f | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
 | verify-80 | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
+| tools-bench | build | verified-held |  |  | 7ab7fdd1 | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
+| systembench | build | landed |  | 83 | 6145930b | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
+| calib-kit | tools | landed | feat/calib-kit | 85 | aba69902 | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
+| verify-mm1 | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
+| verify-85 | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
+| verify-83 | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
+| calib-kit-fix | tools | done | feat/calib-kit |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
+| sysbench-era | tools | landed | feat/sysbench-era | 88 | 7d70ee3a | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
+| verify-85b | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
+| calib-kit-merge | tools | done | feat/calib-kit |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md |
+| verify-88 | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
+| verify-85c | verify | done |  |  |  | /home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md |
 
 ## Verification ledger
 
-Verdicts: unit-test-verified=23, verifier-failed=1
+Verdicts: unit-test-verified=27, verifier-failed=2
 
 | PR | SHA | Verdict | Evidence | Verifier | Timestamp |
 | --- | --- | --- | --- | --- | --- |
@@ -130,6 +142,11 @@ Verdicts: unit-test-verified=23, verifier-failed=1
 | 78 | 584b9fdac76f6bf4a34fe4dc8a34a4735b5dd99a | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-78.md | sonnet-verify-78 | 2026-10-09T00:27:53.356Z |
 | 79 | 120398a0f76c3af8c1692a3183a8426179ddc64f | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-79.md | sonnet-verify-79 | 2026-10-09T01:06:37.397Z |
 | 80 | 33ad9d4fa9e257fbb4233a855c7bb0f319f10432 | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-80.md | sonnet-verify-80 | 2026-10-09T01:52:01.426Z |
+| 85 | 6febf9e7d8ba95cef9daa4227c42a8b71d48a20e | verifier-failed | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-85.md | sonnet-verify-85 | 2026-10-09T09:07:43.105Z |
+| 83 | 6145930ba3b5233df457cd4fc3004332857444c3 | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-83.md | sonnet-verify-83 | 2026-10-09T09:36:11.527Z |
+| 85 | 17729ddfabea4d33e912e940a7a110844c7a71d9 | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-85b.md | sonnet-verify-85b | 2026-10-09T10:13:38.088Z |
+| 88 | 7d70ee3a5073c525ccbcc92b74b03a8d3a36ec38 | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-88.md | sonnet-verify-88 | 2026-10-09T10:39:33.266Z |
+| 85 | aba69902e81f0d84c446a8ebb028f44a81d72ddb | unit-test-verified | /home/wscottsh/.claude/orchestrate/ares-n64-timing/reports/verify-85c.md | sonnet-verify-85c | 2026-10-09T11:25:09.472Z |
 
 ## Frontier
 
@@ -144,7 +161,8 @@ Lowest unmerged: none
 | --- | --- | --- | --- | --- | --- |
 | land-stack | resolved | Merging PRs is blocked for agents (classifier: Merge Without Review). Land the stacked PRs yourself, bottom up, starting at #30? | land them as they verify \| add a permission rule letting the coordinator merge verified PRs | stack keeps growing on branches; nothing reaches master until you land it | Scott added allow rule Bash(gh pr merge:*) via /permissions (2026-10-05); coordinator lands verified PRs |
 | build-corpora | resolved | Building test ROMs from external source (nemu64-test via cargo, libdragon-based n64-systembench / Thar0 RDP-Timing-Tests) was blocked for agents (classifier: Code from External). Run tools/n64-timing/build-nemu64.sh yourself, or allow it? | run it yourself \| allow agents to build external test ROMs \| skip these corpora | verify with MM, prebuilt ROMs (pi_dma_test, hydra rdp tests, bigbass timing) and in-repo checks; behaviors whose only check is these corpora are marked verification-pending | default taken: corpora ported into in-repo romgen (nemu64, Thar0, systemtest, repeater64, snapper64); n64-systembench numbers used as cited values only |
-| tools-bench | open | Map #1 lists 'point tools/bench at the fork and remove the func_80173B48 pin'. mm-decomp-60fps tools/bench is untracked, runs stock ares from PATH, and its BENCH build still pins func_80173B48. The fork's own mmbench (tools/n64-timing/mmbench) already runs the retail ROM unpinned and carries the acceptance checks. Do it, or retire tools/bench in favor of mmbench? | port tools/bench to the fork and drop the pin \| retire it; mmbench is the bench of record | retire it: mmbench is the bench of record; the closure draft reports the item as not done until you rule |  |
-| systembench-build | open | To compare bench numbers with hardware point by point (instead of 'consistent-with' over a poll-phase range), we need the original n64-systembench ROM built with the libdragon toolchain and run in the fork. Building external code is blocked for agents (gate build-corpora). Allow an agent to install libdragon and build rasky/n64-systembench @845635c, or build it yourself? | allow agents to build it \| you build it and drop the .z64 in ~/n64-timing/roms \| skip; keep consistent-with labels | skip: consistent-with labels stay, with the mean verdict printed beside them |  |
+| tools-bench | resolved | Map #1 lists 'point tools/bench at the fork and remove the func_80173B48 pin'. mm-decomp-60fps tools/bench is untracked, runs stock ares from PATH, and its BENCH build still pins func_80173B48. The fork's own mmbench (tools/n64-timing/mmbench) already runs the retail ROM unpinned and carries the acceptance checks. Do it, or retire tools/bench in favor of mmbench? | port tools/bench to the fork and drop the pin \| retire it; mmbench is the bench of record | retire it: mmbench is the bench of record; the closure draft reports the item as not done until you rule | port tools/bench to the fork and drop the pin (Scott, 2026-10-09, verbatim: "do the first two, skip 16 for now. Just make sure it's comprehensive once I have hardware to compare against.") |
+| systembench-build | resolved | To compare bench numbers with hardware point by point (instead of 'consistent-with' over a poll-phase range), we need the original n64-systembench ROM built with the libdragon toolchain and run in the fork. Building external code is blocked for agents (gate build-corpora). Allow an agent to install libdragon and build rasky/n64-systembench @845635c, or build it yourself? | allow agents to build it \| you build it and drop the .z64 in ~/n64-timing/roms \| skip; keep consistent-with labels | skip: consistent-with labels stay, with the mean verdict printed beside them | allow agents to build it (Scott, 2026-10-09, verbatim: "do the first two, skip 16 for now. Just make sure it's comprehensive once I have hardware to compare against.") |
+| mm-bench-merge | open | wScottSh/mm-decomp-60fps#1 (bench on the fork, pin removed) passed verify-mm1. It commits your uncommitted bench harness to main, which will clash with your local uncommitted copy. Merge it yourself when ready (then the map #1 tools/bench row reads done)? | you merge it \| coordinator merges it \| leave open | leave open for you; coordinator does not merge in your decomp repo |  |
 
-<!-- orch-summary {"unitStates":{"done":45,"landed":46},"ledgerVerdicts":{"unit-test-verified":23,"verifier-failed":1},"frontierGeneration":0,"openGateIds":["systembench-build","tools-bench"]} -->
+<!-- orch-summary {"unitStates":{"done":53,"landed":49,"verified-held":1},"ledgerVerdicts":{"unit-test-verified":27,"verifier-failed":2},"frontierGeneration":0,"openGateIds":["mm-bench-merge"]} -->

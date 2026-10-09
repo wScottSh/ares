@@ -18,14 +18,23 @@
 
 ## tools-bench
 
-- Status: open
+- Status: resolved
 - Question: Map #1 lists 'point tools/bench at the fork and remove the func_80173B48 pin'. mm-decomp-60fps tools/bench is untracked, runs stock ares from PATH, and its BENCH build still pins func_80173B48. The fork's own mmbench (tools/n64-timing/mmbench) already runs the retail ROM unpinned and carries the acceptance checks. Do it, or retire tools/bench in favor of mmbench?
 - Options: port tools/bench to the fork and drop the pin | retire it; mmbench is the bench of record
 - Default: retire it: mmbench is the bench of record; the closure draft reports the item as not done until you rule
+- Answer: port tools/bench to the fork and drop the pin (Scott, 2026-10-09, verbatim: "do the first two, skip 16 for now. Just make sure it's comprehensive once I have hardware to compare against.")
 
 ## systembench-build
 
-- Status: open
+- Status: resolved
 - Question: To compare bench numbers with hardware point by point (instead of 'consistent-with' over a poll-phase range), we need the original n64-systembench ROM built with the libdragon toolchain and run in the fork. Building external code is blocked for agents (gate build-corpora). Allow an agent to install libdragon and build rasky/n64-systembench @845635c, or build it yourself?
 - Options: allow agents to build it | you build it and drop the .z64 in ~/n64-timing/roms | skip; keep consistent-with labels
 - Default: skip: consistent-with labels stay, with the mean verdict printed beside them
+- Answer: allow agents to build it (Scott, 2026-10-09, verbatim: "do the first two, skip 16 for now. Just make sure it's comprehensive once I have hardware to compare against.")
+
+## mm-bench-merge
+
+- Status: open
+- Question: wScottSh/mm-decomp-60fps#1 (bench on the fork, pin removed) passed verify-mm1. It commits your uncommitted bench harness to main, which will clash with your local uncommitted copy. Merge it yourself when ready (then the map #1 tools/bench row reads done)?
+- Options: you merge it | coordinator merges it | leave open
+- Default: leave open for you; coordinator does not merge in your decomp repo

@@ -90,3 +90,15 @@ labels-phase	tools	landed	feat/labels-phase	79	120398a0	/home/wscottsh/.claude/o
 verify-79	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
 pif-joy	build	landed	feat/pif-joy	80	33ad9d4f	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
 verify-80	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+tools-bench	build	verified-held			7ab7fdd1	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+systembench	build	landed		83	6145930b	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+calib-kit	tools	landed	feat/calib-kit	85	aba69902	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-mm1	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-85	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-83	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+calib-kit-fix	tools	done	feat/calib-kit			/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+sysbench-era	tools	landed	feat/sysbench-era	88	7d70ee3a	/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-85b	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+calib-kit-merge	tools	done	feat/calib-kit			/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/build-common.md
+verify-88	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
+verify-85c	verify	done				/home/wscottsh/.claude/orchestrate/ares-n64-timing/briefs/verify-pr.md
