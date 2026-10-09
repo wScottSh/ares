@@ -866,7 +866,7 @@ def calibration_errors(root, rows, checks, found):
     rows, checks, items or issues in its closes column; a row's hw check is one its question closes, and
     a row a comparable question closes names its hw check unless that question re-runs the row's fit;
     and everything a console could decide (hardware_needs) has a question or a stated reason that no
-    console run can decide it (calibration/undecidable.tsv)."""
+    console run, or no run of this kit, can decide it (calibration/undecidable.tsv)."""
     errors = []
     kit = kit_module(root)
     qs = {q["id"]: q for q in question_rows(root)}

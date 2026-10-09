@@ -315,15 +315,15 @@ def ext_snapper64(root, model_dir, paths):
 
 
 def ext_systembench(root, model_dir, paths):
-    """n64-systembench's ISViewer text from the console against the fork's run of the same binary
-    (run.sh ext/systembench.txt), every row of systembench/rows.tsv under main.c's own pass rule with the
+    """n64-systembench's ISViewer text from the console against the fork's run of the same binary, the
+    hardware-era build (build-systembench-era.sh, run.sh ext/systembench.txt), every row of systembench/rows.tsv under main.c's own pass rule with the
     fork's reading as the expected value. Pointwise for that binary only: a one to three instruction
     change in a poll loop moves the poll rows by up to 10 RCP cycles (verify-83), so a console run of
     another build of the same source decides nothing here."""
     from systembench import report as sb
     model_path = Path(model_dir) / "ext" / "systembench.txt"
     if not model_path.exists():
-        return "missing", (f"no fork run of n64-systembench in {model_path}; build it (build-systembench.sh) and run "
+        return "missing", (f"no fork run of n64-systembench in {model_path}; build it (build-systembench-era.sh) and run "
                            f"tools/n64-timing/calibration/run.sh")
     model = sb.parse(model_path.read_text(encoding="utf-8", errors="replace"))
     if model is None:

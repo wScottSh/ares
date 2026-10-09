@@ -1,4 +1,4 @@
-# standing run systembench/after on 9ed43d6ef
+# standing run sysbench-era/after on 8c652711f
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -177,23 +177,23 @@ systembench:joy-empty-4b	pass	JOY: Empty 4B [64] 20641 RCP cycles (hardware 2064
 systembench:joy-empty-56b	pass	JOY: Empty 56B [64] 21161 RCP cycles (hardware 21170, -9, -0.04%); main.c rule holds in 33 of 33 runs
 systembench:joy-empty-63b	pass	JOY: Empty 63B [64] 21161 RCP cycles (hardware 21178, -17, -0.08%); main.c rule holds in 33 of 33 runs
 systembench:joy-empty-8b	pass	JOY: Empty 8B [64] 21161 RCP cycles (hardware 21163, -2, -0.01%); main.c rule holds in 33 of 33 runs
-systembench:pi-dma-1024	pass	PI DMA [1024] 12185 RCP cycles, 12185..12186 over the boot delays (hardware 12168, +17, +0.14%); main.c rule holds in 33 of 33 runs
-systembench:pi-dma-128	fail	PI DMA [128] 1582 RCP cycles (hardware 1591, -9, -0.57%); main.c rule holds in 0 of 33 runs
-systembench:pi-dma-65536	pass	PI DMA [65536] 778349 RCP cycles (hardware 777807, +542, +0.07%); main.c rule holds in 33 of 33 runs
-systembench:pi-dma-8	fail	PI DMA [8] 190 RCP cycles (hardware 193, -3, -1.55%); main.c rule holds in 0 of 33 runs
+systembench:pi-dma-1024	pass	PI DMA [1024] 12170 RCP cycles (hardware 12168, +2, +0.02%); main.c rule holds in 33 of 33 runs
+systembench:pi-dma-128	fail	PI DMA [128] 1580 RCP cycles (hardware 1591, -11, -0.69%); main.c rule holds in 0 of 33 runs
+systembench:pi-dma-65536	pass	PI DMA [65536] 778364 RCP cycles (hardware 777807, +557, +0.07%); main.c rule holds in 33 of 33 runs
+systembench:pi-dma-8	fail	PI DMA [8] 187 RCP cycles, 186..187 over the boot delays (hardware 193, -6, -3.11%); main.c rule holds in 0 of 33 runs
 systembench:pi-io-r	pass	PI I/O R [4] 144 RCP cycles (hardware 144, +0, +0.00%); main.c rule holds in 33 of 33 runs
 systembench:pi-io-w	fail	PI I/O W [4] 130 RCP cycles (hardware 134, -4, -2.99%); main.c rule holds in 0 of 33 runs
 systembench:rcp-io-r	pass	RCP I/O R [1] 24 CPU cycles (hardware 24, +0, +0.00%); main.c rule holds in 33 of 33 runs
 systembench:si-dma-w-ram	pass	SI DMA W RAM [64] 4065 RCP cycles (hardware 4065, +0, +0.00%); main.c rule holds in 33 of 33 runs
-systembench:si-dma-w-rom	consistent-only	SI DMA W ROM [64] 2140 RCP cycles, 2139..2140 over the boot delays (hardware 2144, -4, -0.19%); main.c rule holds in 1 of 33 runs
-systembench:si-io-r	pass	SI I/O R [4] 1974 RCP cycles (hardware 1974, +0, +0.00%); main.c rule holds in 33 of 33 runs
-systembench:si-io-w	fail	SI I/O W [4] 2151 RCP cycles (hardware 2158, -7, -0.32%); main.c rule holds in 0 of 33 runs
-systembench:u16r	pass	RDRAM U16R [2] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
-systembench:u32r	pass	RDRAM U32R [4] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
-systembench:u32r-banked	fail	RDRAM U32R banked [16] 133 CPU cycles (hardware 136, -3, -2.21%); main.c rule holds in 0 of 33 runs
-systembench:u32r-seq	pass	RDRAM U32R seq [16] 133 CPU cycles (hardware 134, -1, -0.75%); main.c rule holds in 33 of 33 runs
-systembench:u64r	pass	RDRAM U64R [8] 37 CPU cycles (hardware 37, +0, +0.00%); main.c rule holds in 33 of 33 runs
-systembench:u8r	pass	RDRAM U8R [1] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:si-dma-w-rom	consistent-only	SI DMA W ROM [64] 2140 RCP cycles, 2138..2140 over the boot delays (hardware 2144, -4, -0.19%); main.c rule holds in 1 of 33 runs
+systembench:si-io-r	pass	SI I/O R [4] 1973 RCP cycles (hardware 1974, -1, -0.05%); main.c rule holds in 33 of 33 runs
+systembench:si-io-w	fail	SI I/O W [4] 2150 RCP cycles, 2150..2151 over the boot delays (hardware 2158, -8, -0.37%); main.c rule holds in 0 of 33 runs
+systembench:u16r	pass	RDRAM U16R [2] 34 CPU cycles, 34..35 over the boot delays (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u32r	pass	RDRAM U32R [4] 34 CPU cycles, 34..35 over the boot delays (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u32r-banked	consistent-only	RDRAM U32R banked [16] 134 CPU cycles, 134..135 over the boot delays (hardware 136, -2, -1.47%); main.c rule holds in 32 of 33 runs
+systembench:u32r-seq	pass	RDRAM U32R seq [16] 134 CPU cycles, 134..135 over the boot delays (hardware 134, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u64r	pass	RDRAM U64R [8] 37 CPU cycles, 37..38 over the boot delays (hardware 37, +0, +0.00%); main.c rule holds in 33 of 33 runs
+systembench:u8r	pass	RDRAM U8R [1] 34 CPU cycles, 34..35 over the boot delays (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs
 thar0:ac-zbsame-vioff-imrd-1cyc	fail	model 108697 vs console 105999 (105940..106092), +2.55%
 thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	fail	model 170392 vs console 166352 (166182..166520), +2.43%
 thar0:alpha-fail-1cycle	pass	model 77772 vs console 77772 (77772..77772), +0.00%

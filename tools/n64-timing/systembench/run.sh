@@ -20,7 +20,7 @@ mkdir -p "$results"
 {
   echo "pristine $roms/n64-systembench.z64"
   for rom in "$roms"/boot-*/n64-systembench.z64; do
-    [ -f "$rom" ] && echo "$(basename "$(dirname "$rom")") $rom"
+    if [ -f "$rom" ]; then echo "$(basename "$(dirname "$rom")") $rom"; fi
   done
 } | xargs -P "${SYSBENCH_JOBS:-4}" -L 1 sh -c '
   out="$1/$2"

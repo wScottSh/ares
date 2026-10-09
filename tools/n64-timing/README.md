@@ -222,23 +222,32 @@ tools/n64-timing/run-thar0.sh
 ## n64-systembench, the original ROM
 
 ```sh
-tools/n64-timing/build-systembench.sh      # docker; writes $N64_TIMING_HOME/systembench (OUT overrides)
-tools/n64-timing/systembench/run.sh        # SYSBENCH_ROMS overrides the ROM directory
+tools/n64-timing/build-systembench-era.sh  # docker; 50f5066 + GCC 12.2 into $N64_TIMING_HOME/systembench-era/2023
+tools/n64-timing/build-systembench.sh      # docker; 845635c + GCC 16.2 into $N64_TIMING_HOME/systembench
+tools/n64-timing/systembench/run.sh        # SYSBENCH_ROMS and SYSBENCH_RESULTS override the directories
 python tools/n64-timing/systembench/compare.py $N64_TIMING_HOME/results/systembench/results.tsv \
   $N64_TIMING_HOME/results/bench/results.tsv   # original vs romgen port vs hardware, per row
 ```
 
-`build-systembench.sh` builds rasky/n64-systembench `845635c` with libdragon `preview` `cc490afe0` in the libdragon preview toolchain image, pinned by digest (GCC 16.2). It writes `n64-systembench.z64` and `.elf`, 32 `boot-<K>/n64-systembench.z64` ROMs and `provenance.txt` with the sha256s. Two builds of the same inputs are byte-identical. n64-systembench has no license file, so its source and ROM stay outside the repo; libdragon is public domain (Unlicense). `standing.sh` builds the ROMs into `$N64_TIMING_HOME/roms/systembench`; without docker the `systembench:*` checks are `pending:no-rom`.
+The `systembench:*` checks run the hardware-era build. `standing.sh` builds it into `$N64_TIMING_HOME/roms/systembench` and the 845635c build into `roms/systembench-845635c`, which it runs as a report only. Without docker the `systembench:*` checks are `pending:no-rom`. n64-systembench has no license file, so its source and ROMs stay outside the repo; libdragon is public domain (Unlicense).
+
+`build-systembench-era.sh` builds the commit and toolchain the hardware values came from:
+
+- `git blame` of main.c's table dates the PI values to de9d9dd (2022-08-08), the RDRAM and RCP values to 3c6a0ee (2022-08-09) and the SI and JOY values to 50f5066 (2023-01-25). No value changed after that. From de9d9dd to 50f5066 the timed functions are the same source; later commits add code around them.
+- `2023` (the default) is 50f5066, the only era commit with every row. `2022` is d12e8ea, the last 2022-08 commit. Each uses the vendored libdragon and a toolchain image built from libdragon's own Dockerfile at the last toolchain change before that date: a54ccd736 (GCC 12.2.0, binutils 2.39) and eed8ef3b7 (GCC 12.1.0, binutils 2.38). The ubuntu:18.04 base is pinned by digest. Two builds give the same z64.
+- The era `timeit_average` drops only one sample when every sample is equal and still divides by n-2. The fork's samples are identical, so an unfixed era build reads (n-1)/(n-2) high wherever that happens: PI DMA 1 KiB 13692 instead of 12170, JOY Empty 4B-56B +2 %, and 64 KiB 9/8 high in other layouts (measured). The script changes `>` to `>=` in its max test. That is two instructions, and `nm` lists the same addresses (measured). `ERA_TIE_FIX=0` builds the original.
+
+`build-systembench.sh` builds `845635c` with libdragon `preview` `cc490afe0` in the libdragon preview toolchain image, pinned by digest (GCC 16.2). Both scripts write `n64-systembench.z64` and `.elf`, 32 `boot-<K>` ROMs and `provenance.txt` with the sha256s.
 
 A `boot-<K>` ROM counts down K iterations in libdragon's `_start` before `main`. It pads `_start` so that every later address moves by exactly 2 KiB at every K, so the boot-delay ROMs share one code and data layout. That layout is the unpadded ROM's moved by one RDRAM row.
 
-The ROM prints its table through ISViewer, which `n64-run` writes to stdout. `run.sh` runs the unpadded ROM and every boot-delay ROM. `report.py` parses each `*** NAME [QTY]` block and applies main.c's own rule to every run: within the sampling error (1 CPU cycle, or 2 RCP cycles) or under 0.2 % (main.c:17-18, 664-669). The expected value is the one the ROM prints, compiled into main.c. `rows.tsv` names each benchmark, its romgen port and whether it is a check. `results.tsv` gives the unpadded value, the range over every run and the verdict: `pass` when every run passes, `consistent-only` when only some do, `fail` when none do.
+The ROM prints its table through ISViewer, which `n64-run` writes to stdout. `run.sh` runs the unpadded ROM and every boot-delay ROM. `report.py` parses each `*** NAME [QTY]` block and applies main.c's own rule to every run: within the sampling error (1 CPU cycle, or 2 RCP cycles) or under 0.2 % (main.c:17-18, 664-669 at 845635c). The expected value is the one the ROM prints, compiled into main.c. `rows.tsv` names each benchmark, its romgen port and whether it is a check. `results.tsv` gives the unpadded value, the range over every run and the verdict: `pass` when every run passes, `consistent-only` when only some do, `fail` when none do.
 
 What the comparison can and cannot show:
 
-- The hardware numbers came from 2022-08 builds (most rows) and a 2023-01 build (the SI DMA and JOY rows), made with that era's toolchain (GCC 12) and the vendored libdragon. `845635c` builds against today's libdragon and GCC 16.2. Its timed loops are fixed by volatile accesses and `TICKS_READ`, so their instruction sequence is very likely the same (inferred). Code and data addresses do differ.
-- `rambuf`'s address is one such difference. In this build it starts 0x200 bytes below a 2 KiB RDRAM row boundary, so U32R rand (+1024, +12, +568, +912) crosses rows and PI DMA 1 KiB spans two rows. A build with `rambuf` aligned to 2 KiB reads U32R rand 133 and PI DMA 1 KiB 12170, against 151 and 12185 unaligned. Where the hardware build's `rambuf` was is not known.
-- 4b538eb (2024-05) rewrote TIMEIT_MULTI's averaging after the hardware numbers were taken and left the expected values unchanged.
+- The timed instructions of the poll benchmarks (PI DMA, PI I/O W, SI I/O W, SI DMA W) are the same in GCC 12.1, 12.2 and 16.2 builds, apart from register names. de9d9dd's PI DMA has one more `nop` after the length write (objdump, measured). Across seven builds the readings move by at most 4 rclk. So the compiler and layout do not explain the PI I/O W, SI I/O W, SI DMA W ROM, PI DMA 8 and PI DMA 128 offsets. A changed poll step does move them: one to three `nop`s per step move them by up to 10 rclk (verify-83). These checks therefore hold for this instruction sequence, which the hardware build also had if it used a GCC 12 (inferred).
+- `rambuf`'s address depends on the whole link, which includes libdragon, and the hardware build's address is not known. U32R rand (+1024, +12, +568, +912) reads 134 when `rambuf` sits in one 2 KiB RDRAM row, as in the 50f5066 build (0x800278c0). It reads 150-151 when the reads cross a row, as in the 2022 builds (0x80026580) and 845635c (0x8002de00). PI DMA 1 KiB reads 12170 within one row and 12185 across two.
+- C8R-C64R read 2 or 4 CPU cycles per binary, and hardware reads 3. COUNT ticks every 2 pclk, and the fork's samples are identical, so a run reads one COUNT phase (inferred). Changing two instructions in `timeit_average` flips C16R, C32R and C64R between 2 and 4 (measured), so the value is the run's COUNT parity, not a cache cost. The hardware 3 is a mean over mixed phases (inferred). 4b538eb (2024-05) rewrote TIMEIT_MULTI after the hardware values were taken. In the 50f5066 build U32R seq reads 134, as on hardware, and 845635c reads 133. The tie fix leaves that 134 unchanged, so the difference comes from layout or code, not from the averaging (measured).
 
 ## Self-test without the corpus
 
