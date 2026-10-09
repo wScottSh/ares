@@ -1,40 +1,33 @@
-# Handoff: timing-model program, paused 2026-10-05
+# Handoff: timing-model program, 2026-10-08 (unicron)
 
-Scott paused the program after this batch because of token budget ("when this batch of work is done, we need to pause. to much token budget used."). Nothing is running and no PR is open. Everything below is on master in wScottSh/ares.
+All plan units are landed on master (wScottSh/ares ce3b475d7). Nothing is running and no PR is open.
 
-## Landed (plan units)
+## Landed this session (PRs, each with an independent sonnet verdict in ledger.tsv)
 
-- Harness: n64-run headless runner, mmbench (7 MM scenes incl. the #11 file-select acceptance scenes and `filesel_check.py`), romgen in-repo ROM generator with suites nemu64, bench, thar0, rdpstat, snapper.
-- Design: ADR 0001 (`docs/adr/0001-timing-core.md`), build plan (`docs/design/timing-core/plan.md`), sketches.
-- T1 recompilers removed. T2 determinism floor + trace_hash. T3 behaviors table, generator, spec, literal lint. T4 absolute 750 MHz clock, exact VCLK. T5 timeline scheduler. T6 RI arbiter + SysAD port. T7a CPU pipeline scoreboard. T8 DMA engines as RI bus clients. T9/T10 cen64-jgemu software RDP is the only RDP (paraLLEl/Vulkan removed). T12 timed DPC front end.
-- Tooling: fit provenance in behaviors.py (a fit row needs an independent check or a `verify-is-fit:` note); research docs consolidated in `docs/research/`.
+- #60 L0 Linux harness port. #61 T7b exceptions. #62 T7c CP0 timing. #64 cop0hazard ROM order. #65 T7d fetch window and I-fills.
+- #63 T11 VI fetch on the bus (first head failed verify-63 on accuracy; fixed, re-verified twice, merged with T7d).
+- #66 CPU provenance labels. #67 T13 RDP memory interface. #68 T14 noise LFSR. #69 T15 unsynced attribute sampling. #70 t13-fix (RDP readiness cache, -9% MM wall).
+- #71 T16 run budget (all scenes < 120 s; slowest filesel-rotate 102.9 s). #72 T17 spec assembly and closure draft.
+- #73 t17-fix (honest gates, pidma wired). #74 not-built status. #75/#76 systembench ports and builds (PIF RAM read, dword read, PI I/O read and write busy, SI I/O, SI write64 ROM). #78 phase walk and per-check verdict rules. #79 consistent-only / pass-conditional labels. #80 joybus/PIF timing from systembench totals.
 
-## Where the numbers stand (master, measured by independent verifiers)
+## Where the numbers stand (master ce3b475d7, measured by verifiers)
 
-- nemu64 failures: timing 453 / 1604 (from 924 at the start), cycle 9 / 13, cop0hazard 5 / 5.
-- snapper64 console dumps: 2592 / 2592 match. rdpstat: systemtest 0/7, dpc 0/2, repeater64 0/21 failed.
-- Thar0 RDP: configs 84/92 = 77,772 and 85/93 = 155,052 exactly (these are fit-only, flagged); the other 96 configs need memory time (T13).
-- pidma replay: about 23.8k / 24k points within ±3%.
-- MM 600 fields: about 11–12 s wall on the shared host (budget 120 s). Determinism, stepcap and save-state round trip pass.
-- #11 acceptance: empty-files file select 1.00 field/frame (pass); two-named-files row FAILS (model 1.00, hardware 2.00). The RDP memory interface (T13) is what should move it.
+- Spec: 149 behaviors: 72 pass, 31 fail, 10 fit only, 3 model-choice, 7 pending:calibration-16, 15 pending:no-corpus, 11 pending:report-only. Every behavior is built (behaviors.py --check enforces a code read or pointer per row).
+- nemu64 failures: timing 9 / 1604 (C7 Load Miss VI-off x8: D-fill has no tail; 20.0 same-bank VI-on mean), cycle 0 / 13, cop0hazard 0 / 5.
+- snapper 2592 / 2592. rdpstat 0/7, 0/2, 0/21; 1prim 2/4 (its expectation is a cen64 extrapolation, not hardware). thar0 4/100 inside the strict console min..max, mean |residual| about 5%.
+- Map #1 Destination: determinism pass; <= 2 min pass; file select #11 FAIL (named files 1.6941 vs 1.90-2.10; empty 1.0113 pass); tools/bench item not done (gate tools-bench).
+- Closure draft: docs/spec/map-1-closure-draft.md (generated, not posted to #1).
 
-## Next units, in order (plan.md has goal, files, check for each)
+## Open gates (Scott)
 
-0. L0 Linux harness port (new; not in plan.md). The program moved to the Linux host `qwen` (unicron: Ubuntu, 32 cores, 107 GB RAM, g++/cmake/ninja/python3/gh; no clang, no bun). `tools/n64-timing/build.sh` is MSYS2-clang64-only and the scripts assume a `.exe` runner and Windows drive-letter path conversion (`cygpath`). Make the harness build and run natively on Linux (g++ or clang via apt), keep Windows working, then rerun the full standing-check set on master and record the Linux baseline: nemu64 453/9/5, snapper 2592/2592, rdpstat 0/7 0/2 0/21, thar0 84/92/85/93 exact, det, stepcap, state-roundtrip, MM 600-field wall time. Determinism across hosts is not required, but within-host runs must be byte-identical; report any value that differs from the Windows baseline with cause. Regenerate local data: `romgen/build.py`, `suites/snapper/fetch.sh` into `~/n64-timing/corpora`, and re-clone the research corpora the briefs name (`~/n64-timing/scratch/r29/clones/...`, cen64 jgemu at `~/n64-timing/scratch/jgcen64`) from the URLs and commits in `docs/research/hardware-corpora.md` and `docs/research/jgemu-dpc-probe.md`.
-1. T7b exceptions and bubbles (C1, 439 nemu64 values; `Pipeline::fault()` is the hook, see reports/t7a.md "For T7b").
-2. T7c CP0 timing, then T7d fetch window and I-fills (cycle 13/13).
-3. T11 VI fetch on the bus (memset band residuals, VI-on same-bank 36), drops VI from the Rdram::ram friend list.
-4. T13 RDP memory interface (Thar0 100 configs, snapper span, MM #11 named-files row), drops RDP from the friend list.
-5. T14 noise LFSR, T15 unsynced attributes, T16 budget, T17 bench integration and final spec assembly, then close map #1.
-- A cleanup unit for `followups.md` (mostly behaviors.tsv labels: rows the verifiers found unlabeled or inferred) is cheap and can run any time.
+- tools-bench: port mm-decomp-60fps tools/bench to the fork and drop the func_80173B48 pin, or retire it for mmbench. Default: retire.
+- systembench-build: allow building rasky/n64-systembench with libdragon so bench numbers can be compared pointwise instead of consistent-with over poll phase. Default: skip.
+- #16 hardware calibration run (unchanged). It decides the filesel named-files gap, the VI-vs-CPU contention strength, the D-fill tail, thar0 residuals, the first VI line after enable (#77), noise questions, pidma offset.
+
+## Next work if resumed
+
+followups.md lists everything parked, newest at the bottom. The cheap, reference-backed ones: verify-80 wording fix on joybus independent checks; U32R banked cause; pidma COUNT logging to pin the offset; mmbench/report.py PYTHONPATH break; rdp.port-lookahead / span-slots sensitivity notes.
 
 ## How to resume
 
-On qwen this is already done: the repo is `~/repos/ares` (pulled to master), the store is installed at `~/.claude/orchestrate/ares-n64-timing/` with the STOP line removed, and the model sheet is `~/.claude/pstack-models.md`. The MM ROM is `~/repos/mm-decomp-60fps/baseroms/n64-us/baserom.z64` (md5 2a0a8acb61538235bc1094d297fb6556, the NTSC-U 1.0 the decomp matches). `tools/n64-timing/program-paths.py --home <home>` rewrites the operative program files for another host.
-
-1. Install the pstack plugin in Claude Code on the host (the briefs name its skills and the orchestrate CLI; the CLI needs bun: `npm install -g bun`).
-2. Start the coordinator in `~/repos/ares` with `/pstack:poteto-mode continue the ares timing program from ~/.claude/orchestrate/ares-n64-timing/handoff.md`. It runs L0 first.
-3. Each build unit: spawn a fresh worker with `briefs/build-common.md` naming the unit and base `master`; then an independent verifier on a different model with `briefs/verify-pr.md`; merge on PASS. Model policy (Scott): opus workers, sonnet verifiers, medium effort.
-4. Human-only items, unchanged: #16 hardware calibration run, #25 contact the jgemu author (draft in the #25 comment).
-
-Paths in `reports/` refer to the original Windows machine's user directory and are kept as a historical record; briefs, standing orders and this handoff use qwen paths.
+Store: ~/.claude/orchestrate/ares-n64-timing/ (preferences.md lines 1-27 are the standing orders). orch CLI needs bun (~/.npm-global/bin/bun). One command reruns every standing check: tools/n64-timing/standing.sh, then behaviors.py --results <dir>. Workers opus, verifiers sonnet, medium effort; verifiers never touch the coordinator checkout (verify-pr.md step 2).
