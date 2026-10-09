@@ -101,3 +101,24 @@
 - Unplanned behavior changes (labeled): cart channel charged by presence (was always 20000); 0xC0-flag handshake = skip. 1 ms reset and ~520 us flag delays uncharged. Channel order 4..0 ignored.
 - 36 rclk ares-side offset varies 29.5..42 across JOY points.
 - mmbench/report.py needs PYTHONPATH=tools/n64-timing (ModuleNotFoundError romgen).
+- (tools-bench) emux XPROFREAD 0x0201 RSP halted cycles always 0 on fork since T5 (512acc926): issue #82. DP_DMA unfed; command-DMA bytes accounting unverified. No mm scene exercises the RDP-time particle budget (rain scene or moving Link would).
+- (verify-mm1) tools/bench README line 97: budget range is 14.0..30.1 ms, not 14.0..24.0; fix in PR #1 if merged.
+
+## From systembench (PR #83)
+- Re-solve pi.io-busy / si.io-busy / si.write64-rom so the original's reading lands on 134 / 2158 / 2144 (separate fit unit, pref 21). Refit pi.block-writeback against the original (128 B -9, 8 B -3). Trace U32R banked (133 vs 136, confirmed by original).
+- Hardware-era build (n64-systembench 50f5066 + GCC 12 libdragon toolchain from a54ccd736 Dockerfile) to bound codegen/layout effects; hardware numbers came from 2022-23 GCC 12 builds; 4b538eb rewrote TIMEIT_MULTI later. Coordinator reads pref 28b's grant as covering any commit of rasky/n64-systembench (agent interpretation; Scott can narrow).
+- For #16: run this exact ROM on hardware and read rambuf from its ELF (U32R rand / PI DMA 1 KiB depend on rambuf crossing a 2 KiB row).
+- (verify-83) SUPERSEDES the refit follow-up above: do NOT refit pi.io-busy / si.io-busy / si.write64-rom / pi.block-writeback to the fork's original-binary readings. A 1-3 instruction change in the poll step moves those rows by up to ~10 units, so the pointwise check is valid for this binary only. Settle with a hardware-era build (50f5066 + GCC 12) or the #16 run on the same binary. Wording fix: four notes say "the hardware's poll phase" -> "this binary's phase, codegen-sensitive, about ±10 rclk"; README "instruction sequence very likely the same" unverified; old TIMEIT_MULTI averaging explains C16R-C64R and U32R seq/rand (measured), superseding the "inferred parity" note.
+
+## From calib-kit-fix (PR #85)
+- Fork never raises the Watch exception (kit-cpu2 watch points fire 0 times): not filed yet.
+- #86 RDP hazard tail rejecting pixels keeps first-pass pixels (fork 0 vs n64brew 27).
+- vi-first-line first_ticks ±24 tolerance not investigated; sp-dma-direction 8-128 B needs an RSP-timed point.
+- External readers: systembench (now landed, #83) and pi_dma_test / MM bench still compared by hand.
+- LD from PIF RAM freezes the fork CPU (dropped from kit).
+
+## From sysbench-era / verify-88 (PR #88)
+- Model-error candidates (era binary on fork vs hw): PI I/O W -4, SI DMA W ROM -4, SI I/O W -8 (all measured basis, multiples of 4 rclk: maybe one shared write-to-first-poll cause, a guess). Independent check needs the #16 same-binary run. PI DMA 8 -6 independent: bundle with pidma track. PI DMA 128 -11 is pi.block-writeback fit data (absorbed poll phase). U32R banked -2 = one COUNT tick, defer to #16.
+- U32R rand era pass depends on the GCC 12.2 link (12.1 puts rambuf at 0x80027c00, reads 151): not model confirmation.
+- README: hardware sits on fixed (not tie-inflated) values; 8313bcb introduced PI I/O R 144.
+- (verify-85c) PI-wait timeout triggers slowly on console (271 s for kit-rdp); kit-dma PI-wait mutant unmeasured (>6 min). Consider lowering the PI bound.

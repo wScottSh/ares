@@ -1,6 +1,6 @@
-# Handoff: timing-model program, 2026-10-08 (unicron)
+# Handoff: timing-model program, 2026-10-09 (unicron)
 
-All plan units are landed on master (wScottSh/ares ce3b475d7). Nothing is running and no PR is open.
+All plan units are landed on master (wScottSh/ares 7664d395b). Nothing is running. One PR is open and waits on Scott: wScottSh/mm-decomp-60fps#1.
 
 ## Landed this session (PRs, each with an independent sonnet verdict in ledger.tsv)
 
@@ -18,11 +18,19 @@ All plan units are landed on master (wScottSh/ares ce3b475d7). Nothing is runnin
 - Map #1 Destination: determinism pass; <= 2 min pass; file select #11 FAIL (named files 1.6941 vs 1.90-2.10; empty 1.0113 pass); tools/bench item not done (gate tools-bench).
 - Closure draft: docs/spec/map-1-closure-draft.md (generated, not posted to #1).
 
+
+## Landed 2026-10-09 (after Scott's rulings, preferences 28-29)
+
+- #83 systembench: original n64-systembench built with libdragon in docker, run on the fork, pointwise checks.
+- #88 sysbench-era: hardware-era build (50f5066, GCC 12.2, tie fix) is the binary the checks run. Five model-error candidates remain (PI I/O W -4, SI I/O W -8, SI DMA W ROM -4, PI DMA 8 -6, PI DMA 128 -11 fit data); only the #16 same-binary run gives them an independent check. Nothing refit.
+- #85 calibration kit for #16: docs/calibration/hardware-run.md (procedure), docs/calibration/inventory.md (224 entries: 208 questions, 7 not hardware-decidable, 9 not decidable by this kit), tools/n64-timing/calibration/ingest.py. --check enforces coverage. Dry run: 76 of 80 hw checks pass on the emulator's own logs.
+- wScottSh/mm-decomp-60fps#1: tools/bench on the fork, func_80173B48 pin removed. Verified (verify-mm1), NOT merged: gate mm-bench-merge (Scott merges; it puts his uncommitted bench harness on main).
+- Issues filed: #82 RSP halted cycles always 0, #84 VI::compose segfault on mid-field blank, #86 RDP hazard tail, #87 Watch exception never fires.
+
 ## Open gates (Scott)
 
-- tools-bench: port mm-decomp-60fps tools/bench to the fork and drop the func_80173B48 pin, or retire it for mmbench. Default: retire.
-- systembench-build: allow building rasky/n64-systembench with libdragon so bench numbers can be compared pointwise instead of consistent-with over poll phase. Default: skip.
-- #16 hardware calibration run (unchanged). It decides the filesel named-files gap, the VI-vs-CPU contention strength, the D-fill tail, thar0 residuals, the first VI line after enable (#77), noise questions, pidma offset.
+- mm-bench-merge: merge wScottSh/mm-decomp-60fps#1 when ready (tools-bench and systembench-build were resolved 2026-10-09).
+- #16 hardware calibration run: deferred by Scott; the kit is ready (see above). It decides the filesel named-files gap, the VI-vs-CPU contention strength, the D-fill tail, thar0 residuals, the first VI line after enable (#77), noise questions, pidma offset.
 
 ## Next work if resumed
 
