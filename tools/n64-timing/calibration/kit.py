@@ -20,11 +20,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE))
 from romgen.suites.bench import report as bench_report  # noqa: E402
+import derived  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
-QUESTION_COLUMNS = ["id", "question", "decides", "kit", "points", "metric", "rule", "closes", "source"]
+QUESTION_COLUMNS = ["id", "question", "decides", "kit", "points", "metric", "rule", "closes", "source", "boot"]
+#How the console was started before the capture: power-on (a power cycle) or reset (the Reset button
+#after a kit ROM ran). A capture file named *.reset.* is a reset capture.
+BOOTS = ("power-on", "reset")
 RULE = re.compile(r"^(exact|range:(abs|rel):[\d.]+|-)$")
 
 #Every kit ROM: suite, build.py --set, and whether the fork walks boot delays for it (calib suite).
@@ -41,6 +46,12 @@ KIT_ROMS = {
     "rdpstat-systemtest": ("rdpstat", "systemtest", False),
     "rdpstat-unsynced": ("rdpstat", "unsynced", False),
     "nemu64-timing": ("nemu64", "timing", False),
+    "nemu64-cycle": ("nemu64", "cycle", False),
+    "nemu64-cop0hazard": ("nemu64", "cop0hazard", False),
+    "kit-tex": ("calib", "kit-tex", True),
+    "kit-zmem": ("calib", "kit-zmem", True),
+    "kit-cpu2": ("calib", "kit-cpu2", True),
+    "kit-bus": ("calib", "kit-bus", True),
 }
 SRAM_BYTES = 0x8000
 
@@ -68,6 +79,7 @@ class Log:
     def __init__(self, data):
         self.raw = data
         self.header, self.footer, self.records, self.pi, self.complete = {}, {}, {}, {}, False
+        self.boot = "power-on"
         start = data.find(b"#kit rom=")
         if start < 0:
             return
@@ -126,6 +138,11 @@ def derive(records):
             pass
     for point, p in by_rom.get("count-fields", {}).items():
         p["ticks_per_field"] = round(p["min"] / p["fields"], 3)
+    for fn in derived.DERIVED:
+        try:
+            records.update(fn(records))
+        except (KeyError, ZeroDivisionError, TypeError):
+            pass
     frozen = [p["seen"] for point, p in by_rom.get("cmd-fetch", {}).items() if point.startswith("frozen-") and "seen" in p]
     if frozen:
         #A frozen RDP's CURRENT stops only where a fetch ended; the highest offset is the full FIFO,
@@ -175,6 +192,7 @@ def read_logs(paths):
     out = {}
     for path in paths:
         log = Log(normalize(Path(path).read_bytes()))
+        log.boot = "reset" if ".reset." in Path(path).name else "power-on"
         if log.rom:
             out.setdefault(log.rom, []).append((Path(path), log))
     return out
@@ -240,6 +258,92 @@ def compare(question, hw, model):
     return "pass", f"{checked} values agree ({rule})"
 
 
+def ext_thar0(root, model_dir, paths):
+    """Thar0/RDP-Timing-Tests on the console (its usblog text) against the fork's run of the romgen port
+    (run.sh ext/thar0.txt), per configuration's pruned average BUFBUSY and PIPEBUSY within 1%; the
+    detail also counts the configurations within 1% of Thar0's own console (expected.tsv)."""
+    from romgen.suites.thar0 import compare as thar0
+    model_path = Path(model_dir) / "ext" / "thar0.txt"
+    if not model_path.exists():
+        return "missing", f"no fork run of the thar0 port in {model_path}; run tools/n64-timing/calibration/run.sh"
+    console = {}
+    for path in paths:
+        for i, block in thar0.parse(str(path)).items():
+            for key, values in block.items():
+                console.setdefault(i, {}).setdefault(key, []).extend(values)
+    model, published = thar0.parse(str(model_path)), thar0.load_expected()
+    lacking, off_model, off_hw = [], [], 0
+    for i, (sid, hw_buf, hw_pipe) in sorted(published.items()):
+        c = console.get(i, {})
+        if "BUF" not in c or "PIPE" not in c:
+            lacking.append(sid)
+            continue
+        for key, hw in (("BUF", hw_buf), ("PIPE", hw_pipe)):
+            avg = thar0.reduce(c[key])[1]
+            mavg = thar0.reduce(model[i][key])[1]
+            if abs(avg - mavg) > 0.01 * mavg:
+                off_model.append(f"{sid} {key} console {avg:.1f} fork {mavg:.1f}")
+            off_hw += abs(avg - hw[1]) > 0.01 * hw[1]
+    if lacking:
+        return "fail", f"the capture lacks {len(lacking)} of {len(published)} configurations; first {lacking[0]}"
+    checked = 2 * len(published)
+    detail = (f"{checked - len(off_model)} of {checked} averages within 1% of the fork, "
+              f"{checked - off_hw} within 1% of Thar0's console")
+    if off_model:
+        return "fail", f"{detail}; first {off_model[0]}"
+    return "pass", detail
+
+
+def ext_snapper64(root, model_dir, paths):
+    """snapper64's .test dumps from the console against the published console dumps byte for byte
+    (romgen/suites/snapper/compare.py default_corpus), over every dump the snapper sets read."""
+    from romgen.suites.snapper import compare as snap, sets as snap_sets
+    corpus = Path(snap.default_corpus())
+    wanted = sorted({r.id for st in snap_sets.SETS if st.set_name in snap.REFERENCE_DIGEST
+                     for c in st.cases for r in c.records if c.group != snap.RW_GROUP})
+    got = {p.stem: p for p in paths if p.suffix == ".test"}
+    if not (corpus / f"{wanted[0]}.test").exists():
+        return "missing", f"no published snapper64 dumps in {corpus} (romgen/suites/snapper/fetch.sh)"
+    lacking = [w for w in wanted if w not in got]
+    if lacking:
+        return "fail", f"the capture lacks {len(lacking)} of {len(wanted)} dumps; first {lacking[0]}.test"
+    differ = [w for w in wanted if got[w].read_bytes() != (corpus / f"{w}.test").read_bytes()]
+    if differ:
+        return "fail", f"{len(differ)} of {len(wanted)} dumps differ from the published console dumps; first {differ[0]}.test"
+    return "pass", f"{len(wanted)} dumps equal the published console dumps"
+
+
+#External ROMs a capture can hold: kit column `ext:<name>`, the capture file or directory name
+#prefix `ext-<name>`, and the reader that compares it (None: stored, compared by hand per
+#hardware-run.md until a reader exists).
+EXT_ROMS = {
+    "thar0": ext_thar0,
+    "snapper64": ext_snapper64,
+    "systembench": None,
+    "pi_dma_test": None,
+    "mm-bench": None,
+}
+
+
+def ext_name(path):
+    """The external ROM a capture file belongs to, from its name (ext-<name>...) or, for Thar0's
+    usblog text, its BUF/PIPE blocks."""
+    for part in Path(path).parts:
+        for name in EXT_ROMS:
+            if part.startswith(f"ext-{name}"):
+                return name
+    return None
+
+
+def ext_captures(root=ROOT):
+    base = Path(root) / HARDWARE
+    out = {}
+    for p in sorted(base.glob("*/ext-*/**/*")) if base.exists() else []:
+        if p.is_file() and ext_name(p.relative_to(base)):
+            out.setdefault(ext_name(p.relative_to(base)), []).append(p)
+    return out
+
+
 def captures(root=ROOT):
     """Every ingested console log under docs/calibration/hardware, by kit ROM."""
     base = Path(root) / HARDWARE
@@ -259,12 +363,23 @@ def result_from(root, model_dir, qid):
     if q is None:
         return None
     kit = q["kit"]
-    if kit.startswith(("ext:", "none")):
-        return "pending:calibration-16", f"{kit}: no in-repo kit ROM; hardware-run.md says how to run and read it"
+    if kit.startswith("none"):
+        return "pending:calibration-16", f"{kit}: no kit ROM"
+    if kit.startswith("ext:"):
+        name = kit[4:]
+        paths = ext_captures(root).get(name, [])
+        if not paths:
+            return "pending:calibration-16", f"no console capture of {name} (capture name ext-{name}*) in {HARDWARE}"
+        reader = EXT_ROMS.get(name)
+        if reader is None:
+            return "pending:calibration-16", (f"{len(paths)} files of {name} stored in {HARDWARE}; no reader yet, "
+                                              f"compare by hand per hardware-run.md")
+        return reader(root, model_dir, paths)
     hw, ids = captures(root)
-    logs = [log for log in hw.get(kit, []) if log.complete]
+    boot = q.get("boot", "power-on")
+    logs = [log for log in hw.get(kit, []) if log.complete and log.boot == boot]
     if not logs:
-        return "pending:calibration-16", f"no complete console capture of {kit} in {HARDWARE}"
+        return "pending:calibration-16", f"no complete {boot} console capture of {kit} in {HARDWARE}"
     paks = [log for log in logs if log.records.get(("joybus-setup", "pads"), {}).get("paks")]
     if paks:
         return "fail", (f"{kit}: a controller held a Controller Pak or Rumble Pak (paks="
@@ -292,7 +407,8 @@ def verify_run(run_dir):
     from romgen import hwout
     errors = []
     for txt in sorted(Path(run_dir).glob("*/**/*.txt")):
-        if "roms" in txt.relative_to(run_dir).parts:
+        parts = txt.relative_to(run_dir).parts
+        if "roms" in parts or parts[0] == "ext":
             continue
         data = txt.read_bytes()
         log = Log(data)
@@ -361,7 +477,31 @@ def self_test():
     return failed
 
 
+PHOTO_BYTES = 2048
+
+
+def run_table(run_dir, root=ROOT):
+    """hardware-run.md's run-order table from a calibration/run.sh output: each console build's fork
+    run time, log size, whether it is short enough to film, and the questions it answers."""
+    run_dir = Path(run_dir)
+    asks = {}
+    for q in questions(root):
+        asks.setdefault(q["kit"], []).append(q["id"])
+    out = ["| # | ROM | Runs for | Log | Film it? | Answers |", "|---|---|---|---|---|---|"]
+    for n, (rom, (_, _, walks)) in enumerate(KIT_ROMS.items(), 1):
+        base = run_dir / ("boot-1" if walks else "single") / rom
+        err = base.with_suffix(".err").read_text(errors="replace")
+        secs = float(re.search(r"emulated_s=([\d.]+)", err).group(1))
+        size = len(base.with_suffix(".txt").read_bytes())
+        out.append(f"| {n} | `{rom}` | {secs:.1f} s | {size / 1000:.1f} KB | {'yes' if size <= PHOTO_BYTES else 'no'} | "
+                   f"{', '.join(f'`{q}`' for q in asks.get(rom, []))} |")
+    return "\n".join(out)
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--table"]:
+        print(run_table(sys.argv[2]))
+        sys.exit(0)
     if sys.argv[1:2] == ["--self-test"]:
         sys.exit(1 if self_test() else 0)
     if sys.argv[1:2] == ["--verify-run"]:
@@ -371,4 +511,4 @@ if __name__ == "__main__":
         print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
               file=sys.stderr)
         sys.exit(1 if errs else 0)
-    sys.exit("usage: kit.py --verify-run RUN_DIR | --self-test")
+    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --self-test")

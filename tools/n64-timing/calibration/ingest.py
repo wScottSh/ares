@@ -6,7 +6,9 @@ usage: ingest.py CAPTURE_DIR [--id NAME] [--model DIR] [--dry-run]
 
 CAPTURE_DIR holds what the console produced, in any mix: ISViewer logs (sc64deployer debug output),
 SRAM saves from the flashcart SD card (.srm, .sra, .sav; either byte order) and transcribed screen
-text. Every file whose bytes contain a `#kit rom=` header is a kit log. ingest.py
+text. Every file whose bytes contain a `#kit rom=` header is a kit log; a file named *.reset.* is a
+capture after the Reset button. A file or directory named ext-<rom>* holds an external ROM's output
+(kit.py EXT_ROMS; Thar0's usblog text is also recognized by its BUF/PIPE blocks). ingest.py
 
 1. parses each log and checks its #kit-end byte count and FNV (an incomplete log is stored, never
    compared),
@@ -56,21 +58,39 @@ def store(root, capture, name):
     kit = load(root, "tools/n64-timing/calibration/kit.py", "kit_ingest")
     files = sorted(p for p in Path(capture).rglob("*") if p.is_file())
     logs = kit.read_logs(files)
-    if not logs:
-        raise SystemExit(f"{capture}: no file holds a `#kit rom=` header; see hardware-run.md, Capture")
+    ext = {}
+    for path in files:
+        rom = kit.ext_name(path.relative_to(capture))
+        if rom is None and not any(path == p for entries in logs.values() for p, _ in entries):
+            data = path.read_bytes()
+            rom = "thar0" if b"BUF = [" in data and b"PIPE = [" in data else None
+        if rom:
+            ext.setdefault(rom, []).append(path)
+    if not logs and not ext:
+        raise SystemExit(f"{capture}: no file holds a `#kit rom=` header or is an ext-<rom> capture; see "
+                         f"hardware-run.md, Capture")
     out = Path(root) / kit.HARDWARE / name
     out.mkdir(parents=True, exist_ok=True)
-    manifest = ["log\tsource\tsha256\tcomplete\tbytes\tkit_sha\tri_refresh"]
+    manifest = ["log\tsource\tsha256\tcomplete\tbytes\tkit_sha\tri_refresh\tboot\tpads"]
+    for rom, paths in sorted(ext.items()):
+        (out / f"ext-{rom}").mkdir(exist_ok=True)
+        for path in paths:
+            dest = out / f"ext-{rom}" / path.name
+            shutil.copyfile(path, dest)
+            manifest.append("\t".join([str(dest.relative_to(out)), path.name, hashlib.sha256(path.read_bytes()).hexdigest(),
+                                       "-", str(path.stat().st_size), "-", "-", "-", "-"]))
+        print(f"ingest: ext-{rom}: {len(paths)} files of the external ROM {rom}")
     for rom, entries in sorted(logs.items()):
         known = rom in kit.KIT_ROMS
         for n, (path, log) in enumerate(entries, 1):
             text = log.text + (f"#kit-end rom={rom} bytes={log.footer.get('bytes')} fnv={log.footer.get('fnv')}\n"
                                if log.footer else "")
-            dest = out / f"{rom}.{n}.log"
+            dest = out / (f"{rom}.{n}.log" if log.boot == "power-on" else f"{rom}.{log.boot}.{n}.log")
             dest.write_text(text, encoding="ascii", errors="replace", newline="\n")
             manifest.append("\t".join([dest.name, path.name, hashlib.sha256(path.read_bytes()).hexdigest(),
                                        "yes" if log.complete else "no", str(len(log.text)),
-                                       log.header.get("sha", "-"), log.header.get("ri_refresh", "-")]))
+                                       log.header.get("sha", "-"), log.header.get("ri_refresh", "-"), log.boot,
+                                       "-" if log.pads is None else f"{log.pads:04b}"]))
             note = "" if log.complete else "  INCOMPLETE: footer missing or FNV mismatch; stored, not compared"
             print(f"ingest: {path.name}: {rom} ({'kit ROM' if known else 'not a kit ROM'}), {len(log.records)} "
                   f"records{note}")

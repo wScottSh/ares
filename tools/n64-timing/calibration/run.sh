@@ -5,7 +5,8 @@
 # usage: tools/n64-timing/calibration/run.sh [OUT_DIR]
 # OUT_DIR defaults to $N64_TIMING_HOME/results/calib. Writes OUT_DIR/roms/{boot-<K>,single}/*.z64
 # (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log),
-# OUT_DIR/pads-4/boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture)
+# OUT_DIR/pads-4/boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture),
+# OUT_DIR/ext/thar0.txt (the romgen Thar0 port, the fork side of ext:thar0)
 # and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
 # env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS.
 set -euo pipefail
@@ -25,7 +26,11 @@ for rom, (suite, set_name, walks) in kit.KIT_ROMS.items():
 PY
   "$PYTHON" "$here/romgen/build.py" --suite "$suite" --set "$set" --hw --out "$out/roms/single" >/dev/null
 done
-(cd "$out/roms" && find . -name '*.z64' | sort | xargs sha256sum) > "$out/rom-sha256.txt"
+mkdir -p "$out/ext"
+"$PYTHON" "$here/romgen/build.py" --suite thar0 --out "$out/ext" >/dev/null
+(cd "$out/roms" && find . -name '*.z64' | sort | xargs sha256sum; cd "$out/ext" && sha256sum thar0-rdp.z64) > "$out/rom-sha256.txt"
+"$run" "$out/ext/thar0-rdp.z64" --emulated-seconds 3600 --wall-seconds 3600 > "$out/ext/thar0.txt" 2> "$out/ext/thar0.err" &
+thar0_pid=$!
 printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
 find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   rel="${rom#$out/roms/}"
@@ -35,5 +40,6 @@ done | xargs -P "${CALIB_JOBS:-4}" -n 3 sh -c '
   mkdir -p "$(dirname "$2")"
   "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
 ' sh
+wait "$thar0_pid" || echo "thar0 port run failed (see $out/ext/thar0.err)" >&2
 "$PYTHON" "$here/calibration/kit.py" --verify-run "$out"
 echo "$out"

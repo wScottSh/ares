@@ -17,6 +17,7 @@ cartridge SRAM and the screen, and a `#kit` header naming the ROM and the git co
 suite is always built this way.
 """
 import argparse
+import hashlib
 import importlib
 import os
 import struct
@@ -32,6 +33,12 @@ from romgen.suite import Suite  # noqa: E402
 
 DEFAULT_IPL3 = os.path.join(os.environ.get("N64_TIMING_HOME", os.path.expanduser("~/n64-timing")),
                             "scratch", "r29", "clones", "libdragon", "boot", "bin", "ipl3_compat.z64")
+
+
+#The stub the console builds were checked with (docs/calibration/hardware-run.md, Before you start):
+#libdragon boot/bin/ipl3_compat.z64 at this commit.
+IPL3_COMMIT = "e356bf3f56f7afbf7e5246329562f145965cfdfc"
+IPL3_SHA256 = "f522db2e31a701f82597f399e76d55c9487760d015aff9d90176b463ae39a068"
 
 
 def suite_sets(name):
@@ -59,7 +66,7 @@ def git_sha():
 
 
 def build_payload(set_def, hw=None):
-    """hw: None, or (rom id, git sha) for the console variant."""
+    """hw: None, or (rom id, git sha, build variant) for the console variant."""
     suite = Suite(set_def.rom_name, set_def.category, set_def.banner_flags)
     extra = list(set_def.asm)
     base_text = runtime_text(extra, set_def.consts)
@@ -107,6 +114,9 @@ def main():
     ipl3 = open(args.ipl3, "rb").read()
     if len(ipl3) != 0x1000 or ipl3[:4] != b"\x80\x37\x12\x40":
         raise SystemExit(f"{args.ipl3}: expected a 4 KiB big-endian ipl3_compat.z64")
+    if (args.hw or args.suite == "calib") and hashlib.sha256(ipl3).hexdigest() != IPL3_SHA256:
+        raise SystemExit(f"{args.ipl3}: not the pinned ipl3_compat.z64 (libdragon {IPL3_COMMIT}, sha256 {IPL3_SHA256}); "
+                         f"a console build must boot the stub the kit was verified with")
     os.makedirs(args.out, exist_ok=True)
     hw = args.hw or args.suite == "calib"
     sha = git_sha() if hw else None
@@ -118,7 +128,8 @@ def main():
             raise SystemExit(f"{set_def.rom_name}: no constant {', '.join(sorted(unknown))}")
         set_def.consts = {**set_def.consts, **defines}
         rom_id = os.path.basename(set_def.rom_name)
-        suite, payload = build_payload(set_def, (rom_id, sha) if hw else None)
+        variant = os.path.dirname(set_def.rom_name) or "single"
+        suite, payload = build_payload(set_def, (rom_id, sha, variant) if hw else None)
         rom = make_rom(ipl3, payload)
         if hw:
             rom = hwout.header_bytes(rom)

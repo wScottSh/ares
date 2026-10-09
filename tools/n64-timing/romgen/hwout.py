@@ -12,7 +12,7 @@ every emux instruction. Each line the runtime prints goes three ways:
 - The screen: when the ROM ends it shows the log in pages of 26 lines, 8 s per page, looping, for
   the photographed fallback.
 
-The log starts with `#kit rom=<id> sha=<git sha> fmt=1` and the RI and MI registers, and ends with
+The log starts with `#kit rom=<id> sha=<git sha> fmt=1 build=<boot-K or single>` and the RI and MI registers, and ends with
 `#kit-end rom=<id> bytes=<n> fnv=<FNV-1a 32 of the n bytes before the footer>`, so ingestion can tell
 a complete capture from a cut one. A done word at DATA_BASE + D_HW_DONE lets the fork's runner stop
 (calibration/run.sh).
@@ -86,10 +86,11 @@ def regs_asm(label, regs):
     return f"{label}_names:\n{names}\n.align 4\n{label}_addrs:\n    .word {addrs}"
 
 
-def asm(rom_id, sha):
+def asm(rom_id, sha, variant):
+    """variant is padded to a fixed width so every boot-delay build keeps one code layout."""
     glyphs = ",".join(f"{g >> 32:#010x},{g & 0xFFFFFFFF:#010x}" for g in font8x8.GLYPHS)
     return rf"""
-hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha} fmt=1")}
+hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha} fmt=1 build={variant:<12}")}
 hw_str_end: .asciiz {runtime.asm_string(f"#kit-end rom={rom_id} bytes=")}
 hw_str_fnv: .asciiz " fnv="
 hw_str_hex: .asciiz "#hex "

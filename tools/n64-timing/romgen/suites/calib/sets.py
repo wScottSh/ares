@@ -94,13 +94,14 @@ def cmd_fetch(suite):
     cmd_fetch_frozen(suite, rom)
 
 
-FETCH_SPINS = range(8)
+FETCH_SPINS = range(16)
 
 
 def cmd_fetch_frozen(suite, rom):
     """The command FIFO filling behind a frozen RDP: DPC_CURRENT can only stop at a burst boundary
     there, so the offsets a poll sees are multiples of the burst whatever the poll's cadence
-    (calibration/kit.py derive: burst_gcd)."""
+    (calibration/kit.py derive: burst_gcd). The spins move the first poll by about 3 pclk each, over
+    more than one 35 pclk poll period."""
     words = rcp.words([rcp.nop()] * 512 + [rcp.full_sync()])
     build = Step("bench_list_step", [suite.blob(words), len(words), 0, 0, 0, 0, 0, KSEG1 | LIST_BUF], 0)
     for spin in FETCH_SPINS:
@@ -120,6 +121,29 @@ def sp_dma_chain(suite):
                 rom.point(f"{direction}-{size}-off{off:x}", "k_sp_chain",
                           [benches.SP_BASE + len_reg, size - 1, benches.SP_DMA_BUF + off, n],
                           [("bytes", size), ("dir", direction), ("off", off), ("dmas", n)])
+
+
+def bus_reads(suite):
+    """A cartridge domain-2 read: the SRAM the kit logs to, under hw_init's DOM2 timing (legacy.pi.cart-read
+    charges 250 pclk)."""
+    rom = Rom(suite, "bus-reads")
+    benches.sb_cached(rom, 32, "k_sb_lw")
+    benches.sb_point(rom, "dom2-sram-word", "k_sb_lw", [KSEG1 | 0x08000000, 0], 50, "rclk")
+
+
+PI_ROW_ENDS = [0x7F8, 0x7C0]
+
+
+def pi_dma_rowend(suite):
+    """pi-dma-sizes' DMAs into RDRAM 8 B and 64 B before a 2 KiB row end, so the first block crosses the
+    row (followups: PI first block ending at a row end)."""
+    rom = Rom(suite, "pi-dma-rowend")
+    pi = benches.PI_BASE
+    for off in PI_ROW_ENDS:
+        for size in (8, 128, 1024):
+            benches.sb_while(rom, f"cart-to-ram-{size}-off{off:x}",
+                             [(pi + 0x0, benches.PI_DMA_BUF + off), (pi + 0x4, 0x10000000)], (pi + 0xC, size - 1),
+                             pi + 0x10, 10, [("bytes", size), ("off", off)])
 
 
 STATUS_FRAME = [0xFF010300FFFFFFFF] * 4 + [0xFE00000000000000] + [0] * 2 + [1]
@@ -178,10 +202,10 @@ class BenchKit:
 KITS = {
     "kit-cpu": [benches.uncached_sizes, benches.rcp_reg_read, benches.pif_ram_read, benches.pi_io_read,
                 benches.pi_io_write, benches.si_io_write, benches.dirty_row_sweep, benches.dirty_miss_isolated,
-                dcb, wb_stores, reg_write, ifill],
+                dcb, wb_stores, reg_write, ifill, bus_reads],
     "kit-vi": [vi_enable, count_fields],
     "kit-dma": [benches.mi_memset_uncached, benches.mi_memset_cached, benches.mi_memset_rspdma,
-                benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain],
+                benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain, pi_dma_rowend],
     "kit-hpos": [benches.uncached_vs_hpos],
     "kit-rdp": [benches.rdp_sync_sweep, benches.rdp_setter_sweep, benches.rdp_atomic_sweep, benches.rdp_rectn,
                 fifo_depth, cmd_fetch],
@@ -228,6 +252,7 @@ NOISE_CASES = [
                                             prim_combiner(), prim=0x808080FF))]),
     ("ac-dither", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE, AC_DITHER,
                                           prim_combiner(), prim=0xFFFFFF80))]),
+    ("im-rd-stall", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | PLAIN, rcp.IM_RD, noise_combiner()))]),
     ("ad-noise-threshold", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
                                                    rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF78,
                                                    blend=0x00000080))]),

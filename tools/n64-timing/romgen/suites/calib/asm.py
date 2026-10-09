@@ -246,8 +246,8 @@ kcm_same:
     jr $ra
     subu $v0, $t7, $t8
 
-# args = {list phys, bytes, spin}: freezes the RDP, spins `spin` iterations (so the reps and points
-# walk the poll's phase against the fetches), points START/END at the list and polls DPC_CURRENT 64
+# args = {list phys, bytes, spin}: freezes the RDP, points START/END at the list, spins `spin`
+# iterations (so the points walk the polls' phase against the fetches) and polls DPC_CURRENT 64
 # times while the frozen FIFO fills. RES[2] = mask of the offsets seen (bit i: CURRENT - START = 8 i,
 # i < 32), RES[3] = the first offset other than 0, RES[4] = the offset after the polls. Then unfreezes
 # and waits for the list's DP interrupt. v0 = ticks of the 64 polls.
@@ -260,10 +260,6 @@ k_fetch_frozen:
     lw $t2, 0($a0)
     lw $t3, 4($a0)
     lw $t4, 8($a0)
-kff_spin:
-    addiu $t4, $t4, -1
-    bgez $t4, kff_spin
-    nop
     addu $t3, $t2, $t3
     move $a2, $zero
     move $a3, $zero
@@ -271,6 +267,10 @@ kff_spin:
     sw $t2, 0($t0)
     mfc0 $t8, $count
     sw $t3, 4($t0)
+kff_spin:
+    addiu $t4, $t4, -1
+    bgez $t4, kff_spin
+    nop
 kff_poll:
     lw $t6, 8($t0)
     subu $t6, $t6, $t2

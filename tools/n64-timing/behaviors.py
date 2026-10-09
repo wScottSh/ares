@@ -803,22 +803,70 @@ def render_closure(root, rows, checks, found):
 
 def generated(root):
     errors, rows, checks, sites = validate(root)
-    errors += calibration_errors(root, rows, checks)
     found = load_results(root, rows, checks, errors)
+    errors += calibration_errors(root, rows, checks, found)
     return errors, {HEADER: render_header(rows), SPEC: render_spec(rows, checks, found),
                     CLOSURE: render_closure(root, rows, checks, found),
                     INVENTORY: render_inventory(root, rows, checks, found)}
 
 
-def calibration_errors(root, rows, checks):
+CALIBRATION = "tools/n64-timing/calibration"
+UNDECIDABLE_PREFIX = "not-hardware-decidable: "
+
+
+def calibration_tsv(root, name):
+    path = Path(root) / CALIBRATION / name
+    if not path.exists():
+        return []
+    lines = [l for l in path.read_text(encoding="utf-8").split("\n") if l]
+    head = lines[0].split("\t")
+    return [dict(zip(head, l.split("\t")), line=n) for n, l in enumerate(lines[1:], 2)]
+
+
+def hardware_needs(root, rows, found):
+    """(id, why, where) for everything a console could have to decide: rows that rest on a fit, a model
+    choice or an inference, rows and checks with a failing, consistent-only or conditional result,
+    rows no corpus or only a report checks, and the hardware items of issues and follow-ups
+    (calibration/items.tsv)."""
+    out = []
+    for r in rows:
+        why = []
+        if r["basis"] in ("fit", "model-choice", "inferred"):
+            why.append(r["basis"])
+        if "verify-is-fit" in r["verify"] + " " + r["note"]:
+            why.append("verify-is-fit")
+        if re.search(r"\binferred\b", r["note"] + " " + r["reference"], re.I) and "inferred" not in why:
+            why.append("an inference in its reference or note")
+        weak = [c for c, _ in verify_checks(r) if not c.startswith("hw:") and
+                (found.get(c, ("",))[0] == "fail" or WEAK.match(found.get(c, ("",))[0]))]
+        if weak:
+            why.append(f"check {', '.join(weak)} {found[weak[0]][0]}")
+        status = row_status(r, found)
+        for gate in ("pending:no-corpus", "pending:report-only"):
+            if gate in status:
+                why.append(gate)
+        if why:
+            out.append((r["id"], "; ".join(why), f"{TABLE}:{r['line']}"))
+    for c in sorted(found):
+        res = found[c][0]
+        if c != "#source" and not c.startswith("hw:") and (res == "fail" or WEAK.match(res)):
+            out.append((c, f"result {res}", RESULTS))
+    for item in calibration_tsv(root, "items.tsv"):
+        out.append((f"item:{item['id']}", item["source"], f"{CALIBRATION}/items.tsv:{item['line']}"))
+    return out
+
+
+def calibration_errors(root, rows, checks, found):
     """The calibration inventory's rules: no row waits on calibration #16 without a kit question that
     measures it, every question names a kit ROM (or says why none exists), a valid rule, and only
-    rows, checks or issues in its closes column; a row's hw check is one its question closes."""
+    rows, checks, items or issues in its closes column; a row's hw check is one its question closes;
+    and everything a console could decide (hardware_needs) has a question or a stated reason that no
+    console run can decide it (calibration/undecidable.tsv)."""
     errors = []
     kit = kit_module(root)
     qs = {q["id"]: q for q in question_rows(root)}
     _, explicit, _, suite_files = load_checks(root, [])
-    ids = {r["id"] for r in rows}
+    ids = {r["id"] for r in rows} | {f"item:{i['id']}" for i in calibration_tsv(root, "items.tsv")}
     for r in rows:
         where = f"{TABLE}:{r['line']}"
         for cid, _ in verify_checks(r):
@@ -846,7 +894,25 @@ def calibration_errors(root, rows, checks):
                           f"question, `-` otherwise")
         for c in q["closes"].split():
             if c != "-" and c not in ids and not check_defined(c, explicit, suite_files) and not re.match(r"^#\d+$", c):
-                errors.append(f"{where}: closes `{c}`, which is no behavior row, check or #issue")
+                errors.append(f"{where}: closes `{c}`, which is no behavior row, check, item:<id> or #issue")
+    links = question_links(root)
+    undecidable = {}
+    for u in calibration_tsv(root, "undecidable.tsv"):
+        where = f"{CALIBRATION}/undecidable.tsv:{u['line']}"
+        undecidable[u["id"]] = u
+        if not u.get("reason", "").startswith(UNDECIDABLE_PREFIX) or len(u["reason"]) < len(UNDECIDABLE_PREFIX) + 10:
+            errors.append(f"{where}: `{u['id']}` needs a reason `{UNDECIDABLE_PREFIX}<why no console run can decide it>`")
+        if u["id"] not in ids and not check_defined(u["id"], explicit, suite_files) and u["id"] not in found:
+            errors.append(f"{where}: `{u['id']}` is no behavior row, check or item:<id>")
+        if u["id"] in links:
+            errors.append(f"{where}: `{u['id']}` is closed by hw:{links[u['id']][0]} and also marked not hardware-decidable; "
+                          f"keep one")
+    for nid, why, where in hardware_needs(root, rows, found):
+        if nid not in links and nid not in undecidable:
+            errors.append(f"{where}: `{nid}` ({why}) has no hardware question. Add it to the closes column of the "
+                          f"tools/n64-timing/calibration/questions.tsv question whose kit points decide it (adding the "
+                          f"points to a kit ROM if none does), or to {CALIBRATION}/undecidable.tsv with "
+                          f"`{UNDECIDABLE_PREFIX}<reason>`.")
     return errors
 
 
@@ -877,7 +943,8 @@ def render_inventory(root, rows, checks, found):
         "`tools/n64-timing/calibration/ingest.py` stores a console capture, then pass when the console's values "
         "fall in the fork's range over its boot delays under the question's rule, fail otherwise. "
         f"Kit ROMs: {', '.join(f'`{k}`' for k in kit.KIT_ROMS)}. `ext:` names a ROM outside the repository "
-        "that the procedure runs and a person compares; `none:` is a question with no kit ROM yet.",
+        "that the procedure runs and ingestion stores; calibration/kit.py EXT_ROMS compares the ones with a reader. "
+        "`none:` is a question with no kit ROM, with the reason.",
         "",
         "## Questions",
         "",
@@ -914,6 +981,22 @@ def render_inventory(root, rows, checks, found):
             f"{sum(1 for c, _ in weak if c in links)} with a kit question.", "",
             "| Check | Result | Detail | Question |", "|---|---|---|---|"]
     out += [f"| `{c}` | {r} | {cell(d[:200])} | {asked(c)} |" for c, (r, d) in weak]
+    undecidable = {u["id"]: u["reason"] for u in calibration_tsv(root, "undecidable.tsv")}
+    items = {f"item:{i['id']}": i["item"] for i in calibration_tsv(root, "items.tsv")}
+    needs = hardware_needs(root, rows, found)
+    out += ["", "## Coverage", "",
+            f"Everything a console could have to decide: rows that rest on a fit, a model choice or an inference, rows "
+            f"and checks with a failing, consistent-only or conditional result, rows that no corpus or only a report "
+            f"checks, and the hardware items of issues and follow-ups ({CALIBRATION}/items.tsv). `behaviors.py "
+            f"--check` fails unless each one has a question or a reason no console run can decide it "
+            f"({CALIBRATION}/undecidable.tsv). {len(needs)} entries: "
+            f"{sum(1 for n, _, _ in needs if n in links)} with a question, "
+            f"{sum(1 for n, _, _ in needs if n in undecidable)} not hardware-decidable.", "",
+            "| Entry | Why | Question or reason |", "|---|---|---|"]
+    for nid, why, _ in needs:
+        what = f"{cell(why)}: {cell(items[nid])}" if nid in items else cell(why)
+        answer = asked(nid) if nid in links else cell(undecidable.get(nid, "**none**"))
+        out.append(f"| `{nid}` | {what} | {answer} |")
     gaps = [q for q in qs if q["kit"].startswith(("ext:", "none"))]
     out += ["", "## Questions without an in-repo kit ROM", "",
             "These run outside the kit's mechanical comparison: an external ROM the procedure names, or no ROM yet.",
@@ -1341,10 +1424,19 @@ def self_test(root):
              "waits on pending:calibration-16 with no kit test. Name the hw:<question>"),
             ("a hardware check its question does not close", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:dcb"),
              "but the question's closes column does not list it"),
-            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:ri-priority"),
+            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:vi-mid-field-blank"),
              "not an in-repo kit ROM"),
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
+            ("a model-choice row with neither a question nor a reason", "tools/n64-timing/calibration/undecidable.tsv",
+             lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("scheduler.tie-rank\t")),
+             "`scheduler.tie-rank` (model-choice) has no hardware question"),
+            ("a not-hardware-decidable entry without its reason", "tools/n64-timing/calibration/undecidable.tsv",
+             lambda t: t.replace("scheduler.tie-rank\tnot-hardware-decidable: ", "scheduler.tie-rank\t", 1),
+             "`scheduler.tie-rank` needs a reason `not-hardware-decidable: "),
+            ("an issue item no question closes", "tools/n64-timing/calibration/items.tsv",
+             lambda t: t + "self-test-item\tissue #16\ta hardware item added without a question\n",
+             "`item:self-test-item` (issue #16) has no hardware question"),
             ("an inferred row without its inference", TABLE, row_field("cpu.ifill-stall", "note", ""),
              "inferred row `cpu.ifill-stall` has no note. State the inference"),
             ("removing a reference", TABLE, row_field("ri.read-hit", "reference", ""), "has no reference. Cite the hardware reference"),
