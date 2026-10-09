@@ -331,6 +331,14 @@ SB_JOY_EMPTY = {
 }
 
 
+# Every RD64B point: its command block and how many channels get a command. read64-n is bench_joybus_nj
+# (main.c:427-493), accessory bench_joybus_access (main.c:495-510).
+SB_JOY_FRAMES = {f"read64-{n}": ([0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1], n)
+                 for n in range(1, 5)}
+SB_JOY_FRAMES.update({point: (block, 0) for point, block in SB_JOY_EMPTY.items()})
+SB_JOY_FRAMES["accessory"] = ([0xFF010300FFFFFFFF, 0xFE00000000000000] + [0] * 5 + [1], 1)
+
+
 def joybus_block(dwords):
     return [w for d in dwords for w in (d >> 32, d & 0xFFFFFFFF)]
 
@@ -342,11 +350,7 @@ def si_dma(suite):
              [("dir", "write64")], pre=[zero])
     sb_while(rom, "write64-rom", [(SI_BASE + 0x0, SB_BUF)], (SI_BASE + 0x10, PIF_ROM), SI_BASE + 0x18, 10,
              [("dir", "write64")])
-    blocks = {f"read64-{n}": ([0xFF010401FFFFFFFF] * n + [0xFE00000000000000] + [0] * (6 - n) + [1], n)
-              for n in range(1, 5)}
-    blocks.update({point: (block, 0) for point, block in SB_JOY_EMPTY.items()})
-    blocks["accessory"] = ([0xFF010300FFFFFFFF, 0xFE00000000000000] + [0] * 5 + [1], 1)
-    for point, (block, commands) in blocks.items():
+    for point, (block, commands) in SB_JOY_FRAMES.items():
         sb_point(rom, point, "k_sb_joybus", [suite.blob(joybus_block(block)), KSEG1 | SB_BUF, SB_BUF + 64],
                  50, "rclk", [("dir", "read64"), ("commands", commands)])
 
