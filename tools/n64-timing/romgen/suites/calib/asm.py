@@ -245,4 +245,122 @@ kcm_same:
     sw $t6, 0($a2)
     jr $ra
     subu $v0, $t7, $t8
+
+# args = {list phys, bytes, spin}: freezes the RDP, spins `spin` iterations (so the reps and points
+# walk the poll's phase against the fetches), points START/END at the list and polls DPC_CURRENT 64
+# times while the frozen FIFO fills. RES[2] = mask of the offsets seen (bit i: CURRENT - START = 8 i,
+# i < 32), RES[3] = the first offset other than 0, RES[4] = the offset after the polls. Then unfreezes
+# and waits for the list's DP interrupt. v0 = ticks of the 64 polls.
+k_fetch_frozen:
+    li $t0, 0xA4100000
+    li $t1, 0x3C1
+    sw $t1, 0xC($t0)
+    li $t1, 0x8
+    sw $t1, 0xC($t0)
+    lw $t2, 0($a0)
+    lw $t3, 4($a0)
+    lw $t4, 8($a0)
+kff_spin:
+    addiu $t4, $t4, -1
+    bgez $t4, kff_spin
+    nop
+    addu $t3, $t2, $t3
+    move $a2, $zero
+    move $a3, $zero
+    li $t5, 64
+    sw $t2, 0($t0)
+    mfc0 $t8, $count
+    sw $t3, 4($t0)
+kff_poll:
+    lw $t6, 8($t0)
+    subu $t6, $t6, $t2
+    bnez $a3, kff_first_known
+    nop
+    move $a3, $t6
+kff_first_known:
+    srl $t7, $t6, 3
+    sltiu $t1, $t7, 32
+    beqz $t1, kff_next
+    addiu $t1, $zero, 1
+    sllv $t1, $t1, $t7
+    or $a2, $a2, $t1
+kff_next:
+    addiu $t5, $t5, -1
+    bnez $t5, kff_poll
+    nop
+    mfc0 $t9, $count
+    sw $a2, 0($a1)
+    sw $a3, 4($a1)
+    sw $t6, 8($a1)
+    li $t1, 0x4
+    sw $t1, 0xC($t0)
+    li $t6, 0xA4300000
+kff_done:
+    lw $t7, 8($t6)
+    andi $t7, $t7, 0x20
+    beqz $t7, kff_done
+    nop
+    li $t7, 0x800
+    sw $t7, 0($t6)
+    jr $ra
+    subu $v0, $t9, $t8
+
+# args = {response block, uncached}: reads the four channels of a joybus status frame's reply.
+# RES[2] = channels that answered (bit i: channel i's rx byte has no error bit), RES[3] = channels
+# whose status reports an accessory (Controller Pak, Rumble Pak). v0 = 0.
+k_pads:
+    lw $t0, 0($a0)
+    move $t1, $zero
+    move $t2, $zero
+    addiu $t3, $zero, 1
+    addiu $t4, $zero, 4
+kpd_loop:
+    lbu $t5, 2($t0)
+    andi $t5, $t5, 0xC0
+    bnez $t5, kpd_next
+    nop
+    or $t1, $t1, $t3
+    lbu $t5, 6($t0)
+    andi $t5, $t5, 1
+    beqz $t5, kpd_next
+    nop
+    or $t2, $t2, $t3
+kpd_next:
+    sll $t3, $t3, 1
+    addiu $t4, $t4, -1
+    bnez $t4, kpd_loop
+    addiu $t0, $t0, 8
+    sw $t1, 0($a1)
+    sw $t2, 4($a1)
+    jr $ra
+    move $v0, $zero
+
+# args = {length register, length - 1, DRAM address, n}: n SP DMAs of one size between DMEM 0 and one
+# DRAM address, each written as soon as SP_DMA_FULL clears, then SP_DMA_BUSY polled clear. v0 = ticks.
+k_sp_chain:
+    lw $t0, 0($a0)
+    lw $t1, 4($a0)
+    lw $t2, 8($a0)
+    lw $t3, 12($a0)
+    li $t4, 0xA4040000
+    mfc0 $t8, $count
+ksc_loop:
+    lw $t5, 0x14($t4)
+    andi $t5, $t5, 1
+    bnez $t5, ksc_loop
+    nop
+    sw $zero, 0($t4)
+    sw $t2, 4($t4)
+    sw $t1, 0($t0)
+    addiu $t3, $t3, -1
+    bnez $t3, ksc_loop
+    nop
+ksc_wait:
+    lw $t5, 0x18($t4)
+    andi $t5, $t5, 1
+    bnez $t5, ksc_wait
+    nop
+    mfc0 $t9, $count
+    jr $ra
+    subu $v0, $t9, $t8
 """

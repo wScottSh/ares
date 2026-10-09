@@ -4,7 +4,8 @@
 # (romgen/suites/calib/sets.py DELAYS), the other kit ROMs (kit.py KIT_ROMS) once.
 # usage: tools/n64-timing/calibration/run.sh [OUT_DIR]
 # OUT_DIR defaults to $N64_TIMING_HOME/results/calib. Writes OUT_DIR/roms/{boot-<K>,single}/*.z64
-# (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log)
+# (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log),
+# OUT_DIR/pads-4/boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture)
 # and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
 # env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS.
 set -euo pipefail
@@ -28,10 +29,11 @@ done
 printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
 find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   rel="${rom#$out/roms/}"
-  echo "$rom $out/${rel%.z64}"
-done | xargs -P "${CALIB_JOBS:-4}" -n 2 sh -c '
+  echo "$rom $out/${rel%.z64} 1"
+  case "$rel" in boot-*/kit-dma.z64) echo "$rom $out/pads-4/${rel%.z64} 4" ;; esac
+done | xargs -P "${CALIB_JOBS:-4}" -n 3 sh -c '
   mkdir -p "$(dirname "$2")"
-  "'"$run"'" "$1" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
+  "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
 ' sh
 "$PYTHON" "$here/calibration/kit.py" --verify-run "$out"
 echo "$out"

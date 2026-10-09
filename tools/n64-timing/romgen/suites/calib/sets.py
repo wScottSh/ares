@@ -18,7 +18,7 @@ from ..rdpstat import routines
 from ..rdpstat.routines import fill32
 from ..snapper import asm as snapper_asm
 from ..snapper.cases import UNCACHED, Lists, emit, run_sync
-from . import asm
+from . import asm, bus, cpu2, tex, zmem
 
 DELAYS = [int(k) for k in os.environ.get("N64_CALIB_DELAYS", "1,165,329,493,657,821,985,1149").split(",")]
 CAL_BUF = 0x005D0000       # bank 5, clear of the bench buffers (SB_BUF 0x5C0000, HPOS 0x5A0000)
@@ -91,6 +91,47 @@ def cmd_fetch(suite):
         build = Step("bench_list_step", [suite.blob(words), len(words), 0, 0, 0, 0, 0, KSEG1 | LIST_BUF], 0)
         rom.point(f"{name}-{n}", "k_cmd_fetch", [LIST_BUF, 4 * len(words)], [("cmds", n)], reps=4,
                   flags=benches.VI_OFF, extra=["changes", "min_step", "max_step", "first_step"], pre=[build])
+    cmd_fetch_frozen(suite, rom)
+
+
+FETCH_SPINS = range(8)
+
+
+def cmd_fetch_frozen(suite, rom):
+    """The command FIFO filling behind a frozen RDP: DPC_CURRENT can only stop at a burst boundary
+    there, so the offsets a poll sees are multiples of the burst whatever the poll's cadence
+    (calibration/kit.py derive: burst_gcd)."""
+    words = rcp.words([rcp.nop()] * 512 + [rcp.full_sync()])
+    build = Step("bench_list_step", [suite.blob(words), len(words), 0, 0, 0, 0, 0, KSEG1 | LIST_BUF], 0)
+    for spin in FETCH_SPINS:
+        rom.point(f"frozen-s{spin}", "k_fetch_frozen", [LIST_BUF, 4 * len(words), spin], [("spin", spin)], reps=4,
+                  flags=benches.VI_OFF, extra=["seen", "first", "last"], pre=[build] if spin == 0 else [])
+
+
+def sp_dma_chain(suite):
+    """sp-dma-sweep's DMAs queued back to back through SP_DMA_FULL, max(16, 4096 / size) of them, timed
+    to SP_DMA_BUSY clear: the 26 pclk quantum of the busy poll that ends sp-dma-sweep's single DMA
+    (verify-63c) falls on the whole chain, so per DMA it is 26 / n pclk."""
+    rom = Rom(suite, "sp-dma-chain")
+    for direction, len_reg in (("rd", 0x8), ("wr", 0xC)):
+        for off in benches.SP_OFFSETS:
+            for size in benches.SP_SIZES:
+                n = max(16, 4096 // size)
+                rom.point(f"{direction}-{size}-off{off:x}", "k_sp_chain",
+                          [benches.SP_BASE + len_reg, size - 1, benches.SP_DMA_BUF + off, n],
+                          [("bytes", size), ("dir", direction), ("off", off), ("dmas", n)])
+
+
+STATUS_FRAME = [0xFF010300FFFFFFFF] * 4 + [0xFE00000000000000] + [0] * 2 + [1]
+
+
+def joybus_setup(suite):
+    """Which controller ports answer a status command and which report an accessory: ingestion
+    compares an SI capture with the fork run that had the same pads (calibration/run.sh pads-4)."""
+    rom = Rom(suite, "joybus-setup")
+    rom.point("status-4", "k_sb_joybus", [suite.blob(benches.joybus_block(STATUS_FRAME)), KSEG1 | benches.SB_BUF,
+                                          benches.SB_BUF + 64], [("commands", 4)], reps=1, flags=benches.VI_OFF)
+    rom.point("pads", "k_pads", [KSEG1 | (benches.SB_BUF + 64)], reps=1, extra=["mask", "paks"])
 
 
 SPAN_WIDTHS = [1, 4, 8, 12, 14, 15, 16, 17, 18, 20, 24, 28, 30, 31, 32, 33, 34, 36, 40, 44, 46, 47, 48, 49, 50,
@@ -117,6 +158,7 @@ class BenchKit:
     set_name: str
     rom_name: str
     builders: list
+    extra_asm: list = field(default_factory=list)
     category: str = "Calib"
     consts: dict = field(default_factory=dict)
 
@@ -126,7 +168,7 @@ class BenchKit:
 
     @property
     def asm(self):
-        return [bench_asm.ASM, asm.ASM]
+        return [bench_asm.ASM, asm.ASM] + self.extra_asm
 
     def build(self, suite):
         for b in self.builders:
@@ -139,12 +181,17 @@ KITS = {
                 dcb, wb_stores, reg_write, ifill],
     "kit-vi": [vi_enable, count_fields],
     "kit-dma": [benches.mi_memset_uncached, benches.mi_memset_cached, benches.mi_memset_rspdma,
-                benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma],
+                benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain],
     "kit-hpos": [benches.uncached_vs_hpos],
     "kit-rdp": [benches.rdp_sync_sweep, benches.rdp_setter_sweep, benches.rdp_atomic_sweep, benches.rdp_rectn,
                 fifo_depth, cmd_fetch],
     "kit-span": [span_width],
+    "kit-tex": tex.BUILDERS,
+    "kit-zmem": zmem.BUILDERS,
+    "kit-cpu2": cpu2.BUILDERS,
+    "kit-bus": bus.BUILDERS,
 }
+KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
@@ -247,7 +294,9 @@ def kit_sets(delays):
     sets = []
     for k in delays:
         for name, builders in KITS.items():
-            sets.append(BenchKit(name, f"boot-{k}/{name}", builders,
+            if not builders:
+                continue
+            sets.append(BenchKit(name, f"boot-{k}/{name}", builders, KIT_ASM.get(name, []),
                                  consts={"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k}))
         sets.append(NoiseKit(rom_name=f"boot-{k}/kit-noise", consts={"DUMP": 0, "BOOT_DELAY": k}))
     return sets

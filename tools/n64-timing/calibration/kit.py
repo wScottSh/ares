@@ -11,6 +11,7 @@ boot delay (calibration/run.sh). A question (questions.tsv) names points and met
 `compare` turns the console's values and the model's into pass or fail.
 """
 import fnmatch
+import math
 import os
 import re
 import sys
@@ -106,6 +107,11 @@ class Log:
     def rom(self):
         return self.header.get("rom")
 
+    @property
+    def pads(self):
+        """Controller ports that answered the joybus-setup probe (kit-dma), or None."""
+        return self.records.get(("joybus-setup", "pads"), {}).get("mask")
+
 
 def derive(records):
     """Adds bench report.py's derived metrics to every bench ROM's points, and the kit's own."""
@@ -120,6 +126,17 @@ def derive(records):
             pass
     for point, p in by_rom.get("count-fields", {}).items():
         p["ticks_per_field"] = round(p["min"] / p["fields"], 3)
+    frozen = [p["seen"] for point, p in by_rom.get("cmd-fetch", {}).items() if point.startswith("frozen-") and "seen" in p]
+    if frozen:
+        #A frozen RDP's CURRENT stops only where a fetch ended; the highest offset is the full FIFO,
+        #so the burst is the gcd of the others (sets.py cmd_fetch_frozen).
+        seen = 0
+        for mask in frozen:
+            seen |= mask
+        offsets = [8 * i for i in range(32) if seen >> i & 1]
+        inner = [o for o in offsets[:-1] if o]
+        records[("cmd-fetch", "burst")] = {"burst_gcd": math.gcd(*inner) if inner else offsets[-1],
+                                          "offsets": ",".join(map(str, offsets))}
     span = by_rom.get("span-width", {})
     for bpp in (16, 32):
         widths = sorted((p["w"], p["clock"]) for p in span.values() if p.get("bpp") == bpp and "clock" in p)
@@ -163,9 +180,14 @@ def read_logs(paths):
     return out
 
 
-def model_logs(run_dir, rom):
-    """The fork's logs of one kit ROM in a calibration/run.sh output, one per boot delay."""
-    run_dir = Path(run_dir)
+#The fork runs per controller setup the joybus-setup probe can report (calibration/run.sh).
+PAD_SETUPS = {None: "", 0b0001: "", 0b1111: "pads-4/"}
+
+
+def model_logs(run_dir, rom, pads=None):
+    """The fork's logs of one kit ROM in a calibration/run.sh output, one per boot delay, run with the
+    controllers whose ports answered as `pads` did."""
+    run_dir = Path(run_dir) / PAD_SETUPS[pads]
     paths = sorted(run_dir.glob(f"boot-*/{rom}.txt")) + sorted(run_dir.glob(f"single/{rom}.txt"))
     return [Log(p.read_bytes()) for p in paths]
 
@@ -185,11 +207,13 @@ def values(logs, pattern, metric):
 def compare(question, hw, model):
     """(result, detail): pass or fail, from the console's logs and the model's, under the question's rule."""
     rule = question["rule"]
-    bad, checked = [], 0
+    bad, lacking, checked = [], [], 0
     for pattern in question["points"].split():
         for metric in question["metric"].split():
             want = values(model, pattern, metric)
             got = values(hw, pattern, metric)
+            for key in sorted(set(want) - set(got)):
+                lacking.append(f"{key} {metric}")
             for key, hv in sorted(got.items()):
                 mv = want.get(key)
                 if mv is None:
@@ -209,6 +233,8 @@ def compare(question, hw, model):
                     bad.append(shown)
     if not checked:
         return "fail", f"no console value matches {question['points']} {question['metric']}; the capture lacks the points"
+    if lacking:
+        return "fail", f"the capture lacks {len(lacking)} of {len(lacking) + checked} model values; first {lacking[0]}"
     if bad:
         return "fail", f"{len(bad)} of {checked} values differ; first {bad[0]}"
     return "pass", f"{checked} values agree ({rule})"
@@ -239,11 +265,24 @@ def result_from(root, model_dir, qid):
     logs = [log for log in hw.get(kit, []) if log.complete]
     if not logs:
         return "pending:calibration-16", f"no complete console capture of {kit} in {HARDWARE}"
-    model = [m for m in model_logs(model_dir, kit) if m.complete]
-    if not model:
-        return "missing", f"no fork run of {kit} in {model_dir}; run tools/n64-timing/calibration/run.sh there"
-    res, detail = compare(q, logs, model)
-    return res, f"{detail}; capture {','.join(ids)}, {len(logs)} console and {len(model)} fork logs"
+    paks = [log for log in logs if log.records.get(("joybus-setup", "pads"), {}).get("paks")]
+    if paks:
+        return "fail", (f"{kit}: a controller held a Controller Pak or Rumble Pak (paks="
+                        f"{paks[0].records[('joybus-setup', 'pads')]['paks']}); the fork has none, so remove it and rerun")
+    results, details = [], []
+    for pads in sorted({log.pads for log in logs}, key=lambda p: -1 if p is None else p):
+        group = [log for log in logs if log.pads == pads]
+        if pads not in PAD_SETUPS:
+            return "fail", f"{kit}: controller ports {pads:04b} answered; the fork runs 1 pad (0001) or 4 (1111)"
+        model = [m for m in model_logs(model_dir, kit, pads) if m.complete]
+        if not model:
+            return "missing", f"no fork run of {kit} in {model_dir}/{PAD_SETUPS[pads]}; run tools/n64-timing/calibration/run.sh there"
+        res, detail = compare(q, group, model)
+        results.append(res)
+        setup = "" if pads is None else f"{bin(pads).count('1')} pads: "
+        details.append(f"{setup}{detail}, {len(group)} console and {len(model)} fork logs")
+    res = "fail" if "fail" in results else "pass"
+    return res, f"{'; '.join(details)}; capture {','.join(ids)}"
 
 
 def verify_run(run_dir):
@@ -305,6 +344,19 @@ def self_test():
             ok = got == want
             failed += not ok
             print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (complete={got}, want {want})")
+    q = {"points": "dcb/*", "metric": "min", "rule": "range:abs:1"}
+    model = [Log(log)]
+    partial = sample_log("#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=26 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    compares = [("a full capture that agrees", [Log(log)], "pass"),
+                ("a capture holding one of the two points", [Log(partial)], "fail"),
+                ("a capture 2 pclk off on one point", [Log(off)], "fail")]
+    for name, hw, want in compares:
+        got, detail = compare(q, hw, model)
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
+    cases += compares
     print(f"kit.py: self-test: {len(cases)} cases, {failed} failed")
     return failed
 
