@@ -1,0 +1,48 @@
+id	source	item
+16.pipebusy-stall	issue #16 (from #2, #3)	Does DPC_PIPEBUSY count memory-stall cycles, so that CLOCK - PIPE is a stall counter (PIPEBUSY gross vs net)?
+16.span-slots	issue #16 (from #3, #20)	Span RAM slot size and overlap, from a DPC_CLOCK sweep over span width
+16.masked-burst	issue #16 (from #3, #17)	Is a partly rejected span written as one masked burst or split?
+16.fifo-depth	issue #16 (from #8)	How far DPC_CURRENT runs ahead of execution (the command buffer depth)
+16.sp-dma-setup	issue #16 (from #4, #7)	SP DMA setup overhead, rate per direction, and the cost of an RDRAM row crossing
+16.dirty-writeback	issue #16 (from #5, #6, #26)	Dirty D-cache line writeback cost and order (fill then writeback), and the isolated dirty-miss stall (about 40 vs 67-71)
+16.wb-full	issue #16 (from #5, #6, #26)	Uncached stores into a full 4-entry write buffer: the 5th-store stall, release on a free slot or on an empty buffer
+16.cache-ops	issue #16 (from #5)	The cost of each CACHE op
+16.ri-priority	issue #16 (from #4)	Client priority and starvation: uncached-load latency while SP DMA, the RDP and PI DMA each saturate the bus
+16.ri-reorder	issue #16 (from #4)	Does the RI reorder same-bank different-row requests?
+16.refresh-all-banks	issue #16 (from #4)	Does the 52/54-clock refresh holdoff block every bank?
+16.span-law	issue #16 (from #2)	The cen64-jgemu span law (14 per primitive + sum(px * 129/128 + 12) per span), split into compute and memory
+16.sync-in-flight	issue #16 (from #2)	Sync costs with and without a primitive in flight
+16.triangle-setup	issue #16 (from #2)	Triangle setup cost per triangle type (many 1-pixel triangles)
+16.loadtile-loadblock	issue #16 (from #2)	LoadTile vs LoadBlock per-row overhead, through DPC_TMEM
+16.wb-drain-target	issue #16 (from #6, #26)	Write-buffer drain time per entry by target (RDRAM, RCP register, PI), the load wait behind N = 0-4 buffered writes per target, and the RCP write-ack delay per device
+16.vi-rows-per-line	issue #16 (from #22)	VI rows fetched per output line (3 per the SDK and patent vs 4 per Angrylion and paraLLEl) and the burst size and cadence, from uncached-load latency against line position
+16.noise-idle-stall	issue #16 (from #18)	Does the noise LFSR step while the RDP is idle and during in-span memory stalls (noise phase vs DPC_CLOCK and BUFBUSY)?
+16.noise-reset-state	issue #16 (from #18)	What loads the all-ones LFSR state: a power-on only, or also the Reset button?
+16.noise-bits	issue #16 (from #18)	Which noise bits feed G_AD_NOISE, G_CD_NOISE and G_AC_DITHER, and the G_AD_NOISE range
+16.noise-2cycle	issue #16 (from #18)	Noise steps per pixel in 2-cycle mode
+16.count-per-field	issue #16 (from #24)	COUNT ticks per VI field (the X1 vs X2 ratio and the crystal error)
+16.vi-rcp-phase	issue #16 (from #24)	VI vs RCP clock-domain phase and jitter at power-on
+16.vi-intr-latency	issue #16 (from #24)	VI interrupt sync latency
+16.span-tri-16bpp	issue #16 (from #20)	snapper64 Span Tri at 16 bpp: is the span half 32 px or 16 positions?
+16.span-transaction	issue #16 (from #20)	The span read and write RDRAM transaction unit (16 B vs 64 B), from DPC_CLOCK steps against span width
+16.imrd-zcmp-slots	issue #16 (from #20)	Do IM_RD and Z_CMP prefetch share the same stream slots?
+16.zcomb-run-count	issue #16 (from #17)	Run-count sweep: a Z comb every N = 1-32 px (rising = per-run bursts, flat = masked burst, a step at 4 = per word), and whether runs are cut at 16 B or 64 B boundaries
+16.copy-passfail	issue #16 (from #17)	The copy-mode cost of pass/fail/pass/fail words
+16.clobber	issue #16 (from #17)	IM_RD on, atomic off, an overlapping second primitive that fails alpha: stale-block or masked write-back?
+16.atomic	issue #16 (from #19)	The DPC_CLOCK delta per ATOMIC_PRIM primitive, its growth with Z and RDRAM contention, and whether it is paid only when consecutive primitives overlap
+16.mm-bench-scenes	issue #16	Majora's Mask bench scenes on the console (file select with named files, and the scenes behind mm:south-clock-town)
+fu.vi-same-bank-tail	followups T11 / verify-63b	The same-bank VI-on mean tail and the VI-vs-CPU interaction strength (about 2x the nemu64 means)
+fu.thar0-residuals	followups T13 / verify-67	The Thar0 residuals: 2-cycle Z reads -11.8%, VI-same-bank Z -11..-13%
+fu.stale-read-32px	followups T13	The 32 px stale read (rdpstat-1prim's expectation is cen64's extrapolation, not hardware)
+fu.rdp-hold	followups T15	A held rectangle sees only commands already in the FIFO; a command appended later never reaches it
+fu.rect-tail-twice	followups T15	A rectangle tail drawn twice: with IM_RD blend or Z update a pixel can blend twice or fail its own Z compare
+fu.exc-entry	followups T7c, verify-85	Interrupt entry cost, CTC1-raised FPE cost, fetch-stage and watch exceptions, an isolated ERET, and the extra pclk before a fetch-fault exception
+fu.pi-edge-wait	verify-85	PiEdgeWait 0.5 rclk and the PI row-hit assumption (code-only constants with no behaviors row)
+fu.pi-row-end	verify-85	A PI DMA whose first block ends at an RDRAM row end
+fu.pidma-offset	followups not-built / verify-74	The COUNT offset the n64_pi_dma_test log starts at (pidma replay offsets)
+fu.systembench-binary	followups systembench	The original n64-systembench 845635c on the console, with rambuf read from its ELF, so every row is a same-binary comparison
+fu.joybus-56-63	followups pif-joy / verify-80	Hardware 56 B and 63 B empty joybus frames (+7 / +15 rclk over 8 B, uncaptured)
+fu.pif-ram-dword	followups sysbench / verify-75	An LD from PIF RAM (the fork reads the word twice)
+fu.power-on-compare	followups T7c	The power-on COMPARE value (cop0hazard leaves IP7 set after the COUNT test wraps through Compare = 0)
+fu.hpos-holdoff	followups labels-phase	hpos holdoff_rclk_max from a window that starts on a refresh
+fu.vi-mid-field-blank	issue #84	What hardware does on a VI blank and re-enable mid-field (the kit blanks only in vertical blank because the fork crashes, #84)

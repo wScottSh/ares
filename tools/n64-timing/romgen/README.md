@@ -34,6 +34,8 @@ tools/n64-timing/run-thar0.sh
 | `suites/rdpstat/` | RDP command-sequencing ROMs ported from n64-systemtest and repeater64. See [suites/rdpstat/README.md](suites/rdpstat/README.md) |
 | `suites/snapper/` | Port of snapper64's RDP test-mode, fill-triangle and no-sync tests, with a fetch script for its console dumps and a comparator. See [suites/snapper/README.md](suites/snapper/README.md) |
 | `suites/noise/` | Port of Thar0/RDP-Noise's 1016x1 NOISE rectangle, checked against the noise LFSRs. See [suites/noise/README.md](suites/noise/README.md) |
+| `hwout.py` | The console output layer for `build.py --hw`: no emux instruction; each line goes to the ISViewer, cartridge SRAM and, at the end, paged screen text (`font8x8.py`), between a `#kit` header and a `#kit-end` footer with the log's FNV-1a. See [docs/calibration/hardware-run.md](../../../docs/calibration/hardware-run.md) |
+| `suites/calib/` | The calibration kit ROMs: bench ROMs combined, plus the kit's own points. Always built with `--hw`. See `tools/n64-timing/calibration/` |
 | `report.py` | Joins a ROM's `@<test>.<value>` records with its `.tests.tsv` listing |
 
 The ROM decides pass or fail by itself and prints nemu64-test's output format. The host side only parses output.

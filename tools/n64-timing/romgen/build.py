@@ -1,7 +1,7 @@
 """Builds romgen test ROMs.
 
-usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat|snapper|noise --out DIR
-       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE]
+usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat|snapper|noise|calib --out DIR
+       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE] [--hw]
 
 Writes one .z64 per set of the suite (romgen/suites/<suite>/sets.py), for example
 nemu64-timing.z64 or bench-pi-dma-sizes.z64, and a .tests.tsv next to each listing every value
@@ -11,22 +11,34 @@ inputs give byte-identical ROMs.
 The boot code is libdragon's public-domain ipl3_compat.z64 (the same stub
 make-emux-smoke-rom.py uses). It loads the flat payload at ROM 0x1000 to the entry point in
 header word 0x8, with the payload size in header word 0x10.
+
+--hw builds the console variant (hwout.py): no emux instruction, output through the ISViewer,
+cartridge SRAM and the screen, and a `#kit` header naming the ROM and the git commit. The calib
+suite is always built this way.
 """
 import argparse
+import hashlib
 import importlib
 import os
 import struct
+import subprocess
 import sys
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "romgen"
 
-from romgen import mips, runtime  # noqa: E402
+from romgen import hwout, mips, runtime  # noqa: E402
 from romgen.suite import Suite  # noqa: E402
 
 DEFAULT_IPL3 = os.path.join(os.environ.get("N64_TIMING_HOME", os.path.expanduser("~/n64-timing")),
                             "scratch", "r29", "clones", "libdragon", "boot", "bin", "ipl3_compat.z64")
+
+
+#The stub the console builds were checked with (docs/calibration/hardware-run.md, Before you start):
+#libdragon boot/bin/ipl3_compat.z64 at this commit.
+IPL3_COMMIT = "e356bf3f56f7afbf7e5246329562f145965cfdfc"
+IPL3_SHA256 = "f522db2e31a701f82597f399e76d55c9487760d015aff9d90176b463ae39a068"
 
 
 def suite_sets(name):
@@ -46,10 +58,20 @@ def runtime_text(extra_asm, consts):
     return "\n".join([text] + extra_asm)
 
 
-def build_payload(set_def):
+def git_sha():
+    here = os.path.dirname(os.path.abspath(__file__))
+    sha = subprocess.run(["git", "-C", here, "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True).stdout.strip()
+    dirty = subprocess.run(["git", "-C", here, "status", "--porcelain", "--", ".."], capture_output=True, text=True).stdout.strip()
+    return (sha or "unknown") + ("-dirty" if dirty else "")
+
+
+def build_payload(set_def, hw=None):
+    """hw: None, or (rom id, git sha, build variant) for the console variant."""
     suite = Suite(set_def.rom_name, set_def.category, set_def.banner_flags)
     extra = list(set_def.asm)
     base_text = runtime_text(extra, set_def.consts)
+    if hw:
+        base_text = hwout.transform(base_text) + hwout.asm(*hw)
     probe = mips.Image(runtime.PAYLOAD_BASE).asm(base_text, **runtime.CONSTS, **set_def.consts)
     suite.symbols = probe.layout()
     set_def.build(suite)
@@ -84,6 +106,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--ipl3", default=DEFAULT_IPL3)
     ap.add_argument("--set", action="append", help="build only these sets")
+    ap.add_argument("--hw", action="store_true", help="build the console variant (hwout.py)")
     ap.add_argument("--define", action="append", default=[], metavar="NAME=VALUE",
                     help="override an integer assembler constant of the suite, e.g. RUNS=1000")
     args = ap.parse_args()
@@ -91,7 +114,12 @@ def main():
     ipl3 = open(args.ipl3, "rb").read()
     if len(ipl3) != 0x1000 or ipl3[:4] != b"\x80\x37\x12\x40":
         raise SystemExit(f"{args.ipl3}: expected a 4 KiB big-endian ipl3_compat.z64")
+    if (args.hw or args.suite == "calib") and hashlib.sha256(ipl3).hexdigest() != IPL3_SHA256:
+        raise SystemExit(f"{args.ipl3}: not the pinned ipl3_compat.z64 (libdragon {IPL3_COMMIT}, sha256 {IPL3_SHA256}); "
+                         f"a console build must boot the stub the kit was verified with")
     os.makedirs(args.out, exist_ok=True)
+    hw = args.hw or args.suite == "calib"
+    sha = git_sha() if hw else None
     for set_def in suite_sets(args.suite):
         if args.set and set_def.set_name not in args.set:
             continue
@@ -99,8 +127,12 @@ def main():
         if unknown:
             raise SystemExit(f"{set_def.rom_name}: no constant {', '.join(sorted(unknown))}")
         set_def.consts = {**set_def.consts, **defines}
-        suite, payload = build_payload(set_def)
+        rom_id = os.path.basename(set_def.rom_name)
+        variant = os.path.dirname(set_def.rom_name) or "single"
+        suite, payload = build_payload(set_def, (rom_id, sha, variant) if hw else None)
         rom = make_rom(ipl3, payload)
+        if hw:
+            rom = hwout.header_bytes(rom)
         path = os.path.join(args.out, f"{set_def.rom_name}.z64")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:

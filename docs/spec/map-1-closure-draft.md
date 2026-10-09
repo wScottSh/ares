@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run sysbench-era/after on 8c652711f). 1 consistent-only, 33 fail, 10 fit only, 3 model-choice, 69 pass, 7 pending:calibration-16, 15 pending:no-corpus, 11 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
+The spec is `docs/spec/n64-timing.md`: 149 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run calib-kit-merge/standing on 214c46421). 1 consistent-only, 33 fail, 10 fit only, 3 model-choice, 69 pass, 7 pending:calibration-16, 2 pending:calibration-16 pending:no-corpus, 10 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior is built: the code reads each value or implements each rule.
 
 ## Destination
 
@@ -45,7 +45,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 4 consistent-only, 23 fail, 87 pass, 1 pass-conditional:#77, 15 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 4 consistent-only, 23 fail, 87 pass, 1 pass-conditional:#77, 95 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
@@ -133,13 +133,23 @@ No published value exists for these, and no check measures them: their checks ar
 | `rdp.color-half-pixels-16bpp` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `rdp.noise-alpha-dither` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `rdp.noise-dither-bits` | model-choice | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `legacy.pi.cart-read` | legacy | calibration-16, no-corpus | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; no corpus in the program measures this behavior; it stays pending until one does |
+| `legacy.ai.power-on-rate` | legacy | calibration-16, no-corpus | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; no corpus in the program measures this behavior; it stays pending until one does |
+| `clock.vclk` | derived | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `cpu.ifill-stall` | inferred | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `cpu.dirty-miss-order` | vendor | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `cpu.wb-release` | vendor | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `pif.joybus-no-device` | fit | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `ai.fetch-bytes` | vendor | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `vi.register-sample` | model-choice | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `vi.display-window` | model-choice | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `rdp.fill-copy-rate` | vendor | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `rdp.tmem-load-rate` | rtl | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `legacy.clock.vclk-pal` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.nmi-entry` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.sysad-frozen-step` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `legacy.pi.cart-read` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.pif.step-quantum` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.pif.boot-timeout` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `legacy.ai.power-on-rate` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.eeprom-write` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.rtc-tick` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mx-sector-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
@@ -148,17 +158,7 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.cart.flash-mn63-sector-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-chip-erase` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cart.flash-mn63-program` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
-| `clock.vclk` | derived | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `cpu.ifill-stall` | inferred | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `cpu.dirty-miss-order` | vendor | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `cpu.wb-release` | vendor | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `pif.joybus-no-device` | fit | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `ai.fetch-bytes` | vendor | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `vi.register-sample` | model-choice | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `vi.unfetched-sample` | model-choice | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `vi.display-window` | model-choice | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `rdp.fill-copy-rate` | vendor | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
-| `rdp.tmem-load-rate` | rtl | report-only | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 
 ## Pending checks inside rows that pass, fail or are fit only
 
@@ -166,6 +166,111 @@ These checks are gated too, but another check already decides their row.
 
 | Behavior | Status | Pending checks |
 |---|---|---|
-| `ri.retry-dirty` | pass | `bench:dirty-row-sweep` pending (report-only) |
-| `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only) |
-| `rdp.primitive-base` | fit only | `bench:rdp-rectn` pending (report-only) |
+| `clock.unit` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `ri.read-hit` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `ri.write-hit` | fail | `hw:memset-vi` pending (calibration-16) |
+| `ri.octbyte` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.retry-clean` | fail | `hw:nemu64-console` pending (calibration-16) |
+| `ri.retry-dirty` | pass | `bench:dirty-row-sweep` pending (report-only); `hw:dirty-row` pending (calibration-16) |
+| `ri.post-read-gap` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.post-write-gap` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.max-burst` | pass | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.bank-of` | fail | `hw:nemu64-console` pending (calibration-16) |
+| `ri.row-of` | fail | `hw:nemu64-console` pending (calibration-16) |
+| `ri.refresh-clean` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `ri.refresh-dirty` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `ri.refresh-trigger` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-blank-counting` pending (calibration-16); `hw:refresh-all-banks` pending (calibration-16) |
+| `ri.refresh-waits-for-burst` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:refresh-all-banks` pending (calibration-16) |
+| `ri.arbitration` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16); `hw:ri-reorder` pending (calibration-16); `hw:ri-priority-overlap` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `ri.rank.refresh` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `ri.rank.vi` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `ri.rank.other` | pass | `hw:ri-priority` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `ri.overhead-read` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.overhead-vi` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `ri.overhead-write` | fail | `hw:memset-vi` pending (calibration-16) |
+| `ri.overhead-rdp` | fail | `hw:thar0-console` pending (calibration-16) |
+| `cpu.uncached-read-total` | fail | `hw:cpu-reads` pending (calibration-16); `hw:nemu64-console` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.uncached-read-dword-total` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.dfill-total` | fail | `hw:dirty-miss` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.dcache-hit` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.ldi` | pass | `hw:load-interlock-cop` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.mci` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-rf` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-ex` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-fpu` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-fpu-detect` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:fpu-classes` pending (calibration-16) |
+| `cpu.fpu-add` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-mul-s` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-mul-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-div-s` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-div-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-trivial` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:fpu-classes` pending (calibration-16) |
+| `cpu.fpu-forward` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.issue` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.mult` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.dmult` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.div` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.ddiv` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-sqrt-s` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-sqrt-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-convert` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-cvt-s-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.likely-nullified` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.eret` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:cpu-exceptions` pending (calibration-16) |
+| `cpu.mtc0-slow-regs` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.cache-index-load-tag` | pass | `hw:cache-ops` pending (calibration-16); `hw:cache-ops-sum` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.irq-sample` | fit only | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `cpu.wb-entries` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.wb-block-entries` | fail | `hw:wb-release` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16) |
+| `cpu.rcp-register-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.pif-ram-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.pi-io-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `sysad.rdram-write-period` | fail | `hw:memset-vi` pending (calibration-16) |
+| `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only); `hw:memset-vi` pending (calibration-16) |
+| `cpu.random-rule` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `cpu.wired-write-latency` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `sp.dma-burst` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `rsp.slot` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `pi.page-setup` | fail | `hw:pi-dma-small` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `pi.halfword-bias` | fail | `hw:pi-dma-small` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `pi.block-bytes` | fail | `hw:pi-dma-small` pending (calibration-16) |
+| `pi.block-writeback` | fail | `hw:pi-dma-small` pending (calibration-16) |
+| `pi.io-busy` | fail | `hw:poll-phase` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `si.io-busy` | fail | `hw:poll-phase` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `si.write64` | pass | `hw:systembench` pending (calibration-16) |
+| `si.write64-rom` | consistent-only | `hw:systembench` pending (calibration-16) |
+| `si.read64-base` | pass | `hw:joybus-pads` pending (calibration-16) |
+| `pif.joybus-skip` | pass | `hw:joybus-pads` pending (calibration-16) |
+| `pif.joybus-escape` | pass | `hw:joybus-pads` pending (calibration-16) |
+| `pif.joybus-byte` | pass | `hw:joybus-pads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `pif.joybus-handshake` | pass | `hw:joybus-pads` pending (calibration-16) |
+| `vi.lines-per-output-line` | fail | `hw:vi-fetch-modes` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `vi.burst` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16) |
+| `vi.fetch-window` | pass | `hw:vi-fetch-position` pending (calibration-16) |
+| `vi.vclk-per-pixel` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `vi.aa-mode-lines` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `rdp.xbus-fetch-rate` | pass | `hw:xbus-fetch-rate` pending (calibration-16) |
+| `rdp.sync-pipe` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
+| `rdp.sync-tile` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
+| `rdp.sync-load` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
+| `rdp.sync-full` | pass | `hw:rdp-sync-setter` pending (calibration-16); `hw:attribute-sync-cost` pending (calibration-16) |
+| `rdp.setter` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
+| `rdp.primitive-base` | fit only | `bench:rdp-rectn` pending (report-only); `hw:rdp-rect-base` pending (calibration-16) |
+| `rdp.span-dead-pixels` | fit only | `hw:rdp-rect-base` pending (calibration-16) |
+| `rdp.span-line-gap` | fit only | `hw:rdp-rect-base` pending (calibration-16) |
+| `rdp.span-1cycle` | pass | `hw:thar0-console` pending (calibration-16) |
+| `rdp.span-2cycle` | pass | `hw:thar0-console` pending (calibration-16) |
+| `rdp.pipeline-depth` | pass | `hw:attribute-stage` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
+| `rdp.attribute-stage` | pass | `hw:attribute-stage` pending (calibration-16); `hw:attribute-sync-cost` pending (calibration-16); `hw:rdp-hold` pending (calibration-16) |
+| `rdp.atomic-dead` | fail | `hw:rdp-atomic` pending (calibration-16); `hw:stale-read` pending (calibration-16); `hw:atomic-contention` pending (calibration-16); `hw:clobber` pending (calibration-16) |
+| `rdp.span-ram-half` | pass | `hw:snapper64` pending (calibration-16) |
+| `rdp.span-ram-segment` | pass | `hw:snapper64` pending (calibration-16) |
+| `rdp.span-read-latency` | fail | `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16) |
+| `rdp.mem-overhead-read` | fail | `hw:span-width` pending (calibration-16) |
+| `rdp.span-slots` | fail | `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
+| `rdp.read-gate` | fail | `hw:thar0-console` pending (calibration-16) |
+| `rdp.write-run` | pass | `hw:write-granularity` pending (calibration-16); `hw:write-granularity-pixels` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
+| `rdp.noise-step` | pass | `hw:noise-pixel-offset` pending (calibration-16) |
+| `rdp.noise-reset` | pass | `hw:noise-reset` pending (calibration-16) |
+| `rdp.noise-pixel-offset` | pass | `hw:noise-pixel-offset` pending (calibration-16); `hw:noise-idle` pending (calibration-16); `hw:noise-2cycle` pending (calibration-16); `hw:noise-stall` pending (calibration-16) |
+| `legacy.cpu.interrupt-entry` | pass | `hw:nemu64-cop0hazard-console` pending (calibration-16) |
