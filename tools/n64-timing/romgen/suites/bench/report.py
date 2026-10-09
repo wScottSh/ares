@@ -6,7 +6,8 @@ Reads RESULTS_DIR/boot-<K>/<rom>/stdout.txt and ROMS_DIR/boot-<K>/bench-<rom>.te
 every boot delay K in phases.DELAYS. Writes RESULTS_DIR/measurements.tsv (every raw and derived
 value per delay and point), RESULTS_DIR/phases.tsv (each expected.tsv metric at every delay) and
 RESULTS_DIR/results.tsv (one row per expected.tsv entry with the phase min, median, max and mean
-and its verdict under the row's rule). Exits 1 when a ROM did not print every point its listing
+and its verdict under the row's rule; a consistent row also gets the mean rule's verdict and its
+acceptance window, see label and acceptance). Exits 1 when a ROM did not print every point its listing
 promises, which is the format check; value verdicts never change the exit code.
 
 Units: COUNT ticks at 46.875 MHz; pclk = 2 ticks (VR4300 93.75 MHz); rclk = 4/3 ticks (RCP
@@ -60,8 +61,9 @@ def hpos(p):
     outliers = [(off, lat) for off, lat in samples if lat >= median + 20]
     line = p["line_ticks"]
     #Offset 0 is the HSYNC the sync loop saw. The window's first and last HSYNCs sit at its
-    #edges, and the ROM's one-line estimate of `line` can be off by a refresh holdoff (2926 vs
-    #2975 ticks after a 20-byte code shift), which moves an edge HSYNC in or out. So the rate
+    #edges, and the ROM's estimate of `line` can be off by a refresh holdoff on its poll (one
+    #interval read 2926 ticks against a 2984 HSYNC spacing, verify-78; the ROM now averages 4),
+    #which moves an edge HSYNC in or out. So the rate
     #counts only the HSYNCs half a line or more inside both edges: lines 1 .. full_lines - 1.
     full_lines = (samples[-1][0] + samples[-1][1]) // line
     interior = [off for off, _ in outliers if line / 2 <= off < (full_lines - 0.5) * line]
@@ -174,19 +176,47 @@ def phase_of(per_delay, key):
     return Phase(values, min(lows + values), max(highs + values))
 
 
-def verdict(row, phase):
+def holds(rule, lo, hi, model_lo, model_hi, mean):
     """consistent: the hardware band overlaps the model's phase range (the hardware number is one
     phase). mean: the phase mean lies in the band (the hardware number averages many phases).
     every: the whole phase range lies in the band (a fixed cost holds at every phase)."""
+    return {"consistent": model_lo <= hi and lo <= model_hi,
+            "mean": lo <= mean <= hi,
+            "every": lo <= model_lo and model_hi <= hi}[rule]
+
+
+def label(row, model_lo, model_hi, mean):
+    """A check row's result from the model's phase range and mean. A consistent pass whose mean
+    misses the band is consistent-only: some phase agrees, the average does not, so it is
+    consistent with the hardware number, not agreement. A pass that rests on a model choice
+    with no hardware reference (the row's condition, an issue) is pass-conditional:<issue>."""
+    lo, hi, rule = float(row["lo"]), float(row["hi"]), row["rule"]
+    if not holds(rule, lo, hi, model_lo, model_hi, mean):
+        return "fail"
+    if rule == "consistent" and not holds("mean", lo, hi, model_lo, model_hi, mean):
+        return "consistent-only"
+    condition = row.get("condition", "-")
+    return "pass" if condition == "-" else f"pass-conditional:{condition}"
+
+
+def verdict(row, phase):
     if phase is None:
         return "missing"
     if row["kind"] != "check":
         return "report"
-    lo, hi, rule = float(row["lo"]), float(row["hi"]), row["rule"]
-    ok = {"consistent": phase.lo <= hi and lo <= phase.hi,
-          "mean": lo <= phase.mean <= hi,
-          "every": lo <= phase.lo and phase.hi <= hi}[rule]
-    return "pass" if ok else "fail"
+    return label(row, phase.lo, phase.hi, phase.mean)
+
+
+def acceptance(row, phase):
+    """For a consistent row: the mean rule's verdict, and the window the model median may move in
+    and still pass, half the band width plus half the model's phase range, as a % of the
+    hardware number."""
+    if phase is None or row["kind"] != "check" or row["rule"] != "consistent":
+        return "-", "-"
+    lo, hi = float(row["lo"]), float(row["hi"])
+    mean_ok = holds("mean", lo, hi, phase.lo, phase.hi, phase.mean)
+    half = (hi - lo + phase.hi - phase.lo) / 2
+    return ("pass" if mean_ok else "fail"), f"{100 * half / float(row['expected']):.1f}"
 
 
 def main():
@@ -222,17 +252,21 @@ def main():
         for key in dict.fromkeys((r["rom"], r["point"], r["metric"]) for r in rows):
             f.write("\t".join(key + tuple(str(m.get(key)) for m in per_delay)) + "\n")
     with open(os.path.join(results, "results.tsv"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("rom\tpoint\tmetric\tmin\tmedian\tmax\tmean\texpected\tlo\thi\tkind\trule\tverdict\tsource\n")
+        f.write("rom\tpoint\tmetric\tmin\tmedian\tmax\tmean\texpected\tlo\thi\tkind\trule\tcondition\tverdict\t"
+                "mean_verdict\twindow_pct\tsource\n")
         for row in rows:
             phase = phase_of(per_delay, (row["rom"], row["point"], row["metric"]))
             v = verdict(row, phase)
+            mean_v, window = acceptance(row, phase)
             counts[v] = counts.get(v, 0) + 1
             stats = [str(x) for x in (round(phase.lo, 3), phase.median, round(phase.hi, 3), phase.mean)] \
                 if phase else ["None"] * 4
             f.write("\t".join([row["rom"], row["point"], row["metric"], *stats, row["expected"],
-                               row["lo"], row["hi"], row["kind"], row["rule"], v, row["source"]]) + "\n")
+                               row["lo"], row["hi"], row["kind"], row["rule"], row["condition"], v, mean_v, window,
+                               row["source"]]) + "\n")
+            extra = f", window ±{window}%, mean rule {mean_v}" if window != "-" else ""
             print(f"  {v:7} {row['rom']} {row['point']} {row['metric']} = {stats[0]}..{stats[2]} "
-                  f"median {stats[1]} mean {stats[3]} (expected {row['expected']}, {row['lo']}..{row['hi']}, {row['rule']})")
+                  f"median {stats[1]} mean {stats[3]} (expected {row['expected']}, {row['lo']}..{row['hi']}, {row['rule']}{extra})")
     print("format: " + ("ok" if format_ok else "MISSING POINTS") + "; expected rows: "
           + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     sys.exit(0 if format_ok else 1)

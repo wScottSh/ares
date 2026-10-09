@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))
 
-from romgen.suites.bench.report import derive, phase_of, verdict  # noqa: E402
+from romgen.suites.bench.report import acceptance, derive, phase_of, verdict  # noqa: E402
 
 failures = 0
 
@@ -64,11 +64,20 @@ key = ("r", "p", "m")
 delays = [{key: v} for v in (6.169, 6.169, 6.334, 6.495, 6.678)]
 phase = phase_of(delays, key)
 check("phase range over the boot delays", (phase.lo, phase.hi, phase.median, phase.mean), (6.169, 6.678, 6.334, 6.369))
-band = {"kind": "check", "lo": "6.49", "hi": "6.515"}
-check("consistent: the band overlaps the phase range", verdict({**band, "rule": "consistent"}, phase), "pass")
+band = {"kind": "check", "lo": "6.49", "hi": "6.515", "expected": "6.5", "condition": "-"}
+check("consistent: the band overlaps the range but the mean 6.369 misses it", verdict({**band, "rule": "consistent"}, phase),
+      "consistent-only")
+check("consistent: the mean rule's verdict and the window (0.025 + 0.509) / 2 of 6.5",
+      acceptance({**band, "rule": "consistent"}, phase), ("fail", "4.1"))
+straddle = phase_of([{key: 6.48}, {key: 6.52}], key)
+check("consistent: the band overlaps the range and holds the mean", verdict({**band, "rule": "consistent"}, straddle), "pass")
+inside = phase_of([{key: 6.5}, {key: 6.51}], key)
+check("a pass that rests on a model choice names its issue", verdict({**band, "rule": "every", "condition": "#77"}, inside),
+      "pass-conditional:#77")
+check("a conditional row that fails is a fail", verdict({**band, "rule": "mean", "condition": "#77"}, phase), "fail")
+check("only a consistent row has a window", acceptance({**band, "rule": "mean"}, phase), ("-", "-"))
 check("mean: the phase mean is outside the band", verdict({**band, "rule": "mean"}, phase), "fail")
 check("every: not every phase is inside the band", verdict({**band, "rule": "every"}, phase), "fail")
-inside = phase_of([{key: 6.5}, {key: 6.51}], key)
 check("every: every phase inside the band", verdict({**band, "rule": "every"}, inside), "pass")
 check("consistent: a range wholly below the band", verdict({"kind": "check", "lo": "7", "hi": "8", "rule": "consistent"}, phase), "fail")
 poll = phase_of([{key: 133, key[:2] + ("m_rep_min",): 125.33, key[:2] + ("m_rep_max",): 142.67}], key)

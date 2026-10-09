@@ -47,9 +47,13 @@ nemu64:cycle/smc-multiple-writes	nemu64	cycle	icache: Self-modifying code within
 nemu64:cycle/smc-single-write	nemu64	cycle	icache: Self-modifying code within basic block (single write) (cycle accurate)	self	nemu64-test cycle set, icache.rs ModifyWithinBasicBlock, stores one and two slots ahead
 bench:mi-memset-uncached	bench	mi-memset-uncached	point=vi-on metric=pclk_per_sd	suite	n64brew MIPS_Interface memset table, 25.7 ms/MiB
 bench:mi-memset-cached	bench	mi-memset-cached	point=vi-on metric=pclk_per_line	suite	n64brew MIPS_Interface memset table, 49.8 ms/MiB
-bench:mi-memset-rspdma	bench	mi-memset-rspdma	point=vi-on metric=b_per_rclk	suite	n64brew MIPS_Interface memset table, 2.58 ms/MiB
+bench:mi-memset-rspdma	bench	mi-memset-rspdma	point=vi-on metric=b_per_rclk	suite	n64brew MIPS_Interface memset table, 2.58 ms/MiB; its pass is conditional on #77: the model's mean is in the band only on the idle VI's 0x800-VCLK grid, which has no hardware reference (a 1-VCLK idle step reads 6.422 B/rclk, a fail, at every delay; verify-78), so it is not independent hardware agreement
 bench:sp-dma-sweep	bench	sp-dma-sweep	-	suite	n64brew memset 6.5 B/rclk (check); hcs64 5.55 (report)
 bench:pi-dma-sizes	bench	pi-dma-sizes	metric=sb_rclk	suite	n64-systembench main.c:589-592, cited values; TIMEIT_WHILE_MULTI port (main.c:171-180)
+bench:pi-dma-sizes-8	bench	pi-dma-sizes	point=cart-to-ram-8 metric=sb_rclk	suite	n64-systembench main.c:589 PI DMA cart to RDRAM 8 B, one point of bench:pi-dma-sizes
+bench:pi-dma-sizes-128	bench	pi-dma-sizes	point=cart-to-ram-128 metric=sb_rclk	suite	n64-systembench main.c:590 PI DMA cart to RDRAM 128 B, one point of bench:pi-dma-sizes
+bench:pi-dma-sizes-1024	bench	pi-dma-sizes	point=cart-to-ram-1024 metric=sb_rclk	suite	n64-systembench main.c:591 PI DMA cart to RDRAM 1 KiB, one point of bench:pi-dma-sizes
+bench:pi-dma-sizes-65536	bench	pi-dma-sizes	point=cart-to-ram-65536 metric=sb_rclk	suite	n64-systembench main.c:592 PI DMA cart to RDRAM 64 KiB, one point of bench:pi-dma-sizes
 bench:uncached-vs-hpos	bench	uncached-vs-hpos	-	suite	rdram-bus-arbitration.md B11-B12; vi-fetch.md
 bench:dirty-row-sweep	bench	dirty-row-sweep	-	suite	report only; NEC uPD488170L datasheet inference, a dirty row miss 3 pclk over a clean one (expected.tsv), no console measurement
 bench:dirty-miss-isolated	bench	dirty-miss-isolated	-	suite	report only; nemu64-test clean fill 41 pclk reported (the sample also holds its harness), no hardware value for the dirty cases (plan T6)

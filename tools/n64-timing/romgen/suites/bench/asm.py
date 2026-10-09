@@ -344,7 +344,8 @@ krd_wait:
     subu $v0, $t8, $t5
 
 # Step. a0 = {header prefix, chunk prefix, uncached address, max samples, buffer (cached),
-# lines}. Measures one VI line period (two VI_CURRENT changes apart), then from the next line
+# lines}. Measures the VI line period as the mean of 4 VI_CURRENT change intervals (a
+# refresh holdoff on one poll skews a single interval by up to 2%, verify-78), then from the next line
 # start takes back-to-back timed uncached LWs for `lines` line periods (or until the buffer is
 # full). Prints "<header> line_ticks=N count=N", then the samples 64 per line as
 # "<chunk prefix> samples=off:lat,...", where off is the load's COUNT offset from the line start
@@ -372,12 +373,17 @@ bh_sync0:
     beq $t2, $t1, bh_sync0
     nop
     mfc0 $s3, $count
+    li $t8, 4
 bh_sync1:
     lw $t1, 0($t0)
     beq $t1, $t2, bh_sync1
     nop
+    addiu $t8, $t8, -1
+    bnez $t8, bh_sync1
+    move $t2, $t1
     mfc0 $t3, $count
     subu $s3, $t3, $s3
+    srl $s3, $s3, 2
     lw $t9, 20($s0)
     multu $s3, $t9
     mflo $a3

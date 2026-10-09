@@ -15,7 +15,7 @@ python tools/n64-timing/romgen/suites/bench/selftest.py
 ```
 
 - `build.py` writes one `boot-<K>/bench-<rom>.z64` per ROM and boot delay K (see [Phase](#phase)), and a `bench-<rom>.tests.tsv` listing next to each that names every point. Two builds produce byte-identical files.
-- `run.sh` runs each ROM at each delay, `BENCH_JOBS` (default 4) runners at once, and writes `results/bench/boot-<K>/<rom>/{stdout,stderr}.txt` and `runs.txt` (one stop line per run). It then runs `report.py`, which writes `measurements.tsv` (every raw and derived value per delay), `phases.tsv` (each `expected.tsv` metric at every delay) and `results.tsv` (one row per `expected.tsv` entry: the phase min, median, max and mean, the rule and a verdict). `run.sh` exits 1 only when a ROM did not print every point in its listing. A value outside its band is reported but does not change the exit code.
+- `run.sh` runs each ROM at each delay, `BENCH_JOBS` (default 4) runners at once, and writes `results/bench/boot-<K>/<rom>/{stdout,stderr}.txt` and `runs.txt` (one stop line per run). It then runs `report.py`, which writes `measurements.tsv` (every raw and derived value per delay), `phases.tsv` (each `expected.tsv` metric at every delay) and `results.tsv` (one row per `expected.tsv` entry: the phase min, median, max and mean, the rule, the condition and a verdict, and for a `consistent` row the `mean` verdict and the acceptance window). `run.sh` exits 1 only when a ROM did not print every point in its listing. A value outside its band is reported but does not change the exit code.
 - `selftest.py` checks the derived metrics in `report.py` against synthetic inputs whose answers are known.
 
 ## Output format
@@ -76,11 +76,15 @@ Each `check` row names a `rule`. The rule follows from what the hardware number 
 | `mean` | the model's phase mean is in the band | `mi-memset-*`, `sp-dma-sweep` | The n64brew memset times cover 41 to 780 VI lines each, so they average many refresh and fetch phases. The SP DMA rate is that memset's average over 256 transfers. |
 | `every` | every delay is in the band | `rdp-*`, `uncached-vs-hpos` | A documented fixed cost (a sync, a setter, the 1-primitive gap) or one refresh per line must hold at every phase. |
 
+A `consistent` pass is weaker than the other two. The model median may move by half the band plus half its own phase range and still pass, so `results.tsv` gives each consistent row that window as a % of the hardware number (`window_pct`; `pi-io-write` is about ±8 %, since one 16.7 rclk poll period is wider than its 4 rclk band). It also gives the `mean` rule's verdict on the same values (`mean_verdict`). A row that passes `consistent` and fails `mean` is `consistent-only`: some phase of the model agrees with the hardware number, the model's average does not. That is consistency with the hardware number, not agreement, and `behaviors.py` counts it apart from pass.
+
+A check row whose pass rests on a model choice with no hardware reference names that choice's issue in `condition`, and its pass reads `pass-conditional:<issue>`. `mi-memset-rspdma` is `#77`: its mean is in the band only because of the idle VI's 0x800-VCLK grid; with a 1-VCLK idle step it reads 6.422 B/rclk at every delay (verify-78), a fail.
+
 The `si-dma` JOY points end on a one-read poll loop that the port does not walk, so their range covers boot phase only, not poll phase.
 
 The delays come from two measured periods.
 
-- The idle VI. While VI_CONTROL selects no pixel type, the VI posts a line event every 0x800 VCLKs, 3944 pclk (`ares/n64/vi/vi.cpp` `VI::line`). The first line after `vi_init` sets a type starts on that grid, so the VI's line phase against the program is set by where the boot ends against a grid that runs from power-on. One delay iteration is 3 pclk, so the grid is 1313 iterations. Over 872 delays (K = 1 to 400, every 13th to 5991, then 40 geometric steps to 625302, about 1.2 VI fields), `mi-memset-rspdma` dips to 6.42 B/rclk at K = 1 and 1300 to 1316 (every delay), and near 2611, 3924 and 5237 (every 13th delay), and `sp-dma-sweep` `wr-4096-off0` repeats its 6.16 to 6.69 pattern on the same period. No value appears past the first period that the first period lacks. With the idle step at 1 VCLK (a scratch build), every value is the same at all 45 delays tried.
+- The idle VI. While VI_CONTROL selects no pixel type, the VI posts a line event every 0x800 VCLKs, 3944 pclk (`ares/n64/vi/vi.cpp` `VI::line`). The first line after `vi_init` sets a type starts on that grid, so the VI's line phase against the program is set by where the boot ends against a grid that runs from power-on. One delay iteration is 3 pclk, so the grid is 3944 / 3 = 1314.7 iterations (measured dip spacing 1314 and 1315, verify-78). Over 872 delays (K = 1 to 400, every 13th to 5991, then 40 geometric steps to 625302, about 1.2 VI fields), `mi-memset-rspdma` dips to 6.42 B/rclk at K = 1 and 1300 to 1316 (every delay; a scan of every K = 1 to 1330 puts the dip at 1292 to 1316, verify-78), and near 2611, 3924 and 5237 (every 13th delay), and `sp-dma-sweep` `wr-4096-off0` repeats its 6.16 to 6.69 pattern on the same period. No value appears past the first period that the first period lacks. With the idle step at 1 VCLK (a scratch build), every value is the same at all 45 delays tried.
 - The CPU poll loops, 25 and 26 pclk.
 
 `phases.py` takes 32 delays 41 iterations (123 pclk) apart. They cover one grid period and land at 32 different poll phases (123 mod 26 = 19). The 32 give every check the verdict the 872 give. A standing bench run is 32 ROM builds and 640 runner runs: 19 s to build and 28 s to run with 4 runners (measured at load average 15).
@@ -89,9 +93,10 @@ The delays come from two measured periods.
 
 ## expected.tsv
 
-The columns are `rom`, `point`, `metric`, `expected`, `lo`, `hi`, `kind`, `rule` and `source`.
+The columns are `rom`, `point`, `metric`, `expected`, `lo`, `hi`, `kind`, `rule`, `condition` and `source`.
 
 - `kind` is `check` when a timing-core unit asserts the row, under its `rule` (see [Phase](#phase)), and `report` when the value is only shown. `report` rows are values with no hardware measurement, values whose sources conflict, and values whose provenance is doubted. A `report` row's `rule` is `-`. `behaviors.py --check` rejects a check row without a rule.
+- `condition` is `-`, or the `#<issue>` of a model choice with no hardware reference that the row's pass depends on (see [Phase](#phase)). A `report` row's `condition` is `-`.
 - `source` cites the hardware reference: the n64brew page, the research doc section on its `research/*` branch, or the n64-systembench line. n64-systembench has no license, so only its numbers are cited. No code is copied from it.
 - Metric names come from `report.py` `derive`. For example, `pclk_per_sd` is 2 x min ticks / (bytes / 8), and `per_sync_clk` is the DPC_CLOCK difference from the empty list, divided by N.
 
