@@ -7,7 +7,8 @@ This guide takes you through one calibration session (#16) on an N64. You run ea
 You need:
 
 - An NTSC retail NUS-001 console with an Expansion Pak. The kit ROMs use RDRAM above 4 MiB, so they do not run without the Pak.
-- Four standard controllers, with nothing in their accessory slots. Remove every Controller Pak, Rumble Pak and Transfer Pak. The `kit-dma` ROM reads which ports answer and which report an accessory, and ingestion refuses a capture with an accessory, because the fork's runs have none.
+- One standard controller in port 1, with nothing in its accessory slot. Remove every Controller Pak, Rumble Pak and Transfer Pak. The `kit-dma` ROM reads which ports answer and which report an accessory, and ingestion refuses a capture with an accessory, because the fork's runs have none.
+- Three more controllers, only for the second `kit-dma` run (see [kit-dma with four controllers](#kit-dma-with-four-controllers)). Every other ROM runs with one. If you have only one controller, skip that run: `joybus-pads` is then decided for one controller only, and the 2J-4J joybus fit stays open.
 - A flashcart. Use one of these:
   - SummerCart64 (SC64), with `sc64deployer` on a PC and a USB cable. This is the best path: the log arrives over USB as the ROM runs, and the PC can read the SRAM copy back.
   - EverDrive-64 X7 (ED64). The log is in the cartridge SRAM, and the ED64 writes it to the SD card.
@@ -41,7 +42,7 @@ Allow about two hours for the required runs and three for the recommended ones. 
    tools/n64-timing/calibration/run.sh
    ```
 
-   This builds every kit ROM and runs each one on the fork: the walked kit ROMs at 8 boot delays, `kit-dma` also with four controllers, and the romgen Thar0 port. That run is the model side of each comparison. It writes `$N64_TIMING_HOME/results/calib/` and takes about one minute. It fails if any ROM's cartridge SRAM copy differs from its ISViewer copy, or if a ROM left the PI domain-1 timing changed.
+   This builds every kit ROM and runs each one on the fork: the walked kit ROMs at 8 boot delays, `kit-dma` also with four controllers, the romgen Thar0 port, and n64-systembench when its ROM is built (see n64-systembench under [External ROMs](#external-roms); without it `hw:systembench` reads `missing`). That run is the model side of each comparison. It writes `$N64_TIMING_HOME/results/calib/` and takes about one minute. It fails if any ROM's cartridge SRAM copy differs from its ISViewer copy, if a ROM left the PI domain-1 timing changed, or if any wait gave up (see [A hang](#a-hang)).
 
 2. Copy the console builds to the flashcart's SD card:
 
@@ -104,16 +105,16 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 6 | `kit-span` | 0.2 s | 9.1 KB | no | `color-half-16bpp`, `span-width` |
 | 7 | `kit-noise` | 0.2 s | 29.5 KB | no | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
 | 8 | `rdpstat-1prim` | 0.2 s | 1.0 KB | yes | `stale-read` |
-| 9 | `rdpstat-dpc` | 0.2 s | 0.5 KB | yes | `dpc-sequencing` |
+| 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | `dpc-sequencing` |
 | 10 | `rdpstat-systemtest` | 0.2 s | 0.8 KB | yes | `systemtest-rdp` |
 | 11 | `rdpstat-unsynced` | 0.2 s | 0.6 KB | yes | `unsynced-attrs` |
-| 12 | `nemu64-timing` | 0.8 s | 25.8 KB | no | `nemu64-console` |
+| 12 | `nemu64-timing` | 0.8 s | 25.9 KB | no | `nemu64-console` |
 | 13 | `nemu64-cycle` | 0.2 s | 1.4 KB | yes | `nemu64-cycle-console` |
 | 14 | `nemu64-cop0hazard` | 0.2 s | 0.7 KB | yes | `nemu64-cop0hazard-console` |
 | 15 | `kit-tex` | 0.3 s | 16.2 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
 | 16 | `kit-zmem` | 1.3 s | 20.3 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 17 | `kit-cpu2` | 0.2 s | 17.7 KB | no | `cpu-exceptions`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 18 | `kit-bus` | 1.5 s | 10.5 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
+| 17 | `kit-cpu2` | 0.2 s | 17.7 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 18 | `kit-bus` | 1.5 s | 10.6 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
 
 For each ROM:
 
@@ -126,6 +127,17 @@ For each ROM:
 ### kit-dma with four controllers
 
 Run `kit-dma` twice: once with one controller in port 1 and nothing else, and once with four controllers in ports 1-4. Name the second capture `kit-dma.pads4.isviewer.log` (or `.pads4.srm`). Ingestion reads which ports answered from the log itself and compares each capture with the fork's run with the same controllers. The two setups answer `joybus-pads`, which decides the 2J-4J joybus fit.
+
+### A hang
+
+Every wait in a kit ROM gives up after a bound and the ROM goes on: a PI wait after 2^20 polls (about 0.3 s), an RDP wait for the DP interrupt after 2^22 polls (about 1 s). The fork's longest wait is 2.7 ms. Each wait that gave up counts in the `#kit-timeout pi=<n> rdp=<n>` line before the footer. The fork reads `pi=0x0 rdp=0x0` for every ROM, and ingestion fails every question of a ROM whose log counts any timeout, because the points after the wait are not measurements.
+
+A ROM can still stop for good, for example in a CPU exception the kit does not expect. Then:
+
+- On the ED64, the save on the SD card is empty (all zero bytes) or ends before the `#kit-end` line. An empty save means the ROM stopped before its first line; a truncated one means it stopped after the last record in the save.
+- On the SC64, the listener output stops and the screen never shows text.
+
+If a ROM hangs or logs a nonzero `#kit-timeout`, turn the console off and run it once more from a power cycle. Keep both captures, even the empty or truncated one: ingestion stores a log without a valid footer as INCOMPLETE and does not compare it. Then go on with the next ROM. In [What to send back](#what-to-send-back), name the ROM and the last record its log holds. A hang loses only that ROM's questions; nothing on the console or the flashcart needs a repair.
 
 ### Repeat runs
 
@@ -141,9 +153,15 @@ These ROMs are not built by the kit. Each capture goes in the capture directory 
 
 - **Thar0/RDP-Timing-Tests** (`ext-thar0`). Build it from [Thar0/RDP-Timing-Tests](https://github.com/Thar0/RDP-Timing-Tests) at commit `a81ced93b28d` as its README describes, or use a build you trust. It logs over libdragon's USB log, which the SC64 and the ED64 X7 both carry; its `client.py` prints it. Save that text as `capture/ext-thar0.log`. Ingestion compares each configuration's pruned average BUFBUSY and PIPEBUSY with the fork's run of the romgen port, within 1%, and counts the configurations within 1% of Thar0's own console. It answers `thar0-console`. The romgen port's console build is not used: its `--hw` build hangs in its first configuration on the fork.
 - **snapper64** (`ext-snapper64`). Run snapper64 `e1cd8a61fc43` as published and copy the `.test` dumps it writes into `capture/ext-snapper64/`. Ingestion compares each dump byte for byte with the published console dumps. It answers `snapper64`.
-- **n64-systembench** (`ext-systembench`). Build it with `tools/n64-timing/build-systembench.sh` from PR #83 (`feat/systembench`; not on master yet), which pins rasky/n64-systembench `845635c`. Run it once with one controller and once with four, and save each ISViewer log as `capture/ext-systembench.pads1.log` and `.pads4.log`. Also record the address of `rambuf` from the ELF the script writes (`mips64-elf-nm n64-systembench.elf | grep rambuf`) in `capture/ext-systembench.rambuf.txt`, since U32R rand and PI DMA 1 KiB depend on where rambuf sits against a 2 KiB row. Ingestion stores the logs. Until PR #83 lands, `systembench/report.py` on that branch reads them by hand.
-- **n64_pi_dma_test** (`ext-pi_dma_test`). Run rasky's prebuilt ROM (the sha256 is pinned in `standing.sh`) and save its log as `capture/ext-pi_dma_test.log`. The ROM does not print its COUNT reads, which `pidma-offset` needs, so this capture only re-checks the published logs. A build that logs COUNT needs the ROM's source, which has no license.
-- **Majora's Mask bench** (`ext-mm-bench`). Scott's `mm-decomp-60fps` BENCH build prints `osGetCount` and DPC_CLOCK per frame. Run it on the file-select screen with named files and in the scenes behind `mm:south-clock-town`, and save the log as `capture/ext-mm-bench.<scene>.log`. Ingestion stores it; the comparison is by hand against `tools/n64-timing/mmbench`.
+- **n64-systembench** (`ext-systembench`). Build it before `run.sh`, so the fork runs the same file:
+
+  ```sh
+  OUT="$N64_TIMING_HOME/roms/systembench" tools/n64-timing/build-systembench.sh
+  ```
+
+  The script needs docker and pins rasky/n64-systembench `845635c`, libdragon preview `cc490afe0` and the toolchain image. Its `provenance.txt` must show `c1c85c1357bcc01ad4dd306759cf5433269c3423c858d0ba9403171095cbf5f6  n64-systembench.z64`. Run that unpadded `n64-systembench.z64` with one controller in port 1, not a boot-delay build, and save its ISViewer log as `capture/ext-systembench.log` (and `ext-systembench.run2.log` for the second run). Ingestion compares each of the 34 rows with the fork's run of the same file (`run.sh` writes it to `ext/systembench.txt`) under the ROM's own rule (within 1 CPU or 2 RCP cycles, or 0.2 %), and counts the rows that also match the published hardware value. It answers `systembench`. The comparison holds only for this binary: a change of one to three instructions in a poll loop moves the poll rows by up to 10 RCP cycles (verify-83), so a log from any other build of the source decides nothing. Also record the address of `rambuf` from the ELF (`mips64-elf-nm n64-systembench.elf | grep rambuf`) in `capture/ext-systembench.rambuf.txt`, since U32R rand and PI DMA 1 KiB depend on where rambuf sits against a 2 KiB row.
+- **n64_pi_dma_test** (`ext-pi_dma_test`). Run rasky's prebuilt ROM (the sha256 is pinned in `standing.sh`) and save its log as `capture/ext-pi_dma_test.log`. The ROM does not print its COUNT reads, which `pidma-offset` needs, so this capture only re-checks the published logs, and `pidma-offset` has no reader. A build that logs COUNT needs the ROM's source, which has no license.
+- **Majora's Mask bench** (`ext-mm-bench`). Scott's `mm-decomp-60fps` BENCH build prints `osGetCount` and DPC_CLOCK per frame. Run it on the file-select screen with named files and in the scenes behind `mm:south-clock-town`, and save the log as `capture/ext-mm-bench.<scene>.log`. Ingestion stores it, and `mm-filesel` has no reader: the fork side would need the same BENCH build run on `n64-run`, and no tool in this repository builds it. Compare it by hand against `tools/n64-timing/mmbench`.
 
 ## Capture
 
@@ -177,7 +195,7 @@ The command does these things:
 3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures against the fork's range over its boot delays. A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
 
-To see what an ingestion would change without writing to the repository, add `--dry-run`. `tools/n64-timing/calibration/dry-run.sh <run.sh output>` runs the whole path on the fork's own logs as a fake capture: ISViewer logs, real SRAM dumps in both byte orders, a CRLF log, the four-controller run, a cut log, the Thar0 port's output and the published snapper64 dumps.
+To see what an ingestion would change without writing to the repository, add `--dry-run`. `tools/n64-timing/calibration/dry-run.sh <run.sh output>` runs the whole path on the fork's own logs as a fake capture: ISViewer logs, real SRAM dumps in both byte orders, a CRLF log, the four-controller run, a cut log, the Thar0 port's output, the fork's n64-systembench log and the published snapper64 dumps.
 
 ## What to send back
 
@@ -187,4 +205,6 @@ To see what an ingestion would change without writing to the repository, add `--
 
 ## What each result will tell us
 
-Each question in [inventory.md](inventory.md) has a `hw:<id>` result. A pass means the model agrees with your console under the question's rule. A fail gives the console's values and the model's range. The rows that the question closes then show what to change. The inventory groups them: rows that wait only for this run, fit-only and model-choice rows, inferred rows, failing and weakly passing checks, and the items from issue #16 and the follow-ups. Its last table lists what no console run can decide, and why.
+Each question in [inventory.md](inventory.md) has a `hw:<id>` result. A pass means the model agrees with your console under the question's rule. A fail gives the console's values and the model's range. The rows that the question closes then show what to change. The inventory groups them: rows that wait only for this run, fit-only and model-choice rows, inferred rows, failing and weakly passing checks, and the items from issue #16 and the follow-ups. Its Coverage table names a question for every behavior row, or one of two reasons: `not-hardware-decidable` when no console run can decide it, and `not decidable by this kit` when a console could but this kit and a flashcart cannot, with what would (a retail cartridge's save chip, a modified IPL3).
+
+`cpu-watch` is expected to fail until issue #87 is fixed: the fork never raises the Watch exception. No behavior row names it, so a console that raises Watch moves no row.

@@ -812,6 +812,8 @@ def generated(root):
 
 CALIBRATION = "tools/n64-timing/calibration"
 UNDECIDABLE_PREFIX = "not-hardware-decidable: "
+#An entry a console could decide, but not with this kit's ROMs and a flashcart; the reason names what would.
+KIT_LIMIT_PREFIX = "not decidable by this kit: "
 
 
 def calibration_tsv(root, name):
@@ -824,15 +826,17 @@ def calibration_tsv(root, name):
 
 
 def hardware_needs(root, rows, found):
-    """(id, why, where) for everything a console could have to decide: rows that rest on a fit, a model
-    choice or an inference, rows and checks with a failing, consistent-only or conditional result,
-    rows no corpus or only a report checks, and the hardware items of issues and follow-ups
-    (calibration/items.tsv)."""
+    """(id, why, where) for everything a console could have to decide: every behavior row (one that
+    rests on a fit, a model choice or an inference, and one whose reference a console run would
+    confirm), checks with a failing, consistent-only or conditional result, rows no corpus or only a
+    report checks, and the hardware items of issues and follow-ups (calibration/items.tsv)."""
     out = []
     for r in rows:
         why = []
         if r["basis"] in ("fit", "model-choice", "inferred"):
             why.append(r["basis"])
+        else:
+            why.append(f"{r['basis']} reference")
         if "verify-is-fit" in r["verify"] + " " + r["note"]:
             why.append("verify-is-fit")
         if re.search(r"\binferred\b", r["note"] + " " + r["reference"], re.I) and "inferred" not in why:
@@ -859,7 +863,8 @@ def hardware_needs(root, rows, found):
 def calibration_errors(root, rows, checks, found):
     """The calibration inventory's rules: no row waits on calibration #16 without a kit question that
     measures it, every question names a kit ROM (or says why none exists), a valid rule, and only
-    rows, checks, items or issues in its closes column; a row's hw check is one its question closes;
+    rows, checks, items or issues in its closes column; a row's hw check is one its question closes, and
+    a row a comparable question closes names its hw check unless that question re-runs the row's fit;
     and everything a console could decide (hardware_needs) has a question or a stated reason that no
     console run can decide it (calibration/undecidable.tsv)."""
     errors = []
@@ -878,14 +883,21 @@ def calibration_errors(root, rows, checks, found):
                 q = qs.get(cid[3:])
                 if q is None:
                     continue
-                if q["kit"] not in kit.KIT_ROMS:
+                if not comparable(kit, q):
                     errors.append(f"{where}: `{r['id']}` names {cid}, whose kit is `{q['kit']}`, not an in-repo kit ROM "
-                                  f"({', '.join(kit.KIT_ROMS)}). A row's hardware check needs a ROM ingestion can compare.")
+                                  f"({', '.join(kit.KIT_ROMS)}) or an ext: ROM with a reader (calibration/kit.py EXT_ROMS). "
+                                  f"A row's hardware check needs a ROM ingestion can compare.")
                 if r["id"] not in q["closes"].split():
                     errors.append(f"{where}: `{r['id']}` names {cid}, but the question's closes column does not list it. "
                                   f"Add `{r['id']}` there.")
+    by_id = {r["id"]: r for r in rows}
     for q in qs.values():
         where = f"tools/n64-timing/calibration/questions.tsv:{q['line']}"
+        for rid in q["closes"].split():
+            r = by_id.get(rid)
+            if r and comparable(kit, q) and f"hw:{q['id']}" not in r["verify"].split() and not reruns_fit(kit, q, r, explicit):
+                errors.append(f"{TABLE}:{r['line']}: `{rid}` is closed by hw:{q['id']}, but its verify column does not "
+                              f"name it, so a console result never reaches the row. Add `hw:{q['id']}` there.")
         if q["kit"] not in kit.KIT_ROMS and not q["kit"].startswith(("ext:", "none: ")):
             errors.append(f"{where}: kit `{q['kit']}` is not a kit ROM ({', '.join(kit.KIT_ROMS)}), `ext:<rom>` or "
                           f"`none: <reason>`")
@@ -900,20 +912,40 @@ def calibration_errors(root, rows, checks, found):
     for u in calibration_tsv(root, "undecidable.tsv"):
         where = f"{CALIBRATION}/undecidable.tsv:{u['line']}"
         undecidable[u["id"]] = u
-        if not u.get("reason", "").startswith(UNDECIDABLE_PREFIX) or len(u["reason"]) < len(UNDECIDABLE_PREFIX) + 10:
-            errors.append(f"{where}: `{u['id']}` needs a reason `{UNDECIDABLE_PREFIX}<why no console run can decide it>`")
+        reason = u.get("reason", "")
+        prefix = next((p for p in (UNDECIDABLE_PREFIX, KIT_LIMIT_PREFIX) if reason.startswith(p)), None)
+        if prefix is None or len(reason) < len(prefix) + 10:
+            errors.append(f"{where}: `{u['id']}` needs a reason `{UNDECIDABLE_PREFIX}<why no console run can decide it>` "
+                          f"or `{KIT_LIMIT_PREFIX}<what would decide it>`")
         if u["id"] not in ids and not check_defined(u["id"], explicit, suite_files) and u["id"] not in found:
             errors.append(f"{where}: `{u['id']}` is no behavior row, check or item:<id>")
         if u["id"] in links:
-            errors.append(f"{where}: `{u['id']}` is closed by hw:{links[u['id']][0]} and also marked not hardware-decidable; "
+            errors.append(f"{where}: `{u['id']}` is closed by hw:{links[u['id']][0]} and also listed as undecidable; "
                           f"keep one")
     for nid, why, where in hardware_needs(root, rows, found):
         if nid not in links and nid not in undecidable:
             errors.append(f"{where}: `{nid}` ({why}) has no hardware question. Add it to the closes column of the "
                           f"tools/n64-timing/calibration/questions.tsv question whose kit points decide it (adding the "
                           f"points to a kit ROM if none does), or to {CALIBRATION}/undecidable.tsv with "
-                          f"`{UNDECIDABLE_PREFIX}<reason>`.")
+                          f"`{UNDECIDABLE_PREFIX}<reason>` or `{KIT_LIMIT_PREFIX}<what would decide it>`.")
     return errors
+
+
+def comparable(kit, q):
+    """True when ingestion can compare a console capture for the question: a kit ROM, or an ext: ROM
+    with a reader."""
+    return q["kit"] in kit.KIT_ROMS or (q["kit"].startswith("ext:") and kit.EXT_ROMS.get(q["kit"][4:]) is not None)
+
+
+def reruns_fit(kit, q, r, explicit):
+    """True when the question's ROM is the one the row's fit-from checks run, so its console run repeats
+    the fit's own measurement and is no independent check of the row (pref 21: such a row stays fit only)."""
+    fit = r["fit-from"].split()
+    if q["kit"].startswith("ext:"):
+        return any(c.startswith(kit.EXT_SUITES[q["kit"][4:]] + ":") for c in fit)
+    suite, set_name, _ = kit.KIT_ROMS[q["kit"]]
+    return suite != "calib" and any(explicit.get(c, {}).get("runner") == suite and explicit[c].get("target") == set_name
+                                    for c in fit)
 
 
 def question_links(root):
@@ -985,13 +1017,17 @@ def render_inventory(root, rows, checks, found):
     items = {f"item:{i['id']}": i["item"] for i in calibration_tsv(root, "items.tsv")}
     needs = hardware_needs(root, rows, found)
     out += ["", "## Coverage", "",
-            f"Everything a console could have to decide: rows that rest on a fit, a model choice or an inference, rows "
-            f"and checks with a failing, consistent-only or conditional result, rows that no corpus or only a report "
-            f"checks, and the hardware items of issues and follow-ups ({CALIBRATION}/items.tsv). `behaviors.py "
-            f"--check` fails unless each one has a question or a reason no console run can decide it "
-            f"({CALIBRATION}/undecidable.tsv). {len(needs)} entries: "
+            f"Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, "
+            f"and a reference a console run would confirm), checks with a failing, consistent-only or conditional "
+            f"result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups "
+            f"({CALIBRATION}/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in "
+            f"{CALIBRATION}/undecidable.tsv: `{UNDECIDABLE_PREFIX.strip()}` when no console run can decide it, "
+            f"`{KIT_LIMIT_PREFIX.strip()}` when a console could but this kit cannot, with what would. {len(needs)} entries: "
             f"{sum(1 for n, _, _ in needs if n in links)} with a question, "
-            f"{sum(1 for n, _, _ in needs if n in undecidable)} not hardware-decidable.", "",
+            f"{sum(1 for n, _, _ in needs if undecidable.get(n, '').startswith(UNDECIDABLE_PREFIX))} not hardware-decidable "
+            f"(no console run can decide them), "
+            f"{sum(1 for n, _, _ in needs if undecidable.get(n, '').startswith(KIT_LIMIT_PREFIX))} not decidable by this kit "
+            f"(a console could, with what the reason names).", "",
             "| Entry | Why | Question or reason |", "|---|---|---|"]
     for nid, why, _ in needs:
         what = f"{cell(why)}: {cell(items[nid])}" if nid in items else cell(why)
@@ -1453,6 +1489,17 @@ def self_test(root):
             ("an issue item no question closes", "tools/n64-timing/calibration/items.tsv",
              lambda t: t + "self-test-item\tissue #16\ta hardware item added without a question\n",
              "`item:self-test-item` (issue #16) has no hardware question"),
+            ("a row a comparable question closes, without its hw check", TABLE,
+             row_field("rdp.sync-pipe", "verify", "bench:rdp-sync-sweep"),
+             "`rdp.sync-pipe` is closed by hw:rdp-sync-setter, but its verify column does not name it"),
+            ("a fit row whose fit ROM no longer matches, without the hw check", TABLE,
+             row_field("cpu.ctc1-fpe-ce", "fit-from", "bench:pi-dma-sizes"),
+             "`cpu.ctc1-fpe-ce` is closed by hw:nemu64-cycle-console, but its verify column does not name it"),
+            ("a referenced passing row no question closes", "tools/n64-timing/calibration/questions.tsv",
+             lambda t: t.replace(" clock.unit ", " ", 1), "`clock.unit` (derived reference) has no hardware question"),
+            ("a not-decidable-by-this-kit entry without what would decide it", "tools/n64-timing/calibration/undecidable.tsv",
+             lambda t: t.replace("legacy.cart.rtc-tick\tnot decidable by this kit: ", "legacy.cart.rtc-tick\t", 1),
+             "`legacy.cart.rtc-tick` needs a reason `not-hardware-decidable: "),
             ("an inferred row without its inference", TABLE, row_field("cpu.ifill-stall", "note", ""),
              "inferred row `cpu.ifill-stall` has no note. State the inference"),
             ("removing a reference", TABLE, row_field("ri.read-hit", "reference", ""), "has no reference. Cite the hardware reference"),

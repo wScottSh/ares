@@ -22,6 +22,13 @@ from . import font8x8, runtime
 D_HW_LOGPOS = 0x0E0
 D_HW_FNV = 0x0E4
 D_HW_DONE = 0x0E8
+D_HW_TIMEOUT_PI = 0x0EC   # PI idle waits that gave up (pi_wait)
+D_HW_TIMEOUT_RDP = 0x0F0  # DP interrupt waits that gave up (DP_WAITS)
+#Poll bounds, as the upper half of a down-counter. A PI wait covers at most the 32 KiB SRAM write (about
+#4 ms at the domain-2 timing hw_init sets); 2^20 polls of at least 25 pclk is 0.28 s. The longest kit
+#point reads 124,517 COUNT ticks (2.7 ms) on the fork (kit-rdp); 2^22 polls of at least 24 pclk is 1.07 s.
+PI_POLLS_HI = 0x10
+RDP_POLLS_HI = 0x40
 D_HW_SAVE = 0x1700
 DONE_MAGIC = 0x600DF00D
 LOG = 0xA0488000          # bank 4 above the stack top (0x80480000) and below SCRATCH_BASE: no suite uses it
@@ -46,7 +53,9 @@ def header_bytes(rom):
 
 
 def transform(text):
-    """Rewrites runtime and suite asm so it uses no emux instruction."""
+    """Rewrites runtime and suite asm so it uses no emux instruction and every DP interrupt wait of the
+    kit kernels gives up."""
+    text = bound_dp_waits(text)
     flush_old = "    xlog $t2\n    jr $ra\n    sw $t2, 0($t0)\n"
     flush_new = "    sw $t2, 0($t0)\n    j hw_out\n    nop\n"
     text = text.replace(flush_old, flush_new)
@@ -60,14 +69,49 @@ def transform(text):
     return text
 
 
+def give_up(counter, base, reg):
+    """Counts one abandoned wait at DATA_BASE + counter; hw_finish prints the counts as #kit-timeout."""
+    return f"""
+    la {base}, DATA_BASE
+    lw {reg}, {counter}({base})
+    addiu {reg}, {reg}, 1
+    sw {reg}, {counter}({base})"""
+
+
 def pi_wait(reg, label):
+    """Waits for PI_STATUS DMA and IO busy to clear, at most 2^20 polls; $t1 is the poll count."""
     return f"""
     li {reg}, {PI_STATUS:#x}
+    lui $t1, {PI_POLLS_HI:#x}
 {label}:
     lw $t9, 0({reg})
     andi $t9, $t9, 3
-    bnez $t9, {label}
-    nop"""
+    beqz $t9, {label}_idle
+    addiu $t1, $t1, -1
+    bnez $t1, {label}
+    nop{give_up(D_HW_TIMEOUT_PI, "$t1", "$t9")}
+{label}_idle:"""
+
+
+#The kit kernels' DP interrupt waits (MI_INTR bit 5): label, MI base register, value register, loop
+#head. Each is bounded in the console build, with $a0 (free once the kernel read its args) as the poll
+#count; the loop head is where the count starts.
+DP_WAITS = [("krd_wait", "$t6", "$t7", "krd_wait"), ("kfd_done", "$t6", "$t7", "kfd_done"),
+            ("kff_done", "$t6", "$t7", "kff_done"), ("kcm_same", "$a2", "$t7", "kcm_poll")]
+
+
+def bound_dp_waits(text):
+    for label, base, reg, head in DP_WAITS:
+        wait = f"{label}:\n    lw {reg}, 8({base})\n    andi {reg}, {reg}, 0x20\n    beqz {reg}, {head}\n    nop\n"
+        if f"{label}:" not in text:
+            continue
+        if text.count(wait) != 1 or text.count(f"\n{head}:\n") != 1:
+            raise SystemExit(f"--hw: the DP interrupt wait at {label} changed shape; update hwout.DP_WAITS")
+        bounded = (f"{label}:\n    lw {reg}, 8({base})\n    andi {reg}, {reg}, 0x20\n    bnez {reg}, {label}_seen\n"
+                   f"    addiu $a0, $a0, -1\n    bnez $a0, {head}\n    nop{give_up(D_HW_TIMEOUT_RDP, '$a0', reg)}\n"
+                   f"{label}_seen:\n")
+        text = text.replace(wait, bounded).replace(f"\n{head}:\n", f"\n    lui $a0, {RDP_POLLS_HI:#x}\n{head}:\n")
+    return text
 
 
 #The log's header registers: the RI state the boot left (cold or warm boot differ) and the VI line.
@@ -78,6 +122,7 @@ HEADER_REGS = [("ri_mode", 0xA4700000), ("ri_config", 0xA4700004), ("ri_refresh"
 PI_REGS = [("dom1_lat", PI_BASE + 0x14), ("dom1_pwd", PI_BASE + 0x18), ("dom1_pgs", PI_BASE + 0x1C),
            ("dom1_rls", PI_BASE + 0x20)]
 DOM1_HEADER = {"dom1_lat": 0x40, "dom1_pwd": 0x12, "dom1_pgs": 0x7, "dom1_rls": 0x3}
+TIMEOUT_REGS = [("pi", runtime.DATA_BASE + D_HW_TIMEOUT_PI), ("rdp", runtime.DATA_BASE + D_HW_TIMEOUT_RDP)]
 
 
 def regs_asm(label, regs):
@@ -96,8 +141,10 @@ hw_str_fnv: .asciiz " fnv="
 hw_str_hex: .asciiz "#hex "
 hw_str_page: .asciiz {runtime.asm_string(f"{rom_id} page ")}
 hw_str_pi: .asciiz "#kit-pi"
+hw_str_timeout: .asciiz "#kit-timeout"
 {regs_asm("hw_regs", HEADER_REGS)}
 {regs_asm("hw_pi_regs", PI_REGS)}
+{regs_asm("hw_timeout", TIMEOUT_REGS)}
 .align 8
 hw_font:
     .word {glyphs}
@@ -120,6 +167,8 @@ hw_init:
     li $t1, 0x811C9DC5
     sw $t1, {D_HW_FNV}($t0)
     sw $zero, {D_HW_DONE}($t0)
+    sw $zero, {D_HW_TIMEOUT_PI}($t0)
+    sw $zero, {D_HW_TIMEOUT_RDP}($t0)
     li $t0, {LOG:#x}
     li $t1, {LOG + LOG_SIZE:#x}
 hwi_zero:
@@ -370,6 +419,13 @@ hwd_done:
 
 # The footer, the done word, then the log on screen forever.
 hw_finish:
+    la $a0, hw_str_timeout
+    jal pr_str
+    nop
+    la $a0, hw_timeout_names
+    la $a1, hw_timeout_addrs
+    jal hw_regline
+    addiu $a2, $zero, {len(TIMEOUT_REGS)}
     la $a0, hw_str_pi
     jal pr_str
     nop

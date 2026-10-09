@@ -78,7 +78,7 @@ class Log:
 
     def __init__(self, data):
         self.raw = data
-        self.header, self.footer, self.records, self.pi, self.complete = {}, {}, {}, {}, False
+        self.header, self.footer, self.records, self.pi, self.timeouts, self.complete = {}, {}, {}, {}, {}, False
         self.boot = "power-on"
         start = data.find(b"#kit rom=")
         if start < 0:
@@ -106,8 +106,9 @@ class Log:
                         fields["samples"] = fields.get("samples", []) + value.split(",")
                     else:
                         fields[key] = int(value) if value.lstrip("-").isdigit() else value
-            elif parts and parts[0] == "#kit-pi":
-                self.pi = {k: int(v, 16) for k, _, v in (kv.partition("=") for kv in parts[1:])}
+            elif parts and parts[0] in ("#kit-pi", "#kit-timeout"):
+                regs = {k: int(v, 16) for k, _, v in (kv.partition("=") for kv in parts[1:])}
+                setattr(self, "pi" if parts[0] == "#kit-pi" else "timeouts", regs)
             elif len(parts) == 4 and parts[0] == "@snap":
                 self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3]}
             elif parts and re.match(r"^@\d+\.\d+$", parts[0]):
@@ -313,16 +314,59 @@ def ext_snapper64(root, model_dir, paths):
     return "pass", f"{len(wanted)} dumps equal the published console dumps"
 
 
+def ext_systembench(root, model_dir, paths):
+    """n64-systembench's ISViewer text from the console against the fork's run of the same binary
+    (run.sh ext/systembench.txt), every row of systembench/rows.tsv under main.c's own pass rule with the
+    fork's reading as the expected value. Pointwise for that binary only: a one to three instruction
+    change in a poll loop moves the poll rows by up to 10 RCP cycles (verify-83), so a console run of
+    another build of the same source decides nothing here."""
+    from systembench import report as sb
+    model_path = Path(model_dir) / "ext" / "systembench.txt"
+    if not model_path.exists():
+        return "missing", (f"no fork run of n64-systembench in {model_path}; build it (build-systembench.sh) and run "
+                           f"tools/n64-timing/calibration/run.sh")
+    model = sb.parse(model_path.read_text(encoding="utf-8", errors="replace"))
+    if model is None:
+        return "missing", f"the fork's run in {model_path} did not print 'Benchmarks done'"
+    runs = [sb.parse(normalize(p.read_bytes()).decode("ascii", errors="replace")) for p in paths]
+    runs = [r for r in runs if r is not None]
+    if not runs:
+        return "pending:calibration-16", (f"{len(paths)} files of systembench stored, none with 'Benchmarks done': "
+                                          f"a cut log or a hang")
+    keys = [(r["name"], int(r["qty"])) for r in sb.read_rows()]
+    lacking = [k for k in keys if any(k not in run for run in runs)]
+    if lacking:
+        return "fail", f"the capture lacks {len(lacking)} of {len(keys)} rows; first *** {lacking[0][0]} [{lacking[0][1]}]"
+    off, hw_ok = [], 0
+    for key in keys:
+        unit, expected, fork = model[key]
+        found = [run[key][2] for run in runs]
+        if not all(sb.passes(unit, fork, f) for f in found):
+            off.append(f"{key[0]} [{key[1]}] console {min(found)}..{max(found)} fork {fork} {unit}")
+        hw_ok += all(sb.passes(unit, expected, f) for f in found)
+    detail = (f"{len(keys) - len(off)} of {len(keys)} rows agree with the fork under main.c's rule, {hw_ok} with the "
+              f"published hardware value, over {len(runs)} console runs; pointwise for this one binary")
+    if off:
+        return "fail", f"{detail}; first {off[0]}"
+    return "pass", detail
+
+
 #External ROMs a capture can hold: kit column `ext:<name>`, the capture file or directory name
 #prefix `ext-<name>`, and the reader that compares it (None: stored, compared by hand per
 #hardware-run.md until a reader exists).
 EXT_ROMS = {
     "thar0": ext_thar0,
     "snapper64": ext_snapper64,
-    "systembench": None,
+    "systembench": ext_systembench,
+    #The published ROM logs no COUNT, and its source carries no license, so no build of it can.
     "pi_dma_test": None,
+    #The fork side needs Scott's BENCH build of mm-decomp-60fps run on n64-run; no in-repo tool builds it.
     "mm-bench": None,
 }
+#The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
+#that repeats a row's fit data from an independent one.
+EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "pi_dma_test": "pidma",
+              "mm-bench": "mm"}
 
 
 def ext_name(path):
@@ -380,6 +424,10 @@ def result_from(root, model_dir, qid):
     logs = [log for log in hw.get(kit, []) if log.complete and log.boot == boot]
     if not logs:
         return "pending:calibration-16", f"no complete {boot} console capture of {kit} in {HARDWARE}"
+    hung = [log for log in logs if any(log.timeouts.values())]
+    if hung:
+        return "fail", (f"{kit}: the console gave up {hung[0].timeouts} waits (#kit-timeout): a PI or RDP wait never "
+                        f"ended, so the points after it are not measurements; see hardware-run.md, A hang")
     paks = [log for log in logs if log.records.get(("joybus-setup", "pads"), {}).get("paks")]
     if paks:
         return "fail", (f"{kit}: a controller held a Controller Pak or Rumble Pak (paks="
@@ -422,6 +470,8 @@ def verify_run(run_dir):
             errors.append(f"{srm}: the SRAM copy differs from the ISViewer copy")
         if log.pi != hwout.DOM1_HEADER:
             errors.append(f"{txt}: domain-1 PI timing at the end {log.pi}, the ROM header's {hwout.DOM1_HEADER}")
+        if log.timeouts != {"pi": 0, "rdp": 0}:
+            errors.append(f"{txt}: #kit-timeout {log.timeouts or 'missing'}; on the fork no wait may give up")
     return errors
 
 
@@ -473,6 +523,11 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     cases += compares
+    hung = Log(sample_log("#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#kit-timeout pi=0 rdp=2\n"))
+    ok = hung.complete and hung.timeouts == {"pi": 0, "rdp": 2}
+    failed += not ok
+    print(f"kit: self-test: a log whose RDP wait gave up twice reads timeouts rdp=2: {'ok' if ok else 'FAILED'} ({hung.timeouts})")
+    cases.append(("timeouts", None, None))
     print(f"kit.py: self-test: {len(cases)} cases, {failed} failed")
     return failed
 

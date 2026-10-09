@@ -57,6 +57,7 @@ hw:copy-passfail-pixels	pending:calibration-16	no complete power-on console capt
 hw:count-per-field	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:cpu-exceptions	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cpu-reads	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
+hw:cpu-watch	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:dcb	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dirty-miss	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dirty-row	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware

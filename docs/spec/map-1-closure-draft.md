@@ -46,7 +46,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 3 consistent-only, 24 fail, 87 pass, 1 pass-conditional:#77, 94 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 3 consistent-only, 24 fail, 87 pass, 1 pass-conditional:#77, 95 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
@@ -166,66 +166,111 @@ These checks are gated too, but another check already decides their row.
 
 | Behavior | Status | Pending checks |
 |---|---|---|
+| `clock.unit` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `ri.read-hit` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `ri.write-hit` | fail | `hw:memset-vi` pending (calibration-16) |
 | `ri.octbyte` | fail | `hw:sp-dma-direction` pending (calibration-16) |
 | `ri.retry-clean` | fail | `hw:nemu64-console` pending (calibration-16) |
 | `ri.retry-dirty` | pass | `bench:dirty-row-sweep` pending (report-only); `hw:dirty-row` pending (calibration-16) |
 | `ri.post-read-gap` | fail | `hw:sp-dma-direction` pending (calibration-16) |
 | `ri.post-write-gap` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.max-burst` | pass | `hw:sp-dma-direction` pending (calibration-16) |
 | `ri.bank-of` | fail | `hw:nemu64-console` pending (calibration-16) |
 | `ri.row-of` | fail | `hw:nemu64-console` pending (calibration-16) |
+| `ri.refresh-clean` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `ri.refresh-dirty` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
 | `ri.refresh-trigger` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-blank-counting` pending (calibration-16); `hw:refresh-all-banks` pending (calibration-16) |
 | `ri.refresh-waits-for-burst` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:refresh-all-banks` pending (calibration-16) |
-| `ri.arbitration` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16); `hw:ri-reorder` pending (calibration-16); `hw:ri-priority-overlap` pending (calibration-16) |
-| `ri.rank.vi` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16) |
-| `ri.rank.other` | pass | `hw:ri-priority` pending (calibration-16) |
+| `ri.arbitration` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16); `hw:ri-reorder` pending (calibration-16); `hw:ri-priority-overlap` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `ri.rank.refresh` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `ri.rank.vi` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `ri.rank.other` | pass | `hw:ri-priority` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `ri.overhead-read` | fail | `hw:sp-dma-direction` pending (calibration-16) |
+| `ri.overhead-vi` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `ri.overhead-write` | fail | `hw:memset-vi` pending (calibration-16) |
-| `cpu.uncached-read-total` | fail | `hw:cpu-reads` pending (calibration-16) |
-| `cpu.uncached-read-dword-total` | pass | `hw:cpu-reads` pending (calibration-16) |
+| `ri.overhead-rdp` | fail | `hw:thar0-console` pending (calibration-16) |
+| `cpu.uncached-read-total` | fail | `hw:cpu-reads` pending (calibration-16); `hw:nemu64-console` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.uncached-read-dword-total` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `cpu.dfill-total` | fail | `hw:dirty-miss` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
-| `cpu.ldi` | pass | `hw:load-interlock-cop` pending (calibration-16) |
-| `cpu.exc-ex` | pass | `hw:cpu-exceptions` pending (calibration-16) |
-| `cpu.exc-fpu` | pass | `hw:cpu-exceptions` pending (calibration-16) |
+| `cpu.dcache-hit` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.ldi` | pass | `hw:load-interlock-cop` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.mci` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-rf` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-ex` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-fpu` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `cpu.exc-fpu-detect` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:fpu-classes` pending (calibration-16) |
+| `cpu.fpu-add` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-mul-s` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-mul-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-div-s` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-div-d` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.fpu-trivial` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:fpu-classes` pending (calibration-16) |
-| `cpu.issue` | pass | `hw:cpu-exceptions` pending (calibration-16) |
+| `cpu.fpu-forward` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.issue` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.mult` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.dmult` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.div` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.ddiv` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-sqrt-s` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-sqrt-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-convert` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.fpu-cvt-s-d` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.likely-nullified` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.eret` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:cpu-exceptions` pending (calibration-16) |
-| `cpu.cache-index-load-tag` | pass | `hw:cache-ops` pending (calibration-16); `hw:cache-ops-sum` pending (calibration-16) |
+| `cpu.mtc0-slow-regs` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `cpu.cache-index-load-tag` | pass | `hw:cache-ops` pending (calibration-16); `hw:cache-ops-sum` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `cpu.irq-sample` | fit only | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `cpu.wb-entries` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.wb-block-entries` | fail | `hw:wb-release` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16) |
-| `cpu.rcp-register-read` | pass | `hw:cpu-reads` pending (calibration-16) |
-| `cpu.pif-ram-read` | pass | `hw:cpu-reads` pending (calibration-16) |
+| `cpu.rcp-register-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.pif-ram-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.pi-io-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `sysad.rdram-write-period` | fail | `hw:memset-vi` pending (calibration-16) |
 | `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only); `hw:memset-vi` pending (calibration-16) |
 | `cpu.random-rule` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
 | `cpu.wired-write-latency` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
 | `sp.dma-burst` | fail | `hw:sp-dma-direction` pending (calibration-16) |
-| `pi.page-setup` | fail | `hw:pi-dma-small` pending (calibration-16) |
-| `pi.halfword-bias` | fail | `hw:pi-dma-small` pending (calibration-16) |
+| `rsp.slot` | pass | `hw:nemu64-console` pending (calibration-16) |
+| `pi.page-setup` | fail | `hw:pi-dma-small` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `pi.halfword-bias` | fail | `hw:pi-dma-small` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `pi.block-bytes` | fail | `hw:pi-dma-small` pending (calibration-16) |
 | `pi.block-writeback` | fail | `hw:pi-dma-small` pending (calibration-16) |
-| `pi.io-busy` | fail | `hw:poll-phase` pending (calibration-16) |
-| `si.io-busy` | fail | `hw:poll-phase` pending (calibration-16) |
+| `pi.io-busy` | fail | `hw:poll-phase` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `si.io-busy` | fail | `hw:poll-phase` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `si.write64` | pass | `hw:systembench` pending (calibration-16) |
+| `si.write64-rom` | consistent-only | `hw:systembench` pending (calibration-16) |
 | `si.read64-base` | pass | `hw:joybus-pads` pending (calibration-16) |
 | `pif.joybus-skip` | pass | `hw:joybus-pads` pending (calibration-16) |
 | `pif.joybus-escape` | pass | `hw:joybus-pads` pending (calibration-16) |
+| `pif.joybus-byte` | pass | `hw:joybus-pads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `pif.joybus-handshake` | pass | `hw:joybus-pads` pending (calibration-16) |
-| `vi.lines-per-output-line` | fail | `hw:vi-fetch-modes` pending (calibration-16) |
+| `vi.lines-per-output-line` | fail | `hw:vi-fetch-modes` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `vi.burst` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16) |
 | `vi.fetch-window` | pass | `hw:vi-fetch-position` pending (calibration-16) |
-| `vi.aa-mode-lines` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16) |
+| `vi.vclk-per-pixel` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `vi.aa-mode-lines` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `rdp.xbus-fetch-rate` | pass | `hw:xbus-fetch-rate` pending (calibration-16) |
+| `rdp.sync-pipe` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
+| `rdp.sync-tile` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
+| `rdp.sync-load` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
 | `rdp.sync-full` | pass | `hw:rdp-sync-setter` pending (calibration-16); `hw:attribute-sync-cost` pending (calibration-16) |
 | `rdp.setter` | pass | `hw:rdp-sync-setter` pending (calibration-16) |
 | `rdp.primitive-base` | fit only | `bench:rdp-rectn` pending (report-only); `hw:rdp-rect-base` pending (calibration-16) |
 | `rdp.span-dead-pixels` | fit only | `hw:rdp-rect-base` pending (calibration-16) |
 | `rdp.span-line-gap` | fit only | `hw:rdp-rect-base` pending (calibration-16) |
-| `rdp.pipeline-depth` | pass | `hw:attribute-stage` pending (calibration-16) |
+| `rdp.span-1cycle` | pass | `hw:thar0-console` pending (calibration-16) |
+| `rdp.span-2cycle` | pass | `hw:thar0-console` pending (calibration-16) |
+| `rdp.pipeline-depth` | pass | `hw:attribute-stage` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
 | `rdp.attribute-stage` | pass | `hw:attribute-stage` pending (calibration-16); `hw:attribute-sync-cost` pending (calibration-16); `hw:rdp-hold` pending (calibration-16) |
 | `rdp.atomic-dead` | fail | `hw:rdp-atomic` pending (calibration-16); `hw:stale-read` pending (calibration-16); `hw:atomic-contention` pending (calibration-16); `hw:clobber` pending (calibration-16) |
+| `rdp.span-ram-half` | pass | `hw:snapper64` pending (calibration-16) |
+| `rdp.span-ram-segment` | pass | `hw:snapper64` pending (calibration-16) |
 | `rdp.span-read-latency` | fail | `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16) |
 | `rdp.mem-overhead-read` | fail | `hw:span-width` pending (calibration-16) |
-| `rdp.span-slots` | fail | `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16) |
-| `rdp.write-run` | pass | `hw:write-granularity` pending (calibration-16); `hw:write-granularity-pixels` pending (calibration-16) |
+| `rdp.span-slots` | fail | `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
+| `rdp.read-gate` | fail | `hw:thar0-console` pending (calibration-16) |
+| `rdp.write-run` | pass | `hw:write-granularity` pending (calibration-16); `hw:write-granularity-pixels` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
+| `rdp.noise-step` | pass | `hw:noise-pixel-offset` pending (calibration-16) |
+| `rdp.noise-reset` | pass | `hw:noise-reset` pending (calibration-16) |
 | `rdp.noise-pixel-offset` | pass | `hw:noise-pixel-offset` pending (calibration-16); `hw:noise-idle` pending (calibration-16); `hw:noise-2cycle` pending (calibration-16); `hw:noise-stall` pending (calibration-16) |
+| `legacy.cpu.interrupt-entry` | pass | `hw:nemu64-cop0hazard-console` pending (calibration-16) |

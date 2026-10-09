@@ -15,7 +15,7 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `color-half-16bpp` | Is a span's color half 32 px or 16 px at 16 bpp? | the width at which DPC_CLOCK of an 8-line IM_RD rectangle jumps, at 16 and 32 bpp | kit-span | span-width/half-b16 span-width/half-b32 | half_px per point | exact | `rdp.color-half-pixels-16bpp` `item:16.span-tri-16bpp` | pending:calibration-16 |
 | `noise-alpha-dither` | Which noise bits feed G_AD_NOISE and G_AC_DITHER (Angrylion (noise >> 6) & 7 vs MiSTer's odd values)? | the pixels written by 256 px rectangles with alpha-compare dither and with AD_NOISE against a threshold | kit-noise | snap/ac-dither snap/ad-noise-threshold | hash per point | exact | `rdp.noise-alpha-dither` `item:16.noise-bits` | pending:calibration-16 |
 | `noise-dither-bits` | Which noise bits feed G_CD_NOISE per channel? | the 16 bpp pixels of a 256 px gray rectangle with RGB dither set to noise | kit-noise | snap/cd-noise-16 | hash per point | exact | `rdp.noise-dither-bits` `item:16.noise-bits` | pending:calibration-16 |
-| `noise-pixel-offset` | Does the model's noise sequence start at the console's pixel and clock offset? | the 1016x1 NOISE rectangle of Thar0/RDP-Noise | kit-noise | snap/rect-1016 | hash per point | exact | `rdp.noise-pixel-offset` `noise:rect-1016` | pending:calibration-16 |
+| `noise-pixel-offset` | Does the model's noise sequence start at the console's pixel and clock offset? | the 1016x1 NOISE rectangle of Thar0/RDP-Noise | kit-noise | snap/rect-1016 | hash per point | exact | `rdp.noise-pixel-offset` `noise:rect-1016` `rdp.noise-step` | pending:calibration-16 |
 | `noise-idle` | Does the noise LFSR step while the RDP is idle? | two 256 px NOISE rectangles with a 100000-iteration CPU spin between their lists | kit-noise | snap/idle-gap | hash per point | exact | `rdp.noise-pixel-offset` `item:16.noise-idle-stall` | pending:calibration-16 |
 | `noise-2cycle` | How many noise steps does a 2-cycle pixel take? | a 256 px NOISE rectangle in 2-cycle mode | kit-noise | snap/two-cycle | hash per point | exact | `rdp.noise-pixel-offset` `item:16.noise-2cycle` | pending:calibration-16 |
 | `vi-first-line` | When does the VI start counting lines after VI_CONTROL selects a type, and does V_CURRENT hold while blanked (#77)? | V_CURRENT at the enable and COUNT ticks to its first and second change, at 10 delays after a blank in vertical blank | kit-vi | vi-enable/* | v_at_enable first_ticks per point | range:abs:24 | `#77` `bench:mi-memset-rspdma` | pending:calibration-16 |
@@ -24,14 +24,14 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `wb-release` | When the 4-entry write buffer is full, does a store wait for one free entry (NEC) or an empty buffer (R4300i), and how long does a load wait behind N buffered stores? | COUNT for 1-8 back-to-back uncached RDRAM stores, alone and followed by a load | kit-cpu | wb-stores/* | min per point | range:abs:2 | `cpu.wb-release` `cpu.wb-block-entries` `bench:wb-fifth-store` `item:16.wb-full` | pending:calibration-16 |
 | `dirty-miss` | What does an isolated dirty D-cache miss cost, and is the order fill then writeback? | COUNT for a D-cache miss with an invalid, clean or dirty victim, alone and followed by a second miss | kit-cpu | dirty-miss-isolated/* | min per point | range:abs:1 | `cpu.dirty-miss-order` `cpu.dfill-total` `bench:dirty-miss-isolated` `nemu64:timing/load-miss-vi-off` `item:16.dirty-writeback` | pending:calibration-16 |
 | `dirty-row` | What does an RDRAM row miss cost after the open row was written (datasheet 3 pclk more, model 2)? | COUNT of one uncached load after a clean or dirty open row, same row and four other rows | kit-cpu | dirty-row-sweep/* | min per point | range:abs:1 | `ri.retry-dirty` `bench:dirty-row-sweep` | pending:calibration-16 |
-| `cpu-reads` | Do the systembench-style uncached RDRAM, RCP register, PIF RAM and cart word reads cost on this console what the model charges? | the bench ports of n64-systembench C*R, U*R, U32R seq/rand/banked, RCP I/O R, SI I/O R and PI I/O R | kit-cpu | uncached-sizes/* rcp-reg-read/* pif-ram-read/* pi-io-read/* | min per point | range:abs:2 | `cpu.uncached-read-total` `cpu.uncached-read-dword-total` `cpu.rcp-register-read` `cpu.pif-ram-read` `bench:uncached-sizes-u32-banked` | pending:calibration-16 |
+| `cpu-reads` | Do the systembench-style uncached RDRAM, RCP register, PIF RAM and cart word reads cost on this console what the model charges? | the bench ports of n64-systembench C*R, U*R, U32R seq/rand/banked, RCP I/O R, SI I/O R and PI I/O R | kit-cpu | uncached-sizes/* rcp-reg-read/* pif-ram-read/* pi-io-read/* | min per point | range:abs:2 | `cpu.uncached-read-total` `cpu.uncached-read-dword-total` `cpu.rcp-register-read` `cpu.pif-ram-read` `bench:uncached-sizes-u32-banked` `cpu.pi-io-read` | pending:calibration-16 |
 | `poll-phase` | Are the systembench TIMEIT_WHILE numbers one phase of the poll sawtooth? | the PI and SI I/O write points with their poll walked over two poll periods: lowest and second-highest rep | kit-cpu | pi-io-write/* si-io-write/* | min max2 per point | range:abs:4 | `pi.io-busy` `si.io-busy` `bench:pi-io-write` `bench:si-io-write` | pending:calibration-16 |
 | `memset-vi` | How much does VI scanout slow the CPU and RSP memsets, and was n64brew's memset table measured with the VI on? | the four 1 MiB memsets with the VI on and blanked | kit-dma | mi-memset-uncached/* mi-memset-cached/* mi-memset-rspdma/* mi-memset-repeat/* | min per point | range:rel:0.5 | `sysad.rdram-write-period` `sysad.rdram-block-write-period` `ri.write-hit` `ri.overhead-write` `bench:mi-memset-uncached` `bench:mi-memset-cached` `bench:mi-memset-rspdma` | pending:calibration-16 |
-| `sp-dma-direction` | What is the SP DMA rate per direction and size, and does a row crossing cost (hcs64 5.55 vs n64brew 6.5 B/rclk)? | max(16, 4096 / size) SP DMAs of 256-4096 B queued back to back through SP_DMA_FULL, both directions, row-aligned and 64 B / 8 B before a row end, timed to SP_DMA_BUSY clear: the 26 pclk busy-poll quantum falls on the chain, not on each DMA. Chains of 8-128 B DMAs run at the CPU's register-write rate (about 49 pclk each on the fork) and are logged as report values, and sp-dma-sweep's single DMAs are quantized to the poll, so neither decides a small DMA's cost | kit-dma | sp-dma-chain/*-256-off* sp-dma-chain/*-512-off* sp-dma-chain/*-1024-off* sp-dma-chain/*-2048-off* sp-dma-chain/*-4096-off* | min per point | range:rel:1 | `ri.overhead-read` `sp.dma-burst` `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `bench:sp-dma-sweep` `item:16.sp-dma-setup` | pending:calibration-16 |
+| `sp-dma-direction` | What is the SP DMA rate per direction and size, and does a row crossing cost (hcs64 5.55 vs n64brew 6.5 B/rclk)? | max(16, 4096 / size) SP DMAs of 256-4096 B queued back to back through SP_DMA_FULL, both directions, row-aligned and 64 B / 8 B before a row end, timed to SP_DMA_BUSY clear: the 26 pclk busy-poll quantum falls on the chain, not on each DMA. Chains of 8-128 B DMAs run at the CPU's register-write rate (about 49 pclk each on the fork) and are logged as report values, and sp-dma-sweep's single DMAs are quantized to the poll, so neither decides a small DMA's cost | kit-dma | sp-dma-chain/*-256-off* sp-dma-chain/*-512-off* sp-dma-chain/*-1024-off* sp-dma-chain/*-2048-off* sp-dma-chain/*-4096-off* | min per point | range:rel:1 | `ri.overhead-read` `sp.dma-burst` `ri.octbyte` `ri.post-read-gap` `ri.post-write-gap` `bench:sp-dma-sweep` `item:16.sp-dma-setup` `ri.max-burst` | pending:calibration-16 |
 | `pi-dma-small` | Where do small PI DMAs lose the 12 rclk the model misses at 8-31 B? | n64-systembench PI DMA at 8, 128, 1024 and 65536 B with the poll walked | kit-dma | pi-dma-sizes/* | min max2 per point | range:abs:4 | `pi.page-setup` `pi.halfword-bias` `pi.block-bytes` `pi.block-writeback` `bench:pi-dma-sizes` `bench:pi-dma-sizes-8` `pidma:logs` `item:fu.pi-edge-wait` | pending:calibration-16 |
-| `joybus-pads` | What does an RD64B joybus frame cost with 1 and with 4 controllers connected (the 2J-4J fit assumes one pad on port 1)? | the SI DMA write and read points (N read-buttons commands, empty frames, accessory) and a 4-channel status frame, with kit-dma run once with one controller in port 1 and once with four; the joybus-setup probe logs which ports answered, and ingestion compares each capture with the fork run that had the same pads (calibration/run.sh pads-4) | kit-dma | si-dma/* joybus-setup/status-4 joybus-setup/pads | min mask per point | range:abs:4 | `pif.joybus-no-device` `pif.joybus-escape` `pif.joybus-skip` `pif.joybus-handshake` `si.read64-base` `bench:si-dma-read64-2` `bench:si-dma-read64-3` `bench:si-dma-read64-4` `item:fu.joybus-56-63` | pending:calibration-16 |
-| `vi-cpu-contention` | How much does VI scanout delay an isolated uncached load, by bank and line position (model about 2x the nemu64 means)? | back-to-back timed uncached loads over three VI lines, in the VI's bank and another | kit-hpos | uncached-vs-hpos/* | median_pclk outliers_per_line holdoff_rclk_max per point | range:abs:2 | `ri.rank.vi` `ri.arbitration` `vi.aa-mode-lines` `vi.burst` `ri.refresh-trigger` `nemu64:timing/load-from-uncached-vi-on-same-bank` `ri.refresh-waits-for-burst` `item:fu.vi-same-bank-tail` `item:fu.hpos-holdoff` `item:16.vi-rows-per-line` | pending:calibration-16 |
-| `rdp-sync-setter` | What do the RDP syncs and one-word setters cost? | N bare syncs, N rectangle+sync pairs, N one-word setters: DPC_CLOCK | kit-rdp | rdp-sync-sweep/* rdp-setter-sweep/* | clock per point | range:rel:1 | `rdp.sync-full` `bench:rdp-sync-sweep` `bench:rdp-setter-sweep` `rdp.setter` `item:16.sync-in-flight` | pending:calibration-16 |
+| `joybus-pads` | What does an RD64B joybus frame cost with 1 and with 4 controllers connected (the 2J-4J fit assumes one pad on port 1)? | the SI DMA write and read points (N read-buttons commands, empty frames, accessory) and a 4-channel status frame, with kit-dma run once with one controller in port 1 and once with four; the joybus-setup probe logs which ports answered, and ingestion compares each capture with the fork run that had the same pads (calibration/run.sh pads-4) | kit-dma | si-dma/* joybus-setup/status-4 joybus-setup/pads | min mask per point | range:abs:4 | `pif.joybus-no-device` `pif.joybus-escape` `pif.joybus-skip` `pif.joybus-handshake` `si.read64-base` `bench:si-dma-read64-2` `bench:si-dma-read64-3` `bench:si-dma-read64-4` `item:fu.joybus-56-63` `pif.joybus-byte` `bench:si-dma-accessory` | pending:calibration-16 |
+| `vi-cpu-contention` | How much does VI scanout delay an isolated uncached load, by bank and line position (model about 2x the nemu64 means)? | back-to-back timed uncached loads over three VI lines, in the VI's bank and another | kit-hpos | uncached-vs-hpos/* | median_pclk outliers_per_line holdoff_rclk_max per point | range:abs:2 | `ri.rank.vi` `ri.arbitration` `vi.aa-mode-lines` `vi.burst` `ri.refresh-trigger` `nemu64:timing/load-from-uncached-vi-on-same-bank` `ri.refresh-waits-for-burst` `item:fu.vi-same-bank-tail` `item:fu.hpos-holdoff` `item:16.vi-rows-per-line` `ri.refresh-clean` `ri.refresh-dirty` `ri.rank.refresh` `vi.vclk-per-pixel` `bench:uncached-vs-hpos` | pending:calibration-16 |
+| `rdp-sync-setter` | What do the RDP syncs and one-word setters cost? | N bare syncs, N rectangle+sync pairs, N one-word setters: DPC_CLOCK | kit-rdp | rdp-sync-sweep/* rdp-setter-sweep/* | clock per point | range:rel:1 | `rdp.sync-full` `bench:rdp-sync-sweep` `bench:rdp-setter-sweep` `rdp.setter` `item:16.sync-in-flight` `rdp.sync-pipe` `rdp.sync-tile` `rdp.sync-load` | pending:calibration-16 |
 | `rdp-atomic` | What does ATOMIC_PRIM add per primitive, and only when primitives overlap? | N 16x4 rectangles with the atomic bit off and on: DPC_CLOCK | kit-rdp | rdp-atomic-sweep/* | clock per point | range:rel:1 | `rdp.atomic-dead` `bench:rdp-atomic-sweep` `item:16.atomic` | pending:calibration-16 |
 | `rdp-rect-base` | What are the rectangle base, per-line gap and dead pixels, independent of the Thar0 alpha-fail fit? Does DPC_PIPEBUSY count memory stalls (CLOCK - PIPEBUSY as a stall counter)? | cen64 dpc_probe RECTN and DUTY shapes: DPC_CLOCK, BUFBUSY, PIPEBUSY | kit-rdp | rdp-rectn/* | clock bufbusy pipebusy per point | range:rel:1 | `rdp.primitive-base` `rdp.span-dead-pixels` `rdp.span-line-gap` `bench:rdp-rectn` `item:16.pipebusy-stall` `item:16.span-law` | pending:calibration-16 |
 | `span-width` | How does DPC_CLOCK of an IM_RD span grow with width at 16 and 32 bpp (span transaction unit, read latency)? | 33 widths 1-80 px at both depths: DPC_CLOCK, BUFBUSY, PIPEBUSY | kit-span | span-width/b* | clock per point | range:rel:2 | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.span-slots` `item:16.span-slots` `item:16.span-transaction` `item:16.span-law` | pending:calibration-16 |
@@ -39,26 +39,27 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `dpc-sequencing` | Do DMA_BUSY and END_PENDING sequence as the model does (no console capture)? | the rdpstat DPC sequencing cases' pass or fail | rdpstat-dpc | * | v0 per point | exact | `rdpstat:dpc-sequencing` | pending:calibration-16 |
 | `unsynced-attrs` | Does a combiner change without a sync reach a rectangle already in flight, in 1- and 2-cycle? | the rdpstat unsynced cases' pass or fail | rdpstat-unsynced | * | v0 per point | exact | `rdpstat:unsynced-combiner` | pending:calibration-16 |
 | `systemtest-rdp` | Do the n64-systemtest RDP status cases pass on this console? | the rdpstat systemtest cases' pass or fail | rdpstat-systemtest | * | v0 per point | exact | `rdpstat:current-prefetch` | pending:calibration-16 |
-| `thar0-console` | Do Thar0's RDP timing configs read on this console what Thar0's console read, including the 2-cycle Z-read and VI-same-bank Z configs the model misses by 5-12%? | the 100 Thar0 configs: DPC BUFBUSY and PIPEBUSY over RUNS runs (the romgen port's --hw build hangs in its first config on the fork, so the original ROM runs instead) | ext:thar0 | - | - | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` `rdp.read-gate` `rdp.port-lookahead` `thar0:imrd-1cycle` `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` `ri.overhead-rdp` `item:fu.thar0-residuals` `thar0:ac-zbsame-vioff-imrd-1cyc` `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` `thar0:nozb-vioff-imrd-1cyc` `thar0:nozb-visame-noimrd-1cyc` `thar0:nozb-visep-imrd-1cyc` `thar0:separate-bank` `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` `thar0:zcmp` | pending:calibration-16 |
-| `nemu64-console` | Do the nemu64-test timing cases pass on this console, including Load Miss with the VI off (model lacks the 42.5 mean tail) and the VI-on same-bank load? | every nemu64-test timing value's pass or fail | nemu64-timing | * | v0 per point | exact | `cpu.dfill-total` `nemu64:timing/load-miss-vi-off` `nemu64:timing/load-from-uncached-vi-on-same-bank` `cpu.exc-fpu-detect` `cpu.fpu-trivial` `cpu.eret` `cpu.random-rule` `cpu.wired-write-latency` `ri.retry-clean` `ri.bank-of` `ri.row-of` `item:fu.vi-same-bank-tail` | pending:calibration-16 |
-| `systembench` | Do the original n64-systembench numbers on this console match its published table, and where does each TIMEIT_WHILE poll land? | rasky/n64-systembench @845635c, built by unit systembench, run once with 1 and once with 4 controllers | ext:systembench | - | - | - | `bench:pi-dma-sizes` `bench:si-dma` `bench:pi-io-write` `bench:si-io-write` `item:fu.systembench-binary` `si.write64-rom` `systembench:pi-dma-128` `systembench:pi-dma-8` `systembench:pi-io-w` `systembench:si-dma-w-rom` `systembench:si-io-w` `systembench:u32r-banked` | pending:calibration-16 |
+| `thar0-console` | Do Thar0's RDP timing configs read on this console what Thar0's console read, including the 2-cycle Z-read and VI-same-bank Z configs the model misses by 5-12%? | the 100 Thar0 configs: DPC BUFBUSY and PIPEBUSY over RUNS runs (the romgen port's --hw build hangs in its first config on the fork, so the original ROM runs instead) | ext:thar0 | - | - | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` `rdp.read-gate` `rdp.port-lookahead` `thar0:imrd-1cycle` `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` `ri.overhead-rdp` `item:fu.thar0-residuals` `thar0:ac-zbsame-vioff-imrd-1cyc` `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` `thar0:nozb-vioff-imrd-1cyc` `thar0:nozb-visame-noimrd-1cyc` `thar0:nozb-visep-imrd-1cyc` `thar0:separate-bank` `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` `thar0:zcmp` `ri.arbitration` `rdp.primitive-base` `rdp.span-dead-pixels` `rdp.span-line-gap` `rdp.span-1cycle` `rdp.span-2cycle` `rdp.fill-copy-rate` `rdp.span-slots` `rdp.write-run` | pending:calibration-16 |
+| `nemu64-console` | Do the nemu64-test timing cases pass on this console, including Load Miss with the VI off (model lacks the 42.5 mean tail) and the VI-on same-bank load? | every nemu64-test timing value's pass or fail | nemu64-timing | * | v0 per point | exact | `cpu.dfill-total` `nemu64:timing/load-miss-vi-off` `nemu64:timing/load-from-uncached-vi-on-same-bank` `cpu.exc-fpu-detect` `cpu.fpu-trivial` `cpu.eret` `cpu.random-rule` `cpu.wired-write-latency` `ri.retry-clean` `ri.bank-of` `ri.row-of` `item:fu.vi-same-bank-tail` `clock.unit` `ri.read-hit` `ri.arbitration` `ri.rank.vi` `ri.rank.other` `ri.overhead-vi` `cpu.uncached-read-total` `cpu.dcache-hit` `cpu.ldi` `cpu.mci` `cpu.exc-rf` `cpu.exc-ex` `cpu.exc-fpu` `cpu.fpu-add` `cpu.fpu-mul-s` `cpu.fpu-mul-d` `cpu.fpu-div-s` `cpu.fpu-div-d` `cpu.fpu-forward` `cpu.issue` `cpu.mult` `cpu.dmult` `cpu.div` `cpu.ddiv` `cpu.fpu-sqrt-s` `cpu.fpu-sqrt-d` `cpu.fpu-convert` `cpu.fpu-cvt-s-d` `cpu.likely-nullified` `cpu.mtc0-slow-regs` `cpu.cache-index-load-tag` `cpu.wb-entries` `rsp.slot` `vi.lines-per-output-line` `vi.aa-mode-lines` | pending:calibration-16 |
+| `systembench` | Does the original n64-systembench binary read on this console what the fork reads for the same binary, row by row? | the unpadded n64-systembench.z64 that build-systembench.sh makes (rasky/n64-systembench @845635c, libdragon preview cc490afe0, sha256 c1c85c13...f5f6), its ISViewer text with one controller in port 1. Each of the 34 rows of systembench/rows.tsv must match the fork's run of that same file under main.c's rule (1 CPU or 2 RCP cycles, or 0.2 %); the detail also counts the rows within that rule of the published hardware value. Pointwise for this one binary only: a 1-3 instruction change in a poll loop moves the poll rows by up to 10 RCP cycles (verify-83), so a console run of any other build decides nothing. Also read rambuf's address from the ELF (item fu.systembench-binary) | ext:systembench | - | - | - | `bench:pi-dma-sizes` `bench:si-dma` `bench:pi-io-write` `bench:si-io-write` `item:fu.systembench-binary` `si.write64-rom` `systembench:pi-dma-128` `systembench:pi-dma-8` `systembench:pi-io-w` `systembench:si-dma-w-rom` `systembench:si-io-w` `systembench:u32r-banked` `cpu.uncached-read-total` `cpu.uncached-read-dword-total` `cpu.rcp-register-read` `cpu.pif-ram-read` `cpu.pi-io-read` `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` `pi.io-busy` `si.io-busy` `si.write64` `si.read64-base` `pif.joybus-skip` `pif.joybus-escape` `pif.joybus-byte` `pif.joybus-handshake` `pif.joybus-no-device` | pending:calibration-16 |
 | `pidma-offset` | Which COUNT offset does the n64_pi_dma_test log start at (pidma replay calibrated offsets)? | n64_pi_dma_test with its COUNT reads logged | ext:pi_dma_test | - | - | - | `pidma:logs` `item:fu.pidma-offset` | pending:calibration-16 |
 | `mm-filesel` | How many fields does a Majora's Mask file-select game frame take with named files, and how much CPU and RDP time? | Scott's mm-decomp-60fps BENCH build with its osGetCount and DPC_CLOCK prints, on the named-files screen | ext:mm-bench | - | - | - | `mm:filesel-named` `rdp.span-read-latency` `item:16.mm-bench-scenes` | pending:calibration-16 |
-| `snapper64` | Do snapper64's dumps on this console match the published console dumps? | snapper64 e1cd8a61fc43 run as published | ext:snapper64 | - | - | - | `snapper:span-tri` `item:16.span-tri-16bpp` | pending:calibration-16 |
+| `snapper64` | Do snapper64's dumps on this console match the published console dumps? | snapper64 e1cd8a61fc43 run as published | ext:snapper64 | - | - | - | `snapper:span-tri` `item:16.span-tri-16bpp` `rdp.pipeline-depth` `rdp.span-ram-half` `rdp.span-ram-segment` `rdp.span-slots` `rdp.write-run` | pending:calibration-16 |
 | `write-granularity` | Is a partly rejected span written as one masked burst, one write per octbyte or one per run, and is a fully rejected span written (rdp-write-granularity.md)? | DPC_CLOCK of a 320x8 Z-compared rectangle (Z_CMP, and Z_CMP+Z_UPD) over a Z comb every N = 1-8, 12, 16, 24, 32 px, all pass, all fail: the clock's slope against written runs per row (per-run write-back; the fork reads 15.4 and 36.8 rclk per run, r2 0.96/0.98), and all pass less all fail (near 0 when a rejected span is still written; fork 1259 and 3606). The fits' r2 against runs and against octbytes and the comb's range are logged as report values | kit-zmem | zmem-write-gran/zcmp-fit zmem-write-gran/zcmp-zupd-fit | run_slope reject_saving per point | range:rel:15 | `rdp.write-run` `item:16.masked-burst` `item:16.zcomb-run-count` | pending:calibration-16 |
 | `ri-priority` | Which RDRAM client wins against the CPU, and can SP DMA, the RDP or PI DMA starve it (rdram-bus-arbitration.md Q1)? | 32 timed uncached loads with the VI blanked, idle and while a 16 KiB SP DMA, an 8 KiB PI DMA, an RDP fill list and an RDP IM_RD list run, in the client's bank and in bank 5: ticks added per load over idle. A client with priority starves the CPU (extra about 55 or more, the client finishes first); CPU priority gives about 0; first come first served (the fork) about one burst: SP 9.5 / 19.3, PI 0.2 / -0.1, RDP fill 6.6 / 10.4, IM_RD 11.2 / 1.1 | kit-bus | bus-derived/all | ri-sp-rd-16k-own-extra-per-load ri-sp-rd-16k-bank5-extra-per-load ri-pi-8k-own-extra-per-load ri-pi-8k-bank5-extra-per-load ri-rdp-fill-own-extra-per-load ri-rdp-fill-bank5-extra-per-load ri-rdp-imrd-own-extra-per-load ri-rdp-imrd-bank5-extra-per-load per point | range:abs:0.5 | `ri.arbitration` `ri.rank.other` `ri.rank.vi` `item:16.ri-priority` | pending:calibration-16 |
 | `ri-reorder` | Does the RI reorder same-bank different-row requests (rdram-bus-arbitration.md Q2)? | the SP DMA's time with the CPU's loads in its own bank less with them in bank 5 (in-order service with row misses: a large positive value, the fork 232 ticks; an RI that serves the open row first: about 0), and the DMA's slowdown against running alone | kit-bus | bus-derived/all | ri-reorder-own-minus-bank5 ri-sp-bank5-minus-alone per point | range:abs:10 | `ri.arbitration` `item:16.ri-reorder` | pending:calibration-16 |
 | `tmem-load-rate` | What is the TMEM load rate (MiSTer RTL 8 B per clock, 0.125 clk/B, vs the jgemu dpc_probe law about 15 clocks + 0.418 clocks per byte; the fork reads 0.703 clk/B + 7)? | DPC_TMEM of 1 and 4 back-to-back Load Block and Load Tile commands of 8-4096 B: the per-load cost (4 loads less 1, over 3) fit against bytes. TMEMBUSY is a gated counter; DPC_CLOCK carries the CPU's MI_INTR poll quantum (about 17 rclk) and is not used | kit-tex | tex-derived/all | load-block-clk-per-byte load-tile-clk-per-byte per point | range:rel:3 | `rdp.tmem-load-rate` `bench:rdp-loadsz-sweep` | pending:calibration-16 |
 | `fill-copy-rate` | What is the fill and copy mode rate (SDK 12.1.4/12.1.5 8 B per rclk; the fork reads fill 6.69 B/clk at 16 bpp, 6.44 at 32 bpp, copy 2.21)? | DPC_PIPEBUSY of 8-line fill rectangles at 16 and 32 bpp and copy-mode texture rectangles at 16 bpp, widths 8-320: bytes per clock from the slope against bytes | kit-tex | tex-derived/all | fill-b16-bytes-per-clk fill-b32-bytes-per-clk copy-b16-bytes-per-clk per point | range:rel:3 | `rdp.fill-copy-rate` `thar0:fill-mode` | pending:calibration-16 |
 | `vi-fetch-modes` | How many lines does the VI fetch per output line in each AA mode and scale, does it fetch outside the H and V video windows, and does a register written mid-field take effect at the next line (vi.lines-per-output-line, vi.aa-mode-lines, vi.register-sample, vi.display-window)? | uncached loads done in a 10-line window in the VI's bank, VI on, against the same window outside V_VIDEO (no fetch): loads lost per case. Each fetched line costs about 41 loads; the fork fetches three per output line whatever AA_MODE, X_SCALE or Y_SCALE say (about 122 lost), about 68 with H_VIDEO halved, -1 above ares's display window, and a late blank or V_VIDEO change stops the loss within the field (per-line register sampling) | kit-bus | bus-derived/all | vi-base-loads-lost vi-aa0-loads-lost vi-aa1-loads-lost vi-aa3-loads-lost vi-x-0.25-loads-lost vi-x-1.0-loads-lost vi-x-2.0-loads-lost vi-y-0.5-loads-lost vi-y-2.0-loads-lost vi-aa3-y-2.0-loads-lost vi-hvideo-half-loads-lost vi-vvideo-early-loads-lost vi-x-2.0-late-loads-lost vi-vi-blank-late-loads-lost vi-vvideo-outside-late-loads-lost vi-base-bank5-loads-lost per point | range:abs:6 | `vi.lines-per-output-line` `vi.aa-mode-lines` `vi.register-sample` `vi.display-window` `vi.burst` `item:16.vi-rows-per-line` | pending:calibration-16 |
-| `cpu-exceptions` | What do store AdE, TLB store miss, TLB Mod, a fetch-stage address error, the watch exception, interrupt entry (software IP and COMPARE) and a CTC1-raised FPU exception cost, and an isolated ERET? | COUNT from the faulting instruction to handler entry, read in both COUNT parities so min is the entry in pclk (the harness adds 1; N nops read N+1), and how many of 4 shots entered the handler. AdEL reads 6 as nemu64's JustFire; the fork reads 6 for AdES, TLBS and Mod (inferred to share the load's stage), fetch AdE 4 against a plain jr 3 (the fetch-fault slot), CTC1 FPE 2, software interrupt 4, ERET 4 (3 net). The fork never raises Watch (fired 0); the COMPARE interrupt resolves only to 1 tick | kit-cpu2 | cpu2-base/* cpu2-exc/* | min fired per point | exact | `cpu.exc-ex` `cpu.issue` `cpu.exc-fpu` `cpu.eret` `cpu.irq-sample` `item:fu.exc-entry` | pending:calibration-16 |
+| `cpu-exceptions` | What do store AdE, TLB store miss, TLB Mod, a fetch-stage address error, interrupt entry (software IP and COMPARE) and a CTC1-raised FPU exception cost, and an isolated ERET? | COUNT from the faulting instruction to handler entry, read in both COUNT parities so min is the entry in pclk (the harness adds 1; N nops read N+1), and how many of 4 shots entered the handler. AdEL reads 6 as nemu64's JustFire; the fork reads 6 for AdES, TLBS and Mod (inferred to share the load's stage), fetch AdE 4 against a plain jr 3 (the fetch-fault slot), CTC1 FPE 2, software interrupt 4, ERET 4 (3 net). The COMPARE interrupt resolves only to 1 tick. The Watch points are their own question, cpu-watch | kit-cpu2 | cpu2-base/* cpu2-exc/ade* cpu2-exc/tlb* cpu2-exc/mod-* cpu2-exc/jr-* cpu2-exc/fetch-* cpu2-exc/irq-* cpu2-exc/fpe-* cpu2-exc/eret | min fired per point | exact | `cpu.exc-ex` `cpu.issue` `cpu.exc-fpu` `cpu.eret` `cpu.irq-sample` `item:fu.exc-entry` | pending:calibration-16 |
+| `cpu-watch` | Does a load or store that matches WatchLo raise the Watch exception, and how many pclk from the access to the handler? | the watch-lw and watch-sw points: COUNT from the access to handler entry and how many of 4 shots entered the handler. Expected to differ from the fork until #87 is fixed: the fork never raises Watch (fired 0), so a console that raises it fails this question and only this one; no behavior row names hw:cpu-watch | kit-cpu2 | cpu2-exc/watch-* | min fired per point | exact | `item:fu.exc-entry` `#87` | pending:calibration-16 |
 | `cache-ops` | What does each CACHE op cost on an absent, clean and dirty line, and what does it leave for the next access? | each I- and D-cache CACHE op over 8 entry phases: the op's lowest ticks, its sum over the 8 (sum / 4 - 1 = phase-averaged pclk; an op that costs only its slot reads 8), and the next load's lowest ticks (hit 1-2, miss 21, dirty writeback then miss 28-29). Fork: Index Load Tag about 6 pclk, I-cache Fill 19 ticks, the rest their slot | kit-cpu2 | cpu2-cache/* | min next_min per point | range:abs:1 | `cpu.cache-index-load-tag` `item:16.cache-ops` | pending:calibration-16 |
 | `nemu64-cycle-console` | Do the nemu64-test cycle cases pass on this console: self-modifying code within a basic block (cpu.fetch-ahead-slots: 2 vs 3 slots) and the CTC1-raised exception's Cause.CE? | every nemu64-test cycle value's pass or fail, the data cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce were fit to, re-measured on this console | nemu64-cycle | * | v0 per point | exact | `cpu.fetch-ahead-slots` `cpu.ctc1-fpe-ce` | pending:calibration-16 |
-| `nemu64-cop0hazard-console` | Do the nemu64-test cop0hazard cases pass on this console: the COUNT write hold, the software-interrupt sample points and Random read early? | every nemu64-test cop0hazard value's pass or fail, the data the COUNT hold, the interrupt sampler and the Random/Wired rules were fit to, re-measured on this console (COMPARE's power-on value shows in the COUNT case, which wraps through Compare = 0) | nemu64-cop0hazard | * | v0 per point | exact | `cpu.count-write-hold` `cpu.irq-sample` `cpu.random-rule` `cpu.wired-write-latency` `item:fu.power-on-compare` | pending:calibration-16 |
+| `nemu64-cop0hazard-console` | Do the nemu64-test cop0hazard cases pass on this console: the COUNT write hold, the software-interrupt sample points and Random read early? | every nemu64-test cop0hazard value's pass or fail, the data the COUNT hold, the interrupt sampler and the Random/Wired rules were fit to, re-measured on this console (COMPARE's power-on value shows in the COUNT case, which wraps through Compare = 0) | nemu64-cop0hazard | * | v0 per point | exact | `cpu.count-write-hold` `cpu.irq-sample` `cpu.random-rule` `cpu.wired-write-latency` `item:fu.power-on-compare` `legacy.cpu.interrupt-entry` | pending:calibration-16 |
 | `dom2-read` | What does a cartridge domain-2 word read cost (legacy.pi.cart-read charges 250 pclk)? | an uncached LW from the SRAM the kit logs to, under hw_init's domain-2 timing (LAT 5, PWD 12, PGS 13, RLS 2), against the cached baseline | kit-cpu | bus-reads/* | min per point | range:abs:2 | `legacy.pi.cart-read` | pending:calibration-16 |
 | `pi-row-end` | Does a PI DMA whose first block ends at an RDRAM row end cost what the model charges? | pi-dma-sizes' 8, 128 and 1024 B DMAs into RDRAM 8 B and 64 B before a 2 KiB row end, poll walked | kit-dma | pi-dma-rowend/* | min max2 per point | range:abs:4 | `item:fu.pi-row-end` | pending:calibration-16 |
 | `noise-stall` | Does the noise LFSR step during in-span memory stalls (an IM_RD rectangle stalls on its reads)? | the pixels of a 256 px NOISE rectangle with IM_RD on | kit-noise | snap/im-rd-stall | hash per point | exact | `item:16.noise-idle-stall` `rdp.noise-pixel-offset` | pending:calibration-16 |
-| `noise-reset` | Does the Reset button reload the noise LFSR's all-ones power-on state? | kit-noise's pixels captured after a Reset (file *.reset.*) against the fork's power-on run: equal hashes mean a reset reloads the state | kit-noise | snap/* | hash per point | exact | `item:16.noise-reset-state` | pending:calibration-16 |
+| `noise-reset` | Does the Reset button reload the noise LFSR's all-ones power-on state? | kit-noise's pixels captured after a Reset (file *.reset.*) against the fork's power-on run: equal hashes mean a reset reloads the state | kit-noise | snap/* | hash per point | exact | `item:16.noise-reset-state` `rdp.noise-reset` | pending:calibration-16 |
 | `vi-mid-field-blank` | What does the VI do on a blank and re-enable in the middle of a field (V_CURRENT, the first line fetched)? | k_vi_enable with the blank written mid-field instead of in vertical blank | none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists | - | - | - | `item:fu.vi-mid-field-blank` `#84` | pending:calibration-16 |
 | `tmem-load-setup` | What is a TMEM load's fixed cost (jgemu about 15 clocks with its paired Sync Load, the fork 7)? | the intercept of the same per-load fit as tmem-load-rate | kit-tex | tex-derived/all | load-block-intercept load-tile-intercept per point | range:abs:3 | `rdp.tmem-load-rate` | pending:calibration-16 |
 | `loadtile-rows` | Does Load Tile pay a per-row cost over Load Block (issue #16, LoadTile vs LoadBlock per-row overhead via DPC_TMEM)? | DPC_TMEM of 2048 B loaded by Load Tile as 1 row of 2048 B down to 256 rows of 8 B, against one Load Block of 2048 B: any per-row cost of 1 clock or more shows as 255 clocks or more at 256 rows (the fork reads 0) | kit-tex | tex-derived/all | rows256-minus-block2048 per point | range:abs:4 | `item:16.loadtile-loadblock` `rdp.tmem-load-rate` | pending:calibration-16 |
@@ -100,13 +101,13 @@ Rows whose checks wait on the console run. 19 rows, 19 with a kit question.
 | `cpu.dirty-miss-order` | pending:calibration-16 pending:report-only | bench:dirty-miss-isolated hw:dirty-miss | `hw:dirty-miss` |
 | `cpu.wb-release` | pending:calibration-16 pending:report-only | bench:wb-fifth-store hw:wb-release hw:wb-drain-target | `hw:wb-release`, `hw:wb-drain-target` |
 | `sysad.register-write` | pending:calibration-16 | hw:register-write hw:wb-drain-target | `hw:register-write`, `hw:wb-drain-target` |
-| `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads` |
+| `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads`, `hw:systembench` |
 | `ai.fetch-bytes` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:ai-fetch | `hw:ai-fetch` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes | `hw:vi-fetch-modes` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.cmd-fifo-dwords` | pending:calibration-16 | ~rdpstat:current-prefetch hw:cmd-fifo-depth | `hw:cmd-fifo-depth` |
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
-| `rdp.fill-copy-rate` | pending:calibration-16 pending:report-only | thar0:fill-mode hw:fill-copy-rate hw:copy-passfail | `hw:fill-copy-rate`, `hw:copy-passfail` |
+| `rdp.fill-copy-rate` | pending:calibration-16 pending:report-only | thar0:fill-mode hw:fill-copy-rate hw:copy-passfail hw:thar0-console | `hw:thar0-console`, `hw:fill-copy-rate`, `hw:copy-passfail` |
 | `rdp.tmem-load-rate` | pending:calibration-16 pending:report-only | bench:rdp-loadsz-sweep hw:tmem-load-rate hw:tmem-load-setup hw:loadtile-rows | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
 | `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp | `hw:color-half-16bpp` |
 | `rdp.noise-alpha-dither` | pending:calibration-16 | hw:noise-alpha-dither | `hw:noise-alpha-dither` |
@@ -127,9 +128,9 @@ Rows whose only passing checks are their own fit data. 10 rows, 10 with a kit qu
 | `cpu.irq-sample` | fit only | nemu64:cop0hazard/softwareinterrupt hw:cpu-exceptions hw:nemu64-cop0hazard-console | `hw:cpu-exceptions`, `hw:nemu64-cop0hazard-console` |
 | `cpu.fetch-ahead-slots` | fit only | nemu64:cycle/smc-single-write | `hw:nemu64-cycle-console` |
 | `cpu.ctc1-fpe-ce` | fit only | nemu64:cycle/ctc1 | `hw:nemu64-cycle-console` |
-| `rdp.primitive-base` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle bench:rdp-rectn hw:rdp-rect-base | `hw:rdp-rect-base` |
-| `rdp.span-dead-pixels` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base` |
-| `rdp.span-line-gap` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base` |
+| `rdp.primitive-base` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle bench:rdp-rectn hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
+| `rdp.span-dead-pixels` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
+| `rdp.span-line-gap` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
 
 ## Model-choice rows
 
@@ -139,9 +140,9 @@ Rows with no published value: the console decides the choice. 22 rows, 20 with a
 |---|---|---|---|
 | `scheduler.tie-rank` | model-choice | ~det ~stepcap ~unit:timeline | **no kit question** |
 | `ri.refresh-waits-for-burst` | pass | bench:uncached-vs-hpos hw:vi-cpu-contention hw:refresh-all-banks | `hw:vi-cpu-contention`, `hw:refresh-all-banks` |
-| `ri.arbitration` | fail | nemu64:timing/load-miss-vi-on thar0:separate-bank hw:vi-cpu-contention hw:ri-priority hw:ri-reorder hw:ri-priority-overlap | `hw:vi-cpu-contention`, `hw:ri-priority`, `hw:ri-reorder`, `hw:ri-priority-overlap` |
-| `ri.rank.vi` | fail | nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:ri-priority | `hw:vi-cpu-contention`, `hw:ri-priority` |
-| `ri.rank.other` | pass | nemu64:timing/load-miss-vi-on hw:ri-priority | `hw:ri-priority` |
+| `ri.arbitration` | fail | nemu64:timing/load-miss-vi-on thar0:separate-bank hw:vi-cpu-contention hw:ri-priority hw:ri-reorder hw:ri-priority-overlap hw:thar0-console hw:nemu64-console | `hw:vi-cpu-contention`, `hw:thar0-console`, `hw:nemu64-console`, `hw:ri-priority`, `hw:ri-reorder`, `hw:ri-priority-overlap` |
+| `ri.rank.vi` | fail | nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:ri-priority hw:nemu64-console | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:ri-priority` |
+| `ri.rank.other` | pass | nemu64:timing/load-miss-vi-on hw:ri-priority hw:nemu64-console | `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.request-latency` | model-choice | ~det ~stepcap | **no kit question** |
 | `sysad.register-write` | pending:calibration-16 | hw:register-write hw:wb-drain-target | `hw:register-write`, `hw:wb-drain-target` |
 | `sp.dma-burst` | fail | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
@@ -149,13 +150,13 @@ Rows with no published value: the console decides the choice. 22 rows, 20 with a
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes | `hw:vi-fetch-modes` |
 | `vi.fetch-overrun` | model-choice | ~det ~stepcap | `hw:vi-unfetched-video` |
 | `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | `hw:vi-unfetched-video` |
-| `vi.aa-mode-lines` | fail | nemu64:timing/load-miss-vi-on nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:vi-fetch-modes | `hw:vi-cpu-contention`, `hw:vi-fetch-modes` |
+| `vi.aa-mode-lines` | fail | nemu64:timing/load-miss-vi-on nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:vi-fetch-modes hw:nemu64-console | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
 | `rdp.xbus-fetch-rate` | pass | rdpstat:xbus hw:xbus-fetch-rate | `hw:xbus-fetch-rate` |
 | `rdp.sync-full` | pass | bench:rdp-sync-sweep hw:rdp-sync-setter hw:attribute-sync-cost | `hw:rdp-sync-setter`, `hw:attribute-sync-cost` |
 | `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp | `hw:color-half-16bpp` |
-| `rdp.span-slots` | fail | thar0:imrd-1cycle snapper:span-tri hw:span-width hw:imrd-zcmp-slots | `hw:span-width`, `hw:imrd-zcmp-slots` |
+| `rdp.span-slots` | fail | thar0:imrd-1cycle snapper:span-tri hw:span-width hw:imrd-zcmp-slots hw:thar0-console hw:snapper64 | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots` |
 | `rdp.noise-pixel-offset` | pass | noise:rect-1016 hw:noise-pixel-offset hw:noise-idle hw:noise-2cycle hw:noise-stall | `hw:noise-pixel-offset`, `hw:noise-idle`, `hw:noise-2cycle`, `hw:noise-stall` |
 | `rdp.noise-alpha-dither` | pending:calibration-16 | hw:noise-alpha-dither | `hw:noise-alpha-dither` |
 | `rdp.noise-dither-bits` | pending:calibration-16 | hw:noise-dither-bits | `hw:noise-dither-bits` |
@@ -170,12 +171,12 @@ Rows whose deciding check reports a number and asserts none. 11 rows, 11 with a 
 | `cpu.ifill-stall` | pending:calibration-16 pending:report-only | bench:ifill-isolated hw:ifill | `hw:ifill` |
 | `cpu.dirty-miss-order` | pending:calibration-16 pending:report-only | bench:dirty-miss-isolated hw:dirty-miss | `hw:dirty-miss` |
 | `cpu.wb-release` | pending:calibration-16 pending:report-only | bench:wb-fifth-store hw:wb-release hw:wb-drain-target | `hw:wb-release`, `hw:wb-drain-target` |
-| `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads` |
+| `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads`, `hw:systembench` |
 | `ai.fetch-bytes` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:ai-fetch | `hw:ai-fetch` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes | `hw:vi-fetch-modes` |
 | `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | `hw:vi-unfetched-video` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
-| `rdp.fill-copy-rate` | pending:calibration-16 pending:report-only | thar0:fill-mode hw:fill-copy-rate hw:copy-passfail | `hw:fill-copy-rate`, `hw:copy-passfail` |
+| `rdp.fill-copy-rate` | pending:calibration-16 pending:report-only | thar0:fill-mode hw:fill-copy-rate hw:copy-passfail hw:thar0-console | `hw:thar0-console`, `hw:fill-copy-rate`, `hw:copy-passfail` |
 | `rdp.tmem-load-rate` | pending:calibration-16 pending:report-only | bench:rdp-loadsz-sweep hw:tmem-load-rate hw:tmem-load-setup hw:loadtile-rows | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
 
 ## Failing and weakly passing checks
@@ -215,43 +216,78 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 
 ## Coverage
 
-Everything a console could have to decide: rows that rest on a fit, a model choice or an inference, rows and checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason no console run can decide it (tools/n64-timing/calibration/undecidable.tsv). 171 entries: 155 with a question, 16 not hardware-decidable.
+Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 224 entries: 208 with a question, 7 not hardware-decidable (no console run can decide them), 9 not decidable by this kit (a console could, with what the reason names).
 
 | Entry | Why | Question or reason |
 |---|---|---|
-| `clock.vclk` | pending:report-only | `hw:count-per-field` |
+| `clock.unit` | derived reference | `hw:nemu64-console` |
+| `clock.vclk` | derived reference; pending:report-only | `hw:count-per-field` |
 | `scheduler.tie-rank` | model-choice | not-hardware-decidable: the order the emulator's scheduler breaks a same-unit tie in; a console has no scheduler and no observable that orders two events inside one 1.3 ns unit |
-| `ri.write-hit` | check bench:mi-memset-uncached fail | `hw:memset-vi` |
-| `ri.octbyte` | check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
-| `ri.retry-clean` | check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
-| `ri.post-read-gap` | check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
-| `ri.post-write-gap` | check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
-| `ri.bank-of` | check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
-| `ri.row-of` | check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
+| `ri.read-hit` | datasheet reference | `hw:nemu64-console` |
+| `ri.write-hit` | datasheet reference; check bench:mi-memset-uncached fail | `hw:memset-vi` |
+| `ri.octbyte` | datasheet reference; check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
+| `ri.retry-clean` | datasheet reference; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
+| `ri.retry-dirty` | datasheet reference | `hw:dirty-row` |
+| `ri.post-read-gap` | datasheet reference; check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
+| `ri.post-write-gap` | datasheet reference; check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
+| `ri.max-burst` | wiki reference | `hw:sp-dma-direction` |
+| `ri.bank-of` | wiki reference; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
+| `ri.row-of` | datasheet reference; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
+| `ri.refresh-clean` | vendor reference | `hw:vi-cpu-contention` |
+| `ri.refresh-dirty` | vendor reference | `hw:vi-cpu-contention` |
+| `ri.refresh-trigger` | wiki reference | `hw:vi-cpu-contention`, `hw:vi-blank-counting`, `hw:refresh-all-banks` |
 | `ri.refresh-waits-for-burst` | model-choice | `hw:vi-cpu-contention`, `hw:refresh-all-banks` |
-| `ri.arbitration` | model-choice; check thar0:separate-bank fail | `hw:vi-cpu-contention`, `hw:ri-priority`, `hw:ri-reorder`, `hw:ri-priority-overlap` |
-| `ri.rank.vi` | model-choice; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:ri-priority` |
-| `ri.rank.other` | model-choice | `hw:ri-priority` |
+| `ri.arbitration` | model-choice; check thar0:separate-bank fail | `hw:vi-cpu-contention`, `hw:thar0-console`, `hw:nemu64-console`, `hw:ri-priority`, `hw:ri-reorder`, `hw:ri-priority-overlap` |
+| `ri.rank.refresh` | wiki reference | `hw:vi-cpu-contention` |
+| `ri.rank.vi` | model-choice; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:ri-priority` |
+| `ri.rank.other` | model-choice | `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.overhead-read` | fit; verify-is-fit; check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
-| `ri.overhead-write` | check bench:mi-memset-rspdma, bench:sp-dma-sweep pass-conditional:#77 | `hw:memset-vi` |
-| `ri.overhead-rdp` | check thar0:separate-bank, thar0:imrd-1cycle fail | `hw:thar0-console` |
+| `ri.overhead-vi` | derived reference | `hw:nemu64-console` |
+| `ri.overhead-write` | derived reference; check bench:mi-memset-rspdma, bench:sp-dma-sweep pass-conditional:#77 | `hw:memset-vi` |
+| `ri.overhead-rdp` | derived reference; check thar0:separate-bank, thar0:imrd-1cycle fail | `hw:thar0-console` |
 | `ri.request-latency` | model-choice | not-hardware-decidable: one 750 MHz unit (1.3 ns) between a request's post and the arbiter, chosen so a decision never races a post at the same time; no console measurement resolves 1.3 ns, and the fork's results do not move with it (det, stepcap) |
-| `cpu.uncached-read-total` | check bench:uncached-sizes-u32-banked, systembench:u32r-banked fail | `hw:cpu-reads` |
-| `cpu.dfill-total` | check nemu64:timing/load-miss-vi-off fail | `hw:dirty-miss`, `hw:nemu64-console` |
+| `cpu.uncached-read-total` | measured reference; check bench:uncached-sizes-u32-banked, systembench:u32r-banked fail | `hw:cpu-reads`, `hw:nemu64-console`, `hw:systembench` |
+| `cpu.uncached-read-dword-total` | derived reference | `hw:cpu-reads`, `hw:systembench` |
+| `cpu.dfill-total` | measured reference; check nemu64:timing/load-miss-vi-off fail | `hw:dirty-miss`, `hw:nemu64-console` |
 | `cpu.ifill-stall` | inferred; pending:report-only | `hw:ifill` |
-| `cpu.ldi` | an inference in its reference or note | `hw:load-interlock-cop` |
-| `cpu.exc-ex` | an inference in its reference or note | `hw:cpu-exceptions` |
+| `cpu.dcache-hit` | measured reference | `hw:nemu64-console` |
+| `cpu.ldi` | vendor reference; an inference in its reference or note | `hw:nemu64-console`, `hw:load-interlock-cop` |
+| `cpu.dcb` | vendor reference | `hw:dcb` |
+| `cpu.mci` | measured reference | `hw:nemu64-console` |
+| `cpu.exc-rf` | measured reference | `hw:nemu64-console` |
+| `cpu.exc-ex` | measured reference; an inference in its reference or note | `hw:nemu64-console`, `hw:cpu-exceptions` |
+| `cpu.exc-fpu` | measured reference | `hw:nemu64-console`, `hw:cpu-exceptions` |
 | `cpu.exc-fpu-detect` | fit; verify-is-fit | `hw:nemu64-console`, `hw:fpu-classes` |
+| `cpu.fpu-add` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-mul-s` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-mul-d` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-div-s` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-div-d` | measured reference | `hw:nemu64-console` |
 | `cpu.fpu-trivial` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-console`, `hw:fpu-classes` |
-| `cpu.issue` | an inference in its reference or note | `hw:cpu-exceptions` |
+| `cpu.fpu-forward` | measured reference | `hw:nemu64-console` |
+| `cpu.issue` | measured reference; an inference in its reference or note | `hw:nemu64-console`, `hw:cpu-exceptions` |
+| `cpu.mult` | measured reference | `hw:nemu64-console` |
+| `cpu.dmult` | measured reference | `hw:nemu64-console` |
+| `cpu.div` | measured reference | `hw:nemu64-console` |
+| `cpu.ddiv` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-sqrt-s` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-sqrt-d` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-convert` | measured reference | `hw:nemu64-console` |
+| `cpu.fpu-cvt-s-d` | measured reference | `hw:nemu64-console` |
+| `cpu.likely-nullified` | measured reference | `hw:nemu64-console` |
 | `cpu.eret` | fit; verify-is-fit | `hw:nemu64-console`, `hw:cpu-exceptions` |
+| `cpu.mtc0-slow-regs` | measured reference | `hw:nemu64-console` |
+| `cpu.cache-index-load-tag` | measured reference | `hw:nemu64-console`, `hw:cache-ops`, `hw:cache-ops-sum` |
 | `cpu.count-write-hold` | fit; verify-is-fit | `hw:nemu64-cop0hazard-console` |
 | `cpu.irq-sample` | fit; verify-is-fit; an inference in its reference or note | `hw:cpu-exceptions`, `hw:nemu64-cop0hazard-console` |
 | `cpu.fetch-ahead-slots` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console` |
-| `cpu.dirty-miss-order` | pending:report-only | `hw:dirty-miss` |
-| `cpu.wb-block-entries` | check bench:mi-memset-cached fail | `hw:wb-release`, `hw:wb-drain-target` |
-| `cpu.wb-release` | pending:report-only | `hw:wb-release`, `hw:wb-drain-target` |
-| `cpu.pif-ram-read` | an inference in its reference or note | `hw:cpu-reads` |
+| `cpu.dirty-miss-order` | vendor reference; pending:report-only | `hw:dirty-miss` |
+| `cpu.wb-entries` | vendor reference | `hw:nemu64-console` |
+| `cpu.wb-block-entries` | vendor reference; check bench:mi-memset-cached fail | `hw:wb-release`, `hw:wb-drain-target` |
+| `cpu.wb-release` | vendor reference; pending:report-only | `hw:wb-release`, `hw:wb-drain-target` |
+| `cpu.rcp-register-read` | measured reference | `hw:cpu-reads`, `hw:systembench` |
+| `cpu.pif-ram-read` | derived reference; an inference in its reference or note | `hw:cpu-reads`, `hw:systembench` |
+| `cpu.pi-io-read` | derived reference | `hw:cpu-reads`, `hw:systembench` |
 | `sysad.rdram-write-period` | fit; verify-is-fit; check bench:mi-memset-uncached fail | `hw:memset-vi` |
 | `sysad.rdram-block-write-period` | fit; verify-is-fit; check bench:mi-memset-cached fail | `hw:memset-vi` |
 | `sysad.register-write` | model-choice | `hw:register-write`, `hw:wb-drain-target` |
@@ -259,62 +295,80 @@ Everything a console could have to decide: rows that rest on a fit, a model choi
 | `cpu.wired-write-latency` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console` |
 | `sp.dma-burst` | model-choice; check bench:sp-dma-sweep fail | `hw:sp-dma-direction` |
-| `pi.page-setup` | check pidma:logs, bench:pi-dma-sizes, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small` |
-| `pi.halfword-bias` | check pidma:logs, bench:pi-dma-sizes, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small` |
-| `pi.block-bytes` | check pidma:logs fail | `hw:pi-dma-small` |
-| `pi.block-writeback` | fit; check pidma:logs, bench:pi-dma-sizes-8, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small` |
-| `pi.io-busy` | check systembench:pi-io-w fail | `hw:poll-phase` |
-| `si.io-busy` | check systembench:si-io-w fail | `hw:poll-phase` |
-| `si.write64-rom` | check systembench:si-dma-w-rom consistent-only | `hw:systembench` |
-| `si.read64-base` | fit | `hw:joybus-pads` |
-| `pif.joybus-skip` | fit | `hw:joybus-pads` |
-| `pif.joybus-escape` | fit; an inference in its reference or note | `hw:joybus-pads` |
-| `pif.joybus-handshake` | fit; an inference in its reference or note | `hw:joybus-pads` |
-| `pif.joybus-no-device` | fit; verify-is-fit; an inference in its reference or note; pending:report-only | `hw:joybus-pads` |
-| `ai.fetch-bytes` | pending:report-only | `hw:ai-fetch` |
-| `vi.lines-per-output-line` | check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-fetch-modes` |
+| `rsp.slot` | wiki reference | `hw:nemu64-console` |
+| `pi.page-setup` | wiki reference; check pidma:logs, bench:pi-dma-sizes, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
+| `pi.halfword-bias` | wiki reference; check pidma:logs, bench:pi-dma-sizes, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
+| `pi.block-bytes` | wiki reference; check pidma:logs fail | `hw:pi-dma-small` |
+| `pi.block-writeback` | fit; check pidma:logs, bench:pi-dma-sizes-8, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
+| `pi.io-busy` | measured reference; check systembench:pi-io-w fail | `hw:poll-phase`, `hw:systembench` |
+| `si.io-busy` | measured reference; check systembench:si-io-w fail | `hw:poll-phase`, `hw:systembench` |
+| `si.write64` | measured reference | `hw:systembench` |
+| `si.write64-rom` | measured reference; check systembench:si-dma-w-rom consistent-only | `hw:systembench` |
+| `si.read64-base` | fit | `hw:joybus-pads`, `hw:systembench` |
+| `pif.joybus-skip` | fit | `hw:joybus-pads`, `hw:systembench` |
+| `pif.joybus-escape` | fit; an inference in its reference or note | `hw:joybus-pads`, `hw:systembench` |
+| `pif.joybus-byte` | derived reference | `hw:joybus-pads`, `hw:systembench` |
+| `pif.joybus-handshake` | fit; an inference in its reference or note | `hw:joybus-pads`, `hw:systembench` |
+| `pif.joybus-no-device` | fit; verify-is-fit; an inference in its reference or note; pending:report-only | `hw:joybus-pads`, `hw:systembench` |
+| `ai.fetch-bytes` | vendor reference; pending:report-only | `hw:ai-fetch` |
+| `vi.lines-per-output-line` | vendor reference; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.burst` | model-choice | `hw:vi-cpu-contention`, `hw:vi-fetch-modes` |
+| `vi.fetch-window` | wiki reference | `hw:vi-fetch-position` |
+| `vi.vclk-per-pixel` | wiki reference | `hw:vi-cpu-contention` |
 | `vi.register-sample` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-fetch-modes` |
 | `vi.fetch-overrun` | model-choice; an inference in its reference or note | `hw:vi-unfetched-video` |
 | `vi.unfetched-sample` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-unfetched-video` |
-| `vi.aa-mode-lines` | model-choice; an inference in its reference or note; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:vi-fetch-modes` |
+| `vi.aa-mode-lines` | model-choice; an inference in its reference or note; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.display-window` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
+| `rdp.cmd-fifo-dwords` | wiki reference | `hw:cmd-fifo-depth` |
 | `rdp.cmd-fetch-burst` | model-choice | `hw:cmd-fetch-burst` |
 | `rdp.xbus-fetch-rate` | model-choice | `hw:xbus-fetch-rate` |
+| `rdp.sync-pipe` | wiki reference | `hw:rdp-sync-setter` |
+| `rdp.sync-tile` | wiki reference | `hw:rdp-sync-setter` |
+| `rdp.sync-load` | wiki reference | `hw:rdp-sync-setter` |
 | `rdp.sync-full` | model-choice | `hw:rdp-sync-setter`, `hw:attribute-sync-cost` |
-| `rdp.setter` | an inference in its reference or note | `hw:rdp-sync-setter` |
-| `rdp.primitive-base` | fit; verify-is-fit; an inference in its reference or note | `hw:rdp-rect-base` |
-| `rdp.span-dead-pixels` | fit; verify-is-fit | `hw:rdp-rect-base` |
-| `rdp.span-line-gap` | fit; verify-is-fit | `hw:rdp-rect-base` |
-| `rdp.fill-copy-rate` | pending:report-only | `hw:fill-copy-rate`, `hw:copy-passfail` |
-| `rdp.tmem-load-rate` | pending:report-only | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
-| `rdp.attribute-stage` | an inference in its reference or note | `hw:attribute-stage`, `hw:attribute-sync-cost`, `hw:rdp-hold` |
-| `rdp.atomic-dead` | check rdpstat:1prim fail | `hw:rdp-atomic`, `hw:stale-read`, `hw:atomic-contention`, `hw:clobber` |
+| `rdp.setter` | wiki reference; an inference in its reference or note | `hw:rdp-sync-setter` |
+| `rdp.primitive-base` | fit; verify-is-fit; an inference in its reference or note | `hw:rdp-rect-base`, `hw:thar0-console` |
+| `rdp.span-dead-pixels` | fit; verify-is-fit | `hw:rdp-rect-base`, `hw:thar0-console` |
+| `rdp.span-line-gap` | fit; verify-is-fit | `hw:rdp-rect-base`, `hw:thar0-console` |
+| `rdp.span-1cycle` | vendor reference | `hw:thar0-console` |
+| `rdp.span-2cycle` | vendor reference | `hw:thar0-console` |
+| `rdp.fill-copy-rate` | vendor reference; pending:report-only | `hw:thar0-console`, `hw:fill-copy-rate`, `hw:copy-passfail` |
+| `rdp.tmem-load-rate` | rtl reference; pending:report-only | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
+| `rdp.pipeline-depth` | derived reference | `hw:snapper64`, `hw:attribute-stage` |
+| `rdp.attribute-stage` | wiki reference; an inference in its reference or note | `hw:attribute-stage`, `hw:attribute-sync-cost`, `hw:rdp-hold` |
+| `rdp.atomic-dead` | vendor reference; check rdpstat:1prim fail | `hw:rdp-atomic`, `hw:stale-read`, `hw:atomic-contention`, `hw:clobber` |
+| `rdp.span-ram-half` | measured reference | `hw:snapper64` |
+| `rdp.span-ram-segment` | wiki reference | `hw:snapper64` |
 | `rdp.color-half-pixels-16bpp` | model-choice | `hw:color-half-16bpp` |
 | `rdp.span-read-latency` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console`, `hw:mm-filesel`, `hw:imrd-zcmp-slots` |
 | `rdp.mem-overhead-read` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console` |
 | `rdp.mem-overhead-write` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:thar0-console` |
-| `rdp.span-slots` | model-choice; check thar0:imrd-1cycle fail | `hw:span-width`, `hw:imrd-zcmp-slots` |
+| `rdp.span-slots` | model-choice; check thar0:imrd-1cycle fail | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots` |
 | `rdp.port-lookahead` | fit; verify-is-fit; check thar0:imrd-1cycle fail | `hw:thar0-console` |
-| `rdp.read-gate` | check thar0:imrd-1cycle, thar0:zcmp fail | `hw:thar0-console` |
+| `rdp.read-gate` | vendor reference; check thar0:imrd-1cycle, thar0:zcmp fail | `hw:thar0-console` |
+| `rdp.write-run` | measured reference | `hw:thar0-console`, `hw:snapper64`, `hw:write-granularity`, `hw:write-granularity-pixels` |
+| `rdp.noise-step` | measured reference | `hw:noise-pixel-offset` |
+| `rdp.noise-reset` | measured reference | `hw:noise-reset` |
 | `rdp.noise-pixel-offset` | model-choice | `hw:noise-pixel-offset`, `hw:noise-idle`, `hw:noise-2cycle`, `hw:noise-stall` |
 | `rdp.noise-alpha-dither` | model-choice | `hw:noise-alpha-dither` |
 | `rdp.noise-dither-bits` | model-choice | `hw:noise-dither-bits` |
-| `legacy.clock.vclk-pal` | pending:no-corpus | not-hardware-decidable: on the NTSC target, since the PAL VI clock needs a PAL console, outside the NTSC NUS-001 target (map #1) |
-| `legacy.cpu.nmi-entry` | pending:no-corpus | not-hardware-decidable: NMI comes from the Reset button through the PIF, and no CPU counter can timestamp the press, so the entry latency has no start time to measure from |
-| `legacy.cpu.sysad-frozen-step` | pending:no-corpus | not-hardware-decidable: the emulator's step while the SysAD is frozen, an interpreter quantum with no console counterpart (T6 replaced the frozen SysAD with the SysAD port model) |
-| `legacy.pi.cart-read` | pending:no-corpus | `hw:dom2-read` |
-| `legacy.pif.step-quantum` | pending:no-corpus | not-hardware-decidable: the PIF HLE's boot-handshake poll period, an emulator quantum; the handshake runs in the PIF boot ROM before any kit code |
-| `legacy.pif.boot-timeout` | pending:no-corpus | not-hardware-decidable: by a kit ROM, since measuring it means withholding the CIC boot handshake until the PIF locks the console, and the handshake runs in IPL3 before any kit code; only a modified IPL3 could, which the kit does not ship |
-| `legacy.ai.power-on-rate` | pending:no-corpus | `hw:ai-rate` |
-| `legacy.cart.eeprom-write` | pending:no-corpus | not-hardware-decidable: with a flashcart, since a flashcart emulates the EEPROM in its FPGA with its own timing, and a kit ROM cannot run from a retail cartridge that carries the real chip |
-| `legacy.cart.rtc-tick` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the RTC is a cartridge chip (Animal Forest's); a flashcart's RTC emulation is not the chip, and a kit ROM cannot run from the retail cartridge |
-| `legacy.cart.flash-mx-sector-erase` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the Macronix flash is a cartridge chip; a flashcart emulates it with its own timing, and a kit ROM cannot run from a retail cartridge |
-| `legacy.cart.flash-mx-chip-erase` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the Macronix flash is a cartridge chip; a flashcart emulates it with its own timing, and a kit ROM cannot run from a retail cartridge |
-| `legacy.cart.flash-mx-program` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the Macronix flash is a cartridge chip; a flashcart emulates it with its own timing, and a kit ROM cannot run from a retail cartridge |
-| `legacy.cart.flash-mn63-sector-erase` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the Matsushita flash is a cartridge chip; a flashcart emulates it with its own timing, and a kit ROM cannot run from a retail cartridge |
-| `legacy.cart.flash-mn63-chip-erase` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the Matsushita flash is a cartridge chip; a flashcart emulates it with its own timing, and a kit ROM cannot run from a retail cartridge |
-| `legacy.cart.flash-mn63-program` | pending:no-corpus | not-hardware-decidable: with a flashcart, since the Matsushita flash is a cartridge chip; a flashcart emulates it with its own timing, and a kit ROM cannot run from a retail cartridge |
+| `legacy.clock.vclk-pal` | legacy reference; pending:no-corpus | not-hardware-decidable: on the NTSC target, since the PAL VI clock needs a PAL console, outside the NTSC NUS-001 target (map #1) |
+| `legacy.cpu.interrupt-entry` | legacy reference | `hw:nemu64-cop0hazard-console` |
+| `legacy.cpu.nmi-entry` | legacy reference; pending:no-corpus | not-hardware-decidable: NMI comes from the Reset button through the PIF, and no CPU counter can timestamp the press, so the entry latency has no start time to measure from |
+| `legacy.cpu.sysad-frozen-step` | legacy reference; pending:no-corpus | not-hardware-decidable: the emulator's step while the SysAD is frozen, an interpreter quantum with no console counterpart (T6 replaced the frozen SysAD with the SysAD port model) |
+| `legacy.pi.cart-read` | legacy reference; pending:no-corpus | `hw:dom2-read` |
+| `legacy.pif.step-quantum` | legacy reference; pending:no-corpus | not-hardware-decidable: the PIF HLE's boot-handshake poll period, an emulator quantum; the handshake runs in the PIF boot ROM before any kit code |
+| `legacy.pif.boot-timeout` | legacy reference; pending:no-corpus | not decidable by this kit: the PIF locks the console only when the CIC boot handshake is withheld, and the handshake runs in IPL3 before any kit code. What would decide it: a modified IPL3 that skips the handshake and times the lockup, which the kit does not ship (build.py pins the stock ipl3_compat) |
+| `legacy.ai.power-on-rate` | legacy reference; pending:no-corpus | `hw:ai-rate` |
+| `legacy.cart.eeprom-write` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the EEPROM in its FPGA with its own timing. What would decide it: a retail cartridge carrying the real EEPROM with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
+| `legacy.cart.rtc-tick` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart's RTC emulation is not the chip. What would decide it: the RTC chip itself, on an Animal Forest cartridge or a dev cartridge with the chip, running a timing ROM |
+| `legacy.cart.flash-mx-sector-erase` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Macronix flash with its own timing. What would decide it: a retail cartridge carrying the real Macronix flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
+| `legacy.cart.flash-mx-chip-erase` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Macronix flash with its own timing. What would decide it: a retail cartridge carrying the real Macronix flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
+| `legacy.cart.flash-mx-program` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Macronix flash with its own timing. What would decide it: a retail cartridge carrying the real Macronix flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
+| `legacy.cart.flash-mn63-sector-erase` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Matsushita flash with its own timing. What would decide it: a retail cartridge carrying the real Matsushita flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
+| `legacy.cart.flash-mn63-chip-erase` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Matsushita flash with its own timing. What would decide it: a retail cartridge carrying the real Matsushita flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
+| `legacy.cart.flash-mn63-program` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Matsushita flash with its own timing. What would decide it: a retail cartridge carrying the real Matsushita flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
 | `bench:mi-memset-cached` | result fail | `hw:memset-vi` |
 | `bench:mi-memset-rspdma` | result pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
 | `bench:mi-memset-uncached` | result fail | `hw:memset-vi` |
@@ -380,7 +434,7 @@ Everything a console could have to decide: rows that rest on a fit, a model choi
 | `item:fu.stale-read-32px` | followups T13: The 32 px stale read (rdpstat-1prim's expectation is cen64's extrapolation, not hardware) | `hw:stale-read` |
 | `item:fu.rdp-hold` | followups T15: A held rectangle sees only commands already in the FIFO; a command appended later never reaches it | `hw:rdp-hold` |
 | `item:fu.rect-tail-twice` | followups T15: A rectangle tail drawn twice: with IM_RD blend or Z update a pixel can blend twice or fail its own Z compare | `hw:attribute-stage` |
-| `item:fu.exc-entry` | followups T7c, verify-85: Interrupt entry cost, CTC1-raised FPE cost, fetch-stage and watch exceptions, an isolated ERET, and the extra pclk before a fetch-fault exception | `hw:cpu-exceptions` |
+| `item:fu.exc-entry` | followups T7c, verify-85: Interrupt entry cost, CTC1-raised FPE cost, fetch-stage and watch exceptions, an isolated ERET, and the extra pclk before a fetch-fault exception | `hw:cpu-exceptions`, `hw:cpu-watch` |
 | `item:fu.pi-edge-wait` | verify-85: PiEdgeWait 0.5 rclk and the PI row-hit assumption (code-only constants with no behaviors row) | `hw:pi-dma-small` |
 | `item:fu.pi-row-end` | verify-85: A PI DMA whose first block ends at an RDRAM row end | `hw:pi-row-end` |
 | `item:fu.pidma-offset` | followups not-built / verify-74: The COUNT offset the n64_pi_dma_test log starts at (pidma replay offsets) | `hw:pidma-offset` |
@@ -397,10 +451,10 @@ These run outside the kit's mechanical comparison: an external ROM the procedure
 
 | Question | Kit | Closes |
 |---|---|---|
-| `thar0-console` | ext:thar0 | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` `rdp.read-gate` `rdp.port-lookahead` `thar0:imrd-1cycle` `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` `ri.overhead-rdp` `item:fu.thar0-residuals` `thar0:ac-zbsame-vioff-imrd-1cyc` `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` `thar0:nozb-vioff-imrd-1cyc` `thar0:nozb-visame-noimrd-1cyc` `thar0:nozb-visep-imrd-1cyc` `thar0:separate-bank` `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` `thar0:zcmp` |
-| `systembench` | ext:systembench | `bench:pi-dma-sizes` `bench:si-dma` `bench:pi-io-write` `bench:si-io-write` `item:fu.systembench-binary` `si.write64-rom` `systembench:pi-dma-128` `systembench:pi-dma-8` `systembench:pi-io-w` `systembench:si-dma-w-rom` `systembench:si-io-w` `systembench:u32r-banked` |
+| `thar0-console` | ext:thar0 | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` `rdp.read-gate` `rdp.port-lookahead` `thar0:imrd-1cycle` `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` `ri.overhead-rdp` `item:fu.thar0-residuals` `thar0:ac-zbsame-vioff-imrd-1cyc` `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` `thar0:nozb-vioff-imrd-1cyc` `thar0:nozb-visame-noimrd-1cyc` `thar0:nozb-visep-imrd-1cyc` `thar0:separate-bank` `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` `thar0:zcmp` `ri.arbitration` `rdp.primitive-base` `rdp.span-dead-pixels` `rdp.span-line-gap` `rdp.span-1cycle` `rdp.span-2cycle` `rdp.fill-copy-rate` `rdp.span-slots` `rdp.write-run` |
+| `systembench` | ext:systembench | `bench:pi-dma-sizes` `bench:si-dma` `bench:pi-io-write` `bench:si-io-write` `item:fu.systembench-binary` `si.write64-rom` `systembench:pi-dma-128` `systembench:pi-dma-8` `systembench:pi-io-w` `systembench:si-dma-w-rom` `systembench:si-io-w` `systembench:u32r-banked` `cpu.uncached-read-total` `cpu.uncached-read-dword-total` `cpu.rcp-register-read` `cpu.pif-ram-read` `cpu.pi-io-read` `pi.page-setup` `pi.halfword-bias` `pi.block-writeback` `pi.io-busy` `si.io-busy` `si.write64` `si.read64-base` `pif.joybus-skip` `pif.joybus-escape` `pif.joybus-byte` `pif.joybus-handshake` `pif.joybus-no-device` |
 | `pidma-offset` | ext:pi_dma_test | `pidma:logs` `item:fu.pidma-offset` |
 | `mm-filesel` | ext:mm-bench | `mm:filesel-named` `rdp.span-read-latency` `item:16.mm-bench-scenes` |
-| `snapper64` | ext:snapper64 | `snapper:span-tri` `item:16.span-tri-16bpp` |
+| `snapper64` | ext:snapper64 | `snapper:span-tri` `item:16.span-tri-16bpp` `rdp.pipeline-depth` `rdp.span-ram-half` `rdp.span-ram-segment` `rdp.span-slots` `rdp.write-run` |
 | `vi-mid-field-blank` | none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists | `item:fu.vi-mid-field-blank` `#84` |
 | `vi-unfetched-video` | none: needs a video capture of the VI output, which the kit's ingestion does not read | `vi.unfetched-sample` `vi.fetch-overrun` |

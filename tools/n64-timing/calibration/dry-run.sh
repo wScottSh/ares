@@ -6,7 +6,8 @@
 # left (console byte order) and kit-rdp as that SRAM byte-swapped, both in place of their ISViewer
 # logs; kit-vi with CRLF line ends; kit-noise also as a capture after Reset; kit-dma also as its four-controller run; and kit-cpu as an extra
 # cut log, which ingestion must store and not compare. The external ROMs go in as the fork's
-# Thar0 port output (ext-thar0) and the published snapper64 console dumps (ext-snapper64).
+# Thar0 port output (ext-thar0), the fork's n64-systembench output (ext-systembench) and the published
+# snapper64 console dumps (ext-snapper64).
 # usage: tools/n64-timing/calibration/dry-run.sh MODEL_DIR   (a calibration/run.sh output)
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../host.sh"
@@ -31,6 +32,7 @@ cpu = open(f"{model}/boot-1/kit-cpu.txt", "rb").read()
 open(f"{capture}/kit-cpu.cut.log", "wb").write(cpu[:len(cpu) // 2])
 PY
 cp "$model/ext/thar0.txt" "$capture/ext-thar0.usblog.txt"
+[ -f "$model/ext/systembench.txt" ] && cp "$model/ext/systembench.txt" "$capture/ext-systembench.isviewer.log"
 PYTHONPATH="$n64_repo/tools/n64-timing" "$PYTHON" - "$capture" <<'PY'
 import shutil, sys
 from pathlib import Path

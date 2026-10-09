@@ -6,9 +6,11 @@
 # OUT_DIR defaults to $N64_TIMING_HOME/results/calib. Writes OUT_DIR/roms/{boot-<K>,single}/*.z64
 # (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log),
 # OUT_DIR/pads-4/boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture),
-# OUT_DIR/ext/thar0.txt (the romgen Thar0 port, the fork side of ext:thar0)
+# OUT_DIR/ext/thar0.txt (the romgen Thar0 port, the fork side of ext:thar0),
+# OUT_DIR/ext/systembench.txt (the unpadded n64-systembench ROM from $SYSBENCH_ROMS, default
+# $N64_TIMING_HOME/roms/systembench where standing.sh builds it; the fork side of ext:systembench)
 # and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
-# env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS.
+# env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, SYSBENCH_ROMS.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../host.sh"
 out="${1:-$N64_TIMING_HOME/results/calib}"
@@ -29,6 +31,14 @@ done
 mkdir -p "$out/ext"
 "$PYTHON" "$here/romgen/build.py" --suite thar0 --out "$out/ext" >/dev/null
 (cd "$out/roms" && find . -name '*.z64' | sort | xargs sha256sum; cd "$out/ext" && sha256sum thar0-rdp.z64) > "$out/rom-sha256.txt"
+sysbench="${SYSBENCH_ROMS:-$N64_TIMING_HOME/roms/systembench}/n64-systembench.z64"
+if [ -f "$sysbench" ]; then
+  sha256sum "$sysbench" >> "$out/rom-sha256.txt"
+  "$run" "$sysbench" --frames 2 --wall-seconds 300 > "$out/ext/systembench.txt" 2> "$out/ext/systembench.err" \
+    || echo "systembench run failed (see $out/ext/systembench.err)" >&2
+else
+  echo "no $sysbench (build-systembench.sh): hw:systembench stays missing" >&2
+fi
 "$run" "$out/ext/thar0-rdp.z64" --emulated-seconds 3600 --wall-seconds 3600 > "$out/ext/thar0.txt" 2> "$out/ext/thar0.err" &
 thar0_pid=$!
 printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
