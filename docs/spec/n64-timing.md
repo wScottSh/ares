@@ -77,7 +77,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
-| `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` `bench:uncached-sizes-u32` `bench:uncached-sizes-u32-seq` `bench:uncached-sizes-u32-rand` `bench:uncached-sizes-u32-banked` `systembench:u8r` `systembench:u16r` `systembench:u32r` `systembench:u32r-seq` `systembench:u32r-banked` | **fail**: `nemu64:timing/load-from-uncached-vi-off` pass; `bench:uncached-sizes-u32` pass; `bench:uncached-sizes-u32-seq` pass; `bench:uncached-sizes-u32-rand` pass; `bench:uncached-sizes-u32-banked` fail; `systembench:u8r` pass; `systembench:u16r` pass; `systembench:u32r` pass; `systembench:u32r-seq` pass; `systembench:u32r-banked` fail | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
+| `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` `bench:uncached-sizes-u32` `bench:uncached-sizes-u32-seq` `bench:uncached-sizes-u32-rand` `bench:uncached-sizes-u32-banked` `systembench:u8r` `systembench:u16r` `systembench:u32r` `systembench:u32r-seq` `systembench:u32r-banked` | **fail**: `nemu64:timing/load-from-uncached-vi-off` pass; `bench:uncached-sizes-u32` pass; `bench:uncached-sizes-u32-seq` pass; `bench:uncached-sizes-u32-rand` pass; `bench:uncached-sizes-u32-banked` fail; `systembench:u8r` pass; `systembench:u16r` pass; `systembench:u32r` pass; `systembench:u32r-seq` pass; `systembench:u32r-banked` consistent-only | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
 | `cpu.uncached-read-dword-total` | 35 pclk | derived | n64-systembench @845635c main.c:580 U64R 37 pclk less its 2 pclk harness: its C64R 3 pclk (main.c:575) less the 1 pclk cached hit (nemu64-test, cpu.dcache-hit); research/cpu-memory-costs.md | `bench:uncached-sizes` `systembench:u64r` | **pass**: `bench:uncached-sizes` pass; `systembench:u64r` pass | reads `Timing::Behavior::CpuUncachedReadDwordTotal` | SysAD DwordReadPath (ares/n64/cpu/sysad.hpp) is this less the modeled RI time, as ReadPath is for the word read |
 | `cpu.dfill-total` | 41 pclk | measured | nemu64-test cache.rs:193-286 median, VI off | `nemu64:timing/load-miss-vi-off` | **fail**: `nemu64:timing/load-miss-vi-off` fail | reads `Timing::Behavior::CpuDfillTotal` | assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost. With the VI off the model charges exactly 41 per miss, and load-miss-vi-off, which expects a mean of 42.5, fails: the missing tail of about 1.5 pclk is attributed to RDRAM refresh, which the model runs only while the VI is active (ri.refresh-trigger). That cause is a hypothesis, not measured |
 | `cpu.ifill-stall` | 45 pclk | inferred | NEC Table 11-2 with M from D-fill (cpu-memory-costs.md) | `bench:ifill-isolated` | **pending:report-only**: `bench:ifill-isolated` pending:report-only | reads `Timing::Behavior::CpuIfillStall` | no public hardware value and no asserting check (bench:ifill-isolated only reports, and has no ROM). cpu-memory-costs.md takes Table 11-2's 1-2 PClock term and M = 31-32 independently and gets a 45-47 range; nemu64-test's '~43 extra cycles' is a source comment, not an assertion. Read jointly with the 41 pclk D-fill as one issue slot plus the Table 11-1 stall (40 = 7 + x + M), the two formulas give 13 + x + M = 46 for either x, so the 45 is the range's low corner, not the joint value. M comes from the D-fill measurement, a clean row miss, so the 45 is the uncontended total at a clean row miss: the SysAD path is 45 less the modeled 32 B clean-miss wire and the mean rclk-edge wait, and the RI adds row state and contention |
@@ -259,7 +259,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run systembench/after on 9ed43d6ef).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run sysbench-era/after on 8c652711f).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -360,23 +360,23 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `systembench:joy-empty-56b` | pass | JOY: Empty 56B [64] 21161 RCP cycles (hardware 21170, -9, -0.04%); main.c rule holds in 33 of 33 runs |
 | `systembench:joy-empty-63b` | pass | JOY: Empty 63B [64] 21161 RCP cycles (hardware 21178, -17, -0.08%); main.c rule holds in 33 of 33 runs |
 | `systembench:joy-empty-8b` | pass | JOY: Empty 8B [64] 21161 RCP cycles (hardware 21163, -2, -0.01%); main.c rule holds in 33 of 33 runs |
-| `systembench:pi-dma-1024` | pass | PI DMA [1024] 12185 RCP cycles, 12185..12186 over the boot delays (hardware 12168, +17, +0.14%); main.c rule holds in 33 of 33 runs |
-| `systembench:pi-dma-128` | fail | PI DMA [128] 1582 RCP cycles (hardware 1591, -9, -0.57%); main.c rule holds in 0 of 33 runs |
-| `systembench:pi-dma-65536` | pass | PI DMA [65536] 778349 RCP cycles (hardware 777807, +542, +0.07%); main.c rule holds in 33 of 33 runs |
-| `systembench:pi-dma-8` | fail | PI DMA [8] 190 RCP cycles (hardware 193, -3, -1.55%); main.c rule holds in 0 of 33 runs |
+| `systembench:pi-dma-1024` | pass | PI DMA [1024] 12170 RCP cycles (hardware 12168, +2, +0.02%); main.c rule holds in 33 of 33 runs |
+| `systembench:pi-dma-128` | fail | PI DMA [128] 1580 RCP cycles (hardware 1591, -11, -0.69%); main.c rule holds in 0 of 33 runs |
+| `systembench:pi-dma-65536` | pass | PI DMA [65536] 778364 RCP cycles (hardware 777807, +557, +0.07%); main.c rule holds in 33 of 33 runs |
+| `systembench:pi-dma-8` | fail | PI DMA [8] 187 RCP cycles, 186..187 over the boot delays (hardware 193, -6, -3.11%); main.c rule holds in 0 of 33 runs |
 | `systembench:pi-io-r` | pass | PI I/O R [4] 144 RCP cycles (hardware 144, +0, +0.00%); main.c rule holds in 33 of 33 runs |
 | `systembench:pi-io-w` | fail | PI I/O W [4] 130 RCP cycles (hardware 134, -4, -2.99%); main.c rule holds in 0 of 33 runs |
 | `systembench:rcp-io-r` | pass | RCP I/O R [1] 24 CPU cycles (hardware 24, +0, +0.00%); main.c rule holds in 33 of 33 runs |
 | `systembench:si-dma-w-ram` | pass | SI DMA W RAM [64] 4065 RCP cycles (hardware 4065, +0, +0.00%); main.c rule holds in 33 of 33 runs |
-| `systembench:si-dma-w-rom` | consistent-only | SI DMA W ROM [64] 2140 RCP cycles, 2139..2140 over the boot delays (hardware 2144, -4, -0.19%); main.c rule holds in 1 of 33 runs |
-| `systembench:si-io-r` | pass | SI I/O R [4] 1974 RCP cycles (hardware 1974, +0, +0.00%); main.c rule holds in 33 of 33 runs |
-| `systembench:si-io-w` | fail | SI I/O W [4] 2151 RCP cycles (hardware 2158, -7, -0.32%); main.c rule holds in 0 of 33 runs |
-| `systembench:u16r` | pass | RDRAM U16R [2] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs |
-| `systembench:u32r` | pass | RDRAM U32R [4] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs |
-| `systembench:u32r-banked` | fail | RDRAM U32R banked [16] 133 CPU cycles (hardware 136, -3, -2.21%); main.c rule holds in 0 of 33 runs |
-| `systembench:u32r-seq` | pass | RDRAM U32R seq [16] 133 CPU cycles (hardware 134, -1, -0.75%); main.c rule holds in 33 of 33 runs |
-| `systembench:u64r` | pass | RDRAM U64R [8] 37 CPU cycles (hardware 37, +0, +0.00%); main.c rule holds in 33 of 33 runs |
-| `systembench:u8r` | pass | RDRAM U8R [1] 34 CPU cycles (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs |
+| `systembench:si-dma-w-rom` | consistent-only | SI DMA W ROM [64] 2140 RCP cycles, 2138..2140 over the boot delays (hardware 2144, -4, -0.19%); main.c rule holds in 1 of 33 runs |
+| `systembench:si-io-r` | pass | SI I/O R [4] 1973 RCP cycles (hardware 1974, -1, -0.05%); main.c rule holds in 33 of 33 runs |
+| `systembench:si-io-w` | fail | SI I/O W [4] 2150 RCP cycles, 2150..2151 over the boot delays (hardware 2158, -8, -0.37%); main.c rule holds in 0 of 33 runs |
+| `systembench:u16r` | pass | RDRAM U16R [2] 34 CPU cycles, 34..35 over the boot delays (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs |
+| `systembench:u32r` | pass | RDRAM U32R [4] 34 CPU cycles, 34..35 over the boot delays (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs |
+| `systembench:u32r-banked` | consistent-only | RDRAM U32R banked [16] 134 CPU cycles, 134..135 over the boot delays (hardware 136, -2, -1.47%); main.c rule holds in 32 of 33 runs |
+| `systembench:u32r-seq` | pass | RDRAM U32R seq [16] 134 CPU cycles, 134..135 over the boot delays (hardware 134, +0, +0.00%); main.c rule holds in 33 of 33 runs |
+| `systembench:u64r` | pass | RDRAM U64R [8] 37 CPU cycles, 37..38 over the boot delays (hardware 37, +0, +0.00%); main.c rule holds in 33 of 33 runs |
+| `systembench:u8r` | pass | RDRAM U8R [1] 34 CPU cycles, 34..35 over the boot delays (hardware 34, +0, +0.00%); main.c rule holds in 33 of 33 runs |
 | `thar0:ac-zbsame-vioff-imrd-1cyc` | fail | model 108697 vs console 105999 (105940..106092), +2.55% |
 | `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` | fail | model 170392 vs console 166352 (166182..166520), +2.43% |
 | `thar0:alpha-fail-1cycle` | pass | model 77772 vs console 77772 (77772..77772), +0.00% |
