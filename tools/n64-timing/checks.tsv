@@ -1,5 +1,6 @@
 id	runner	target	selector	expect	source
 bench:*	bench	tools/n64-timing/romgen/suites/bench	rom	file:tools/n64-timing/romgen/suites/bench/expected.tsv	plan R1; each expected row cites its own source
+systembench:*	systembench	tools/n64-timing/systembench	row	file:tools/n64-timing/systembench/rows.tsv	the original rasky/n64-systembench @845635c built by build-systembench.sh and run on the fork; each row is checked against the hardware value compiled into main.c, under main.c's own rule (within the sampling error, or under 0.2 %; main.c:664-669) at the unpadded ROM and every boot delay
 thar0:*	thar0	tools/n64-timing/romgen/suites/thar0	id	file:tools/n64-timing/romgen/suites/thar0/expected.tsv	plan R2; Thar0/RDP-Timing-Tests sample_results.txt hw_data (MIT, a81ced93b28d)
 rdpstat:*	rdpstat	tools/n64-timing/romgen/suites/rdpstat	test	file:tools/n64-timing/romgen/suites/rdpstat/expected.tsv	plan R4; n64-systemtest tests/rdp and repeater64 references (MIT)
 snapper:*	snapper	tools/n64-timing/romgen/suites/snapper	test	file:tools/n64-timing/romgen/suites/snapper/expected.tsv	plan R3; snapper64 console dumps (MIT, e1cd8a61fc43)
@@ -66,8 +67,6 @@ bench:uncached-sizes	bench	uncached-sizes	point=u64 metric=net_pclk	suite	n64-sy
 bench:uncached-sizes-u32	bench	uncached-sizes	point=u32 metric=net_pclk	suite	n64-systembench main.c:579 U32R 34 pclk less its 2 pclk harness = 32; the port subtracts its own (expected.tsv)
 bench:rcp-reg-read	bench	rcp-reg-read	point=vi-control metric=net_pclk	suite	n64-systembench main.c:586 VI_CONTROL read 24 pclk less its 2 pclk harness = 22; the port subtracts its own (expected.tsv)
 bench:pif-ram-read	bench	pif-ram-read	point=pif-ram metric=sb_rclk	suite	n64-systembench main.c:599 SI I/O R, PIF RAM read 1974 rclk
-bench:pi-io-write	bench	pi-io-write	point=rom-word metric=sb_rclk	suite	n64-systembench main.c:595 PI I/O W, write to PI_STATUS idle 134 rclk
-bench:si-dma	bench	si-dma	point=write64 metric=sb_rclk	suite	n64-systembench main.c:597 SI DMA 64 B to PIF RAM, 4065 rclk
 bench:si-dma-read64-1	bench	si-dma	point=read64-1 metric=sb_rclk	suite	n64-systembench main.c:609 SI DMA RD64B with 1 joybus command, 37987 rclk (dma-timing.md SI DMA)
 bench:si-dma-read64-2	bench	si-dma	point=read64-2 metric=sb_rclk	suite	n64-systembench main.c:610 SI DMA RD64B with 2 joybus commands, 57972 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
 bench:si-dma-read64-3	bench	si-dma	point=read64-3 metric=sb_rclk	suite	n64-systembench main.c:611 SI DMA RD64B with 3 joybus commands, 77924 rclk (dma-timing.md SI DMA); report only, the original does not say which ports had a controller (dma-timing.md SI DMA)
@@ -76,8 +75,6 @@ bench:uncached-sizes-u32-seq	bench	uncached-sizes	point=u32-seq metric=net_pclk	
 bench:uncached-sizes-u32-rand	bench	uncached-sizes	point=u32-rand metric=net_pclk	suite	n64-systembench main.c:583 U32R rand, four uncached LWs, 134 pclk less its 2 pclk harness = 132; the port subtracts its own (expected.tsv)
 bench:uncached-sizes-u32-banked	bench	uncached-sizes	point=u32-banked metric=net_pclk	suite	n64-systembench main.c:584 U32R banked, four uncached LWs, 136 pclk less its 2 pclk harness = 134; the port subtracts its own (expected.tsv)
 bench:pi-io-read	bench	pi-io-read	point=rom-word metric=sb_rclk	suite	n64-systembench main.c:594 PI I/O R, a cart word read, 144 rclk
-bench:si-io-write	bench	si-io-write	point=pif-ram metric=sb_rclk	suite	n64-systembench main.c:600 SI I/O W, a PIF RAM word write to SI_STATUS idle, 2158 rclk
-bench:si-dma-write64-rom	bench	si-dma	point=write64-rom metric=sb_rclk	suite	n64-systembench main.c:598 SI DMA W ROM, 64 B to the PIF ROM address, 2144 rclk
 bench:si-dma-empty-0b	bench	si-dma	point=empty-0b metric=sb_rclk	suite	n64-systembench main.c:602 JOY: Empty 0B, SI DMA RD64B with no joybus command, 15030 rclk (dma-timing.md SI DMA)
 bench:si-dma-empty-1b	bench	si-dma	point=empty-1b metric=sb_rclk	suite	n64-systembench main.c:603 JOY: Empty 1B, SI DMA RD64B with no joybus command, 16424 rclk (dma-timing.md SI DMA)
 bench:si-dma-empty-4b	bench	si-dma	point=empty-4b metric=sb_rclk	suite	n64-systembench main.c:604 JOY: Empty 4B, SI DMA RD64B with no joybus command, 20644 rclk (dma-timing.md SI DMA)
