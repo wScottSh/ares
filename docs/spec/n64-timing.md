@@ -270,13 +270,13 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-pidma-fix/standing on f6fab4dc0).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-roms/after2 on 9f1ab593f).
 
 | Check | Result | Detail |
 |---|---|---|
 | `bench:dirty-miss-isolated` | pending:report-only | clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report |
 | `bench:dirty-row-sweep` | pending:report-only | dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points |
-| `bench:ifill-isolated` | pending:report-only |  |
+| `bench:ifill-isolated` | pending:report-only | cold cold_minus_warm_pclk 36..38 median 37.0 mean 37.0 (expected -) report; cold pclk 42 (expected -) report; warm pclk 4..6 median 5.0 mean 5.0 (expected -) report |
 | `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.735..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
 | `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 1.31 (expected 3.8, 3.795..3.805, mean) fail |
 | `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.492..6.501 median 6.498 mean 6.498 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 |
@@ -290,7 +290,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:pif-ram-read` | pass | pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948, consistent, window ±0.2%, mean rule pass) pass |
 | `bench:rcp-reg-read` | pass | vi-control net_pclk 22 (expected 22, 21..23, consistent, window ±4.5%, mean rule pass) pass |
 | `bench:rdp-atomic-sweep` | pass | atomic1-64 per_prim_extra_clk 34.391 (expected 35, 30..40, every) pass |
-| `bench:rdp-loadsz-sweep` | pending:report-only |  |
+| `bench:rdp-loadsz-sweep` | pending:report-only | block-4096-n4 clk_per_byte 0.703 (expected 0.125) report; block-4096-n4 clk_per_byte 0.703 (expected 0.418) report; block-4096-n4 intercept_clk 7.0 (expected 15) report; 1 more report points |
 | `bench:rdp-rectn` | pending:report-only | rect-320x6 clock 2069 (expected 2021) report; duty-320x240 clock 77885 (expected 80287) report |
 | `bench:rdp-setter-sweep` | pass | 4 of 4 points pass |
 | `bench:rdp-sync-sweep` | pass | pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5, every) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5, every) pass; load-256 per_sync_clk 25.051..25.117 median 25.051 mean 25.053 (expected 25, 24.5..25.5, every) pass |
@@ -313,7 +313,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:uncached-sizes-u32-rand` | pass | u32-rand net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
 | `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
-| `bench:wb-fifth-store` | pending:report-only |  |
+| `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 16 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
 | `hw:ai-fetch` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
