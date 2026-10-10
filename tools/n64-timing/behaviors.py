@@ -1242,8 +1242,24 @@ def tally(verdicts, noun):
     return ("fail" if failed else "pass"), f"{len(verdicts) - failed} of {len(verdicts)} {noun} pass"
 
 
+def nemu64_phase_result(base, row):
+    """An averaged test over the VI phases (romgen/suites/nemu64/phase.py): the model's phase mean
+    against the ROM's own average band, its min, max and median at every phase."""
+    selector, _, value = row["selector"].partition(" @")
+    picked = [r for r in tsv_rows(base / "phase.tsv") if r["test"] in selector.split("|") and value in r["value"]]
+    if not picked:
+        return "missing", f"no `{row['selector']}` value in nemu64/{row['target']}/phase.tsv"
+    verdict, detail = tally([r["result"] for r in picked], "values")
+    return verdict, detail + "; " + "; ".join(
+        f"{r['value'].strip()}: phase mean {r['phase_mean']} over {r['phases']} phases (band {r['band_mean']}), "
+        f"mean {r['mean']}, median {r['median']} (band {r['band_median']}) {r['result']}"
+        + (f" on {r['failed']}" if r["failed"] != "-" else "") for r in picked)
+
+
 def nemu64_result(run, row):
     base = run / "nemu64" / row["target"]
+    if (base / "phase.tsv").exists():
+        return nemu64_phase_result(base, row)
     if not (base / "tests.tsv").exists():
         return None
     selector, _, category = row["selector"].partition(" #")

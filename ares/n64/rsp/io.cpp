@@ -119,7 +119,10 @@ auto RSP::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     //SP_STATUS
     if(data.bit( 0) && !data.bit( 1)) {
       //a halted RSP is parked with a stale clock; it resumes at the time of the write that starts it
-      if(status.halted && &thread != static_cast<Thread*>(this) && Thread::clock < thread.clock) Thread::clock = thread.clock;
+      if(status.halted && &thread != static_cast<Thread*>(this) && Thread::clock < thread.clock) {
+        profile.haltedCycles += (thread.clock - Thread::clock).units;
+        Thread::clock = thread.clock;
+      }
       status.halted = 0;
       timeline.wake(Timing::ActorId::RSP);
     }

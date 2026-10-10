@@ -351,9 +351,52 @@ measure_slot_constants:
 """
 
 
-def asm():
-    """step_measure, run_measurement and the two loop templates; nemu64 sets link this in."""
-    out = [STEP_MEASURE_ASM, ".align 4", "measure_loop_plain:"]
+#Phase ROMs only (phases.py). The loop runs after the VI setup and its VSYNC wait, so it moves
+#the measurement's start within the VI line; li is always two words, so every delay keeps one
+#layout. The record line carries no averaged result, so each averaged run prints its own.
+PHASE_DELAY_LOOP = """
+    li $t0, PHASE_DELAY
+sm_phase_delay:
+    addiu $t0, $t0, -1
+    bnez $t0, sm_phase_delay
+    nop
+"""
+
+PHASE_PRINT = "\n".join([
+    "    lw $t0, 48($s0)",
+    "    beqz $t0, sm_phase_printed",
+    "    nop",
+    "    la $a0, sm_phase_tag",
+    "    jal pr_str",
+    "    nop",
+] + [line for offset in (0, 4, 8, 12) for line in (
+    "    la $a0, str_space",
+    "    jal pr_str",
+    "    nop",
+    "    jal pr_dec",
+    f"    lw $a0, {offset}($s1)",
+)] + [
+    "    la $a0, str_nl",
+    "    jal pr_str",
+    "    nop",
+    "    jal pr_flush",
+    "    nop",
+    "sm_phase_printed:",
+    "",
+])
+
+
+def asm(phase=False):
+    """step_measure, run_measurement and the two loop templates; nemu64 sets link this in.
+    phase: the phase-walk variant, which waits PHASE_DELAY loop iterations before measuring and
+    prints "avg <min> <max> <median> <sum>" after each averaged run."""
+    text = STEP_MEASURE_ASM
+    if phase:
+        for label, insert in (("sm_no_vsync:\n", PHASE_DELAY_LOOP), ("sm_finish:\n", PHASE_PRINT)):
+            assert text.count(label) == 1
+            text = text.replace(label, label + insert)
+        text += 'sm_phase_tag: .asciiz "avg"\n'
+    out = [text, ".align 4", "measure_loop_plain:"]
     out += [f"    .word {w}" for w in LOOP_PLAIN]
     out += ["measure_loop_plain_end:", "measure_loop_pre:"]
     out += [f"    .word {w}" for w in LOOP_PRE]
