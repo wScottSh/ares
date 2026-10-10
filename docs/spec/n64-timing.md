@@ -272,7 +272,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-mm-phase/after on ea12d0a97).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-107-fix/standing on 6340b144b).
 
 | Check | Result | Detail |
 |---|---|---|
