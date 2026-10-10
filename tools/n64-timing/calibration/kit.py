@@ -263,7 +263,7 @@ def compare(question, hw, model):
     return "pass", f"{checked} values agree ({question['rule']})"
 
 
-def ext_thar0(root, model_dir, paths):
+def ext_thar0(root, model_dir, paths, points):
     """Thar0/RDP-Timing-Tests on the console (its usblog text) against the fork's run of the romgen port
     (run.sh ext/thar0.txt), per configuration's pruned average BUFBUSY and PIPEBUSY within 1%; the
     detail also counts the configurations within 1% of Thar0's own console (expected.tsv)."""
@@ -299,7 +299,7 @@ def ext_thar0(root, model_dir, paths):
     return "pass", detail
 
 
-def ext_snapper64(root, model_dir, paths):
+def ext_snapper64(root, model_dir, paths, points):
     """snapper64's .test dumps from the console against the published console dumps byte for byte
     (romgen/suites/snapper/compare.py default_corpus), over every dump the snapper sets read."""
     from romgen.suites.snapper import compare as snap, sets as snap_sets
@@ -318,7 +318,7 @@ def ext_snapper64(root, model_dir, paths):
     return "pass", f"{len(wanted)} dumps equal the published console dumps"
 
 
-def ext_systembench(root, model_dir, paths):
+def ext_systembench(root, model_dir, paths, points):
     """n64-systembench's ISViewer text from the console against the fork's run of the same binary, the
     hardware-era build (build-systembench-era.sh, run.sh ext/systembench.txt), every row of systembench/rows.tsv under main.c's own pass rule with the
     fork's reading as the expected value. Pointwise for that binary only: a one to three instruction
@@ -355,15 +355,17 @@ def ext_systembench(root, model_dir, paths):
     return "pass", detail
 
 
-def ext_mm_bench(root, model_dir, paths):
+def ext_mm_bench(root, model_dir, paths, points):
     """The Majora's Mask BENCH ROM's IS-Viewer text from the console against the fork's run of the same
-    pinned per-scene ROMs (run.sh ext/mm-bench/<scene>.txt), under mm_bench.compare's rule."""
-    return mm_bench.compare(paths, model_dir)
+    pinned per-scene ROMs (run.sh ext/mm-bench/<scene>.txt), under mm_bench.compare's rule, for the
+    scenes the question's points name."""
+    return mm_bench.compare(paths, model_dir, points)
 
 
 #External ROMs a capture can hold: kit column `ext:<name>`, the capture file or directory name
 #prefix `ext-<name>`, and the reader that compares it (None: stored, compared by hand per
-#hardware-run.md until a reader exists).
+#hardware-run.md until a reader exists). A reader gets the question's points: mm-bench reads them as
+#scene names, the others need `-`.
 EXT_ROMS = {
     "thar0": ext_thar0,
     "snapper64": ext_snapper64,
@@ -444,7 +446,7 @@ def result_from(root, model_dir, qid):
         if reader is None:
             return "pending:calibration-16", (f"{len(paths)} files of {name} stored in {HARDWARE}; no reader yet, "
                                               f"compare by hand per hardware-run.md")
-        return reader(root, model_dir, paths)
+        return reader(root, model_dir, paths, q["points"].split())
     hw, ids = captures(root)
     boot = q.get("boot", "power-on")
     logs = [log for log in hw.get(kit, []) if log.complete and log.boot == boot]

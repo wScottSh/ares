@@ -1054,6 +1054,9 @@ def calibration_errors(root, rows, checks, found):
         if q["kit"] not in kit.KIT_ROMS and not q["kit"].startswith(("ext:", "none: ")):
             errors.append(f"{where}: kit `{q['kit']}` is not a kit ROM ({', '.join(kit.KIT_ROMS)}), `ext:<rom>` or "
                           f"`none: <reason>`")
+        if q["kit"] == "ext:mm-bench" and not set(q["points"].split()) <= set(kit.mm_bench.SCENES):
+            errors.append(f"{where}: points `{q['points']}` must name the BENCH scenes the question reads "
+                          f"({' '.join(kit.mm_bench.SCENES)})")
         if not kit.RULE.match(q.get("rule", "")) or (q["kit"] in kit.KIT_ROMS) == (q.get("rule") == "-"):
             errors.append(f"{where}: rule `{q.get('rule')}` must be exact or range:abs|rel:<tolerance> for a kit ROM "
                           f"question, `-` otherwise")

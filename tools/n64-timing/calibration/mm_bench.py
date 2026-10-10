@@ -2,14 +2,16 @@
 """The Majora's Mask BENCH ROM (kit.py EXT_ROMS `mm-bench`): its pinned build, its per-scene ROMs, its
 IS-Viewer log, and the console-vs-fork comparison.
 
-The BENCH build of wScottSh/mm-decomp-60fps (tools/bench/README.md there) boots into one Play scene,
-warms up, records per-frame values in RAM, and prints them over IS-Viewer at the end:
+The BENCH build of wScottSh/mm-decomp-60fps (tools/bench/README.md there) boots into one Play scene or the
+file-select screen, warms up, records per-frame values in RAM, and prints them over IS-Viewer at the end:
   BENCH START scene=<i> name=<scene> seed=0x<hex> warmup=<n> frames=<n> emux=<0|1> ...
   BENCH COLUMNS frame vi pre_ticks ... rdram_dp
   BENCH F <frame> <value> ...        one per measured frame
   BENCH END
 `vi` is the VI retraces between game-frame ends (fields per game frame); `rdp_ticks` is gRDPTimeTotal,
-the OSTime ticks from the gfx task's start to the DP full sync. The build prints no DPC_CLOCK.
+the OSTime ticks from the gfx task's start to the DP full sync, so it includes the wait for the RSP.
+`dpc_clock` and `dpc_pipebusy` are the DPC counters (RCP clocks) between game-frame ends.
+A question reads the scenes its points column names (kit.py ext_mm_bench).
 The scene comes from a BenchConfig block (magic BNCH) patched into a copy of the ROM, so each scene
 is its own ROM file with its own sha256. build-mm-bench.sh builds the pinned commit and patches them.
 """
@@ -20,23 +22,27 @@ import sys
 from pathlib import Path
 
 REPO = "wScottSh/mm-decomp-60fps"
-#Merge of mm-decomp-60fps#1 (bench/fork 7ab7fdd1, same tree): tools/bench on the fork, no func_80173B48 pin.
-COMMIT = "707602c67646c6e553a3c50f4ccb74641e8b5dfe"
-BASE_SHA256 = "b58e49e939a70c332745f5619747ff1bc1f0ca44bf6f12917cad1ca013022e52"
+#Head of mm-decomp-60fps bench/filesel (the file-select scenes and DPC counters), while its PR is open.
+COMMIT = "1b3e7f24093128ddfd57efa48c79edc0c1895023"
+BASE_SHA256 = "17b775c5dc05b579eb18690c8336b2888d0bab09cac4d224534daab2aa204be1"
 #bench.py's defaults at COMMIT: 120 warmup frames, 600 measured (BENCH_MAX_FRAMES), seed 0x12345678.
 WARMUP, FRAMES, SEED = 120, 600, 0x12345678
 #sBenchScenes in src/code/bench.c at COMMIT: name -> (index, sha256 of the patched ROM). Scene 0 with the
 #defaults is the base ROM unchanged, so its sha256 is BASE_SHA256.
 SCENES = {
-    "south_clock_town": (0, "b58e49e939a70c332745f5619747ff1bc1f0ca44bf6f12917cad1ca013022e52"),
-    "termina_field": (1, "7d3bb5245f54b0b8c5d5202f6178c37b81cf9a672cb097499727727ffb5d8f6e"),
-    "mountain_village_winter": (2, "6a9cf42962cf4487976c80b8d489af0434634cac823bd3913c7a777a1110fa27"),
-    "great_bay_coast": (3, "5cc5949fbcd459f27af12546692fa24502b78964753a91d616ca651e81df055c"),
+    "south_clock_town": (0, "17b775c5dc05b579eb18690c8336b2888d0bab09cac4d224534daab2aa204be1"),
+    "termina_field": (1, "d6a2daa1993ac7cb8d1b7d5f8ebc1f8971f28ddb88b6b331c4be12d1ab60acfb"),
+    "mountain_village_winter": (2, "b8a1e5f27c34a7c7f0e27d2baf6bd37ac7d1b1418af042f18149b3d562aa9287"),
+    "great_bay_coast": (3, "e29d00662e074e3ef6e2ea5b0aba4ff720291e779e6df3aeb277dd6af724d6b2"),
+    "file_select_empty": (4, "d49246f4608584fcca837eab9c4ac062f6f49ae34db10912aa3700d80b88df16"),
+    "file_select_named": (5, "7a9ac1162988156377937b29649793b020af964a649f04059f9e47aac588a5ce"),
 }
 CONFIG_MAGIC = b"BNCH"
 #The CIC boot code checksums ROM 0x1000..0x101000, so a patch there would not boot on a console.
 CHECKSUMMED_END = 0x101000
 COMPARED = ("vi", "rdp_ticks")
+#Reported beside the verdict, not judged: the RDP's own busy time from the DPC counters.
+REPORTED = ("rdp_ticks", "dpc_pipebusy")
 
 
 def rom_name(scene):
@@ -152,17 +158,18 @@ def model_run(model_dir, scene):
     return runs[-1] if runs else None
 
 
-def compare(paths, model_dir):
-    """(result, detail). Per scene the capture holds: each complete console run's median `vi` and
-    `rdp_ticks` must lie within the fork's per-frame min..max of the same column over its run of the
+def compare(paths, model_dir, scenes):
+    """(result, detail). Per scene of `scenes` the capture holds: each complete console run's median `vi`
+    and `rdp_ticks` must lie within the fork's per-frame min..max of the same column over its run of the
     same ROM. The fork's run is one deterministic boot phase, so its 600-frame range is the spread it
     has; the medians and the mean fields per game frame of both sides are reported."""
     mismatch = rom_mismatch(paths, model_dir)
     if mismatch:
         return "fail", mismatch
-    runs = console_runs(paths)
+    runs = [r for r in console_runs(paths) if r.scene in scenes]
     if not runs:
-        return "pending:calibration-16", f"{len(paths)} files of mm-bench stored, none with a BENCH START line"
+        return "pending:calibration-16", (f"{len(paths)} files of mm-bench stored, no BENCH run of "
+                                          f"{' '.join(scenes)}")
     cut = [r for r in runs if not r.complete]
     if cut:
         return "fail", f"{len(cut)} of {len(runs)} console runs end early (no BENCH END or fewer frames); first {cut[0].scene}"
@@ -182,8 +189,9 @@ def compare(paths, model_dir):
                 off.append(f"{scene} {col} console median {min(meds)}..{max(meds)} outside fork {lo}..{hi}")
         fpf = [sum(r.values("vi")) / len(r.rows) for r in mine]
         notes.append(f"{scene} fields/frame console {min(fpf):.3f}..{max(fpf):.3f} fork "
-                     f"{sum(model.values('vi')) / len(model.rows):.3f}, rdp_ticks median console "
-                     f"{min(statistics.median(r.values('rdp_ticks')) for r in mine)} fork {statistics.median(model.values('rdp_ticks'))}")
+                     f"{sum(model.values('vi')) / len(model.rows):.3f}, " + ", ".join(
+                         f"{col} median console {min(statistics.median(r.values(col)) for r in mine)} fork "
+                         f"{statistics.median(model.values(col))}" for col in REPORTED if col in model.columns))
     detail = f"{len(runs)} console runs of {len({r.scene for r in runs})} scenes; " + "; ".join(notes)
     if off:
         return "fail", f"{len(off)} medians outside the fork's range; first {off[0]}; {detail}"
@@ -202,8 +210,9 @@ def self_test():
     """(cases, failed): the reader's verdicts and ingest's refusal of a capture of other ROMs."""
     import subprocess
     import tempfile
-    pinned = f"{SCENES['south_clock_town'][1]}  {rom_name('south_clock_town')}\n"
+    pinned = "".join(f"{SCENES[s][1]}  {rom_name(s)}\n" for s in ("south_clock_town", "file_select_named"))
     other = f"{'b' * 64}  {rom_name('south_clock_town')}\n"
+    sct, filesel = ("south_clock_town",), ("file_select_empty", "file_select_named")
     cases = [("a capture that agrees", sample(), pinned, "pass", "within the fork's per-frame range"),
              ("a capture whose median rdp_ticks is above the fork's range", sample(rdp=(1800000,) * 4), pinned, "fail",
               "rdp_ticks console median 1800000"),
@@ -211,9 +220,13 @@ def self_test():
               "vi console median 5"),
              ("a cut capture (no BENCH END)", sample(end=False), pinned, "fail", "end early"),
              ("a capture of another ROM (rom-sha256.txt differs)", sample(), other, "fail", f"sha256={'b' * 64}"),
-             ("a capture without rom-sha256.txt", sample(), None, "fail", "no rom-sha256.txt")]
+             ("a capture without rom-sha256.txt", sample(), None, "fail", "no rom-sha256.txt"),
+             ("a capture without the question's scenes", sample(), pinned, "pending:calibration-16",
+              "no BENCH run of file_select_empty file_select_named", filesel),
+             ("a capture with another scene's run, which the question does not read",
+              sample() + sample("file_select_named", vi=(5, 5, 5, 5)), pinned, "pass", "1 console runs of 1 scenes")]
     failed = 0
-    for name, text, shas, want, why in cases:
+    for name, text, shas, want, why, *scenes in cases:
         with tempfile.TemporaryDirectory() as tmp:
             model, capture = Path(tmp) / "model", Path(tmp) / "ext-mm-bench"
             (model / "ext" / "mm-bench").mkdir(parents=True)
@@ -223,7 +236,7 @@ def self_test():
             (capture / "sct.isviewer.log").write_text(text.replace("\n", "\r\n"))
             if shas:
                 (capture / "rom-sha256.txt").write_text(shas)
-            got, detail = compare(sorted(capture.iterdir()), model)
+            got, detail = compare(sorted(capture.iterdir()), model, scenes[0] if scenes else sct)
         ok = got == want and why in detail
         failed += not ok
         print(f"mm_bench: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
