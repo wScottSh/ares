@@ -30,7 +30,8 @@ QUESTION_COLUMNS = ["id", "question", "decides", "kit", "points", "metric", "rul
 #How the console was started before the capture: power-on (a power cycle) or reset (the Reset button
 #after a kit ROM ran). A capture file named *.reset.* is a reset capture.
 BOOTS = ("power-on", "reset")
-RULE = re.compile(r"^(exact|range:(abs|rel):[\d.]+|-)$")
+#One rule for every metric, or one per metric in the metric column's order.
+RULE = re.compile(r"^((exact|range:(abs|rel):[\d.]+)( (exact|range:(abs|rel):[\d.]+))*|-)$")
 
 #Every kit ROM: suite, build.py --set, and whether the fork walks boot delays for it (calib suite).
 KIT_ROMS = {
@@ -225,10 +226,12 @@ def values(logs, pattern, metric):
 
 def compare(question, hw, model):
     """(result, detail): pass or fail, from the console's logs and the model's, under the question's rule."""
-    rule = question["rule"]
+    metrics, rules = question["metric"].split(), question["rule"].split()
+    rule_of = dict(zip(metrics, rules if len(rules) > 1 else rules * len(metrics)))
     bad, lacking, checked = [], [], 0
     for pattern in question["points"].split():
-        for metric in question["metric"].split():
+        for metric in metrics:
+            rule = rule_of[metric]
             want = values(model, pattern, metric)
             got = values(hw, pattern, metric)
             for key in sorted(set(want) - set(got)):
@@ -256,7 +259,7 @@ def compare(question, hw, model):
         return "fail", f"the capture lacks {len(lacking)} of {len(lacking) + checked} model values; first {lacking[0]}"
     if bad:
         return "fail", f"{len(bad)} of {checked} values differ; first {bad[0]}"
-    return "pass", f"{checked} values agree ({rule})"
+    return "pass", f"{checked} values agree ({question['rule']})"
 
 
 def ext_thar0(root, model_dir, paths):
@@ -539,8 +542,13 @@ def self_test():
     compares = [("a full capture that agrees", [Log(log)], "pass"),
                 ("a capture holding one of the two points", [Log(partial)], "fail"),
                 ("a capture 2 pclk off on one point", [Log(off)], "fail")]
-    for name, hw, want in compares:
-        got, detail = compare(q, hw, model)
+    per_metric = {"points": "dcb/*", "metric": "min max", "rule": "exact range:abs:50"}
+    max_off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=24 max=140\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    min_off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=25 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    compares += [("per-metric rules, max 39 off under its abs:50", [Log(max_off)], "pass", per_metric),
+                 ("per-metric rules, min 1 off under its exact", [Log(min_off)], "fail", per_metric)]
+    for name, hw, want, *rule in compares:
+        got, detail = compare(rule[0] if rule else q, hw, model)
         ok = got == want
         failed += not ok
         print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")

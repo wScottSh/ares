@@ -1057,6 +1057,9 @@ def calibration_errors(root, rows, checks, found):
         if not kit.RULE.match(q.get("rule", "")) or (q["kit"] in kit.KIT_ROMS) == (q.get("rule") == "-"):
             errors.append(f"{where}: rule `{q.get('rule')}` must be exact or range:abs|rel:<tolerance> for a kit ROM "
                           f"question, `-` otherwise")
+        elif len(q["rule"].split()) not in (1, len(q["metric"].split())):
+            errors.append(f"{where}: rule `{q['rule']}` names {len(q['rule'].split())} rules for "
+                          f"{len(q['metric'].split())} metrics; give one rule, or one per metric")
         for c in q["closes"].split():
             if c != "-" and c not in ids and not check_defined(c, explicit, suite_files) and not re.match(r"^#\d+$", c):
                 errors.append(f"{where}: closes `{c}`, which is no behavior row, check, item:<id> or #issue")
@@ -1633,6 +1636,9 @@ def self_test(root):
              "not an in-repo kit ROM"),
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
+            ("a question with more rules than metrics", "tools/n64-timing/calibration/questions.tsv",
+             lambda t: t.replace("\texact range:abs:13.5\t", "\texact range:abs:13.5 exact\t", 1),
+             "names 3 rules for 2 metrics; give one rule, or one per metric"),
             ("a model-choice row with neither a question nor a reason", "tools/n64-timing/calibration/undecidable.tsv",
              lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("scheduler.tie-rank\t")),
              "`scheduler.tie-rank` (model-choice) has no hardware question"),
