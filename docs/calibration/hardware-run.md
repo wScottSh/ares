@@ -50,7 +50,7 @@ Allow about two hours for the required runs and three for the recommended ones. 
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
 
-   Each ROM prints a first line `#kit rom=<id> sha=<commit> fmt=1 build=<boot-K or single>`. The commit must be the one you built from. Ingestion records it.
+   Each ROM prints a first line `#kit rom=<id> sha=<commit> rom_sha256=<hash> fmt=1 build=<boot-K or single>`. `sha` is the commit you built from. `rom_sha256` identifies the ROM's bytes: it is the SHA-256 of the `.z64` file with the `sha` and `rom_sha256` values set to zeros (`romgen/hwout.py`), so a later commit that does not change the kit gives the same value. The zeroed fields keep their length, so a `sha` of another length moves the code after it and changes the value. A build from a tree with uncommitted changes under `tools/n64-timing` (`sha` ends in `-dirty`) or from outside a git checkout (`sha=unknown`) does not match a clean build of the same commit. Build the console ROMs and the fork's model run from clean checkouts of the same commit. Ingestion compares each log's `rom_sha256` with the fork's run of the same build and refuses the capture if they differ. Copy the ROMs from the same `run.sh` output that ingestion uses. If you run `run.sh` again after a change to the kit, copy the ROMs again.
 
 ## Set up the flashcart
 
@@ -97,23 +97,23 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 <!-- From a run.sh output: tools/n64-timing/calibration/kit.py --table RUN_DIR -->
 | # | ROM | Runs for | Log | Film it? | Answers |
 |---|---|---|---|---|---|
-| 1 | `kit-cpu` | 0.2 s | 8.9 KB | no | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
-| 2 | `kit-vi` | 3.6 s | 1.8 KB | yes | `vi-first-line`, `count-per-field` |
-| 3 | `kit-dma` | 1.2 s | 15.6 KB | no | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end` |
-| 4 | `kit-hpos` | 0.2 s | 6.6 KB | no | `vi-cpu-contention` |
-| 5 | `kit-rdp` | 0.2 s | 8.2 KB | no | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
-| 6 | `kit-span` | 0.2 s | 9.1 KB | no | `color-half-16bpp`, `span-width` |
-| 7 | `kit-noise` | 0.2 s | 29.5 KB | no | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
-| 8 | `rdpstat-1prim` | 0.2 s | 1.0 KB | yes | `stale-read` |
+| 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
+| 2 | `kit-vi` | 3.6 s | 1.9 KB | yes | `vi-first-line`, `count-per-field` |
+| 3 | `kit-dma` | 1.2 s | 15.7 KB | no | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end` |
+| 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | `vi-cpu-contention` |
+| 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
+| 6 | `kit-span` | 0.2 s | 9.2 KB | no | `color-half-16bpp`, `span-width` |
+| 7 | `kit-noise` | 0.2 s | 29.6 KB | no | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
+| 8 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | `stale-read` |
 | 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | `dpc-sequencing` |
-| 10 | `rdpstat-systemtest` | 0.2 s | 0.8 KB | yes | `systemtest-rdp` |
-| 11 | `rdpstat-unsynced` | 0.2 s | 0.6 KB | yes | `unsynced-attrs` |
+| 10 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | `systemtest-rdp` |
+| 11 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | `unsynced-attrs` |
 | 12 | `nemu64-timing` | 0.8 s | 25.9 KB | no | `nemu64-console` |
-| 13 | `nemu64-cycle` | 0.2 s | 1.4 KB | yes | `nemu64-cycle-console` |
-| 14 | `nemu64-cop0hazard` | 0.2 s | 0.7 KB | yes | `nemu64-cop0hazard-console` |
-| 15 | `kit-tex` | 0.3 s | 16.2 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
-| 16 | `kit-zmem` | 1.3 s | 20.3 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 17 | `kit-cpu2` | 0.2 s | 17.7 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | `nemu64-cycle-console` |
+| 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | `nemu64-cop0hazard-console` |
+| 15 | `kit-tex` | 0.3 s | 16.3 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
+| 16 | `kit-zmem` | 1.3 s | 20.4 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
+| 17 | `kit-cpu2` | 0.2 s | 17.8 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
 | 18 | `kit-bus` | 1.5 s | 10.6 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
 
 For each ROM:
@@ -177,7 +177,7 @@ ingest.py undoes what capture tools add to a log: CRLF or CR line ends (a Window
 
 Use the screen only when neither USB nor SRAM works, and only for the short logs. Each page shows 26 lines for 8 seconds, and the pages loop. A log over about 2 KB is many pages, and one wrong character in the transcription voids it, so for those ROMs fix the USB or SRAM path instead. The table above marks the ROMs short enough to film.
 
-Film one full loop for each ROM. Make sure each frame shows the bottom status line (`<id> page <n>`), so the pages can be ordered. Type the pages into `<rom>.photo.txt`, one screen line per text line, and join the lines that the 38-column screen wrapped.
+Film one full loop for each ROM. Make sure each frame shows the bottom status line (`<id> page <n>`), so the pages can be ordered. Type the pages into `<rom>.photo.txt`, one screen line per text line, and join the lines that the 38-column screen wrapped. Type the 64 characters of `rom_sha256` in the first line exactly: ingestion uses them to identify the ROM.
 
 ## Ingest
 
@@ -189,8 +189,8 @@ tools/n64-timing/calibration/ingest.py capture/ --id console-<date>
 
 The command does these things:
 
-1. It parses every file and prints one line for each log, with the ROM, the record count, and `INCOMPLETE` when the footer is missing or does not match. It prints one line for each external ROM's files.
-2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, `RI_REFRESH`, the boot (power-on or reset) and the controller ports that answered.
+1. It parses every file and prints one line for each log, with the ROM, the record count, and `INCOMPLETE` when the footer is missing or does not match. It prints one line for each external ROM's files. Before it stores anything, it compares each kit log's `rom_sha256` with the fork's log of the same ROM and build. If one differs, the console ran a different ROM from the fork's. The command then stops, stores nothing, and prints both values and the commit that built the console's ROM. To continue, run `run.sh` at that commit and give its output to `--model`, or run the kit again on the console with the current ROMs.
+2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, the ROM's `rom_sha256`, `RI_REFRESH`, the boot (power-on or reset) and the controller ports that answered.
 3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures against the fork's range over its boot delays. A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
 

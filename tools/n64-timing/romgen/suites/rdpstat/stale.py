@@ -3,7 +3,7 @@
 SDK pro-man 12.2.3 (Span Buffer Coherency): without 1PRIMITIVE the RDP prefetches the next
 primitive's span before the previous primitive's pixels are written, so a read-modify-write of
 the same pixels reads stale data; 1PRIMITIVE serializes them (docs/research/1prim-cost.md).
-cen64 jgemu rdp_core.c:4551-4567 states the hardware-adjudicated outcome (PRDP 12:15 and 12:16
+cen64 jgemu 2f8d7bc rdp_core.c:4584-4601 states the hardware-adjudicated outcome (PRDP 12:15 and 12:16
 48-bit checksums, 1- and 2-cycle stacks of four identical one-row rectangles): non-atomic stacks
 of narrow rectangles retire the two-blend value ("repeated blends of one pixel advance only every
 other primitive"), atomic stacks and wide ones (cen64's D <= L, 25 or more 1-cycle pixels) the
