@@ -1,0 +1,69 @@
+diff --git a/ares/n64/rdp/timed.cpp b/ares/n64/rdp/timed.cpp
+index 8ded619a4..e3e5c41f3 100644
+--- a/ares/n64/rdp/timed.cpp
++++ b/ares/n64/rdp/timed.cpp
+@@ -74,6 +74,7 @@ auto RDP::Port::granted(const RiBus::Grant& g) -> void {
+     if(p.write) freeAt = freeAt + scaled(RdpMemOverheadWrite);
+     else freeAt = freeAt + scaled(RdpMemOverheadRead), landAt = freeAt + RdpSpanReadLatency;
+   }
++  if(memLog && this == &self->memory) fprintf(memLog, "G\t%u\t%u\t%u\t%x\t%u\t%lld\t%lld\n", p.image, p.write, p.slot, p.address, p.bytes, (long long)freeAt.units, (long long)landAt.units);
+   flights.push_back({p, landAt});
+   self->changed();
+   timeline.wake(Timing::ActorId::RDP);
+@@ -106,6 +107,7 @@ auto RDP::Port::post(Clock at) -> void {
+     queue.push_front(p);
+   }
+   auto& p = queue.front();
++  if(memLog && this == &self->memory) fprintf(memLog, "P\t%u\t%u\t%u\t%x\t%lld\n", p.image, p.write, p.slot, p.address, (long long)at.units);
+   posted = true;
+   auto r = requester;
+   if(this == &self->memory)
+@@ -191,6 +193,7 @@ auto RDP::step(Clock at) -> void {
+       if(executor.syncFull) {
+         executor.syncFull = false;
+         dpc.syncFullRetired(at);
++        if(memLog) fprintf(memLog, "F\t%lld\n", (long long)at.units);
+         mi.raise(MI::IRQ::DP);
+         if(dpLog) fprintf(dpLog, "I %lld rsp_halted=%u\n", (long long)at.units, (u32)rsp.status.halted);
+       }
+@@ -358,6 +361,7 @@ auto RDP::startSpan(Clock at) -> bool {
+   rdp_render_span_run();
+   engine.renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - host).count();
+   rdp_render_set_windows(nullptr, 0);
++  if(memLog) fprintf(memLog, "S\t%d\t%d\t%d\t%d\t%d\t%lld\t%lld\t%lld\t%lld\n", pipe.prefetched, (int)slot.info.y, (int)slot.info.x0, (int)slot.info.x1, (int)slot.info.cycle_type, (long long)start.units, (long long)slot.ready.units, (long long)pipe.time.units, (long long)at.units);
+   pipe.current = pipe.prefetched;
+   pipe.prefetched = -1;
+   pipe.pixel = 0;
+@@ -432,6 +436,7 @@ auto RDP::endChunk(Clock at) -> void {
+   }
+   if(last) {
+     slot.shaded = true;
++    if(memLog) fprintf(memLog, "E\t%d\t%lld\n", pipe.current, (long long)at.units);
+     pipe.lastSpanEnd = at;
+     pipe.current = -1;
+     retire();
+diff --git a/ares/n64/ri/bus.cpp b/ares/n64/ri/bus.cpp
+index a4f716ae9..a4fba6097 100644
+--- a/ares/n64/ri/bus.cpp
++++ b/ares/n64/ri/bus.cpp
+@@ -78,6 +78,7 @@ auto RI::moveNative(const RiBus::Burst& b, const Client::Native& n) -> void {
+ 
+ auto RI::run(Clock limit) -> void {
+   auto g = channel.decide();
++  if(memLog) fprintf(memLog, "R\t%u\t%u\t%x\t%u\t%lld\t%lld\t%lld\t%u\n", (u32)g.burst.requester, (u32)g.burst.direction, g.burst.address, g.burst.bytes, (long long)g.start.units, (long long)g.dataStart.units, (long long)g.dataEnd.units, (u32)g.rowMiss);
+   if(g.burst.requester == RiBus::Requester::Refresh) return;
+   auto client = clients[(u32)g.burst.requester];
+   if(Client::Native n; client->native(g.burst, n)) {
+diff --git a/ares/n64/ri/ri.hpp b/ares/n64/ri/ri.hpp
+index 789b5e76a..68b94cb52 100644
+--- a/ares/n64/ri/ri.hpp
++++ b/ares/n64/ri/ri.hpp
+@@ -5,6 +5,8 @@
+ //Clients post bursts; at each grant the RI moves the burst's bytes between
+ //rdram.ram and the client's buffer, in grant order, so RDRAM content and RDRAM
+ //timing cannot disagree.
++inline FILE* memLog = [] { auto path = getenv("ARES_MEMLOG"); return path ? fopen(path, "w") : (FILE*)nullptr; }();
++
+ struct RI : Memory::RCP<RI>, Timing::Actor {
+   Node::Object node;
+ 
