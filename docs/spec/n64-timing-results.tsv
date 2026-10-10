@@ -102,6 +102,7 @@ hw:ri-priority-overlap	pending:calibration-16	no complete power-on console captu
 hw:ri-reorder	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:snapper64	pending:calibration-16	no console capture of snapper64 (capture name ext-snapper64*) in docs/calibration/hardware
 hw:sp-dma-direction	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
+hw:sp-dma-rsp	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:span-width	pending:calibration-16	no complete power-on console capture of kit-span in docs/calibration/hardware
 hw:stale-read	pending:calibration-16	no complete power-on console capture of rdpstat-1prim in docs/calibration/hardware
 hw:systembench	pending:calibration-16	no console capture of systembench (capture name ext-systembench*) in docs/calibration/hardware
