@@ -72,6 +72,7 @@ auto RDP::serialize(serializer& s) -> void {
     s(slot.shaded);
     s(slot.queued);
     s(slot.drawn);
+    s(slot.admitted.units);
   }
   s(pipe.time.units);
   s(pipe.wake.units);

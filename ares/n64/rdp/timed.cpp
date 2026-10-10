@@ -369,6 +369,7 @@ auto RDP::admit(Clock at) -> void {
     slot.shaded = false;
     slot.queued = true;
     slot.drawn = 0;
+    slot.admitted = at;
     pipe.count++;
     pipe.admitted++;
     pipe.queued++;
@@ -487,7 +488,7 @@ auto RDP::beginChunk(Clock at) -> bool {
   auto& slot = slots[pipe.current];
   auto& info = slot.info;
   const u32 pixels = spanPixels(info);
-  Clock start = pipe.time, clocks;
+  Clock start = max(pipe.time, slot.admitted), clocks;
   u32 k = pixels - pipe.pixel;
   if(info.cycle_type <= 1) {
     for(u32 image : {(u32)Color, (u32)Depth}) {

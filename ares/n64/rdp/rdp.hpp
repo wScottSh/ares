@@ -128,6 +128,7 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     bool  shaded = false;
     bool  queued = false;  //still in the engine's span queue: its final draw has not run
     u32   drawn = 0;       //pixels its last draw took from landed bytes
+    Clock admitted;        //it starts no earlier (a 1-primitive span's barrier)
   };
 
   //One burst a port has yet to post or has in flight.
