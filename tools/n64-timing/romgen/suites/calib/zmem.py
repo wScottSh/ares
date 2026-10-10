@@ -1,6 +1,7 @@
 """Kit points for the zmem kit ROM (sets.py KITS["kit-zmem"]): the RDP's memory side. Write-back
 granularity under Z rejection (rdp-write-granularity.md), 1PRIMITIVE cost under memory traffic (#19),
-color and Z prefetch slots (#20), the IM_RD clobber test (#17), X-bus command fetch, END appended to a
+color and Z prefetch slots (#20) in 1-cycle and 2-cycle, 2-cycle reads that write nothing (F3,
+green-plan/rdp.md), the IM_RD clobber test (#17), X-bus command fetch, END appended to a
 running list, per-type triangle setup and PIPEBUSY under memory stalls (#16).
 
 Every point runs zmem_k: it clears a color region and writes a Z comb, runs one list, and reports
@@ -152,6 +153,41 @@ def span_slots(suite):
                    [rcp.fill_rectangle(0, 0, w, 8)], 1, region, Comb(0, 8, 0, near=FAR))
 
 
+TWO = rcp.CYC_2CYCLE | rcp.CD_DISABLE | rcp.AD_DISABLE
+WIDTHS_2C = [8, 32, 48, 64, 128, 320]
+#Thar0's alpha-compare configs (configs.py AC_ENABLED): threshold 128 against a rectangle alpha of 96.
+AC_FAIL = [rcp.set_blend_color(rcp.rgba8(0, 0, 0, 128))]
+RED_AC_FAIL = rcp.rgba8(255, 0, 0, 96)
+
+
+def span_slots_2cycle(suite):
+    """span_slots in 2-cycle mode: the same overlap test where a span shades for two clocks per
+    pixel, as in the Thar0 2-cycle configs."""
+    rom = Rom(suite, "zmem-slots2")
+    region = Region(0, 8)
+    for name, mode1 in SLOT_MODES:
+        pro = prologue(mode0=TWO, mode1=mode1)
+        for w in WIDTHS_2C:
+            zpoint(rom, f"{name}-w{w}", [("mode", name), ("w", w), ("h", 8)], pro,
+                   [rcp.fill_rectangle(0, 0, w, 8)], 1, region, Comb(0, 8, 0, near=FAR))
+
+
+def reads_2cycle(suite):
+    """2-cycle rectangles that write nothing: alpha compare and Z (where compared) reject every
+    pixel, as in Thar0's ac-* configs, with no read, color reads, Z reads and both. On Thar0's
+    console a 320 px 2-cycle line with Z reads is slower than one with color reads (F3,
+    green-plan/rdp.md); the width sweep shows how much of each read the shading hides as the span
+    grows past one 64 B half. 8 and 16 lines at 32 and 320 px split a per-line cost from a
+    once-per-rectangle one."""
+    rom = Rom(suite, "zmem-read2")
+    for name, mode1 in SLOT_MODES:
+        pro = prologue(mode0=TWO, mode1=mode1 | rcp.AC_THRESHOLD, prim=RED_AC_FAIL, extra=AC_FAIL)
+        for w in WIDTHS_2C:
+            for h in (8, 16) if w in (32, 320) else (8,):
+                zpoint(rom, f"{name}-w{w}-h{h}", [("mode", name), ("w", w), ("h", h)], pro,
+                       [rcp.fill_rectangle(0, 0, w, h)], 1, Region(0, h), Comb(0, h, 0, near=NEAR))
+
+
 #Triangle words (n64brew Reality Display Processor/Commands, Triangle; the layout snapper/tri.py
 #emits): word 0 = command, lft (bit 55), YL, YM, YH in s11.2; then XL/DxLDy, XH/DxHDy, XM/DxMDy in
 #s15.16. Shade adds 8 dwords and Z 2 dwords after the edges (shade before Z); a flat triangle has
@@ -271,7 +307,7 @@ def pipebusy_stall(suite):
 
 
 BUILDERS = [write_granularity, atomic_traffic, span_slots, triangle_setup, clobber, xbus_fetch, hold,
-            pipebusy_stall]
+            pipebusy_stall, span_slots_2cycle, reads_2cycle]
 
 ASM = f"""
 # args = {{list phys (DMEM offset for the X bus), list bytes, DPC_STATUS X-bus bit, split bytes (0 = whole),

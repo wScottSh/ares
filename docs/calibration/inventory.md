@@ -73,6 +73,8 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `write-granularity-pixels` | Does the Z comb write exactly the pixels that pass? | the count of written pixels after each comb rectangle (1280 for most N, 2560 all pass, 0 all fail), so a console that misreads the comb is caught before its clocks are trusted | kit-zmem | zmem-write-gran/* | count per point | exact | `rdp.write-run` | pending:calibration-16 |
 | `atomic-contention` | Does the ATOMIC_PRIM cost grow with Z and RDRAM traffic (issue #16 from #19)? | N = 16 and 64 overlapping 16x4 rectangles with ATOMIC_PRIM off and on, plain, with Z_CMP+Z_UPD and with IM_RD: the per-primitive cost ((on64 - on16) - (off64 - off16)) / 48. A fixed dead-cycle cost keeps the three equal; the fork's barrier waits for the last write and reads 34.67, 52.46, 48.44 rclk | kit-zmem | zmem-atomic/*-cost | atomic_rclk per point | range:abs:3 | `rdp.atomic-dead` `item:16.atomic` | pending:calibration-16 |
 | `imrd-zcmp-slots` | Do the IM_RD and Z_CMP prefetches share the span's stream slots (issue #16 from #20)? | DPC_CLOCK of 8-line rectangles 8-320 px wide, plain, IM_RD, Z_CMP and both (Z all pass, no update): the extra time with both over the sum of the extras alone (about 1: the streams serialize or share slots; both over the larger extra about 1: they overlap). Fork 0.82-1.10 | kit-zmem | zmem-slots/overlap-* | both_over_sum per point | range:abs:0.05 | `rdp.span-slots` `rdp.span-read-latency` `item:16.imrd-zcmp-slots` | pending:calibration-16 |
+| `imrd-zcmp-slots-2cyc` | Do the IM_RD and Z_CMP prefetches share the span's stream slots in 2-cycle mode, where a span shades for two clocks per pixel (issue #16 from #20; all imrd-zcmp-slots points are 1-cycle)? | DPC_CLOCK of 8-line 2-cycle rectangles 8, 32, 48, 64, 128 and 320 px wide, plain, IM_RD, Z_CMP and both (Z all pass, no update), and the written red pixel count (8 x width). The extra time with both over the sum and over the larger of the extras alone is logged as a report value per width, as in imrd-zcmp-slots. The fork reads 5310, 6099, 5757 and 8040 rclk at 320 px | kit-zmem | zmem-slots2/* | clock count per point | range:abs:36.6 exact | `rdp.span-slots` `rdp.span-read-latency` `rdp.port-lookahead` `item:16.imrd-zcmp-slots` | pending:calibration-16 |
+| `zread-2cyc` | In 2-cycle mode, how much of a span's Z read and color read does the shading hide, and does the Z read cost more than the color read (Thar0 F3: on the console a 320 px 2-cycle line that reads only Z takes 734.7 rclk and one that reads only color 659.0; the fork reads both about 645)? | DPC_CLOCK of 2-cycle rectangles that alpha compare (threshold 128, alpha 96, as Thar0's ac-* configs) and Z (where compared) reject entirely, so nothing is written: 8 lines at 8, 32, 48, 64, 128 and 320 px, and 16 lines at 32 and 320 px, with no read, IM_RD, Z_CMP and both; and the red pixel count (0). The per-line and once-per-rectangle costs from 16 less 8 lines are logged as report values. The fork hides every read behind the shading: 645.25 rclk per 320 px line with a read and 645.38 without, and the reads cost 596 rclk once per rectangle against 146 | kit-zmem | zmem-read2/* | clock count per point | range:abs:38.9 exact | `rdp.span-2cycle` `rdp.span-read-latency` `rdp.span-slots` `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | pending:calibration-16 |
 | `clobber` | With IM_RD on and atomic off, does an overlapping second primitive read stale color, and does a fully rejected one write back a stale block or a masked block (issue #16 from #17)? | two one-row shade triangles in the same span with no sync, 8 and 64 px: whether the blend matches a read of the cleared row (stale) or the first triangle's pixels (coherent), and how many of the first triangle's pixels survive a rejected second one. Fork: stale at both widths (cen64 expects stale only at 8 px), no block write-back | kit-zmem | zmem-clobber/w8 zmem-clobber/w64 | stale_read first_kept block_writeback per point | exact | `item:16.clobber` `rdp.atomic-dead` | pending:calibration-16 |
 | `xbus-fetch-rate` | How fast does the RDP fetch commands over the X bus from DMEM against RDRAM (model-choice 8 B per rclk)? | DPC_CLOCK of 64 and 448 NOPs and 16 and 128 8x1 rectangles, fetched from RDRAM and from DMEM with SET_XBUS: rclk per command from the difference. The fork reads 1.0 (DMEM) and 1.276 (RDRAM) per NOP, and 12.955 per rectangle from both. 1 rclk per NOP is also the execution floor, so a console reading of 1.0 only bounds the X bus at 8 B per rclk or faster | kit-zmem | zmem-xbus/nop-rate zmem-xbus/rect-rate | dmem_rclk_per_cmd rdram_rclk_per_cmd per point | range:abs:0.1 | `rdp.xbus-fetch-rate` `rdpstat:xbus` | pending:calibration-16 |
 | `rdp-hold` | Does an unsynced setter appended to the list after a rectangle is in flight still reach the rectangle (the fork's hold sees only commands already in the FIFO)? | a 320x16 PRIMITIVE-red rectangle, then an unsynced Set Combine selecting ENVIRONMENT green: the green pixel count when the list is submitted whole and when DPC_END is moved past the setter 0-6000 COUNT ticks later. The fork recolors 24 px whole and at 0 ticks, none later | kit-zmem | zmem-hold/* | count per point | exact | `item:fu.rdp-hold` `rdp.attribute-stage` | pending:calibration-16 |
@@ -138,7 +140,7 @@ Rows whose only passing checks are their own fit data. 12 rows, 12 with a kit qu
 | `rdp.primitive-base` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle bench:rdp-rectn hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
 | `rdp.span-dead-pixels` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
 | `rdp.span-line-gap` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
-| `rdp.span-2cycle` | fit only | thar0:alpha-fail-2cycle hw:thar0-console hw:noise-2cycle | `hw:noise-2cycle`, `hw:thar0-console` |
+| `rdp.span-2cycle` | fit only | thar0:alpha-fail-2cycle hw:thar0-console hw:noise-2cycle hw:zread-2cyc | `hw:noise-2cycle`, `hw:thar0-console`, `hw:zread-2cyc` |
 
 ## Model-choice rows
 
@@ -166,7 +168,7 @@ Rows with no published value: the console decides the choice. 24 rows, 19 with a
 | `rdp.xbus-fetch-rate` | pass | rdpstat:xbus hw:xbus-fetch-rate | `hw:xbus-fetch-rate` |
 | `rdp.sync-full` | pass | bench:rdp-sync-sweep hw:rdp-sync-setter hw:attribute-sync-cost | `hw:rdp-sync-setter`, `hw:attribute-sync-cost` |
 | `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp | `hw:color-half-16bpp` |
-| `rdp.span-slots` | fail | thar0:imrd-1cycle snapper:span-tri hw:span-width hw:imrd-zcmp-slots hw:thar0-console ~hw:snapper64 | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots` |
+| `rdp.span-slots` | fail | thar0:imrd-1cycle snapper:span-tri hw:span-width hw:imrd-zcmp-slots hw:thar0-console ~hw:snapper64 hw:imrd-zcmp-slots-2cyc hw:zread-2cyc | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots`, `hw:imrd-zcmp-slots-2cyc`, `hw:zread-2cyc` |
 | `rdp.noise-pixel-offset` | pass | noise:rect-1016 hw:noise-pixel-offset hw:noise-idle hw:noise-2cycle hw:noise-stall | `hw:noise-pixel-offset`, `hw:noise-idle`, `hw:noise-2cycle`, `hw:noise-stall` |
 | `rdp.noise-alpha-dither` | pending:calibration-16 | hw:noise-alpha-dither | `hw:noise-alpha-dither` |
 | `rdp.noise-dither-bits` | pending:calibration-16 | hw:noise-dither-bits | `hw:noise-dither-bits` |
@@ -220,7 +222,7 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 | `thar0:nozb-visame-noimrd-1cyc` | fail | model 77772 vs console 81791.4 (81654..81868), -4.91% | `hw:thar0-console` |
 | `thar0:nozb-visep-imrd-1cyc` | fail | model 181106 vs console 174059 (173832..174382), +4.05% | `hw:thar0-console` |
 | `thar0:separate-bank` | fail | model 225260 vs console 225679 (225518..225802), -0.19% | `hw:thar0-console` |
-| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | fail | model 199078 vs console 208861 (208473..209121), -4.68% | `hw:thar0-console` |
+| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | fail | model 199078 vs console 208861 (208473..209121), -4.68% | `hw:thar0-console`, `hw:zread-2cyc` |
 | `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | fail | model 232657 vs console 245639 (245078..246077), -5.28% | `hw:thar0-console` |
 | `thar0:zcmp` | fail | model 108697 vs console 106000 (105940..106088), +2.54% | `hw:thar0-console` |
 
@@ -343,7 +345,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `rdp.span-dead-pixels` | fit; verify-is-fit | `hw:rdp-rect-base`, `hw:thar0-console` |
 | `rdp.span-line-gap` | fit; verify-is-fit | `hw:rdp-rect-base`, `hw:thar0-console` |
 | `rdp.span-1cycle` | vendor reference | `hw:thar0-console` |
-| `rdp.span-2cycle` | fit; verify-is-fit | `hw:noise-2cycle`, `hw:thar0-console` |
+| `rdp.span-2cycle` | fit; verify-is-fit | `hw:noise-2cycle`, `hw:thar0-console`, `hw:zread-2cyc` |
 | `rdp.fill-copy-rate` | vendor reference; pending:report-only | `hw:thar0-console`, `hw:fill-copy-rate`, `hw:copy-passfail` |
 | `rdp.tmem-load-rate` | rtl reference; pending:report-only | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
 | `rdp.pipeline-depth` | derived reference | `hw:snapper64`, `hw:attribute-stage` |
@@ -352,11 +354,11 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `rdp.span-ram-half` | measured reference | `hw:snapper64` |
 | `rdp.span-ram-segment` | wiki reference | `hw:snapper64` |
 | `rdp.color-half-pixels-16bpp` | model-choice | `hw:color-half-16bpp` |
-| `rdp.span-read-latency` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console`, `hw:mm-filesel`, `hw:imrd-zcmp-slots` |
+| `rdp.span-read-latency` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console`, `hw:mm-filesel`, `hw:imrd-zcmp-slots`, `hw:imrd-zcmp-slots-2cyc`, `hw:zread-2cyc` |
 | `rdp.mem-overhead-read` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console` |
 | `rdp.mem-overhead-write` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:thar0-console` |
-| `rdp.span-slots` | model-choice; check thar0:imrd-1cycle fail | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots` |
-| `rdp.port-lookahead` | fit; verify-is-fit; check thar0:imrd-1cycle fail | `hw:thar0-console` |
+| `rdp.span-slots` | model-choice; check thar0:imrd-1cycle fail | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots`, `hw:imrd-zcmp-slots-2cyc`, `hw:zread-2cyc` |
+| `rdp.port-lookahead` | fit; verify-is-fit; check thar0:imrd-1cycle fail | `hw:thar0-console`, `hw:imrd-zcmp-slots-2cyc` |
 | `rdp.read-gate` | vendor reference; check thar0:imrd-1cycle, thar0:zcmp fail | `hw:thar0-console` |
 | `rdp.write-run` | measured reference | `hw:thar0-console`, `hw:snapper64`, `hw:write-granularity`, `hw:write-granularity-pixels` |
 | `rdp.noise-step` | measured reference | `hw:noise-pixel-offset` |
@@ -401,7 +403,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `thar0:nozb-visame-noimrd-1cyc` | result fail | `hw:thar0-console` |
 | `thar0:nozb-visep-imrd-1cyc` | result fail | `hw:thar0-console` |
 | `thar0:separate-bank` | result fail | `hw:thar0-console` |
-| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | result fail | `hw:thar0-console` |
+| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | result fail | `hw:thar0-console`, `hw:zread-2cyc` |
 | `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | result fail | `hw:thar0-console` |
 | `thar0:zcmp` | result fail | `hw:thar0-console` |
 | `item:16.pipebusy-stall` | issue #16 (from #2, #3): Does DPC_PIPEBUSY count memory-stall cycles, so that CLOCK - PIPE is a stall counter (PIPEBUSY gross vs net)? | `hw:rdp-rect-base`, `hw:pipebusy-stall` |
@@ -430,7 +432,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `item:16.vi-intr-latency` | issue #16 (from #24): VI interrupt sync latency | `hw:vi-intr-latency` |
 | `item:16.span-tri-16bpp` | issue #16 (from #20): snapper64 Span Tri at 16 bpp: is the span half 32 px or 16 positions? | `hw:color-half-16bpp`, `hw:snapper64` |
 | `item:16.span-transaction` | issue #16 (from #20): The span read and write RDRAM transaction unit (16 B vs 64 B), from DPC_CLOCK steps against span width | `hw:span-width` |
-| `item:16.imrd-zcmp-slots` | issue #16 (from #20): Do IM_RD and Z_CMP prefetch share the same stream slots? | `hw:imrd-zcmp-slots` |
+| `item:16.imrd-zcmp-slots` | issue #16 (from #20): Do IM_RD and Z_CMP prefetch share the same stream slots? | `hw:imrd-zcmp-slots`, `hw:imrd-zcmp-slots-2cyc` |
 | `item:16.zcomb-run-count` | issue #16 (from #17): Run-count sweep: a Z comb every N = 1-32 px (rising = per-run bursts, flat = masked burst, a step at 4 = per word), and whether runs are cut at 16 B or 64 B boundaries | `hw:write-granularity` |
 | `item:16.copy-passfail` | issue #16 (from #17): The copy-mode cost of pass/fail/pass/fail words | `hw:copy-passfail`, `hw:copy-passfail-pixels` |
 | `item:16.clobber` | issue #16 (from #17): IM_RD on, atomic off, an overlapping second primitive that fails alpha: stale-block or masked write-back? | `hw:clobber` |
