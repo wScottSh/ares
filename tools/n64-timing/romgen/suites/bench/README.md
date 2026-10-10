@@ -55,6 +55,11 @@ Each point prints one XLOG line:
 | `pi-io-write` | `rom-word` | n64-systembench PI I/O W: one cart word write, then 8-poll rounds of PI_STATUS until idle. Each rep starts the polls at a different phase (below). |
 | `si-io-write` | `pif-ram` | n64-systembench SI I/O W: one PIF RAM word write, then 8-poll rounds of SI_STATUS until idle |
 | `si-dma` | `write64`, `write64-rom`, `read64-{1..4}`, `empty-{0,1,4,8,32,56,63}b`, `accessory` | n64-systembench SI DMA W RAM and ROM, and JOY: a 64 B SI DMA to the PIF RAM or PIF ROM address until SI_STATUS idle, and a 64 B read after a joybus block: n read-buttons commands, an end marker after N zero bytes, or one info command |
+| `ifill-isolated` | `warm`, `cold` | The kit's `ifill` points: one call to a function alone in its 32 B I-cache line, with the line index-invalidated first (`cold`) or not. `cold_minus_warm_pclk` is one instruction-cache fill |
+| `wb-fifth-store` | `sw-<1..8>`, `sw-<1..8>-lw` | The kit's `wb-stores` points: N back-to-back uncached RDRAM stores, alone or followed by one load. `minus_prev_pclk` is the Nth store's cost over N - 1 |
+| `rdp-loadsz-sweep` | `{block,tile}-<8..4096>-n{1,4}` | The kit's `tex-load` points: one or four back-to-back Load Block or Load Tile commands of RGBA16. `per_load_clk` is (4 loads less 1) / 3 of TMEMBUSY; its fit over bytes, `clk_per_byte` and `intercept_clk`, is on the 4096 B `n4` point |
+
+The last three ROMs run the calibration kit's own builders (`suites/calib`) under the bench check's name, so the fork's bench and the console kit measure each quantity one way. They need the kit's kernels (`benches.ROM_ASM`).
 
 The n64-systembench ports run its TIMEIT_MULTI: 50 reps (10 for `write64`, `write64-rom` and `pi-dma-sizes`), and `report.py` takes the mean of all but the lowest and highest rep in its xcycle units, truncated to whole pclk or rclk (`sb_pclk`, `sb_rclk`). Its harness adds about 2 pclk, its cached read (3) less a cached hit (1). The port's harness is its own, so `net_pclk` is `sb_pclk` less the port's overhead, measured the same way from the ROM's `c<bits>` point (`overhead_pclk`). The bands are the original's pass rule: within 1 pclk or 2 rclk, or under 0.2 %.
 
