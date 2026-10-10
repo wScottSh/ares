@@ -42,6 +42,7 @@ auto VI::serialize(serializer& s) -> void {
   s(frame.vend);
   s(frame.y);
   s(frame.row);
+  s(frame.live);
 
   s(fetch.hsync.origin.units);
   s(fetch.hsync.vclks);
