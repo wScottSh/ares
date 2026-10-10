@@ -25,12 +25,13 @@ COMMIT = "707602c67646c6e553a3c50f4ccb74641e8b5dfe"
 BASE_SHA256 = "b58e49e939a70c332745f5619747ff1bc1f0ca44bf6f12917cad1ca013022e52"
 #bench.py's defaults at COMMIT: 120 warmup frames, 600 measured (BENCH_MAX_FRAMES), seed 0x12345678.
 WARMUP, FRAMES, SEED = 120, 600, 0x12345678
-#sBenchScenes in src/code/bench.c at COMMIT: name -> (index, sha256 of the patched ROM).
+#sBenchScenes in src/code/bench.c at COMMIT: name -> (index, sha256 of the patched ROM). Scene 0 with the
+#defaults is the base ROM unchanged, so its sha256 is BASE_SHA256.
 SCENES = {
-    "south_clock_town": (0, ""),
-    "termina_field": (1, ""),
-    "mountain_village_winter": (2, ""),
-    "great_bay_coast": (3, ""),
+    "south_clock_town": (0, "b58e49e939a70c332745f5619747ff1bc1f0ca44bf6f12917cad1ca013022e52"),
+    "termina_field": (1, "7d3bb5245f54b0b8c5d5202f6178c37b81cf9a672cb097499727727ffb5d8f6e"),
+    "mountain_village_winter": (2, "6a9cf42962cf4487976c80b8d489af0434634cac823bd3913c7a777a1110fa27"),
+    "great_bay_coast": (3, "5cc5949fbcd459f27af12546692fa24502b78964753a91d616ca651e81df055c"),
 }
 CONFIG_MAGIC = b"BNCH"
 #The CIC boot code checksums ROM 0x1000..0x101000, so a patch there would not boot on a console.
