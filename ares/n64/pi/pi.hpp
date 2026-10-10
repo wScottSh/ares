@@ -77,6 +77,7 @@ struct PI : Memory::RCP<PI> {
   auto dmaFinished() -> void;
 
   //io.cpp
+  static FILE* const timingLog;
   auto ioRead(u32 address, Thread& thread) -> u32;
   auto ioWrite(u32 address, u32 data, Thread& thread) -> void;
 

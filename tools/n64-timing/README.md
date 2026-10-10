@@ -142,7 +142,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
-tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
+tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard timing-phase]
 ```
 
 `romgen/build.py` generates the three ROMs from the in-repo Python port of nemu64-test, with no external toolchain. See [romgen/README.md](romgen/README.md).
@@ -160,6 +160,8 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 - `values.tsv` (romgen ROMs only) has one row per test value: result, measured cycles, and expected cycles.
 - `categories.tsv` (romgen timing ROM only) assigns each failed value to a root-cause category.
 
+`timing-phase` runs the averaged timing tests at every VI phase of `romgen/suites/nemu64/phases.py` ([romgen README, Phase walk](romgen/README.md#phase-walk)). Its directory holds `phase-<K>/` (`stdout.txt`, `stderr.txt` and `values.tsv` per delay), `runs.txt`, `measurements.tsv` (min, max, median and sum of each averaged value at each delay) and `phase.tsv` (each value's phase ranges, phase mean, bands and verdict).
+
 `results/nemu64/summary.txt` concatenates the set summaries.
 
 ## Behavior table, spec and checks
@@ -171,7 +173,7 @@ python tools/n64-timing/behaviors.py              # writes behaviors.hpp, docs/s
 python tools/n64-timing/behaviors.py --check      # the gen check; the CMake target n64-timing-gen runs it before every build
 python tools/n64-timing/behaviors.py --self-test  # breaks each rule once and checks that the failure names its fix
 python tools/n64-timing/behaviors.py --fix-lines  # moves each legacy row's file:line to its current code site
-python tools/n64-timing/behaviors.py --results RUN_DIR  # writes docs/spec/n64-timing-results.tsv from one standing run
+python tools/n64-timing/behaviors.py --results RUN_DIR [--run-commit SHA]  # writes docs/spec/n64-timing-results.tsv from one standing run
 ```
 
 `--check` fails when:
@@ -197,7 +199,16 @@ A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `f
 
 ### Results
 
-`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that reports a number but asserts none is `pending:report-only`, and a check whose ROM the suite does not build is `pending:no-rom`. `pidma/` holds the pi_dma_test run: standing.sh runs the prebuilt ROM from `$PIDMA_DIR` (default `$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test`, sha256 pinned) for 3000 frames with `ARES_PILOG`, then `pidma-replay.py --calibrated` writes the verdict line to `pidma/summary.txt`. A `harness:` check guards a measuring tool, not a behavior, so it gets a result though no row names it. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
+`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that reports a number but asserts none is `pending:report-only`, and a check whose ROM the suite does not build is `pending:no-rom`. `pidma/` holds the pi_dma_test run: standing.sh runs the prebuilt ROM from `$PIDMA_DIR` (default `$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test`, sha256 pinned) for 3000 frames with `ARES_PILOG`, then `pidma-replay.py` pairs each timed DMA with the ROM's own COUNT reads, writes the verdict line to `pidma/summary.txt` and each point to `pidma/points.tsv`. A `harness:` check guards a measuring tool, not a behavior, so it gets a result though no row names it. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
+
+The first line of `n64-timing-results.tsv` names the commit the run was made on, not the commit of the tree that scores it. standing.sh writes that commit to `run-commit.txt` in `OUT`: the short SHA of the tree it ran from, followed by `dirty` when tracked files had uncommitted changes. `--results` reads the header from that file. A run made before standing.sh wrote `run-commit.txt` has no record, so `--results` stops with an error until you give the commit with `--run-commit SHA`. Do not add `run-commit.txt` to another unit's run directory. Give the commit on the command line instead:
+
+```sh
+python tools/n64-timing/behaviors.py --results ~/n64-timing/results/calib-kit-merge/standing --run-commit 214c46421
+python tools/n64-timing/behaviors.py --results ~/n64-timing/results/u-pidma-fix/standing --run-commit f6fab4dc0
+```
+
+When a run has `run-commit.txt` and `--run-commit` names a different commit, `--results` stops with an error.
 
 ## Clock units
 

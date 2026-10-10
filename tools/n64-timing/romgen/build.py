@@ -71,7 +71,7 @@ def git_sha():
 def build_payload(set_def, hw=None):
     """hw: None, or (rom id, git sha, build variant) for the console variant."""
     suite = Suite(set_def.rom_name, set_def.category, set_def.banner_flags)
-    extra = list(set_def.asm)
+    extra = list(getattr(set_def, "hw_asm", None) or set_def.asm) if hw else list(set_def.asm)
     base_text = runtime_text(extra, set_def.consts)
     if hw:
         base_text = hwout.transform(base_text) + hwout.asm(*hw)

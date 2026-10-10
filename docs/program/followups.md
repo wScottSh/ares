@@ -81,7 +81,7 @@
 - --check "read" test is textual: a comment `//Timing::Behavior::X` counts as a read; pointer resolves if symbol appears anywhere in file. Strip comments / match real uses.
 - ri.refresh-waits-for-burst static_assert guards nothing (flag no one reads).
 - mm:file-select report source names neither a published value nor "none".
-- pidma: log the ROM's COUNT reads in ARES_PILOG to pin the offset; until then a SUCCESS run can't pass the every-offset rule.
+- pidma: log the ROM's COUNT reads in ARES_PILOG to pin the offset. Done in U-PIDMA-EXACT: the replay pairs each DMA with the ROM's own COUNT reads, and hw:pidma-offset is retired.
 - Build pi.io-busy (134 rclk), cpu.pif-ram-read (1974), cpu.uncached-read-dword-total (37) from n64-systembench; each needs its bench ROM (plus si-dma ROM closes 5 checks).
 
 ## From sysbench / verify-75 (PR #75)
@@ -111,7 +111,7 @@
 - (verify-83) SUPERSEDES the refit follow-up above: do NOT refit pi.io-busy / si.io-busy / si.write64-rom / pi.block-writeback to the fork's original-binary readings. A 1-3 instruction change in the poll step moves those rows by up to ~10 units, so the pointwise check is valid for this binary only. Settle with a hardware-era build (50f5066 + GCC 12) or the #16 run on the same binary. Wording fix: four notes say "the hardware's poll phase" -> "this binary's phase, codegen-sensitive, about ±10 rclk"; README "instruction sequence very likely the same" unverified; old TIMEIT_MULTI averaging explains C16R-C64R and U32R seq/rand (measured), superseding the "inferred parity" note.
 
 ## From calib-kit-fix (PR #85)
-- Fork never raises the Watch exception (kit-cpu2 watch points fire 0 times): not filed yet.
+- Fork never raises the Watch exception (kit-cpu2 watch points fire 0 times): fixed by #87 (U-87).
 - #86 RDP hazard tail rejecting pixels keeps first-pass pixels (fork 0 vs n64brew 27).
 - vi-first-line first_ticks ±24 tolerance not investigated; sp-dma-direction 8-128 B needs an RSP-timed point.
 - External readers: systembench (now landed, #83) and pi_dma_test / MM bench still compared by hand.

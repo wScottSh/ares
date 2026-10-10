@@ -291,6 +291,7 @@ auto CPU::DMFC0(r64& rt, u8 rd) -> void {
   }
   if(rd == 9) flushCount();
   rt.u64 = getControlRegister(rd);
+  if(rd == 9 && PI::timingLog) fprintf(PI::timingLog, "C %u %lld\n", (u32)rt.u64, (long long)Thread::clock.units);
 }
 
 auto CPU::DMTC0(cr64& rt, u8 rd) -> void {
@@ -322,6 +323,7 @@ auto CPU::MFC0(r64& rt, u8 rd) -> void {
   }
   if(rd == 9) flushCount();
   rt.u64 = s32(getControlRegister(rd));
+  if(rd == 9 && PI::timingLog) fprintf(PI::timingLog, "C %u %lld\n", (u32)rt.u64, (long long)Thread::clock.units);
 }
 
 auto CPU::MTC0(cr64& rt, u8 rd) -> void {

@@ -594,7 +594,200 @@ def wb_points():
     return out
 
 
-POINTS = base_points() + exception_points() + ldi_points() + fpu_points() + cache_points() + wb_points()
+COUNTW_SLOTS = range(1, 7)
+
+
+def countw_kernel(name, slot):
+    """v0 = the least, RES[2] = the greatest of COUNT read by an MFC0 `slot` instructions after an
+    MTC0 COUNT, less the value written, over eight shots entered 0..7 pclk apart (a ninth, cold,
+    is dropped). The value written is COUNT + 16, so COUNT keeps running near its own time."""
+    return f"""
+{name}:
+    move $t7, $ra
+    li $v0, -1
+    move $v1, $zero
+    li $a2, 9
+{name}_shot:
+    andi $t6, $a2, 7
+    sll $t6, $t6, 2
+    la $t9, {name}_sled
+    addu $t9, $t9, $t6
+    mfc0 $t1, $count
+    addiu $t1, $t1, 16
+    jr $t9
+    nop
+{name}_sled:
+{SLED7}
+    mtc0 $t1, $count
+{nops(slot - 1)}
+    mfc0 $t2, $count
+    subu $t2, $t2, $t1
+    addiu $t6, $a2, -9
+    beqz $t6, {name}_next
+    sltu $t6, $t2, $v0
+    beqz $t6, {name}_a
+    nop
+    move $v0, $t2
+{name}_a:
+    sltu $t6, $v1, $t2
+    beqz $t6, {name}_next
+    nop
+    move $v1, $t2
+{name}_next:
+    addiu $a2, $a2, -1
+    bnez $a2, {name}_shot
+    nop
+    sw $v1, 0($a1)
+    move $ra, $t7
+    jr $ra
+    nop
+"""
+
+
+def countw_points():
+    """cpu.count-write-hold apart from nemu64-test's CountHazards: one MFC0 per shot, at slot 1..6."""
+    return [Point("countw", f"slot-{k}", ident("countw", f"slot-{k}"), countw_kernel(ident("countw", f"slot-{k}"), k),
+                  (("slot", k),), reps=2, extra=("dmax",)) for k in COUNTW_SLOTS]
+
+
+SMC_OLD = 0x34021111   # ori $v0, $zero, 0x1111
+SMC_NEW = 0x34022222   # ori $v0, $zero, 0x2222
+SMC_AHEAD = range(1, 5)
+
+
+def smc_kernel(name, ahead):
+    """v0 = 1 when the word `ahead` instructions after an uncached SW of it runs as the stored word.
+    The SW sits in a 32 B I-cache line warmed by a first call, and the word starts the next line,
+    invalidated before the measured call, so only that line's I-fill can see the store."""
+    line = ["    nop"] * 8
+    line[8 - ahead] = "    sw $t3, 0($t2)"
+    return f"""
+{name}:
+    move $t7, $ra
+    la $t0, {name}_word
+    lui $t2, 0x2000
+    or $t2, $t0, $t2
+    li $t3, {SMC_NEW:#x}
+    li $t4, {SMC_OLD:#x}
+    sw $t4, 0($t2)
+    lw $t5, 0($t2)
+    cache 0x10, 0($t0)
+    jal {name}_line
+    nop
+    sw $t4, 0($t2)
+    lw $t5, 0($t2)
+    cache 0x10, 0($t0)
+    jal {name}_line
+    nop
+    xori $v0, $v0, {SMC_NEW & 0xFFFF:#x}
+    sltiu $v0, $v0, 1
+    sw $t4, 0($t2)
+    lw $t5, 0($t2)
+    cache 0x10, 0($t0)
+    move $ra, $t7
+    jr $ra
+    nop
+.align 32
+{name}_line:
+""" + "\n".join(line) + f"""
+{name}_word:
+    .word {SMC_OLD:#x}
+    jr $ra
+    nop
+"""
+
+
+def smc_points():
+    """cpu.fetch-ahead-slots apart from nemu64-test's SMC cases: a store 1..4 slots before a pinned line boundary."""
+    return [Point("smc", f"ahead-{k}", ident("smc", f"ahead-{k}"), smc_kernel(ident("smc", f"ahead-{k}"), k),
+                  (("ahead", k),), reps=2, flags=VI_OFF, extra=()) for k in SMC_AHEAD]
+
+
+CE_NEXT = [
+    # point, the instruction after the CTC1; its opcode bits 27-26 are the CE the row's rule predicts
+    ("special", "    sll $zero, $zero, 0"),      # SPECIAL 000000: 0
+    ("addiu", "    addiu $zero, $zero, 0"),      # 001001: 1
+    ("slti", "    slti $zero, $zero, 0"),        # 001010: 2
+    ("sltiu", "    sltiu $zero, $zero, 0"),      # 001011: 3
+    ("mfc0", "    mfc0 $zero, $count"),          # COP0 010000: 0
+]
+CE_EXTRA = ("exc", "epc_off", "fired")
+
+
+def ctc1ce_kernel(name, nxt):
+    """v0 = Cause.CE of the FPE a CTC1 raises; RES[2] = Cause.ExcCode, RES[3] = EPC less the CTC1's
+    address, RES[4] = 1 when the exception was taken."""
+    return f"""
+{name}:
+    move $t7, $ra
+    jal cpu2_fit3_vec_on
+    nop
+    li $t1, {FS | 1 << 16 | 1 << 11:#x}
+    la $k0, {name}_cont
+    move $k1, $zero
+    move $t5, $zero
+    la $t4, {name}_ctc1
+{name}_ctc1:
+    ctc1 $t1, 31
+{nxt}
+    nop
+    nop
+{name}_cont:
+{FS_CLEAR}
+    srl $v0, $k1, 28
+    andi $v0, $v0, 3
+    srl $t0, $k1, 2
+    andi $t0, $t0, 31
+    sw $t0, 0($a1)
+    subu $t0, $t5, $t4
+    sw $t0, 4($a1)
+    sltu $t0, $zero, $k1
+    sw $t0, 8($a1)
+{FPU_RESTORE}
+    move $k0, $zero
+    move $k1, $zero
+    jal cpu2_vec_off
+    nop
+    move $ra, $t7
+    jr $ra
+    nop
+"""
+
+
+def ctc1ce_points():
+    """cpu.ctc1-fpe-ce apart from nemu64-test's CTC1 cases (MFC1, MFC2 next): a non-coprocessor or COP0 instruction next."""
+    return [Point("ctc1ce", point, ident("ctc1ce", point), ctc1ce_kernel(ident("ctc1ce", point), nxt),
+                  (("next", point),), reps=2, extra=CE_EXTRA) for point, nxt in CE_NEXT]
+
+
+FIT3_HARNESS = """
+# cpu2_vec_on, then the 0x180 vector's stub stamps Cause into $k1 and EPC into $t5.
+cpu2_fit3_vec_on:
+    move $t4, $ra
+    jal cpu2_vec_on
+    nop
+    move $ra, $t4
+    li $t0, 0xA0000000
+    la $t1, cpu2_fit3_stub
+    lw $t3, 0($t1)
+    sw $t3, 0x180($t0)
+    lw $t3, 4($t1)
+    sw $t3, 0x184($t0)
+    lw $t3, 8($t1)
+    b cpu2_vec_flush
+    sw $t3, 0x188($t0)
+cpu2_fit3_stub:
+    mfc0 $k1, $cause
+    j cpu2_fit3_vec
+    nop
+cpu2_fit3_vec:
+    dmfc0 $t5, $epc
+    j cpu2_vec
+    nop
+"""
+
+POINTS = (base_points() + exception_points() + ldi_points() + fpu_points() + cache_points() + wb_points()
+          + countw_points() + smc_points() + ctc1ce_points())
 
 
 def builder(rom_name):
@@ -609,4 +802,4 @@ def builder(rom_name):
 
 
 BUILDERS = [builder(r) for r in dict.fromkeys(p.rom for p in POINTS)]
-ASM = "\n".join([HARNESS, fpu_operands()] + list({p.kernel: p.text for p in POINTS}.values()))
+ASM = "\n".join([HARNESS, fpu_operands()] + list({p.kernel: p.text for p in POINTS}.values()) + [FIT3_HARNESS])

@@ -6,6 +6,11 @@ auto CPU::ProfileSlot::global() -> ProfileSlot
   p.cpu = ::ares::Nintendo64::cpu.profile;
   p.rsp.cycles = ::ares::Nintendo64::rsp.profile.cycles;
   p.rsp.haltedCycles = ::ares::Nintendo64::rsp.profile.haltedCycles;
+  //a halted RSP's clock is stale until it resumes, so the span still open at the read is charged here
+  auto& rsp = ::ares::Nintendo64::rsp;
+  if(rsp.status.halted && rsp.Thread::clock < ::ares::Nintendo64::cpu.Thread::clock) {
+    p.rsp.haltedCycles += (::ares::Nintendo64::cpu.Thread::clock - rsp.Thread::clock).units;
+  }
   p.rdram = ::ares::Nintendo64::rdram.profile;
   for(u32 r : range((u32)RiBus::Requester::Count)) p.ri[r] = ::ares::Nintendo64::ri.channel.counters[r];
   return p;

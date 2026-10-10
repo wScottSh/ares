@@ -4,6 +4,7 @@ Test order and values follow src/tests/testlist.rs; each port_* function is the 
 Test::run() translated into runtime steps and checks.
 """
 from fractions import Fraction
+from functools import cache
 
 from ...nemu import (Assembler, GPR, ExceptionTimingMode, FCSR, FCSRFlags, Status,
                      _round_to_ieee)
@@ -167,6 +168,7 @@ def f32_of(x):
     return sign * Fraction(0x800000 | frac, 1 << 23) * Fraction(2) ** (exp - 127)
 
 
+@cache
 def average_sum_bounds(expected, epsilon, iterations):
     """The integer sums whose f32 average (sum as f32 / iterations as f32) satisfies the Rust
     soft_assert_eq_with_epsilon(epsilon, average, expected) in f32 arithmetic."""
@@ -321,6 +323,19 @@ def port_rsp_sll(suite):
     return [Value("", [Step("step_rsp_sll", [], 0)], [eq(0, 1, "Expected cycle count")])]
 
 
+AVERAGED = [
+    ("Timing: Load Miss (with VI enabled)", port_load_miss_vi_enabled),
+    ("Timing: Load Miss (with VI disabled)", port_load_miss_vi_disabled),
+    ("Timing: Load from uncached (with VI enabled)", port_uncached_vi_enabled),
+    ("Timing: Load from uncached (with VI disabled)", port_uncached_vi_disabled),
+]
+
+
+def build_averaged(suite):
+    """The four averaged tests alone, in testlist.rs order: the phase ROMs (phases.py)."""
+    suite.tests += [Test(name, port(suite)) for name, port in AVERAGED]
+
+
 def build(suite):
     tables._FNADDR.update(instant_return_function=suite.symbols["instant_return_function"],
                           one_nop_then_return_function=suite.symbols["one_nop_then_return_function"])
@@ -346,10 +361,9 @@ def build(suite):
         suite.tests.append(measured(struct))
     suite.tests += [
         Test("Timing: Data cache Size", port_cache_size(suite)),
-        Test("Timing: Load Miss (with VI enabled)", port_load_miss_vi_enabled(suite)),
-        Test("Timing: Load Miss (with VI disabled)", port_load_miss_vi_disabled(suite)),
-        Test("Timing: Load from uncached (with VI enabled)", port_uncached_vi_enabled(suite)),
-        Test("Timing: Load from uncached (with VI disabled)", port_uncached_vi_disabled(suite)),
+    ]
+    build_averaged(suite)
+    suite.tests += [
         Test("RSP Timing: Clock CPU vs RDP", port_rsp_clock_vs_cpu(suite)),
         Test("RSP Timing: Clock must be readonly", port_rsp_clock_write(suite)),
         Test("RSP Timing: Clock is just 24 bit", port_rsp_clock_masked(suite)),

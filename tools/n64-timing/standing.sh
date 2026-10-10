@@ -13,6 +13,9 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/host.sh"
 out="$(mkdir -p "$1" && cd "$1" && pwd)"
 mm="$2"
+commit="$(git -C "$n64_repo" rev-parse --short HEAD)"
+[ -n "$(git -C "$n64_repo" status --porcelain --untracked-files=no)" ] && commit="$commit dirty"
+echo "$commit" > "$out/run-commit.txt"
 export N64_TIMING_HOME N64_BUILD_DIR="$n64_build" N64_RUN="${N64_RUN:-$(n64_target n64-run)}"
 roms="$N64_TIMING_HOME/roms"
 results="$N64_TIMING_HOME/results"
@@ -48,8 +51,8 @@ if echo "1d2c999c42baa57b9c16a21c0bd75b984901ee615ab30482fdec6ed7fcf156cb  $pidm
     | sha256sum -c - > "$out/pidma/sha256.txt" 2>&1; then
   ARES_PILOG="$out/pidma/pi.log" "$N64_RUN" "$pidma/pi_dma_test.z64" --frames 3000 \
     > "$out/pidma/stdout.txt" 2> "$out/pidma/stderr.txt"
-  "$PYTHON" "$here/pidma-replay.py" "$out/pidma/pi.log" "$pidma/data" --stdout "$out/pidma/stdout.txt" --calibrated \
-    > "$out/pidma/summary.txt" 2>&1
+  "$PYTHON" "$here/pidma-replay.py" "$out/pidma/pi.log" "$pidma/data" --stdout "$out/pidma/stdout.txt" \
+    --table "$out/pidma/points.tsv" > "$out/pidma/summary.txt" 2>&1
   rm -f "$out/pidma/pi.log"
 fi
 for suite in nemu64 bench systembench systembench-845635c rdpstat snapper noise thar0; do
@@ -60,7 +63,8 @@ done
 (cd "$n64_repo" && "$PYTHON" tools/n64-timing/behaviors.py --check && "$PYTHON" tools/n64-timing/behaviors.py --self-test \
   && "$PYTHON" tools/n64-timing/lint-literals.py && "$PYTHON" tools/n64-timing/pidma-replay.py --self-test \
   && "$PYTHON" tools/n64-timing/systembench/report.py --self-test \
-  && "$PYTHON" tools/n64-timing/calibration/kit.py --self-test) > "$out/behaviors.txt" 2>&1
+  && "$PYTHON" tools/n64-timing/calibration/kit.py --self-test \
+  && (cd tools/n64-timing && "$PYTHON" -m romgen.suites.nemu64.phase --self-test)) > "$out/behaviors.txt" 2>&1
 "$here/calibration/run.sh" "$out/calib" > "$out/calib.txt" 2>&1 || echo "calibration/run.sh failed (see $out/calib.txt)" >&2
 for set in timing cycle cop0hazard; do
   DET_OUT="$out/det-nemu64-$set" "$here/determinism.sh" "$roms/nemu64-$set.z64" > "$out/det-nemu64-$set.txt" 2>&1
