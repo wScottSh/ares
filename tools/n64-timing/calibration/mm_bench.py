@@ -131,7 +131,7 @@ def rom_mismatch(paths, model_dir):
     if not shas:
         return "the capture has no rom-sha256.txt for the BENCH ROMs it ran (hardware-run.md, Majora's Mask bench)"
     for run in console_runs(paths):
-        name = rom_name(run.scene) if run.scene in SCENES else f"mm-bench-{run.scene}.z64"
+        name = rom_name(run.scene)
         pin = SCENES.get(run.scene, (None, None))[1]
         if not (shas.get(name) == pin == model_shas.get(name)):
             return (f"mm-bench {run.scene}: the console ran {name} sha256={shas.get(name, 'none')}, the fork ran "
