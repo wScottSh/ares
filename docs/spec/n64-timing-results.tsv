@@ -1,4 +1,4 @@
-# standing run u-pidma-fix/standing on f6fab4dc0
+# standing run u-86/after on 2af1d213d
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -161,6 +161,7 @@ rdpstat:1prim	pass	2 of 2 tests pass
 rdpstat:1prim-32px	pending:report-only	0 of 2 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px
 rdpstat:nosync-1cycle	pass	20 of 20 tests pass
 rdpstat:unsynced-combiner	pass	2 of 2 tests pass
+rdpstat:unsynced-zmode	pass	4 of 4 tests pass
 rdpstat:xbus	pass	3 of 3 tests pass
 snapper:rect-nosync	pass	RDP Rect No-Sync-Env 1C: 20/20 match; RDP Rect No-Sync-Env 2C: 40/40 match; RDP Rect No-Sync-Fill: 20/20 match
 snapper:span-tri	pass	RDP Test-Mode - Span Tri: 432/432 match
