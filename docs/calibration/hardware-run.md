@@ -112,7 +112,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | `nemu64-cycle-console` |
 | 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | `nemu64-cop0hazard-console` |
 | 15 | `kit-tex` | 0.3 s | 16.3 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
-| 16 | `kit-zmem` | 1.3 s | 20.4 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
+| 16 | `kit-zmem` | 1.8 s | 29.2 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
 | 17 | `kit-cpu2` | 0.2 s | 17.8 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
 | 18 | `kit-bus` | 1.5 s | 10.6 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
 
