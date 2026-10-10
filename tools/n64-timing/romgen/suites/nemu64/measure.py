@@ -405,3 +405,90 @@ def cycles_checks(res, expected, exception_mode):
         Check(rt.CHK_RANGE_REL, res + 1, res, 1, msg=msg),
         Check(rt.CHK_SUM_DEC, res, res + 1, 2 if just_fire else 5, expected, msg="Measured cycles"),
     ]
+
+
+#Console builds only (sets.py hw_asm): an emulator build keeps its bytes and layout. After each
+#averaged run, prints the run's nonzero D_HIST buckets as "#hist <test>.<value> <cycles>:<count>,..."
+#(32 per line) before the value's @ record, so a console log holds the distribution, not only
+#min, max, median and sum (green-plan bus.md Q2: a refresh tail and a latency-state tail differ
+#in shape, not in mean).
+HIST_DUMP = r"""sm_median_found:
+    sw $t2, 8($s1)
+    la $s2, DATA_BASE + D_HIST
+    move $s3, $zero
+    move $s4, $zero
+sm_hist_loop:
+    lw $s5, 0($s2)
+    beqz $s5, sm_hist_next
+    nop
+    bnez $s4, sm_hist_comma
+    nop
+    la $a0, sm_hist_tag
+    jal pr_str
+    nop
+    la $t0, DATA_BASE
+    jal pr_dec
+    lw $a0, D_TI($t0)
+    la $a0, str_dot
+    jal pr_str
+    nop
+    la $t0, DATA_BASE
+    jal pr_dec
+    lw $a0, D_VI($t0)
+    la $a0, str_space
+    jal pr_str
+    nop
+    b sm_hist_entry
+    nop
+sm_hist_comma:
+    la $a0, sm_hist_comma_str
+    jal pr_str
+    nop
+sm_hist_entry:
+    jal pr_dec
+    move $a0, $s3
+    la $a0, sm_hist_colon
+    jal pr_str
+    nop
+    jal pr_dec
+    move $a0, $s5
+    addiu $s4, $s4, 1
+    sltiu $t0, $s4, 32
+    bnez $t0, sm_hist_next
+    nop
+    la $a0, str_nl
+    jal pr_str
+    nop
+    jal pr_flush
+    nop
+    move $s4, $zero
+sm_hist_next:
+    addiu $s3, $s3, 1
+    sltiu $t0, $s3, HIST_BUCKETS
+    bnez $t0, sm_hist_loop
+    addiu $s2, $s2, 4
+    beqz $s4, sm_finish
+    nop
+    la $a0, str_nl
+    jal pr_str
+    nop
+    jal pr_flush
+    nop
+    b sm_finish
+    nop
+"""
+
+HIST_STRINGS = """sm_hist_tag: .asciiz "#hist "
+sm_hist_comma_str: .asciiz ","
+sm_hist_colon: .asciiz ":"
+"""
+
+
+def asm_with_hist():
+    """asm() with the D_HIST dump after each averaged run, for the console build."""
+    text = asm()
+    for old, new in (("sm_median_found:\n    b sm_finish\n    sw $t2, 8($s1)\n", HIST_DUMP),
+                     (".align 4\nmeasure_loop_plain:", HIST_STRINGS + ".align 4\nmeasure_loop_plain:")):
+        assert text.count(old) == 1
+        text = text.replace(old, new)
+    return text

@@ -11,7 +11,9 @@ capture after the Reset button. A file or directory named ext-<rom>* holds an ex
 (kit.py EXT_ROMS; Thar0's usblog text is also recognized by its BUF/PIPE blocks). ingest.py
 
 1. parses each log and checks its #kit-end byte count and FNV (an incomplete log is stored, never
-   compared),
+   compared), and stops, storing nothing, when a kit log's header rom_sha256 differs from the fork's log
+   of the same build in the model side (the console ran another ROM than the fork; romgen/hwout.py), or
+   when an external ROM's capture is of other ROMs than the model side ran (kit.py EXT_IDENTITY),
 2. stores every log under docs/calibration/hardware/<NAME>/ as <rom>.<n>.log with a manifest.tsv
    (NAME defaults to console-<date>),
 3. recomputes every hw:<question> row of docs/spec/n64-timing-results.tsv against the fork's run of
@@ -54,7 +56,7 @@ def statuses(root):
     return {r["id"]: b.row_status(r, found) for r in rows}, {c: v[0] for c, v in found.items() if c.startswith("hw:")}
 
 
-def store(root, capture, name):
+def store(root, capture, name, model):
     kit = load(root, "tools/n64-timing/calibration/kit.py", "kit_ingest")
     files = sorted(p for p in Path(capture).rglob("*") if p.is_file())
     logs = kit.read_logs(files)
@@ -69,16 +71,23 @@ def store(root, capture, name):
     if not logs and not ext:
         raise SystemExit(f"{capture}: no file holds a `#kit rom=` header or is an ext-<rom> capture; see "
                          f"hardware-run.md, Capture")
+    differ = [m for rom, entries in sorted(logs.items()) if rom in kit.KIT_ROMS
+              for m in (kit.rom_mismatch(log, model) for _, log in entries) if m]
+    differ += [f"ext-{rom}: {m}" for rom, paths in sorted(ext.items()) if rom in kit.EXT_IDENTITY
+               for m in [kit.EXT_IDENTITY[rom](paths, model)] if m]
+    if differ:
+        raise SystemExit("ingest: the console ran other ROMs than the fork's model side; nothing stored\n  "
+                         + "\n  ".join(differ))
     out = Path(root) / kit.HARDWARE / name
     out.mkdir(parents=True, exist_ok=True)
-    manifest = ["log\tsource\tsha256\tcomplete\tbytes\tkit_sha\tri_refresh\tboot\tpads"]
+    manifest = ["log\tsource\tsha256\tcomplete\tbytes\tkit_sha\trom_sha256\tri_refresh\tboot\tpads"]
     for rom, paths in sorted(ext.items()):
         (out / f"ext-{rom}").mkdir(exist_ok=True)
         for path in paths:
             dest = out / f"ext-{rom}" / path.name
             shutil.copyfile(path, dest)
             manifest.append("\t".join([str(dest.relative_to(out)), path.name, hashlib.sha256(path.read_bytes()).hexdigest(),
-                                       "-", str(path.stat().st_size), "-", "-", "-", "-"]))
+                                       "-", str(path.stat().st_size), "-", "-", "-", "-", "-"]))
         print(f"ingest: ext-{rom}: {len(paths)} files of the external ROM {rom}")
     for rom, entries in sorted(logs.items()):
         known = rom in kit.KIT_ROMS
@@ -89,9 +98,12 @@ def store(root, capture, name):
             dest.write_text(text, encoding="ascii", errors="replace", newline="\n")
             manifest.append("\t".join([dest.name, path.name, hashlib.sha256(path.read_bytes()).hexdigest(),
                                        "yes" if log.complete else "no", str(len(log.text)),
-                                       log.header.get("sha", "-"), log.header.get("ri_refresh", "-"), log.boot,
+                                       log.header.get("sha", "-"), log.header.get("rom_sha256", "-"),
+                                       log.header.get("ri_refresh", "-"), log.boot,
                                        "-" if log.pads is None else f"{log.pads:04b}"]))
             note = "" if log.complete else "  INCOMPLETE: footer missing or FNV mismatch; stored, not compared"
+            hists = len(kit.histograms(log))
+            note += f"; {hists} latency histograms, recorded (kit.py --hist {dest.name})" if hists else ""
             print(f"ingest: {path.name}: {rom} ({'kit ROM' if known else 'not a kit ROM'}), {len(log.records)} "
                   f"records{note}")
     (out / "manifest.tsv").write_text("\n".join(manifest) + "\n", encoding="utf-8", newline="\n")
@@ -143,7 +155,7 @@ def main():
     try:
         before, hw_before = statuses(root)
         if args.capture:
-            print(f"ingest: stored in {store(root, args.capture, args.id).relative_to(root)}")
+            print(f"ingest: stored in {store(root, args.capture, args.id, model).relative_to(root)}")
         refresh(root, model)
         subprocess.run([sys.executable, str(Path(root) / "tools/n64-timing/behaviors.py"), "--root", str(root)],
                        check=True, stdout=subprocess.DEVNULL)
