@@ -60,6 +60,7 @@ auto VI::line() -> void {
     //type 0 sends no sync) pushes the systembench uncached reads out of band, and nemu64-test's
     //VI-off loads do not ask for it (behaviors.tsv ri.refresh-trigger).
     ri.refresh(Thread::clock);
+    if(io.vcounter == 0) latchFrame();
     ++io.vcounter;
     int halfline = io.vcounter << 1 | io.field;
     if(halfline >= io.halfLinesPerField+1) {
@@ -113,9 +114,15 @@ auto VI::line() -> void {
   }
 }
 
+//At the HSYNC that ends a field's line 0, or the first HSYNC after the VI is
+//enabled (vi.frame-latch).
+auto VI::latchFrame() -> void {
+  frame = {io.vstart, io.vend, io.ysubpixel, (s32)io.vstart};
+}
+
 auto VI::sample() const -> Geometry {
-  return {io.colorDepth, io.serrate, io.field, io.hstart, io.hend, io.vstart, io.vend,
-          io.xscale, io.xsubpixel, io.yscale, io.ysubpixel};
+  return {io.colorDepth, io.serrate, io.field, io.hstart, io.hend, frame.vstart, frame.vend,
+          io.xscale, io.xsubpixel, io.yscale};
 }
 
 auto VI::Geometry::window() const -> Window {
@@ -156,7 +163,7 @@ auto VI::compose() -> void {
   const u32 fetched = Fetch::Lines * fetch.pitch;
   for(s32 dy = 2 * fetch.output; dy < 2 * fetch.output + 2; dy++) {
     if(!g.drawn(w, dy)) continue;
-    u32 y = g.ysubpixel + g.yscale * (dy - g.vstart);
+    u32 y = fetch.y + g.yscale * (dy - fetch.row);
     u32 base = ((y >> 11) - fetch.line) * fetch.pitch;
     auto row = screen->pixels(0).data() + (dy - w.vscanStart) * w.hscanLen;
     u32 x = g.xsubpixel + g.xscale * (w.dx0 - g.hstart);
@@ -188,7 +195,13 @@ auto VI::startFetch() -> void {
   fetch.geometry = g;
   fetch.output   = io.vcounter;
   if(dy == w.dy0 || dy == w.dy0 + 1) scannedOrigin = io.dramAddress;
-  fetch.line     = g.ysubpixel + g.yscale * (dy - g.vstart) >> 11;
+  //the accumulator advances by the Y_SCALE read at this HSYNC over the rows since
+  //the last fetched line
+  frame.y       += g.yscale * (dy - frame.row);
+  frame.row      = dy;
+  fetch.y        = frame.y;
+  fetch.row      = dy;
+  fetch.line     = frame.y >> 11;
   const u32 pitch = io.width * g.bpp();
   fetch.start(io.dramAddress + fetch.line * pitch, pitch);
   fetch.next = 0;
@@ -264,6 +277,7 @@ auto VI::power(bool reset) -> void {
   Thread::reset();
   screen->power();
   io = {};
+  frame = {};
   refreshed = false;
   vclk = {system.vclkPeriod()};
   fetch.count = fetch.next = 0;
