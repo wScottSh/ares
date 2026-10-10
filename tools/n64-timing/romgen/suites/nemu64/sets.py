@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 
 from ... import runtime
-from . import cop0hazard, cycle, measure, routines, timing
+from . import cop0hazard, cycle, measure, phases, routines, timing
 
 
 @dataclass
@@ -27,4 +27,9 @@ SETS = [
            cycle.build, [routines.COMMON, cycle.ASM, measure.asm()], CONSTS),
     SetDef("cop0hazard", "nemu64-cop0hazard", "CP0-hazards", "(base=0 timing=0 cycle=0 cp0-hazards=1)",
            cop0hazard.build, [routines.COMMON, cop0hazard.ASM, measure.asm()], CONSTS),
+] + [
+    SetDef("timing-phase", f"phase-{k}/nemu64-timing", "Timing", "(base=0 timing=1 cycle=0 cp0-hazards=0)",
+           timing.build_averaged, [routines.COMMON, routines.TIMING, measure.asm(phase=True)],
+           {**CONSTS, "PHASE_DELAY": k})
+    for k in phases.DELAYS
 ]
