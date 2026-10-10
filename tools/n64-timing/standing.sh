@@ -18,7 +18,7 @@ roms="$N64_TIMING_HOME/roms"
 results="$N64_TIMING_HOME/results"
 mkdir -p "$roms"
 
-for s in nemu64 rdpstat snapper thar0 noise; do
+for s in nemu64 rdpstat snapper thar0 noise cpu; do
   (cd "$n64_repo" && "$PYTHON" tools/n64-timing/romgen/build.py --suite "$s" --out "$roms") > "$out/romgen-$s.txt" 2>&1
 done
 rm -rf "$roms/bench" "$results/bench"
@@ -39,6 +39,7 @@ uptime > "$out/load-start.txt"
 "$here/romgen/suites/snapper/run.sh" > "$out/snapper.txt" 2>&1
 "$here/romgen/suites/noise/run.sh" > "$out/noise.txt" 2>&1
 "$here/run-thar0.sh" > "$out/thar0.txt" 2>&1
+"$here/romgen/suites/cpu/run.sh" > "$out/cpu.txt" 2>&1
 [ -d "$roms/systembench" ] && SYSBENCH_ROMS="$roms/systembench" "$here/systembench/run.sh" > "$out/systembench.txt" 2>&1
 [ -d "$roms/systembench-845635c" ] && SYSBENCH_ROMS="$roms/systembench-845635c" SYSBENCH_RESULTS="$results/systembench-845635c" \
   "$here/systembench/run.sh" > "$out/systembench-845635c.txt" 2>&1
@@ -52,7 +53,7 @@ if echo "1d2c999c42baa57b9c16a21c0bd75b984901ee615ab30482fdec6ed7fcf156cb  $pidm
     > "$out/pidma/summary.txt" 2>&1
   rm -f "$out/pidma/pi.log"
 fi
-for suite in nemu64 bench systembench systembench-845635c rdpstat snapper noise thar0; do
+for suite in nemu64 bench systembench systembench-845635c rdpstat snapper noise thar0 cpu; do
   rm -rf "$out/$suite"
   cp -r "$results/$suite" "$out/$suite"
 done
