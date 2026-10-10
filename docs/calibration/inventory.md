@@ -63,7 +63,7 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `pi-row-end` | Does a PI DMA whose first block ends at an RDRAM row end cost what the model charges? | pi-dma-sizes' 8, 128 and 1024 B DMAs into RDRAM 8 B and 64 B before a 2 KiB row end, poll walked | kit-dma | pi-dma-rowend/* | min max2 per point | range:abs:4 | `item:fu.pi-row-end` | pending:calibration-16 |
 | `noise-stall` | Does the noise LFSR step during in-span memory stalls (an IM_RD rectangle stalls on its reads)? | the pixels of a 256 px NOISE rectangle with IM_RD on | kit-noise | snap/im-rd-stall | hash per point | exact | `item:16.noise-idle-stall` `rdp.noise-pixel-offset` | pending:calibration-16 |
 | `noise-reset` | Does the Reset button reload the noise LFSR's all-ones power-on state? | kit-noise's pixels captured after a Reset (file *.reset.*) against the fork's power-on run: equal hashes mean a reset reloads the state | kit-noise | snap/* | hash per point | exact | `item:16.noise-reset-state` `rdp.noise-reset` | pending:calibration-16 |
-| `vi-mid-field-blank` | What does the VI do on a blank and re-enable in the middle of a field (V_CURRENT, the first line fetched)? | k_vi_enable with the blank written mid-field instead of in vertical blank | none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists | - | - | - | `item:fu.vi-mid-field-blank` `#84` | pending:calibration-16 |
+| `vi-mid-field-blank` | What does the VI do on a blank and re-enable in the middle of a field (V_CURRENT at the enable and when it next changes)? | V_CURRENT at the enable and COUNT ticks to its first and second change, at 10 delays after a blank written as V_CURRENT reaches half-line 0x100, while that line is fetching (k_vi_enable_mid). The pixels of the blanked line are not readable by the CPU (hw:vi-unfetched-video) | kit-vi | vi-mid-field/* | v_at_enable first_ticks per point | exact range:abs:14 | `item:fu.vi-mid-field-blank` `#84` | pending:calibration-16 |
 | `tmem-load-setup` | What is a TMEM load's fixed cost (jgemu about 15 clocks with its paired Sync Load, the fork 7)? | the intercept of the same per-load fit as tmem-load-rate | kit-tex | tex-derived/all | load-block-intercept load-tile-intercept per point | range:abs:3 | `rdp.tmem-load-rate` | pending:calibration-16 |
 | `loadtile-rows` | Does Load Tile pay a per-row cost over Load Block (issue #16, LoadTile vs LoadBlock per-row overhead via DPC_TMEM)? | DPC_TMEM of 2048 B loaded by Load Tile as 1 row of 2048 B down to 256 rows of 8 B, against one Load Block of 2048 B: any per-row cost of 1 clock or more shows as 255 clocks or more at 256 rows (the fork reads 0) | kit-tex | tex-derived/all | rows256-minus-block2048 per point | range:abs:4 | `item:16.loadtile-loadblock` `rdp.tmem-load-rate` | pending:calibration-16 |
 | `copy-passfail` | What do copy-mode words cost when alpha compare passes, fails, or splits a word (issue #16 from #17: pass/fail/pass/fail word cost)? | DPC_PIPEBUSY of 256x8 copy rectangles with alpha compare all pass, all fail, 4 pass / 4 fail per 64-bit word and alternating per texel, as ratios to all pass (a masked-word model gives 1 everywhere; the fork skips rejected words: fail 0.357, word 0.746, texel 1.646) | kit-tex | tex-derived/all | copyac-fail-ac1-over-pass copyac-word-ac1-over-pass copyac-texel-ac1-over-pass copyac-fail-ac0-over-pass per point | range:rel:3 | `item:16.copy-passfail` `rdp.fill-copy-rate` | pending:calibration-16 |
@@ -90,7 +90,6 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `refresh-all-banks` | Does the 52/54-clock refresh holdoff block every bank (issue #16 from #4)? | loads of 30 ticks or more over a window with no VI fetch (V_VIDEO ends at 0x80), in each of banks 0-7: a bank the refresh does not hold off reads 0 (the fork 10-12 in every bank). The holdoff's excess latency (28-29 ticks on the fork) is logged as a report value; it cannot tell 52 from 54 rclk | kit-bus | bus-derived/all | refresh-bank0-hits refresh-bank1-hits refresh-bank2-hits refresh-bank3-hits refresh-bank4-hits refresh-bank5-hits refresh-bank6-hits refresh-bank7-hits per point | range:abs:2 | `ri.refresh-trigger` `ri.refresh-waits-for-burst` `item:16.refresh-all-banks` | pending:calibration-16 |
 | `vi-intr-latency` | How long after V_CURRENT reaches V_INTR does MI_INTR show the VI interrupt (#24)? | a poll loop reading MI_INTR then V_CURRENT, its phase walked over 16 reps: V_CURRENT at the first poll that saw the interrupt and the mean lag in ticks (fork 256 and about 11-15; a half-line or end-of-line interrupt shows about 1490 or 2979). Under about 6 ticks does not resolve: the poll is 31 ticks | kit-bus | bus-vintr/v-intr bus-derived/all | v_at_intr vintr-mean-lag per point | exact range:abs:33 | `item:16.vi-intr-latency` | pending:calibration-16 |
 | `vi-rcp-phase` | Where is the VI's line counter against COUNT when the kit starts (VI vs RCP clock-domain phase at power-on, #24)? | COUNT at the first V_CURRENT change the kit sees and V_CURRENT around it, after hw_init, the header and vi_init (the runtime owns the boot path, so it is not the first change after power-on). A report value: power cycles of the console spread it, the fork has one value per boot delay | kit-bus | bus-vi-phase/* | v_before v_after per point | range:abs:2 | `item:16.vi-rcp-phase` | pending:calibration-16 |
-| `vi-unfetched-video` | What does the VI show for a pixel no fetched line covers (Y_SCALE above one line per output line, X_SCALE past the line; vi.unfetched-sample)? | a video capture of the VI's output; the CPU cannot read the VI's output and the value has no bus-timing signature | none: needs a video capture of the VI output, which the kit's ingestion does not read | - | - | - | `vi.unfetched-sample` `vi.fetch-overrun` | pending:calibration-16 |
 
 ## Rows pending calibration #16
 
@@ -143,7 +142,7 @@ Rows whose only passing checks are their own fit data. 12 rows, 12 with a kit qu
 
 ## Model-choice rows
 
-Rows with no published value: the console decides the choice. 24 rows, 21 with a kit question.
+Rows with no published value: the console decides the choice. 24 rows, 19 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
@@ -159,8 +158,8 @@ Rows with no published value: the console decides the choice. 24 rows, 21 with a
 | `sp.dma-burst` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
 | `vi.burst` | pass | bench:uncached-vs-hpos hw:vi-cpu-contention hw:vi-fetch-modes | `hw:vi-cpu-contention`, `hw:vi-fetch-modes` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes | `hw:vi-fetch-modes` |
-| `vi.fetch-overrun` | model-choice | ~det ~stepcap | `hw:vi-unfetched-video` |
-| `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | `hw:vi-unfetched-video` |
+| `vi.fetch-overrun` | model-choice | ~det ~stepcap | **no kit question** |
+| `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | **no kit question** |
 | `vi.aa-mode-lines` | fail | nemu64:timing/load-miss-vi-on nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:vi-fetch-modes hw:nemu64-console | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
@@ -174,7 +173,7 @@ Rows with no published value: the console decides the choice. 24 rows, 21 with a
 
 ## Rows pending a report-only check
 
-Rows whose deciding check reports a number and asserts none. 15 rows, 15 with a kit question.
+Rows whose deciding check reports a number and asserts none. 15 rows, 14 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
@@ -189,7 +188,7 @@ Rows whose deciding check reports a number and asserts none. 15 rows, 15 with a 
 | `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads`, `hw:systembench` |
 | `ai.fetch-bytes` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:ai-fetch | `hw:ai-fetch` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes | `hw:vi-fetch-modes` |
-| `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | `hw:vi-unfetched-video` |
+| `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | **no kit question** |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.fill-copy-rate` | pending:calibration-16 pending:report-only | thar0:fill-mode hw:fill-copy-rate hw:copy-passfail hw:thar0-console | `hw:thar0-console`, `hw:fill-copy-rate`, `hw:copy-passfail` |
 | `rdp.tmem-load-rate` | pending:calibration-16 pending:report-only | bench:rdp-loadsz-sweep hw:tmem-load-rate hw:tmem-load-setup hw:loadtile-rows | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
@@ -227,7 +226,7 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 
 ## Coverage
 
-Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 221 entries: 204 with a question, 7 not hardware-decidable (no console run can decide them), 10 not decidable by this kit (a console could, with what the reason names).
+Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 221 entries: 202 with a question, 7 not hardware-decidable (no console run can decide them), 12 not decidable by this kit (a console could, with what the reason names).
 
 | Entry | Why | Question or reason |
 |---|---|---|
@@ -328,8 +327,8 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `vi.fetch-window` | wiki reference | `hw:vi-fetch-position` |
 | `vi.vclk-per-pixel` | wiki reference | `hw:vi-cpu-contention` |
 | `vi.register-sample` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-fetch-modes` |
-| `vi.fetch-overrun` | model-choice; an inference in its reference or note | `hw:vi-unfetched-video` |
-| `vi.unfetched-sample` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-unfetched-video` |
+| `vi.fetch-overrun` | model-choice; an inference in its reference or note | not decidable by this kit: no kit point programs a VI line shorter than its H_VIDEO window, the only VI that reaches the keep-fetching rule. What would decide it: a kit point that programs H_SYNC below the line's fetch time with the VI active and counts the bursts each line fetches through CPU load latency, or a video capture that shows which line the next output line displays. MM never reaches it (cited inputs, inferred conclusion; no run counted overruns): every MM VI mode keeps the NTSC H_SYNC 3093 quarter-px (773 px) against H_VIDEO 108-748 (640 px) (decomp mm-decomp-60fps 56fa21dd0: src/libultra/vimodes/vimodentsclan1.c:14,16; the Bomber's Notebook mode src/code/z_vimode.c:125,146,157), and its 3-line fetch takes about 285-398 of the 3972 rclk line (docs/research/vi-fetch.md, MM bus-occupancy estimate) |
+| `vi.unfetched-sample` | model-choice; an inference in its reference or note; pending:report-only | not decidable by this kit: the CPU cannot read the VI's output and the sampled value has no bus-timing signature, so no kit ROM measures it and ingestion reads no video. What would decide it: a video capture of the VI output for a mode that samples past the three fetched lines (a Y_SCALE above one line per output row, or an X_SCALE past the line). MM never reaches it (cited inputs, inferred conclusion; no run counted unfetched samples): NTSC LAN1 runs Y_SCALE 1.0 and X_SCALE 0.5 over a 320-px line (decomp mm-decomp-60fps 56fa21dd0: src/boot/idle.c:107, src/libultra/vimodes/vimodentsclan1.c:11,17,24); the Bomber's Notebook hi-res mode sets Y_SCALE 2.0 but interlaced (src/code/z_vimode.c:81-84, src/code/sys_cfb.c:95), where VI::compose draws one row per output line from the line its fetch began at |
 | `vi.aa-mode-lines` | model-choice; an inference in its reference or note; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.display-window` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.cmd-fifo-dwords` | wiki reference | `hw:cmd-fifo-depth` |
@@ -450,7 +449,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `item:fu.pif-ram-dword` | followups sysbench / verify-75: An LD from PIF RAM (the fork reads the word twice) | not-hardware-decidable: by a kit ROM, since a 64-bit CPU read outside RDRAM freezes the SysAD (ares Bus::freezeDualRead, after n64-systemtest); measured: the kit's LD from PIF RAM froze the fork's CPU, so a console run would hang |
 | `item:fu.power-on-compare` | followups T7c: The power-on COMPARE value (cop0hazard leaves IP7 set after the COUNT test wraps through Compare = 0) | `hw:nemu64-cop0hazard-console` |
 | `item:fu.hpos-holdoff` | followups labels-phase: hpos holdoff_rclk_max from a window that starts on a refresh | `hw:vi-cpu-contention` |
-| `item:fu.vi-mid-field-blank` | issue #84: What hardware does on a VI blank and re-enable mid-field (the kit blanks only in vertical blank because the fork crashes, #84) | `hw:vi-mid-field-blank` |
+| `item:fu.vi-mid-field-blank` | issue #84: What hardware does on a VI blank and re-enable mid-field (kit-vi vi-mid-field points; the fork crashed there before #84) | `hw:vi-mid-field-blank` |
 | `item:plan.fit3` | green-plan pending.md section 8 (U-FIT3): Kit points that decide cpu.count-write-hold, cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce without re-running their nemu64-test fit data (cop0hazard count, the cycle SMC cases, cycle ctc1) | `hw:count-write-hold`, `hw:fetch-ahead`, `hw:ctc1-fpe-ce` |
 
 ## Questions without an in-repo kit ROM
@@ -464,5 +463,3 @@ These run outside the kit's mechanical comparison: an external ROM the procedure
 | `mm-filesel` | none: the pinned BENCH build (mm_bench.py, mm-decomp-60fps 707602c6) has no file-select scene: Bench_EndFrame records only Play frames (src/code/bench.c), so no BENCH capture shows file select, and it prints no DPC_CLOCK. A file-select bench scene in mm-decomp-60fps would give this question a ROM | `mm:filesel-named` `rdp.span-read-latency` `item:16.mm-bench-scenes` |
 | `mm-bench` | ext:mm-bench | `item:16.mm-bench-scenes` |
 | `snapper64` | ext:snapper64 | `snapper:span-tri` `item:16.span-tri-16bpp` `rdp.pipeline-depth` `rdp.span-ram-half` `rdp.span-ram-segment` `rdp.span-slots` `rdp.write-run` |
-| `vi-mid-field-blank` | none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists | `item:fu.vi-mid-field-blank` `#84` |
-| `vi-unfetched-video` | none: needs a video capture of the VI output, which the kit's ingestion does not read | `vi.unfetched-sample` `vi.fetch-overrun` |

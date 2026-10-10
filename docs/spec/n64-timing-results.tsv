@@ -117,9 +117,8 @@ hw:vi-fetch-modes	pending:calibration-16	no complete power-on console capture of
 hw:vi-fetch-position	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-first-line	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-intr-latency	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
-hw:vi-mid-field-blank	pending:calibration-16	none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists: no kit ROM
+hw:vi-mid-field-blank	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-rcp-phase	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
-hw:vi-unfetched-video	pending:calibration-16	none: needs a video capture of the VI output, which the kit's ingestion does not read: no kit ROM
 hw:wb-drain-target	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:wb-release	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:write-granularity	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
