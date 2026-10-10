@@ -154,6 +154,7 @@ auto CPU::fetch(PhysAccess access) -> u32 {
 template<u32 Size>
 auto CPU::read(PhysAccess access) -> maybe<u64> {
   if(!access) return nothing;
+  if(watchMatch(access.paddr, scc.watchLo.trapOnRead)) return exception.watchAddress(), nothing;
   GDB::server.reportMemRead(access.vaddr, Size);
   u32 paddr = access.paddr;
   if(context.littleEndian()) paddr = reverseEndianPaddr<Size>(paddr);
@@ -174,6 +175,7 @@ auto CPU::readDebug(u64 vaddr) -> u64 {
 template<u32 Size>
 auto CPU::write(PhysAccess access, u64 data) -> bool {
   if(!access) return false;
+  if(watchMatch(access.paddr, scc.watchLo.trapOnWrite)) return exception.watchAddress(), false;
   GDB::server.reportMemWrite(access.vaddr, Size);
   u32 paddr = access.paddr;
   if(context.littleEndian()) paddr = reverseEndianPaddr<Size>(paddr);
@@ -191,6 +193,14 @@ auto CPU::writeDebug(u64 vaddr, u64 data) -> bool {
   if(context.littleEndian()) paddr = reverseEndianPaddr<Size>(paddr);
   if(access.cache) return dcache.writeDebug<Size>(access.vaddr, paddr, data), true;
   return bus.write<Size>(paddr, data, dummyThread, RBusDevice::ARES_DEBUGGER), true;
+}
+
+//VR4300 UM U10504EJ7V0UM00 6.3.8, 6.4.17: WatchLo holds physical address bits 31:3, so any
+//access to that doubleword matches. WatchHi's bits 35:32 lie above the VR4300's 32-bit physical
+//address and take no part. EXL masks the exception; the Cause register has no pending bit, so
+//nothing is raised later. CACHE never matches: it does not reach read() or write().
+auto CPU::watchMatch(u32 paddr, bool enabled) const -> bool {
+  return enabled && !scc.status.exceptionLevel && (paddr >> 3) == (scc.watchLo.physicalAddress >> 3);
 }
 
 template<u32 Size>
