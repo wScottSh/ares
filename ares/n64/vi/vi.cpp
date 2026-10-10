@@ -113,7 +113,12 @@ auto VI::line() -> void {
   }
 }
 
-auto VI::window() const -> Window {
+auto VI::sample() const -> Geometry {
+  return {io.colorDepth, io.serrate, io.field, io.hstart, io.hend, io.vstart, io.vend,
+          io.xscale, io.xsubpixel, io.yscale, io.ysubpixel};
+}
+
+auto VI::Geometry::window() const -> Window {
   Window w;
   w.hscanStart = Region::NTSC() ? 108 : 128;
   w.vscanStart = Region::NTSC() ?  34 :  44;
@@ -122,10 +127,10 @@ auto VI::window() const -> Window {
   s32 hscanStop = w.hscanStart + w.hscanLen;
   s32 vscanStop = w.vscanStart + w.vscanLen;
 
-  w.dy0 = io.vstart;
-  w.dy1 = io.vend;   if(w.dy1 < w.dy0) w.dy1 = vscanStop;
-  w.dx0 = io.hstart;
-  w.dx1 = io.hend;
+  w.dy0 = vstart;
+  w.dy1 = vend;   if(w.dy1 < w.dy0) w.dy1 = vscanStop;
+  w.dx0 = hstart;
+  w.dx1 = hend;
 
   w.dy0 = max((s32)w.vscanStart, w.dy0);
   w.dy1 = min(vscanStop, w.dy1);
@@ -138,27 +143,28 @@ auto VI::window() const -> Window {
   return w;
 }
 
-auto VI::drawn(const Window& w, s32 dy) const -> bool {
-  return dy >= w.dy0 && dy < w.dy1 && (!io.serrate || (dy & 1) == !io.field);
+auto VI::Geometry::drawn(const Window& w, s32 dy) const -> bool {
+  return dy >= w.dy0 && dy < w.dy1 && (!serrate || (dy & 1) == !field);
 }
 
 //Output line l covers screen rows 2l and 2l+1 (V_VIDEO counts half-lines).
 //Each row samples framebuffer line (y >> 11) of the three fetched at HSYNC.
 auto VI::compose() -> void {
-  auto w = window();
-  const u32 bpp = io.colorDepth == 2 ? 2 : 4;
+  const auto& g = fetch.geometry;
+  auto w = g.window();
+  const u32 bpp = g.bpp();
   const u32 fetched = Fetch::Lines * fetch.pitch;
   for(s32 dy = 2 * fetch.output; dy < 2 * fetch.output + 2; dy++) {
-    if(!drawn(w, dy)) continue;
-    u32 y = io.ysubpixel + io.yscale * (dy - io.vstart);
+    if(!g.drawn(w, dy)) continue;
+    u32 y = g.ysubpixel + g.yscale * (dy - g.vstart);
     u32 base = ((y >> 11) - fetch.line) * fetch.pitch;
     auto row = screen->pixels(0).data() + (dy - w.vscanStart) * w.hscanLen;
-    u32 x = io.xsubpixel + io.xscale * (w.dx0 - io.hstart);
-    for(s32 dx = w.dx0; dx < w.dx1; dx++, x += io.xscale) {
+    u32 x = g.xsubpixel + g.xscale * (w.dx0 - g.hstart);
+    for(s32 dx = w.dx0; dx < w.dx1; dx++, x += g.xscale) {
       u32 at = base + (x >> 10) * bpp;
       //the VI reads only the fetched lines; a sample past them has no bytes
       u32 pixel = 0;
-      if(at + bpp <= fetched) {
+      if(at < fetched && fetched - at >= bpp) {
         const u8* p = fetch.bytes + at;
         pixel = bpp == 2 ? p[0] << 8 | p[1] : p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
       }
@@ -173,17 +179,17 @@ auto VI::compose() -> void {
 auto VI::startFetch() -> void {
   if(io.colorDepth < 2 || !io.width) return;
   if(fetch.next < fetch.count || fetch.inFlight) return;
-  auto w = window();
+  auto g = sample();
+  auto w = g.window();
   s32 dy = 2 * io.vcounter;
-  if(!drawn(w, dy)) dy++;
-  if(!drawn(w, dy)) return;
-  fetch.hsync  = vclk;
-  fetch.hstart = io.hstart;
-  fetch.hend   = io.hend;
-  fetch.output = io.vcounter;
+  if(!g.drawn(w, dy)) dy++;
+  if(!g.drawn(w, dy)) return;
+  fetch.hsync    = vclk;
+  fetch.geometry = g;
+  fetch.output   = io.vcounter;
   if(dy == w.dy0 || dy == w.dy0 + 1) scannedOrigin = io.dramAddress;
-  fetch.line   = io.ysubpixel + io.yscale * (dy - io.vstart) >> 11;
-  const u32 pitch = io.width * (io.colorDepth == 2 ? 2 : 4);
+  fetch.line     = g.ysubpixel + g.yscale * (dy - g.vstart) >> 11;
+  const u32 pitch = io.width * g.bpp();
   fetch.start(io.dramAddress + fetch.line * pitch, pitch);
   fetch.next = 0;
   timeline.schedule({fetch.dueAt(0), (u32)EventKind::VI_Fetch});
@@ -192,7 +198,7 @@ auto VI::startFetch() -> void {
 auto VI::refresh() -> void {
   if(io.serrate == 0) screen->setProgressive(0);
   if(io.serrate == 1) screen->setInterlace(!io.field);
-  auto w = window();
+  auto w = sample().window();
   screen->setViewport(0, 0, w.hscanLen, w.vscanLen);
   if(Model::Aleck64()) aleck64.vdp.render(screen);
 }
@@ -222,6 +228,7 @@ auto VI::Fetch::start(u32 origin_, u32 pitch_) -> void {
 //Slot k of N is due at H_START + k (H_END - H_START) / N pixels into the line
 //(vi.fetch-window); H_VIDEO counts pixels of vi.vclk-per-pixel VCLKs.
 auto VI::Fetch::dueAt(u32 slot) const -> Clock {
+  const u32 hstart = geometry.hstart, hend = geometry.hend;
   u32 width = hend > hstart ? hend - hstart : 0;
   auto t = hsync;
   return t.advance((u64)(hstart + (u64)slot * width / count) * Timing::Behavior::ViVclkPerPixel);
