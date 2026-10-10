@@ -30,7 +30,8 @@ QUESTION_COLUMNS = ["id", "question", "decides", "kit", "points", "metric", "rul
 #How the console was started before the capture: power-on (a power cycle) or reset (the Reset button
 #after a kit ROM ran). A capture file named *.reset.* is a reset capture.
 BOOTS = ("power-on", "reset")
-RULE = re.compile(r"^(exact|range:(abs|rel):[\d.]+|-)$")
+#One rule for every metric, or one per metric in the metric column's order.
+RULE = re.compile(r"^((exact|range:(abs|rel):[\d.]+)( (exact|range:(abs|rel):[\d.]+))*|-)$")
 
 #Every kit ROM: suite, build.py --set, and whether the fork walks boot delays for it (calib suite).
 KIT_ROMS = {
@@ -225,10 +226,12 @@ def values(logs, pattern, metric):
 
 def compare(question, hw, model):
     """(result, detail): pass or fail, from the console's logs and the model's, under the question's rule."""
-    rule = question["rule"]
+    metrics, rules = question["metric"].split(), question["rule"].split()
+    rule_of = dict(zip(metrics, rules if len(rules) > 1 else rules * len(metrics)))
     bad, lacking, checked = [], [], 0
     for pattern in question["points"].split():
-        for metric in question["metric"].split():
+        for metric in metrics:
+            rule = rule_of[metric]
             want = values(model, pattern, metric)
             got = values(hw, pattern, metric)
             for key in sorted(set(want) - set(got)):
@@ -256,7 +259,7 @@ def compare(question, hw, model):
         return "fail", f"the capture lacks {len(lacking)} of {len(lacking) + checked} model values; first {lacking[0]}"
     if bad:
         return "fail", f"{len(bad)} of {checked} values differ; first {bad[0]}"
-    return "pass", f"{checked} values agree ({rule})"
+    return "pass", f"{checked} values agree ({question['rule']})"
 
 
 def ext_thar0(root, model_dir, paths):
@@ -395,6 +398,20 @@ def captures(root=ROOT):
     return {rom: [log for _, log in logs] for rom, logs in read_logs(paths).items()}, sorted({p.parent.name for p in paths})
 
 
+def rom_mismatch(log, model_dir):
+    """Why the fork's log of the same build in model_dir (a calibration/run.sh output) is not a run of
+    the ROM the console ran, or None. romgen/hwout.py rom_sha256 is the ROM's identity."""
+    build = log.header.get("build", "?")
+    path = Path(model_dir) / build / f"{log.rom}.txt"
+    want = Log(path.read_bytes()).header.get("rom_sha256") if path.exists() else None
+    got = log.header.get("rom_sha256")
+    if got and got == want:
+        return None
+    return (f"{log.rom} {build}: the console ran rom_sha256={got or 'none'} (built at sha={log.header.get('sha', '?')}), "
+            f"the fork's {path} ran {want or 'none'}; run calibration/run.sh at that commit, or rerun the console "
+            f"with this run's ROMs (hardware-run.md, Build the kit)")
+
+
 def result(root, run_dir, qid):
     """The hw:<qid> check's result for behaviors.py --results, from a standing run's calib/ directory."""
     return result_from(root, Path(run_dir) / "calib", qid)
@@ -424,6 +441,9 @@ def result_from(root, model_dir, qid):
     logs = [log for log in hw.get(kit, []) if log.complete and log.boot == boot]
     if not logs:
         return "pending:calibration-16", f"no complete {boot} console capture of {kit} in {HARDWARE}"
+    differ = [m for m in (rom_mismatch(log, model_dir) for log in logs) if m]
+    if differ:
+        return "missing", f"no fork run of the console's ROM: {differ[0]}"
     hung = [log for log in logs if any(log.timeouts.values())]
     if hung:
         return "fail", (f"{kit}: the console gave up {hung[0].timeouts} waits (#kit-timeout): a PI or RDP wait never "
@@ -472,11 +492,16 @@ def verify_run(run_dir):
             errors.append(f"{txt}: domain-1 PI timing at the end {log.pi}, the ROM header's {hwout.DOM1_HEADER}")
         if log.timeouts != {"pi": 0, "rdp": 0}:
             errors.append(f"{txt}: #kit-timeout {log.timeouts or 'missing'}; on the fork no wait may give up")
+        rom = Path(run_dir) / "roms" / log.header.get("build", "?") / f"{log.rom}.z64"
+        if not rom.exists() or hwout.rom_sha256(rom.read_bytes()) != log.header.get("rom_sha256"):
+            errors.append(f"{txt}: header rom_sha256={log.header.get('rom_sha256')} is not the rom_sha256 of {rom}")
     return errors
 
 
-def sample_log(body="#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n"):
-    text = f"#kit rom=kit-cpu sha=0 fmt=1 ri_mode=0xe\n{body}".encode()
+def sample_log(body="#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n",
+               rom_sha256="a" * 64):
+    field = f" rom_sha256={rom_sha256}" if rom_sha256 else ""
+    text = f"#kit rom=kit-cpu sha=0{field} fmt=1 build=boot-1 ri_mode=0xe\n{body}".encode()
     return text + f"#kit-end rom=kit-cpu bytes={len(text)} fnv={fnv(text):08x}\n".encode()
 
 
@@ -517,12 +542,72 @@ def self_test():
     compares = [("a full capture that agrees", [Log(log)], "pass"),
                 ("a capture holding one of the two points", [Log(partial)], "fail"),
                 ("a capture 2 pclk off on one point", [Log(off)], "fail")]
-    for name, hw, want in compares:
-        got, detail = compare(q, hw, model)
+    per_metric = {"points": "dcb/*", "metric": "min max", "rule": "exact range:abs:50"}
+    max_off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=24 max=140\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    min_off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=25 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    compares += [("per-metric rules, max 39 off under its abs:50", [Log(max_off)], "pass", per_metric),
+                 ("per-metric rules, min 1 off under its exact", [Log(min_off)], "fail", per_metric)]
+    for name, hw, want, *rule in compares:
+        got, detail = compare(rule[0] if rule else q, hw, model)
         ok = got == want
         failed += not ok
         print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     cases += compares
+    same, other = "a" * 64, "b" * 64
+    q = {"id": "t", "kit": "kit-cpu", "points": "dcb/*", "metric": "min", "rule": "range:abs:1", "boot": "power-on"}
+    roms = [("a capture of the ROM the fork ran", same, "pass"),
+            ("a capture of a ROM the fork did not run (rom_sha256 differs)", other, "missing"),
+            ("a capture whose header names no rom_sha256", None, "missing")]
+    for name, console_sha, want in roms:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model = Path(tmp) / "root", Path(tmp) / "model"
+            (root / QUESTIONS).parent.mkdir(parents=True)
+            (root / QUESTIONS).write_text("\t".join(QUESTION_COLUMNS) + "\n" +
+                                          "\t".join(q.get(c, "-") for c in QUESTION_COLUMNS) + "\n")
+            (root / HARDWARE / "c").mkdir(parents=True)
+            (root / HARDWARE / "c" / "kit-cpu.1.log").write_bytes(sample_log(rom_sha256=console_sha))
+            (model / "boot-1").mkdir(parents=True)
+            (model / "boot-1" / "kit-cpu.txt").write_bytes(sample_log(rom_sha256=same))
+            got, detail = result_from(root, model, "t")
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: ROM identity, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
+    cases += roms
+    import subprocess
+    run_store = ("import importlib.util, sys\n"
+                 "spec = importlib.util.spec_from_file_location('ingest', sys.argv[1])\n"
+                 "ingest = importlib.util.module_from_spec(spec)\n"
+                 "spec.loader.exec_module(ingest)\n"
+                 "ingest.store(*sys.argv[2:])\n")
+    stores = [("ingest stores a capture of the ROM the fork ran", same, 0),
+              ("ingest refuses a capture whose rom_sha256 differs and stores nothing", other, 1)]
+    for name, console_sha, want in stores:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model, capture = Path(tmp) / "root", Path(tmp) / "model", Path(tmp) / "capture"
+            (root / "tools").mkdir(parents=True)
+            (root / "tools" / "n64-timing").symlink_to(HERE.parent, target_is_directory=True)
+            capture.mkdir()
+            (capture / "kit-cpu.isviewer.log").write_bytes(sample_log(rom_sha256=console_sha))
+            (model / "boot-1").mkdir(parents=True)
+            (model / "boot-1" / "kit-cpu.txt").write_bytes(sample_log(rom_sha256=same))
+            proc = subprocess.run([sys.executable, "-c", run_store, str(HERE / "ingest.py"), str(root), str(capture),
+                                   "c", str(model)], capture_output=True, text=True)
+            stored = sorted(p.name for p in (root / HARDWARE).rglob("*") if p.is_file())
+        ok = proc.returncode == want and (stored == ["kit-cpu.1.log", "manifest.tsv"] if want == 0 else not stored)
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}, stored {stored or 'nothing'})")
+    cases += stores
+    from romgen import hwout
+    rom = hwout.stamp(b"\0" * 64 + f"#kit rom=kit-cpu sha=78b4427b8d86 rom_sha256={hwout.UNSTAMPED} fmt=1\0".encode() + b"code")
+    stamped = Log(rom).header["rom_sha256"]
+    idents = [("a stamped ROM's header holds its rom_sha256", hwout.rom_sha256(rom) == stamped),
+              ("another commit's build of the same bytes keeps the rom_sha256",
+               hwout.rom_sha256(rom.replace(b"sha=78b4427b8d86", b"sha=0123456789ab")) == stamped),
+              ("one changed code byte changes the rom_sha256", hwout.rom_sha256(rom.replace(b"code", b"codf")) != stamped)]
+    for name, ok in idents:
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'}")
+    cases += idents
     hung = Log(sample_log("#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#kit-timeout pi=0 rdp=2\n"))
     ok = hung.complete and hung.timeouts == {"pi": 0, "rdp": 2}
     failed += not ok

@@ -1,0 +1,13 @@
+diff --git a/ares/n64/ri/bus.hpp b/ares/n64/ri/bus.hpp
+index cb611c6a3..01b988367 100644
+--- a/ares/n64/ri/bus.hpp
++++ b/ares/n64/ri/bus.hpp
+@@ -155,7 +155,7 @@ struct Channel {
+   //latency later, so a decision never races an equal-time post.
+   auto post(const Burst& burst, Clock at) -> void {
+     if(count == Capacity) abort();
+-    Clock arrival = at + Timing::Behavior::RiRequestLatency;
++    Clock arrival = at + (burst.requester == Requester::DpColor || burst.requester == Requester::DpDepth ? Clock{0} : Timing::Behavior::RiRequestLatency);
+     pending[count++] = {burst, arrival, sequences[(u32)burst.requester]++};
+     //no decision before `free`, so a refresh never cuts into a granted burst (ri.refresh-waits-for-burst)
+     Clock d = Timing::nextRclkEdge(arrival > free ? arrival : free);

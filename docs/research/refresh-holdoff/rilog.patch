@@ -1,0 +1,35 @@
+diff --git a/ares/n64/cpu/interpreter-scc.cpp b/ares/n64/cpu/interpreter-scc.cpp
+index 8a516ebe8..747298e5f 100644
+--- a/ares/n64/cpu/interpreter-scc.cpp
++++ b/ares/n64/cpu/interpreter-scc.cpp
+@@ -37,6 +37,7 @@ auto CPU::getControlRegister(n5 index) -> u64 {
+     break;
+   case  9:  //count
+     data.bit(0,31) = effectiveCount() >> 1;
++    if(RiBus::rilog) fprintf(RiBus::rilog, "%lld COUNT pc=%08x val=%u\n", (long long)Thread::clock.units, (u32)ipu.pc, (u32)data);
+     break;
+   case 10:  //entryhi
+     data.bit( 0, 7) = scc.tlb.addressSpaceID;
+diff --git a/ares/n64/ri/bus.hpp b/ares/n64/ri/bus.hpp
+index cb611c6a3..68319f50e 100644
+--- a/ares/n64/ri/bus.hpp
++++ b/ares/n64/ri/bus.hpp
+@@ -130,6 +130,8 @@ constexpr auto trailer(Requester requester, Direction direction) -> Clock {
+   return (dp ? Timing::Behavior::RiOverheadRdp : Timing::Behavior::RiOverheadWrite) + Timing::Behavior::RiPostWriteGap;
+ }
+ 
++inline FILE* rilog = [] { auto path = getenv("ARES_RILOG"); return path ? fopen(path, "w") : (FILE*)nullptr; }();
++
+ struct Channel {
+   //every client keeps at most one burst in flight (refresh, SysAD, each DMA engine)
+   static constexpr u32 Capacity = 16;
+@@ -215,6 +217,9 @@ struct Channel {
+       if(write) c.bytesWritten += b.bytes; else c.bytesRead += b.bytes;
+       c.rowMisses += g.rowMiss;
+     }
++    if(rilog) fprintf(rilog, "%lld r=%u a=%06x n=%u arr=%lld ds=%lld de=%lld free=%lld miss=%d pend=%u\n",
++      (long long)d.units, (u32)b.requester, b.address, b.bytes, (long long)p.arrival.units,
++      (long long)g.dataStart.units, (long long)g.dataEnd.units, (long long)free.units, g.rowMiss, count);
+     c.bursts++;
+     c.busy += free - d;
+     c.wait += d - p.arrival;
