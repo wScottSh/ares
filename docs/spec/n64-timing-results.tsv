@@ -71,6 +71,7 @@ hw:fill-copy-rate	pending:calibration-16	no complete power-on console capture of
 hw:fpu-classes	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:ifill	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:imrd-zcmp-slots	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
+hw:imrd-zcmp-slots-2cyc	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:joybus-pads	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:load-interlock-cop	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:loadtile-rows	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
@@ -125,6 +126,7 @@ hw:wb-release	pending:calibration-16	no complete power-on console capture of kit
 hw:write-granularity	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:write-granularity-pixels	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:xbus-fetch-rate	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
+hw:zread-2cyc	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 mm:filesel-empty	pass	filesel: mean 1.0113, 98.9% of 444 game frames at 1 field(s)
 mm:filesel-named	fail	filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s)
 mm:filesel-options	pass	filesel-options: mean 1.0000, 100.0% of 598 game frames at 1 field(s)
