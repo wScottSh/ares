@@ -500,8 +500,15 @@ bus_vl_touch_loop:
     addiu $t5, $t5, -16
     bgtz $t5, bus_vl_touch_loop
     addiu $t4, $t4, 16
-    jal bus_vwait_eq
+    # V_CURRENT bit 0 is the field, which vi_init's odd V_SYNC (0x20D) leaves where boot put it: wait
+    # for the target line in the field the VI is in (field 1 timed out every point, u-107-fix)
+    li $t0, 0xA4400010
+    lw $t0, 0($t0)
     lw $a0, 4($s0)
+    andi $t0, $t0, 1
+    or $a0, $a0, $t0
+    jal bus_vwait_eq
+    sw $a0, 4($s0)
     beqz $v0, bus_vl_timeout
     nop
     lw $t0, 16($s0)
