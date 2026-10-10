@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass, field
 
-from . import dpc, emux, repeater64, routines, stale, systemtest, unsynced
+from . import dpc, emux, repeater64, routines, stale, systemtest, unsynced, zmode
 
 
 @dataclass
@@ -40,6 +40,8 @@ SETS = [
            stale.build, stale.LISTS),
     SetDef("unsynced", "rdpstat-unsynced", "RDP-unsynced", "(rdpstat: n64brew unsynced attribute table)",
            unsynced.build, unsynced.LISTS, unsynced.data),
+    SetDef("unsynced-zmode", "rdpstat-unsynced-zmode", "RDP-unsynced", "(rdpstat: n64brew unsynced z_mode row)",
+           zmode.build, zmode.LISTS, zmode.data),
     SetDef("emux-bus", "rdpstat-emux-bus", "emux-bus", "(rdpstat: emux XPROFREAD 0x04RF)",
            emux.build, [], emux.data),
 ]

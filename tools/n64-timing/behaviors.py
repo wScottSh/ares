@@ -9,6 +9,9 @@ usage: behaviors.py                 write ares/n64/timing/behaviors.hpp, docs/sp
        behaviors.py --results RUN_DIR
                                     write docs/spec/n64-timing-results.tsv, one result per
                                     check, from one standing run of every suite
+       behaviors.py --failing RUN_DIR
+                                    print each suite with a check that fails or did not run in
+                                    one standing run, and exit 1 if any; writes nothing
        behaviors.py --self-test     prove each --check failure fires and names its fix
 
 The console calibration (#16): tools/n64-timing/calibration/questions.tsv lists every question a
@@ -91,7 +94,7 @@ NUMBER_UNITS = {"Hz", "B", "entries", "dwords", "px", "lines", "instr", "rank", 
                 "B/rclk", "px/rclk", "vclk/px"}
 FLAG_UNITS = {"flag"}
 TEXT_UNITS = {"order", "map", "rule", "event"}
-RUNNERS = {"nemu64", "bench", "systembench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",
+RUNNERS = {"nemu64", "cpu", "bench", "systembench", "thar0", "snapper", "rdpstat", "noise", "pidma", "hydra",
            "mm", "det", "stepcap", "unit", "gen", "pending", "harness", "hw"}
 BARE_RUNNERS = {"det", "stepcap", "gen"}
 GUARD_RUNNERS = {"det", "stepcap"}
@@ -1287,6 +1290,22 @@ def nemu64_result(run, row):
     return tally([tests[n] for n in names], "tests")
 
 
+def cpu_result(run, row):
+    """A cpu suite ROM's own verdict (romgen/suites/cpu/run.sh): its `CPU: Failed X of Y` line. A summary
+    without that line is a ROM that never finished, so it fails."""
+    base = run / "cpu" / row["target"]
+    summary = text(base / "summary.txt")
+    if summary is None:
+        return None
+    m = re.search(r"^CPU: Failed (\d+) of (\d+) tests", summary, re.M)
+    if not m:
+        return "fail", f"no `CPU: Failed X of Y` line in cpu/{row['target']}/summary.txt; the ROM did not finish"
+    failed, total = int(m.group(1)), int(m.group(2))
+    failing = [r["test"] for r in tsv_rows(base / "tests.tsv") if r["result"] != "pass"] if (base / "tests.tsv").exists() else []
+    detail = f"{total - failed} of {total} tests pass" + (f"; failing: {', '.join(failing)}" if failing else "")
+    return ("pass" if failed == 0 and total else "fail"), detail
+
+
 def suite_runs(run, pattern, label):
     files = sorted(run.glob(pattern))
     if not files:
@@ -1461,7 +1480,7 @@ def pidma_result(run, row):
     return (m.group(1).lower(), m.group(2)) if m else None
 
 
-READERS = {"nemu64": nemu64_result, "det": lambda run, row: suite_runs(run, "det-*.txt", "determinism"),
+READERS = {"nemu64": nemu64_result, "cpu": cpu_result, "det": lambda run, row: suite_runs(run, "det-*.txt", "determinism"),
            "stepcap": lambda run, row: suite_runs(run, "stepcap-*.txt", "stepcap"),
            "bench": bench_result, "systembench": systembench_result, "thar0": thar0_result, "rdpstat": rdpstat_result, "snapper": snapper_result,
            "unit": ctest_result, "noise": noise_result, "gen": gen_result, "mm": mm_result, "pidma": pidma_result,
@@ -1537,6 +1556,15 @@ def results(root, run):
             result, detail = measured
         out.append((cid, result, detail))
     return errors, out
+
+
+def failing_suites(out):
+    """The checks of one scored run that fail or did not run, grouped by the suite (runner) that ran them."""
+    suites = {}
+    for cid, result, _ in out:
+        if result in ("fail", "not-run"):
+            suites.setdefault(cid.partition(":")[0], []).append(f"{cid} {result}")
+    return suites
 
 
 def run_label(path):
@@ -1827,6 +1855,20 @@ def self_test(root):
               f"{'ok' if ok else 'FAILED'}: {got} (expected consistent-only)")
         failures += not ok
         ran += 1
+        (run / "cpu" / "s").mkdir(parents=True)
+        for name, summary, want in [
+            ("a cpu ROM whose tests all pass", "CPU: Failed 0 of 12 tests (100% success rate)\n", "pass"),
+            ("a cpu ROM with one failing test", "CPU: Failed 1 of 12 tests (91% success rate)\n", "fail"),
+            ("a cpu ROM that never printed its verdict", "n64-run: stop=wall-limit\n", "fail"),
+        ]:
+            (run / "cpu" / "s" / "summary.txt").write_text(summary, encoding="utf-8")
+            got = cpu_result(run, {"target": "s"})
+            listed = "cpu" in failing_suites([("cpu:s", got[0], got[1])])
+            ok = got[0] == want and listed == (want != "pass")
+            print(f"self-test: {name}: {'ok' if ok else 'FAILED'}: {got}, failing list {'names' if listed else 'omits'} cpu "
+                  f"(expected {want})")
+            failures += not ok
+            ran += 1
         (run / "systembench").mkdir()
         cols = ["row", "name", "qty", "unit", "expected", "pristine", "min", "max", "runs", "runs_pass", "verdict", "kind", "port"]
         sb = [["a", "A", "4", "RCP", "134", "134", "134", "134", "33", "33", "pass", "check", "r p"],
@@ -1877,6 +1919,7 @@ def main():
     parser.add_argument("--fix-lines", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--results", metavar="RUN_DIR")
+    parser.add_argument("--failing", metavar="RUN_DIR")
     parser.add_argument("--run-commit", metavar="SHA", help=f"the commit a --results run was made on, for a run without {RUN_COMMIT}")
     args = parser.parse_args()
     root = args.root
@@ -1898,6 +1941,12 @@ def main():
     if args.fix_lines:
         print(f"behaviors.py: --fix-lines rewrote {fix_lines(root)} reference(s)")
         return 0
+    if args.failing:
+        suites = failing_suites(results(root, args.failing)[1])
+        for suite, checks in sorted(suites.items()):
+            print(f"failing suite {suite}: {len(checks)} check(s): {', '.join(checks)}")
+        print(f"behaviors.py: failing: {len(suites)} suite(s) in {run_label(args.failing)}")
+        return 1 if suites else 0
     if args.results:
         commit, error = run_commit(args.results, args.run_commit)
         if error:

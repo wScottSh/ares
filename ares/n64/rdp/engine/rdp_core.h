@@ -220,7 +220,7 @@ typedef struct
     poly_rect       clip;
     int32_t         start, end, offset;
     int32_t         lo;
-    int32_t         w, h, n;
+    int32_t         w, h;
     int32_t         span;
     int32_t         lead[HAZ_STAGES];
     int32_t         lead_max;
