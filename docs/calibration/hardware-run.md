@@ -108,7 +108,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | `dpc-sequencing` |
 | 10 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | `systemtest-rdp` |
 | 11 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | `unsynced-attrs` |
-| 12 | `nemu64-timing` | 0.8 s | 25.9 KB | no | `nemu64-console` |
+| 12 | `nemu64-timing` | 0.8 s | 26.7 KB | no | `nemu64-console` |
 | 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | `nemu64-cycle-console` |
 | 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | `nemu64-cop0hazard-console` |
 | 15 | `kit-tex` | 0.3 s | 16.3 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
