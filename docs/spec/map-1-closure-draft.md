@@ -2,13 +2,13 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 150 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run calib-kit-merge/standing on 214c46421). 1 consistent-only, 27 fail, 10 fit only, 4 model-choice, 70 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
+The spec is `docs/spec/n64-timing.md`: 150 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run calib-kit-merge/standing on 214c46421). 1 consistent-only, 27 fail, 12 fit only, 4 model-choice, 68 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
 
 ## Green predicates
 
 The three reports of `docs/design/green-plan.md` section 1, computed from the tables and the results. SOFTWARE_COMPLETE is the software-only end state; SOFTWARE_READY cannot hold without the console run (#16); MAP_GREEN is the map's destination.
 
-- SOFTWARE_COMPLETE: does not hold. 1 of 3 computed clauses hold; 1 is not computed from the repository.
+- SOFTWARE_COMPLETE: does not hold. 2 of 3 computed clauses hold; 1 is not computed from the repository.
 - SOFTWARE_READY: 0 of 6 clauses hold.
 - MAP_GREEN: does not hold. 0 of 4 computed clauses hold; 1 is not computed from the repository.
 
@@ -18,7 +18,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 |---|---|---|
 | every P0-P4 unit has landed or is closed with a stated reason | not computed | not computed from the repository: docs/design/green-plan.md section 4 lists the units, and the program ledger tracks them |
 | every non-green check names the kit question or console condition that decides it | yes | 42 of 42 non-green checks (hw:* excluded: each is its own console question) are in a question's closes column or tools/n64-timing/calibration/undecidable.tsv; missing: none |
-| no check is green through its own fit data or a fitted third-party threshold | **no** | no row passes through its own fit data (its status is then fit only); rows that pass only through checks another row's value was fit to, so a joint fit can hide their error: `cpu.exc-fpu`, `cpu.fpu-add`, `cpu.fpu-mul-s`, `cpu.fpu-mul-d`, `cpu.fpu-div-s`, `cpu.fpu-div-d`, `cpu.fpu-sqrt-s`, `cpu.fpu-sqrt-d`, `cpu.fpu-convert`, `cpu.fpu-cvt-s-d`, `rdp.span-1cycle`, `rdp.span-2cycle`. A fitted third-party threshold is not machine-readable: each check's source in tools/n64-timing/checks.tsv names its own |
+| no check is green through its own fit data or a fitted third-party threshold | yes | no row passes through its own fit data (its status is then fit only); rows that pass only through checks another row's value was fit to, so a joint fit can hide their error: none. A fitted third-party threshold is not machine-readable: each check's source in tools/n64-timing/checks.tsv names its own |
 | no check is dead (no ROM, no reader, or duplicate) | **no** | no ROM: none; hw checks whose question has no reader: `hw:mm-filesel`, `hw:pidma-offset`, `hw:vi-mid-field-blank`, `hw:vi-unfetched-video`; duplicates: none, since --check fails on two ids for one check |
 
 ### SOFTWARE_READY
@@ -40,7 +40,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
 | every hw:* check is ingested and passes | **no** | 0 of 80 pass, 80 pending:calibration-16 |
-| every row that is not excluded or out-of-kit is verified | **no** | 70 of 144 rows that are not excluded pass, counting the 10 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
+| every row that is not excluded or out-of-kit is verified | **no** | 68 of 144 rows that are not excluded pass, counting the 10 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
 
@@ -140,6 +140,7 @@ No published value exists for these, and no check measures them: their checks ar
 
 | Behavior | Fit from |
 |---|---|
+| `cpu.exc-fpu` | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` |
 | `cpu.exc-fpu-detect` | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` |
 | `cpu.fpu-trivial` | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` |
 | `cpu.eret` | `nemu64:timing/exception-roundtrip` |
@@ -150,6 +151,7 @@ No published value exists for these, and no check measures them: their checks ar
 | `rdp.primitive-base` | `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle` |
 | `rdp.span-dead-pixels` | `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle` |
 | `rdp.span-line-gap` | `thar0:alpha-fail-1cycle` `thar0:alpha-fail-2cycle` |
+| `rdp.span-2cycle` | `thar0:alpha-fail-2cycle` |
 
 ## Pending rows and their gates
 
@@ -227,7 +229,7 @@ These checks are gated too, but another check already decides their row.
 | `cpu.mci` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.exc-rf` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.exc-ex` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
-| `cpu.exc-fpu` | pass | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.exc-fpu` | fit only | `hw:fpu-classes` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `cpu.exc-fpu-detect` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:fpu-classes` pending (calibration-16) |
 | `cpu.fpu-add` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.fpu-mul-s` | pass | `hw:nemu64-console` pending (calibration-16) |
@@ -289,7 +291,7 @@ These checks are gated too, but another check already decides their row.
 | `rdp.span-dead-pixels` | fit only | `hw:rdp-rect-base` pending (calibration-16) |
 | `rdp.span-line-gap` | fit only | `hw:rdp-rect-base` pending (calibration-16) |
 | `rdp.span-1cycle` | pass | `hw:thar0-console` pending (calibration-16) |
-| `rdp.span-2cycle` | pass | `hw:thar0-console` pending (calibration-16) |
+| `rdp.span-2cycle` | fit only | `hw:thar0-console` pending (calibration-16); `hw:noise-2cycle` pending (calibration-16) |
 | `rdp.pipeline-depth` | pass | `hw:attribute-stage` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
 | `rdp.attribute-stage` | pass | `hw:attribute-stage` pending (calibration-16); `hw:attribute-sync-cost` pending (calibration-16); `hw:rdp-hold` pending (calibration-16) |
 | `rdp.atomic-dead` | pass | `rdpstat:1prim-32px` pending (report-only); `hw:rdp-atomic` pending (calibration-16); `hw:stale-read` pending (calibration-16); `hw:atomic-contention` pending (calibration-16); `hw:clobber` pending (calibration-16) |
