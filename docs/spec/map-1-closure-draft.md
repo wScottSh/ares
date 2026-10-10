@@ -2,13 +2,13 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 152 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run u-llsc-kit/after on a6effc96d). 1 consistent-only, 27 fail, 12 fit only, 4 model-choice, 69 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 1 pending:calibration-16 pending:no-rom, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
+The spec is `docs/spec/n64-timing.md`: 152 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run merged/standing on 72b146007). 1 consistent-only, 27 fail, 12 fit only, 4 model-choice, 70 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
 
 ## Green predicates
 
 The three reports of `docs/design/green-plan.md` section 1, computed from the tables and the results. SOFTWARE_COMPLETE is the software-only end state; SOFTWARE_READY cannot hold without the console run (#16); MAP_GREEN is the map's destination.
 
-- SOFTWARE_COMPLETE: does not hold. 1 of 3 computed clauses hold; 1 is not computed from the repository.
+- SOFTWARE_COMPLETE: not decided. 3 of 3 computed clauses hold; 1 is not computed from the repository.
 - SOFTWARE_READY: 0 of 6 clauses hold.
 - MAP_GREEN: does not hold. 0 of 4 computed clauses hold; 1 is not computed from the repository.
 
@@ -17,19 +17,19 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | Clause | Holds | Evidence |
 |---|---|---|
 | every P0-P4 unit has landed or is closed with a stated reason | not computed | not computed from the repository: docs/design/green-plan.md section 4 lists the units, and the program ledger tracks them |
-| every non-green check names the kit question or console condition that decides it | **no** | 42 of 43 non-green checks (hw:* excluded: each is its own console question) are in a question's closes column or tools/n64-timing/calibration/undecidable.tsv; missing: `bench:vi-frame-latch` |
+| every non-green check names the kit question or console condition that decides it | yes | 42 of 42 non-green checks (hw:* excluded: each is its own console question) are in a question's closes column or tools/n64-timing/calibration/undecidable.tsv; missing: none |
 | no check is green through its own fit data or a fitted third-party threshold | yes | no row passes through its own fit data (its status is then fit only); rows that pass only through checks another row's value was fit to, so a joint fit can hide their error: none. A fitted third-party threshold is not machine-readable: each check's source in tools/n64-timing/checks.tsv names its own |
-| no check is dead (no ROM, no reader, or duplicate) | **no** | no ROM: `bench:vi-frame-latch`; hw checks whose question has no reader: none; duplicates: none, since --check fails on two ids for one check |
+| no check is dead (no ROM, no reader, or duplicate) | yes | no ROM: none; hw checks whose question has no reader: none; duplicates: none, since --check fails on two ids for one check |
 
 ### SOFTWARE_READY
 
 | Clause | Holds | Evidence |
 |---|---|---|
-| det and stepcap pass, and the 600-field MM run takes <= 120 s, re-timed on current master | **no** | det pass, stepcap pass; slowest scene filesel-rotate 102.897 s; the wall times name `6dfbf7166` and the standing run `a6effc96d`, and the clause holds only when they match |
+| det and stepcap pass, and the 600-field MM run takes <= 120 s, re-timed on current master | **no** | det pass, stepcap pass; slowest scene filesel-rotate 102.897 s; the wall times name `6dfbf7166` and the standing run `72b146007`, and the clause holds only when they match |
 | no check is fail | **no** | 21 fail: `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:mi-memset-uncached`, `bench:uncached-sizes-u32-banked`, `mm:filesel-named`, `nemu64:timing/load-from-uncached-vi-on-same-bank`, `nemu64:timing/load-miss-vi-off`, `pidma:logs`, `systembench:pi-dma-128`, `systembench:pi-dma-8`, `systembench:pi-io-w`, `systembench:si-io-w`, `thar0:ac-zbsame-vioff-imrd-1cyc`, `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc`, `thar0:imrd-1cycle`, `thar0:nozb-visame-noimrd-1cyc`, `thar0:nozb-visep-imrd-1cyc`, `thar0:separate-bank`, `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`, `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`, `thar0:zcmp` |
 | no check is consistent-only or pass-conditional | **no** | 3: `bench:mi-memset-rspdma` pass-conditional:#77, `systembench:si-dma-w-rom` consistent-only, `systembench:u32r-banked` consistent-only |
-| every pending check is pending:calibration-16 on a kit question a tool can compare | **no** | other gates: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:vi-frame-latch`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; hw checks whose question no tool compares: none |
-| no check is report-only, no-rom or no-corpus, except on excluded or out-of-kit rows | **no** | report-only or no-rom checks: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:vi-frame-latch`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; rows gated on no-corpus: none |
+| every pending check is pending:calibration-16 on a kit question a tool can compare | **no** | other gates: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; hw checks whose question no tool compares: none |
+| no check is report-only, no-rom or no-corpus, except on excluded or out-of-kit rows | **no** | report-only or no-rom checks: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; rows gated on no-corpus: none |
 | every row that is not verified names a hardware question independent of its fit data | **no** | 1 rows that are not excluded or out of kit, do not pass, and name no hw:<question> a tool compares that does not re-run their fit: `rdp.mem-overhead-write` |
 
 ### MAP_GREEN
@@ -40,7 +40,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
 | every hw:* check is ingested and passes | **no** | 0 of 87 pass, 87 pending:calibration-16 |
-| every row that is not excluded or out-of-kit is verified | **no** | 69 of 146 rows that are not excluded pass, counting the 12 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
+| every row that is not excluded or out-of-kit is verified | **no** | 70 of 146 rows that are not excluded pass, counting the 12 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
 
@@ -81,7 +81,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 2 consistent-only, 21 fail, 90 pass, 1 pass-conditional:#77, 106 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 2 consistent-only, 21 fail, 91 pass, 1 pass-conditional:#77, 105 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
@@ -166,7 +166,6 @@ No published value exists for these, and no check measures them: their checks ar
 | `legacy.cpu.interrupt-entry` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `legacy.pi.cart-read` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
 | `legacy.ai.power-on-rate` | legacy | calibration-16 | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
-| `vi.frame-latch` | wiki | calibration-16, no-rom | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `clock.vclk` | derived | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `ri.post-read-gap` | datasheet | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `ri.post-write-gap` | datasheet | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
@@ -285,6 +284,7 @@ These checks are gated too, but another check already decides their row.
 | `vi.burst` | pass | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16) |
 | `vi.fetch-window` | pass | `hw:vi-fetch-position` pending (calibration-16) |
 | `vi.vclk-per-pixel` | pass | `hw:vi-cpu-contention` pending (calibration-16) |
+| `vi.frame-latch` | pass | `hw:vi-frame-latch` pending (calibration-16) |
 | `vi.aa-mode-lines` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:vi-fetch-modes` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `rdp.xbus-fetch-rate` | pass | `hw:xbus-fetch-rate` pending (calibration-16) |
 | `rdp.sync-pipe` | pass | `hw:rdp-sync-setter` pending (calibration-16) |

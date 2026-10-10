@@ -98,7 +98,7 @@ Every question a console run can answer for the timing model (calibration #16), 
 
 ## Rows pending calibration #16
 
-Rows whose checks wait on the console run. 24 rows, 24 with a kit question.
+Rows whose checks wait on the console run. 23 rows, 23 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
@@ -114,7 +114,6 @@ Rows whose checks wait on the console run. 24 rows, 24 with a kit question.
 | `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads`, `hw:systembench` |
 | `ai.fetch-bytes` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:ai-fetch | `hw:ai-fetch` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes hw:vi-frame-latch | `hw:vi-fetch-modes`, `hw:vi-frame-latch` |
-| `vi.frame-latch` | pending:calibration-16 pending:no-rom | bench:vi-frame-latch hw:vi-frame-latch | `hw:vi-frame-latch` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.cmd-fifo-dwords` | pending:calibration-16 | hw:cmd-fifo-depth | `hw:cmd-fifo-depth` |
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
