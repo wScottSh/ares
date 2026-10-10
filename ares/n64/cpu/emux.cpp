@@ -3,7 +3,12 @@
 auto CPU::ProfileSlot::global() -> ProfileSlot
 {
   auto p = ProfileSlot{};
-  p.cpu = ::ares::Nintendo64::cpu.profile;
+  auto& cpu = ::ares::Nintendo64::cpu;
+  p.cpu = cpu.profile;
+  //COUNT is flushed lazily, so the read credits the pending clocks the way flushCount() would, without flushing
+  auto pending = (s64)cpu.pendingCount();
+  p.cpu.cpuCycles += pending;
+  if(cpu.scc.status.exceptionLevel) p.cpu.cpuCyclesExc += pending;
   p.rsp.cycles = ::ares::Nintendo64::rsp.profile.cycles;
   p.rsp.haltedCycles = ::ares::Nintendo64::rsp.profile.haltedCycles;
   //a halted RSP's clock is stale until it resumes, so the span still open at the read is charged here
