@@ -467,6 +467,21 @@ int poly_manager_run_next(poly_manager *poly)
 }
 
 //-------------------------------------------------
+//  poly_manager_draw_next - run the next span's
+//  callback and leave it queued (ares port)
+//-------------------------------------------------
+
+int poly_manager_draw_next(poly_manager *poly)
+{
+    poly_span span;
+    if (!poly_manager_peek(poly, 0, &span))
+        return 0;
+    (*span.primitive->m_callback)(span.primitive->m_cbarg, span.scanline,
+        span.extent, span.primitive->m_object, 0);
+    return 1;
+}
+
+//-------------------------------------------------
 //  poly_manager_object_next - allocate the next
 //  object data block (object_data().next())
 //-------------------------------------------------

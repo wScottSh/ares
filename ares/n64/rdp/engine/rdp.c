@@ -86,6 +86,15 @@ void rdp_render_set_span_clock(uint64_t first_clock, uint32_t clocks_per_pixel)
     s_ctx.rdp->m_noise_step = clocks_per_pixel;
 }
 
+void rdp_render_set_span_stalls(const uint32_t *stall_pixel, const uint32_t *stall_clocks, unsigned count)
+{
+    if (s_ctx.rdp == NULL)
+        return;
+    s_ctx.rdp->m_stall_pixel = stall_pixel;
+    s_ctx.rdp->m_stall_clocks = stall_clocks;
+    s_ctx.rdp->m_stalls = count;
+}
+
 void rdp_render_set_log(void (*log)(int level, const char *fmt, ...))
 {
     cen64_log = log != NULL ? log : rdp_log_stderr;
@@ -261,6 +270,11 @@ int rdp_render_span_peek(unsigned ahead, rdp_span_info *info)
     info->z_compare = o->m_other_modes.z_compare_en;
     info->z_update = o->m_other_modes.z_update_en;
     info->atomic = o->m_other_modes.atomic_prim;
+    /* the combiner's NOISE input (SUB_A RGB code 7), noise dither, or the
+     * alpha compare's noise threshold */
+    info->noise = o->m_combine.sub_a_rgb0 == 7 || o->m_combine.sub_a_rgb1 == 7 ||
+                  o->m_other_modes.rgb_dither_sel == 2 || o->m_other_modes.alpha_dither_sel == 2 ||
+                  o->m_other_modes.alpha_dither_mode == 3;
     return 1;
 }
 
@@ -268,6 +282,12 @@ void rdp_render_span_run(void)
 {
     if (s_ctx.rdp != NULL)
         poly_manager_run_next(&s_ctx.rdp->m_pool);
+}
+
+void rdp_render_span_draw(void)
+{
+    if (s_ctx.rdp != NULL)
+        poly_manager_draw_next(&s_ctx.rdp->m_pool);
 }
 
 void rdp_render_set_windows(const rdp_memwin *windows, unsigned count)

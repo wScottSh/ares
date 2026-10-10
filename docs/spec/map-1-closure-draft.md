@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 151 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run after/standing on aee40c382). 1 consistent-only, 27 fail, 12 fit only, 4 model-choice, 69 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
+The spec is `docs/spec/n64-timing.md`: 150 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run after/standing on aee40c382). 1 consistent-only, 27 fail, 12 fit only, 4 model-choice, 68 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
 
 ## Green predicates
 
@@ -40,7 +40,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
 | every hw:* check is ingested and passes | **no** | 0 of 85 pass, 85 pending:calibration-16 |
-| every row that is not excluded or out-of-kit is verified | **no** | 69 of 145 rows that are not excluded pass, counting the 13 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
+| every row that is not excluded or out-of-kit is verified | **no** | 68 of 144 rows that are not excluded pass, counting the 13 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
 
@@ -71,17 +71,17 @@ Every check whose result is fail, with its residual, and the rows that name it.
 | `systembench:si-io-w` | SI I/O W [4] 2150 RCP cycles, 2150..2151 over the boot delays (hardware 2158, -8, -0.37%); main.c rule holds in 0 of 33 runs | `si.io-busy` | - |
 | `thar0:ac-zbsame-vioff-imrd-1cyc` | model 108697 vs console 105999 (105940..106092), +2.55% | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` |
 | `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` | model 170392 vs console 166352 (166182..166520), +2.43% | - | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` |
-| `thar0:imrd-1cycle` | model 176749 vs console 163556 (163436..163654), +8.07% | `ri.overhead-rdp` `rdp.span-slots` `rdp.port-lookahead` `rdp.read-gate` | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` `rdp.port-lookahead` |
+| `thar0:imrd-1cycle` | model 176749 vs console 163556 (163436..163654), +8.07% | `ri.overhead-rdp` `rdp.span-ram-half` `rdp.port-lookahead` `rdp.read-gate` | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` `rdp.port-lookahead` |
 | `thar0:nozb-visame-noimrd-1cyc` | model 77772 vs console 81791.4 (81654..81868), -4.91% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:nozb-visep-imrd-1cyc` | model 181106 vs console 174059 (173832..174382), +4.05% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:separate-bank` | model 225260 vs console 225679 (225518..225802), -0.19% | `ri.arbitration` `ri.overhead-rdp` | - |
-| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | model 199078 vs console 208861 (208473..209121), -4.68% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
+| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | model 199078 vs console 208861 (208473..209121), -4.68% | `rdp.span-ram-half` `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | model 232657 vs console 245639 (245078..246077), -5.28% | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `thar0:zcmp` | model 108697 vs console 106000 (105940..106088), +2.54% | `rdp.read-gate` | - |
 
 ## Checks that pass only weakly
 
-Check results: 2 consistent-only, 21 fail, 89 pass, 1 pass-conditional:#77, 103 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 2 consistent-only, 21 fail, 90 pass, 1 pass-conditional:#77, 103 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
@@ -118,10 +118,10 @@ None.
 | `si.io-busy` | measured | `systembench:si-io-w`: SI I/O W [4] 2150 RCP cycles, 2150..2151 over the boot delays (hardware 2158, -8, -0.37%); main.c rule holds in 0 of 33 runs |
 | `vi.lines-per-output-line` | vendor | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7846 over 64 phases (band 32.300..40.300), mean 41.642..41.888, median 37 (band 35..37) fail on mean |
 | `vi.aa-mode-lines` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7846 over 64 phases (band 32.300..40.300), mean 41.642..41.888, median 37 (band 35..37) fail on mean |
+| `rdp.span-ram-half` | measured | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199078 vs console 208861 (208473..209121), -4.68% |
 | `rdp.span-read-latency` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181106 vs console 174059 (173832..174382), +4.05%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232657 vs console 245639 (245078..246077), -5.28%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199078 vs console 208861 (208473..209121), -4.68%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) |
 | `rdp.mem-overhead-read` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181106 vs console 174059 (173832..174382), +4.05%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232657 vs console 245639 (245078..246077), -5.28%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199078 vs console 208861 (208473..209121), -4.68%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) |
 | `rdp.mem-overhead-write` | fit | `thar0:nozb-visep-imrd-1cyc`: model 181106 vs console 174059 (173832..174382), +4.05%; `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`: model 232657 vs console 245639 (245078..246077), -5.28%; `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`: model 199078 vs console 208861 (208473..209121), -4.68%; `thar0:nozb-visame-noimrd-1cyc`: model 77772 vs console 81791.4 (81654..81868), -4.91%; `mm:filesel-named`: filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) |
-| `rdp.span-slots` | model-choice | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.port-lookahead` | fit | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `rdp.read-gate` | vendor | `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07%; `thar0:zcmp`: model 108697 vs console 106000 (105940..106088), +2.54% |
 
@@ -298,11 +298,10 @@ These checks are gated too, but another check already decides their row.
 | `rdp.pipeline-depth` | pass | `hw:attribute-stage` pending (calibration-16); `hw:snapper64` pending (calibration-16) |
 | `rdp.attribute-stage` | pass | `hw:attribute-stage` pending (calibration-16); `hw:attribute-sync-cost` pending (calibration-16); `hw:rdp-hold` pending (calibration-16) |
 | `rdp.atomic-dead` | pass | `rdpstat:1prim-32px` pending (report-only); `hw:rdp-atomic` pending (calibration-16); `hw:stale-read` pending (calibration-16); `hw:atomic-contention` pending (calibration-16); `hw:clobber` pending (calibration-16) |
-| `rdp.span-ram-half` | pass | `hw:snapper64` pending (calibration-16) |
+| `rdp.span-ram-half` | fail | `hw:snapper64` pending (calibration-16); `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16); `hw:imrd-zcmp-slots-2cyc` pending (calibration-16); `hw:zread-2cyc` pending (calibration-16); `hw:thar0-console` pending (calibration-16) |
 | `rdp.span-ram-segment` | pass | `hw:snapper64` pending (calibration-16) |
 | `rdp.span-read-latency` | fail | `hw:mm-filesel` pending (calibration-16); `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16); `hw:imrd-zcmp-slots-2cyc` pending (calibration-16); `hw:zread-2cyc` pending (calibration-16) |
 | `rdp.mem-overhead-read` | fail | `hw:span-width` pending (calibration-16) |
-| `rdp.span-slots` | fail | `hw:span-width` pending (calibration-16); `hw:imrd-zcmp-slots` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:snapper64` pending (calibration-16); `hw:imrd-zcmp-slots-2cyc` pending (calibration-16); `hw:zread-2cyc` pending (calibration-16) |
 | `rdp.port-lookahead` | fail | `hw:imrd-zcmp-slots-2cyc` pending (calibration-16) |
 | `rdp.read-gate` | fail | `hw:thar0-console` pending (calibration-16) |
 | `rdp.write-run` | pass | `hw:write-granularity` pending (calibration-16); `hw:write-granularity-pixels` pending (calibration-16); `hw:thar0-console` pending (calibration-16); `hw:snapper64` pending (calibration-16) |

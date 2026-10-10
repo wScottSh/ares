@@ -44,7 +44,10 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
   auto retire() -> void;
   auto land(Clock at) -> void;
   auto pipeline(Clock at) -> void;
-  auto prefetch(Clock at) -> void;
+  auto admit(Clock at) -> void;
+  auto postReads() -> void;
+  auto drain(u32 image, Clock at) -> void;
+  auto draw(bool final) -> void;
   auto startSpan(Clock at) -> bool;
   auto beginChunk(Clock at) -> bool;
   auto endChunk(Clock at) -> void;
@@ -95,28 +98,36 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
 
   //The memory interface (ADR 0001 Decision 3, plan T13). Every byte the
   //renderer reads or writes moves in an RI burst: command words
-  //(DpCommand), span snapshots and write-back runs (DpColor, DpDepth),
-  //TMEM load sources (DpTexture), fill writes (DpFill).
+  //(DpCommand), span reads and write-back runs (DpColor, DpDepth), TMEM
+  //load sources (DpTexture), fill writes (DpFill).
   enum Image : u8 { Color, Depth, Texture, Command };
   static constexpr u32 SpanBytes = 4096 + 16;   //a 1024-pixel 32-bpp row, octbyte-aligned
-  static constexpr u32 Slots = Timing::Behavior::RdpSpanSlots;  //spans between prefetch and their last write grant
+  //Spans whose first half is allocated (span-ram.md rows 3-5: two halves of
+  //rdp.span-ram-half per image, a span takes at least one stream position,
+  //at most one per byte), plus the one entering
+  static constexpr u32 Slots = 2 * Timing::Behavior::RdpSpanRamHalf + 2;
+  static constexpr u32 Segments = 256;          //a power of two above Slots plus one span's halves
   static constexpr u32 LoadBytes = 64 * 1024;   //TMEM load staging (rows of a load, octbyte-aligned)
 
-  //One span row of one image as the RI delivered it and as the pipeline wrote it.
+  //One span row of one image: the bytes each half's read delivered, and
+  //what the pipeline drew from them. A span's pixels are drawn again from
+  //`data` as more of its halves land, so the drawing goes to `out`.
   struct Window {
     u32 lo = 0, hi = 0;
     u8  data[SpanBytes];
     u8  hidden[SpanBytes / 2];
     u8  written[SpanBytes];
+    u8  out[SpanBytes];
+    u8  outHidden[SpanBytes / 2];
   };
 
   struct Slot {
     rdp_span_info info;
     Window color, depth;
-    u32   reads = 0;    //snapshot bursts not yet landed
     u32   writes = 0;   //write-back bursts not yet landed
-    Clock ready;        //the last snapshot burst landed
     bool  shaded = false;
+    bool  queued = false;  //still in the engine's span queue: its final draw has not run
+    u32   drawn = 0;       //pixels its last draw took from landed bytes
   };
 
   //One burst a port has yet to post or has in flight.
@@ -126,7 +137,8 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     u8  write;
     u8  slot;
     u8  image;
-    u8  half;
+    u8  half;     //a write: the span-RAM half it drains
+    u8  segment;  //a read: the segment it fills
   };
 
   //The RDP's memory interface toward the RI. It posts one burst at a time
@@ -156,17 +168,41 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     auto reset() -> void { queue.clear(); flights.clear(); posted = false; freeAt = {}; }
   };
 
-  //A span-RAM half (span-ram.md rows 3-6): it fills along the stream and
-  //writes back when full or at the end of a span; a TMEM load waits for the
-  //Z halves' write-backs (it stages through them).
+  //A span-RAM half (span-ram.md rows 3-6). Each image has two, used in turn
+  //along the pixel stream: instance n of an image lives in half n & 1 and
+  //is usable once instance n - 2 has drained, that is, the pipeline has
+  //shaded all of it and its write-backs have landed. A TMEM load waits for
+  //the Z halves' write-backs (it stages through them).
   struct Half {
-    u32 outstanding = 0;
+    u32   outstanding = 0;  //write-back bursts not yet landed
+    Clock drained;          //the last instance it held drained
+  };
+
+  //The pixels of one span that sit in one half instance of one image, and
+  //their bytes. A span that reads the image reads each segment into its
+  //half once the half is usable.
+  struct Segment {
+    u8    slot = 0;
+    u8    read = 0;      //the span reads this image (rdp.read-gate)
+    u8    posted = 0;    //its read bursts are queued
+    u32   instance = 0;
+    u32   first = 0, end = 0;  //span pixels
+    u32   lo = 0, hi = 0;      //bytes
+    u32   reads = 0;     //read bursts not yet landed
+    Clock ready;         //the last read burst landed
   };
 
   struct Stream {
-    u32  position = 0;  //stream position of the next pixel (span-ram.md row 3)
-    u32  halfStart = 0; //first pixel of the current span in the current half
+    u32  instance = 0;  //the half instance the next span's pixels go into
+    u32  offset = 0;    //stream position in it (span-ram.md row 3)
+    u32  size = 0;      //positions it holds
+    u32  drained = 0;   //instances below this have drained
     Half halves[2];
+    Segment segments[Segments];
+    u32  head = 0, count = 0;  //segments not yet shaded, oldest first
+    u32  posted = 0;           //of them, the leading ones whose reads are queued
+    auto segment(u32 i) -> Segment& { return segments[(head + i) % Segments]; }
+    auto usable(u32 n) const -> bool { return n < drained + 2; }
   };
 
   struct Pipe {
@@ -177,9 +213,14 @@ struct RDP : Thread, Memory::RCP<RDP>, Timing::Actor {
     bool  chunk = false; //a chunk runs until `chunkEnd`
     Clock chunkEnd;
     u32   chunkPixels = 0;
+    Clock spanStart;     //the current span's first chunk began
+    u32   stalls = 0;    //chunks of the current span that began late, and by how much
+    u32   stallPixel[2 * SpanBytes / Timing::Behavior::RdpSpanRamSegment + 2];
+    u32   stallClocks[2 * SpanBytes / Timing::Behavior::RdpSpanRamSegment + 2];
     Stream color, depth;
     u32   head = 0, count = 0;   //slots in use, oldest first
-    s32   prefetched = -1;       //slot holding the next unrun span
+    u32   admitted = 0;          //of them, the newest ones the pipeline has not entered
+    u32   queued = 0;            //engine queue entries before the next span to admit
     u32   lastPrimitive = ~0u;
     Clock lastWrite;             //last write-back landing
     Clock lastSpanEnd;           //the pipeline finished its last span

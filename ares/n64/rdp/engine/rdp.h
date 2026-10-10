@@ -61,13 +61,16 @@ int rdp_render_init(uint32_t rdram_size, int32_t pipeline_depth);
  * byte addresses. data holds the bytes in ares' RDRAM layout (byte a at
  * data[(a - lo) ^ 3]), hidden the ninth bits (halfword a >> 1 at
  * hidden[(a - lo) >> 1]), written one flag per byte the renderer wrote
- * (written[a - lo]). */
+ * (written[a - lo]). Writes go to out and out_hidden when they are set,
+ * so a span can be drawn again from the bytes it read; else in place. */
 typedef struct rdp_memwin
 {
     uint32_t lo, hi;
     uint8_t *data;
     uint8_t *hidden;
     uint8_t *written;
+    uint8_t *out;
+    uint8_t *out_hidden;
 } rdp_memwin;
 
 typedef struct rdp_memrange
@@ -132,6 +135,7 @@ typedef struct rdp_span_info {
   uint32_t fb_address, fb_width, fb_size, zb_address;
   uint32_t cycle_type;
   uint8_t  image_read, z_compare, z_update, atomic;
+  uint8_t  noise;            /* a pixel's value can depend on its clock (noise LFSRs) */
 } rdp_span_info;
 
 /* Plan T14: the hardware noise LFSRs (rdp-noise.md) live in the host. Each
@@ -144,11 +148,18 @@ void rdp_render_set_noise(rdp_noise_bits (*noise)(uint64_t rdp_clock));
 /* The RDP clock, counted from power-on, at which the next span's first pixel
  * samples the noise, and the clocks from one pixel to the next. */
 void rdp_render_set_span_clock(uint64_t first_clock, uint32_t clocks_per_pixel);
+/* Clocks the pipeline stalled inside the next span: from pixel stall_pixel[i]
+ * on, pixels sample the noise stall_clocks[i] clocks later than the span
+ * clock says (pixel order ascending). The arrays stay the host's. */
+void rdp_render_set_span_stalls(const uint32_t *stall_pixel, const uint32_t *stall_clocks, unsigned count);
 
 /* The queued span `ahead` places past the next one to run; 0 when none. */
 int      rdp_render_span_peek(unsigned ahead, rdp_span_info *info);
 /* Runs the next queued span against the installed windows. */
 void     rdp_render_span_run(void);
+/* Draws the next queued span against the installed windows and keeps it
+ * queued, so a later draw or run can draw it again. */
+void     rdp_render_span_draw(void);
 void     rdp_render_set_windows(const rdp_memwin *windows, unsigned count);
 /* Accesses that fell outside every installed window (a footprint bug). */
 uint64_t rdp_render_mem_misses(void);

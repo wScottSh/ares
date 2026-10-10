@@ -211,6 +211,7 @@ void poly_manager_wait(poly_manager *poly);
 // ares port: the queued span `ahead` places past the next, and running the next
 int  poly_manager_peek(poly_manager *poly, uint32_t ahead, poly_span *span);
 int  poly_manager_run_next(poly_manager *poly);
+int  poly_manager_draw_next(poly_manager *poly);
 
 // ares port: save states (see rdp_poly.c)
 typedef void (*poly_state_io)(void *ctx, void *data, size_t size);

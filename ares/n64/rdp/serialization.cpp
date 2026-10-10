@@ -37,6 +37,7 @@ auto RDP::serialize(serializer& s) -> void {
     s(p.slot);
     s(p.image);
     s(p.half);
+    s(p.segment);
   };
   for(auto* port : {&memory, &command, &fillPort}) {
     u32 queued = port->queue.size(), flying = port->flights.size();
@@ -49,7 +50,13 @@ auto RDP::serialize(serializer& s) -> void {
     s(port->freeAt.units);
     s(port->words);
   }
-  for(auto& slot : slots) {
+  s(pipe.head);
+  s(pipe.count);
+  s(pipe.admitted);
+  s(pipe.queued);
+  if(pipe.count > Slots) pipe.count = 0;
+  for(u32 i : range(pipe.count)) {
+    auto& slot = slots[(pipe.head + i) % Slots];
     s(std::span<u8>{(u8*)&slot.info, sizeof(slot.info)});
     for(auto* w : {&slot.color, &slot.depth}) {
       s(w->lo);
@@ -58,11 +65,13 @@ auto RDP::serialize(serializer& s) -> void {
       s(std::span<u8>{w->data, bytes});
       s(std::span<u8>{w->hidden, bytes / 2});
       s(std::span<u8>{w->written, bytes});
+      s(std::span<u8>{w->out, bytes});
+      s(std::span<u8>{w->outHidden, bytes / 2});
     }
-    s(slot.reads);
     s(slot.writes);
-    s(slot.ready.units);
     s(slot.shaded);
+    s(slot.queued);
+    s(slot.drawn);
   }
   s(pipe.time.units);
   s(pipe.wake.units);
@@ -71,14 +80,34 @@ auto RDP::serialize(serializer& s) -> void {
   s(pipe.chunk);
   s(pipe.chunkEnd.units);
   s(pipe.chunkPixels);
+  s(pipe.spanStart.units);
+  s(pipe.stalls);
+  s(pipe.stallPixel);
+  s(pipe.stallClocks);
   for(auto* st : {&pipe.color, &pipe.depth}) {
-    s(st->position);
-    s(st->halfStart);
-    for(auto& h : st->halves) s(h.outstanding);
+    s(st->instance);
+    s(st->offset);
+    s(st->size);
+    s(st->drained);
+    for(auto& h : st->halves) s(h.outstanding), s(h.drained.units);
+    s(st->head);
+    s(st->count);
+    s(st->posted);
+    if(st->count > Segments) st->count = 0;
+    for(u32 i : range(st->count)) {
+      auto& g = st->segment(i);
+      s(g.slot);
+      s(g.read);
+      s(g.posted);
+      s(g.instance);
+      s(g.first);
+      s(g.end);
+      s(g.lo);
+      s(g.hi);
+      s(g.reads);
+      s(g.ready.units);
+    }
   }
-  s(pipe.head);
-  s(pipe.count);
-  s(pipe.prefetched);
   s(pipe.lastPrimitive);
   s(pipe.lastWrite.units);
   s(pipe.lastSpanEnd.units);

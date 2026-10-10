@@ -413,6 +413,9 @@ struct rdp_t
      * (rdp_render_set_span_clock). */
     uint64_t          m_noise_clock;
     uint32_t          m_noise_step;
+    const uint32_t   *m_stall_pixel;
+    const uint32_t   *m_stall_clocks;
+    uint32_t          m_stalls;
 
 
 
@@ -539,7 +542,7 @@ static inline void rdp_mem_write8(rdp_t *rdp, uint32_t a, uint8_t v)
 {
     const rdp_memwin *w;
     if (rdp->m_mem_record || a > MEM8_LIMIT || (w = rdp_mem_find(rdp, a, 1)) == NULL) return;
-    w->data[(a - w->lo) ^ 3u] = v;
+    (w->out ? w->out : w->data)[(a - w->lo) ^ 3u] = v;
     w->written[a - w->lo] = 1;
 }
 static inline void rdp_mem_write16(rdp_t *rdp, uint32_t in, uint16_t v)
@@ -547,7 +550,7 @@ static inline void rdp_mem_write16(rdp_t *rdp, uint32_t in, uint16_t v)
     const uint32_t a = in << 1;
     const rdp_memwin *w;
     if (rdp->m_mem_record || a > MEM8_LIMIT || (w = rdp_mem_find(rdp, a, 2)) == NULL) return;
-    ((uint16_t *)w->data)[((a - w->lo) >> 1) ^ 1u] = v;
+    ((uint16_t *)(w->out ? w->out : w->data))[((a - w->lo) >> 1) ^ 1u] = v;
     w->written[a - w->lo] = 1;
     w->written[a - w->lo + 1] = 1;
 }
@@ -556,7 +559,7 @@ static inline void rdp_mem_write32(rdp_t *rdp, uint32_t in, uint32_t v)
     const uint32_t a = in << 2;
     const rdp_memwin *w;
     if (rdp->m_mem_record || a > MEM8_LIMIT || (w = rdp_mem_find(rdp, a, 4)) == NULL) return;
-    ((uint32_t *)w->data)[(a - w->lo) >> 2] = v;
+    ((uint32_t *)(w->out ? w->out : w->data))[(a - w->lo) >> 2] = v;
     memset(&w->written[a - w->lo], 1, 4);
 }
 static inline uint8_t rdp_mem_hread(rdp_t *rdp, uint32_t in)
@@ -572,7 +575,7 @@ static inline void rdp_mem_hwrite(rdp_t *rdp, uint32_t in, uint8_t v)
     const uint32_t a = in << 1;
     const rdp_memwin *w;
     if (rdp->m_mem_record || a > MEM8_LIMIT || (w = rdp_mem_find(rdp, a, 2)) == NULL) return;
-    w->hidden[(a - w->lo) >> 1] = v;
+    (w->out_hidden ? w->out_hidden : w->hidden)[(a - w->lo) >> 1] = v;
 }
 
 #endif

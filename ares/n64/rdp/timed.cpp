@@ -57,7 +57,7 @@ auto RDP::Port::native(const RiBus::Burst& b, Native& n) -> bool {
     abort();
   }
   auto& w = p.image == Color ? self->slots[p.slot].color : self->slots[p.slot].depth;
-  n = {w.data, w.hidden, w.lo};
+  n = p.write ? Native{w.out, w.outHidden, w.lo} : Native{w.data, w.hidden, w.lo};
   return true;
 }
 
@@ -137,15 +137,18 @@ auto RDP::wakeAt(Clock at) -> void {
 auto RDP::dispatchable() const -> bool {
   if(executor.busy || dpc.freeze || dpc.crashed || rdp_render_engine_need() != 0) return false;
   int command = rdp_render_engine_next();
+  //a span the pipeline has not entered: admitted, or not yet admitted (the
+  //slot past a primitive's last span draws nothing and enters nothing)
   rdp_span_info info;
-  bool unrun = rdp_render_span_peek(0, &info);
+  bool unrun = pipe.admitted > 0;
+  for(u32 i = pipe.queued; !unrun && rdp_render_span_peek(i, &info); i++) unrun = !info.phantom;
   //a primitive dispatches once the previous one's last span has entered the pipe
   if(isPrimitive(command) && unrun) return false;
   //Sync Load/Pipe/Tile stall the pipeline a fixed number of GCLK (n64brew
   //Commands), after the spans ahead of them
   if(isSync(command) && (unrun || pipe.current >= 0)) return false;
   if(rdp_render_engine_drains()) {
-    if(unrun || pipe.current >= 0) return false;
+    if(unrun || pipe.current >= 0 || rdp_render_span_peek(0, &info)) return false;
     if(isLoad(command)) return tmemLoad.active && tmemLoad.reads == 0;
   }
   return true;
@@ -225,7 +228,7 @@ auto RDP::step(Clock at) -> void {
 
 //Frees finished slots, oldest first.
 auto RDP::retire() -> void {
-  while(pipe.count) {
+  while(pipe.count - pipe.admitted) {
     auto& slot = slots[pipe.head];
     if(!slot.shaded || slot.writes) break;
     slot.shaded = false;
@@ -234,7 +237,7 @@ auto RDP::retire() -> void {
   }
 }
 
-//Granted bursts whose data has arrived: snapshots become ready, halves and
+//Granted bursts whose data has arrived: segments become ready, halves and
 //slots drain, command words reach the FIFO, staged load rows count down.
 auto RDP::land(Clock at) -> void {
   auto landOne = [&](Port& port, const Port::Flight& f) {
@@ -256,18 +259,20 @@ auto RDP::land(Clock at) -> void {
       if(t > tmemLoad.ready) tmemLoad.ready = t;
       return;
     }
-    auto& slot = slots[p.slot];
+    auto& stream = p.image == Color ? pipe.color : pipe.depth;
     if(!p.write) {
-      slot.reads--;
-      if(t > slot.ready) slot.ready = t;
+      auto& g = stream.segments[p.segment];
+      g.reads--;
+      if(t > g.ready) g.ready = t;
       return;
     }
+    auto& slot = slots[p.slot];
     slot.writes--;
     pipe.writes--;
     if(t > pipe.lastWrite) pipe.lastWrite = t;
     if(p.half != 0xff) {
-      auto& half = (p.image == Color ? pipe.color : pipe.depth).halves[p.half];
-      half.outstanding--;
+      stream.halves[p.half].outstanding--;
+      drain(p.image, t);
     }
     if(executor.syncFull && !pipe.writes && executor.until == Clock::never()) executor.until = max(t, at);
   };
@@ -286,96 +291,198 @@ auto RDP::land(Clock at) -> void {
   retire();
 }
 
-//Posts the snapshot reads of the next queued span: color if IM_RD, Z if
-//Z_CMP (rdp.read-gate), one span ahead of the pipeline (SDK 12.2.3: the next
-//span is prefetched into another span buffer). A 1-primitive span waits for
-//every earlier write-back to land and for rdp.atomic-dead clocks after the
-//previous span was rendered (SDK 12.2.3: "30 to 40 null cycles after the
-//last span of a primitive is rendered"; 1prim-cost.md).
-auto RDP::prefetch(Clock at) -> void {
-  retire();
-  if(pipe.prefetched >= 0 || pipe.count == Slots) return;
-  rdp_span_info info;
-  //the slot past a primitive's last real span draws nothing and never enters the pipe
-  while(rdp_render_span_peek(0, &info) && info.phantom) rdp_render_span_run();
-  if(!rdp_render_span_peek(0, &info)) return;
-  if(info.atomic && info.primitive != pipe.lastPrimitive) {
-    if(pipe.count || pipe.current >= 0) return;
-    Clock barrier = max(pipe.lastWrite, pipe.lastSpanEnd + Timing::Behavior::RdpAtomicDead);
-    if(barrier > at) return wakeAt(barrier);
+//Half instances drain in order: an instance has drained once no later span
+//can put pixels in it, the pipeline has shaded every segment in it, and its
+//write-backs have landed. Its half then holds instance n + 2.
+auto RDP::drain(u32 image, Clock at) -> void {
+  auto& s = image == Color ? pipe.color : pipe.depth;
+  while(s.drained < s.instance) {
+    if(s.count && s.segment(0).instance <= s.drained) return;
+    auto& half = s.halves[s.drained & 1];
+    if(half.outstanding) return;
+    half.drained = at;
+    s.drained++;
   }
-  u32 index = (pipe.head + pipe.count) % Slots;
-  auto& slot = slots[index];
-  slot.info = info;
-  slot.reads = slot.writes = 0;
-  slot.ready = at;
-  slot.shaded = false;
-  pipe.count++;
-  pipe.prefetched = index;
-  pipe.lastPrimitive = info.primitive;
-
-  auto setup = [&](Window& w, u32 base, u32 bpp, bool read, Image image) {
-    w.lo = w.hi = 0;
-    if(!bpp || info.x1 < info.x0) return;
-    u32 row = base + ((u32)info.y * info.fb_width + (u32)info.x0) * bpp;
-    u32 end = base + ((u32)info.y * info.fb_width + (u32)info.x1 + 1) * bpp;
-    w.lo = row & ~7;
-    w.hi = (end + 7) & ~7;
-    if(w.hi - w.lo > SpanBytes) w.hi = w.lo + SpanBytes;
-    memory::fill<u8>(w.data, w.hi - w.lo, 0);
-    memory::fill<u8>(w.hidden, (w.hi - w.lo) / 2, 0);
-    memory::fill<u8>(w.written, w.hi - w.lo, 0);
-    if(!read) return;
-    splitBursts(w.lo, w.hi, Timing::Behavior::RdpSpanRamHalf, [&](u32 a, u32 n) {
-      memory.queue.push_back({a, (u8)n, 0, (u8)index, (u8)image, 0xff});
-      slot.reads++;
-    });
-  };
-  const bool rmw = info.cycle_type <= 1;
-  setup(slot.color, info.fb_address & 0xffffff, bytesPerPixel(info.fb_size), rmw && info.image_read, Color);
-  const bool z = rmw && (info.z_compare || info.z_update);
-  setup(slot.depth, info.zb_address & 0xffffff, z ? 2 : 0, rmw && info.z_compare, Depth);
 }
 
-//Shades the prefetched span once its snapshot has landed and the pipeline
-//is free: pixels are computed now, from the bytes the RI delivered.
-auto RDP::startSpan(Clock at) -> bool {
-  if(pipe.prefetched < 0) return false;
-  auto& slot = slots[pipe.prefetched];
-  if(slot.reads) return false;
-  Clock start = max(pipe.time, slot.ready);
-  if(start > at) return wakeAt(start), false;
-  rdp_memwin windows[2];
-  u32 n = 0;
-  for(auto* w : {&slot.color, &slot.depth})
-    if(w->hi > w->lo) windows[n++] = {w->lo, w->hi, w->data, w->hidden, w->written};
-  rdp_render_set_windows(windows, n);
-  //each pixel samples the noise at its own pipeline clock, plus the open
-  //rdp.noise-pixel-offset; a 2-cycle pixel at its first clock
-  const u64 first = (Timing::nextRclkEdge(start) + Timing::Behavior::RdpNoisePixelOffset).units / Timing::UnitsPerRclk;
-  rdp_render_set_span_clock(first, RDPTimed::pixelClocks(slot.info.cycle_type, 1).units / Timing::UnitsPerRclk);
-  auto host = std::chrono::steady_clock::now();
-  rdp_render_span_run();
-  engine.renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - host).count();
-  rdp_render_set_windows(nullptr, 0);
-  pipe.current = pipe.prefetched;
-  pipe.prefetched = -1;
-  pipe.pixel = 0;
-  pipe.time = start;
-  for(auto* s : {&pipe.color, &pipe.depth}) {
-    //each span starts at its segment phase (span-ram.md row 3), 4 positions of 4 B as measured
-    //at 32 bpp; the same 4 positions are applied at 16 bpp, where nothing measures them
-    s->position += ((u32)slot.info.x0 - s->position) & (u32)(Timing::Behavior::RdpSpanRamSegment / 4 - 1);
-    s->halfStart = 0;
+//Admits the next queued spans in stream order: each image's pixels take
+//consecutive stream positions in the image's halves (span-ram.md rows 3-6),
+//each span from its segment phase, cut into one segment per half instance.
+//A span is admitted once the half its first pixels go into is usable. A
+//1-primitive span waits for every earlier write-back to land and for
+//rdp.atomic-dead clocks after the previous span was rendered (SDK 12.2.3:
+//"30 to 40 null cycles after the last span of a primitive is rendered";
+//1prim-cost.md).
+auto RDP::admit(Clock at) -> void {
+  while(true) {
+    retire();
+    if(pipe.count == Slots) return;
+    rdp_span_info info;
+    if(!rdp_render_span_peek(pipe.queued, &info)) return;
+    //the slot past a primitive's last real span draws nothing and never enters the pipe
+    if(info.phantom) {
+      if(pipe.queued) pipe.queued++;
+      else rdp_render_span_run();
+      continue;
+    }
+    if(info.atomic && info.primitive != pipe.lastPrimitive) {
+      if(pipe.count || pipe.current >= 0) return;
+      Clock barrier = max(pipe.lastWrite, pipe.lastSpanEnd + Timing::Behavior::RdpAtomicDead);
+      if(barrier > at) return wakeAt(barrier);
+    }
+
+    const bool rmw = info.cycle_type <= 1;
+    const bool z = rmw && (info.z_compare || info.z_update);
+    const u32 bpps[2] = {bytesPerPixel(info.fb_size), z ? 2u : 0u};
+    const bool reads[2] = {rmw && info.image_read, rmw && info.z_compare};
+    const u32 bases[2] = {info.fb_address & 0xffffff, info.zb_address & 0xffffff};
+    const bool empty = info.x1 < info.x0;
+    const u32 pixels = spanPixels(info);
+
+    //where each image's stream puts the span: phase-aligned (4 positions of
+    //4 B as measured at 32 bpp; the same 4 positions at 16 bpp, where nothing
+    //measures them), in a new instance when the half size changes
+    struct Place { u32 instance, offset, size, segments; } place[2];
+    for(u32 image : {(u32)Color, (u32)Depth}) {
+      auto& s = image == Color ? pipe.color : pipe.depth;
+      auto& p = place[image];
+      p = {s.instance, s.offset, s.size, 0};
+      const bool used = rmw && bpps[image] && !empty;
+      if(used) {
+        u32 size = halfPixels(image, bpps[image]);
+        if(size != p.size && p.offset) p.instance++, p.offset = 0;
+        p.size = size;
+      }
+      if(!p.size) continue;
+      p.offset += ((u32)info.x0 - p.offset) & (u32)(Timing::Behavior::RdpSpanRamSegment / 4 - 1);
+      if(p.offset >= p.size) p.instance++, p.offset -= p.size;
+      if(!used) continue;
+      if(!s.usable(p.instance)) return;
+      p.segments = pixels ? (p.offset + pixels + p.size - 1) / p.size : 1;
+      if(s.count + p.segments + 1 > Segments) return;
+    }
+
+    u32 index = (pipe.head + pipe.count) % Slots;
+    auto& slot = slots[index];
+    slot.info = info;
+    slot.writes = 0;
+    slot.shaded = false;
+    slot.queued = true;
+    slot.drawn = 0;
+    pipe.count++;
+    pipe.admitted++;
+    pipe.queued++;
+    pipe.lastPrimitive = info.primitive;
+
+    for(u32 image : {(u32)Color, (u32)Depth}) {
+      auto& s = image == Color ? pipe.color : pipe.depth;
+      auto& w = image == Color ? slot.color : slot.depth;
+      auto& p = place[image];
+      const u32 bpp = bpps[image];
+      w.lo = w.hi = 0;
+      if(bpp && !empty) {
+        u32 row = bases[image] + ((u32)info.y * info.fb_width + (u32)info.x0) * bpp;
+        u32 end = bases[image] + ((u32)info.y * info.fb_width + (u32)info.x1 + 1) * bpp;
+        w.lo = row & ~7;
+        w.hi = (end + 7) & ~7;
+        if(w.hi - w.lo > SpanBytes) w.hi = w.lo + SpanBytes;
+        memory::fill<u8>(w.data, w.hi - w.lo, 0);
+        memory::fill<u8>(w.hidden, (w.hi - w.lo) / 2, 0);
+      }
+      s.instance = p.instance, s.offset = p.offset, s.size = p.size;
+      if(!rmw || !bpp || empty) continue;
+      //one segment per half instance the span's pixels reach; the first
+      //starts at the window's start, the last ends at its end (the walk can
+      //touch one position past the drawn width)
+      const u32 row = bases[image] + ((u32)info.y * info.fb_width + (u32)info.x0) * bpp;
+      u32 first = 0;
+      do {
+        u32 n = min(pixels - first, s.size - s.offset);
+        auto& g = s.segments[(s.head + s.count) % Segments];
+        g = {};
+        g.slot = index;
+        g.read = reads[image];
+        g.instance = s.instance;
+        g.first = first;
+        g.end = first + n;
+        g.lo = first ? max(w.lo, (row + first * bpp) & ~7) : w.lo;
+        g.hi = g.end < pixels ? min(w.hi, (row + g.end * bpp + 7) & ~7) : w.hi;
+        if(g.hi < g.lo) g.hi = g.lo;
+        s.count++;
+        first += n;
+        s.offset += n;
+        if(s.offset == s.size) s.instance++, s.offset = 0;
+      } while(first < pixels);
+    }
   }
+}
+
+//Queues each image's segment reads in stream order, as their halves become usable.
+auto RDP::postReads() -> void {
+  for(u32 image : {(u32)Color, (u32)Depth}) {
+    auto& s = image == Color ? pipe.color : pipe.depth;
+    while(s.posted < s.count) {
+      auto& g = s.segment(s.posted);
+      if(!s.usable(g.instance)) break;
+      if(g.read) splitBursts(g.lo, g.hi, Timing::Behavior::RiMaxBurst, [&](u32 a, u32 n) {
+        memory.queue.push_back({a, (u8)n, 0, g.slot, (u8)image, 0xff, (u8)((s.head + s.posted) % Segments)});
+        g.reads++;
+      });
+      g.posted = 1;
+      s.posted++;
+    }
+  }
+}
+
+//The pipeline takes the oldest admitted span; it enters the pipe with its
+//first chunk.
+auto RDP::startSpan(Clock at) -> bool {
+  if(!pipe.admitted) return false;
+  pipe.current = (pipe.head + pipe.count - pipe.admitted) % Slots;
+  pipe.pixel = 0;
+  pipe.stalls = 0;
+  pipe.spanStart = Clock::never();
   return true;
 }
 
-//Runs the next chunk of the current span: the pixels up to the next half
-//boundary of either image. A half's write-back queues at the memory
-//interface without stalling the pipeline; the interface's occupancy and the
-//span slots bound how far shading runs ahead of memory (fit to Thar0: 2-cycle
-//IM_RD lines take as long as 1-cycle ones, 675 vs 681 rclk per 320 px).
+//Draws the current span from the bytes its reads delivered so far, into
+//`out`; pixels whose halves have not landed draw from zeros and are drawn
+//again later. Each pixel samples the noise at its own pipeline clock, plus
+//the open rdp.noise-pixel-offset; a 2-cycle pixel at its first clock. The
+//final draw leaves the engine's span queue.
+auto RDP::draw(bool final) -> void {
+  auto& slot = slots[pipe.current];
+  rdp_memwin windows[2];
+  u32 n = 0;
+  for(auto* w : {&slot.color, &slot.depth}) {
+    if(w->hi == w->lo) continue;
+    const u32 bytes = w->hi - w->lo;
+    memory::copy<u8>(w->out, w->data, bytes);
+    memory::copy<u8>(w->outHidden, w->hidden, bytes / 2);
+    memory::fill<u8>(w->written, bytes, 0);
+    windows[n++] = {w->lo, w->hi, w->data, w->hidden, w->written, w->out, w->outHidden};
+  }
+  rdp_render_set_windows(windows, n);
+  const u64 first = (Timing::nextRclkEdge(pipe.spanStart) + Timing::Behavior::RdpNoisePixelOffset).units / Timing::UnitsPerRclk;
+  rdp_render_set_span_clock(first, RDPTimed::pixelClocks(slot.info.cycle_type, 1).units / Timing::UnitsPerRclk);
+  rdp_render_set_span_stalls(pipe.stallPixel, pipe.stallClocks, pipe.stalls);
+  auto host = std::chrono::steady_clock::now();
+  if(final) rdp_render_span_run();
+  else rdp_render_span_draw();
+  engine.renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - host).count();
+  rdp_render_set_windows(nullptr, 0);
+  rdp_render_set_span_stalls(nullptr, nullptr, 0);
+  if(!final) return;
+  slot.queued = false;
+  pipe.queued--;
+  //the slot past a primitive's last span, queued behind this one
+  rdp_span_info info;
+  while(pipe.queued && rdp_render_span_peek(0, &info) && info.phantom) rdp_render_span_run(), pipe.queued--;
+}
+
+//Runs the next chunk of the current span: the pixels up to the end of the
+//segment it is in, in each image. A chunk starts once each image's half is
+//usable and, where the span reads the image, the segment's read has landed.
 auto RDP::beginChunk(Clock at) -> bool {
   auto& slot = slots[pipe.current];
   auto& info = slot.info;
@@ -387,8 +494,14 @@ auto RDP::beginChunk(Clock at) -> bool {
       auto& s = image == Color ? pipe.color : pipe.depth;
       auto& w = image == Color ? slot.color : slot.depth;
       if(w.hi == w.lo) continue;
-      u32 h = halfPixels(image, image == Color ? bytesPerPixel(info.fb_size) : 2);
-      k = min(k, h - s.position % h);
+      auto& g = s.segment(0);
+      if(!s.usable(g.instance)) return false;
+      if(g.instance >= 2) start = max(start, s.halves[g.instance & 1].drained);
+      if(g.read) {
+        if(!g.posted || g.reads) return false;
+        start = max(start, g.ready);
+      }
+      k = min(k, g.end - pipe.pixel);
     }
     clocks = RDPTimed::pixelClocks(info.cycle_type, k);
     if(pipe.pixel + k == pixels) clocks += RDPTimed::spanTail(info.cycle_type);
@@ -398,6 +511,21 @@ auto RDP::beginChunk(Clock at) -> bool {
     clocks = RDPTimed::wordClocks(words);
   }
   if(start > at) return wakeAt(start), false;
+  if(pipe.spanStart == Clock::never()) {
+    pipe.spanStart = start;
+    pipe.admitted--;
+    //a span with no halves (fill, copy, or nothing to touch) draws at once
+    bool halves = false;
+    if(info.cycle_type <= 1) for(auto* w : {&slot.color, &slot.depth}) halves |= w->hi > w->lo;
+    if(!halves) draw(true);
+  } else {
+    const s64 late = (Timing::nextRclkEdge(start) - Timing::nextRclkEdge(pipe.spanStart)).units / Timing::UnitsPerRclk
+                   - (s64)pipe.pixel * (RDPTimed::pixelClocks(info.cycle_type, 1).units / Timing::UnitsPerRclk);
+    if(late > (pipe.stalls ? (s64)pipe.stallClocks[pipe.stalls - 1] : 0)) {
+      pipe.stallPixel[pipe.stalls] = pipe.pixel;
+      pipe.stallClocks[pipe.stalls++] = (u32)late;
+    }
+  }
   stat.pipe += clocks.units;
   pipe.chunk = true;
   pipe.chunkPixels = k;
@@ -419,13 +547,14 @@ auto RDP::endChunk(Clock at) -> void {
       auto& s = image == Color ? pipe.color : pipe.depth;
       auto& w = image == Color ? slot.color : slot.depth;
       if(w.hi == w.lo) continue;
-      u32 h = halfPixels(image, image == Color ? bytesPerPixel(info.fb_size) : 2);
-      s.position += k;
-      if(s.position % h == 0 || last) {
-        //a full half, or the end of the span, writes back (span-ram.md row 6)
-        writeBack(image, s.halfStart, pipe.pixel, at);
-        s.halfStart = pipe.pixel;
-      }
+      auto& g = s.segment(0);
+      if(pipe.pixel < g.end) continue;
+      //a segment's end, at a half boundary or the span's end, writes back (span-ram.md row 6)
+      writeBack(image, g.first, pipe.pixel, at);
+      s.head = (s.head + 1) % Segments;
+      s.count--;
+      s.posted--;
+      drain(image, at);
     }
   } else {
     writeBack(Color, 0, pixels, at);
@@ -440,12 +569,26 @@ auto RDP::endChunk(Clock at) -> void {
 
 //One write burst per contiguous written run of [firstPixel, endPixel) of
 //the current span, split at ri.max-burst and 2 KiB rows; a fully rejected
-//range posts nothing (rdp-write-granularity.md).
+//range posts nothing (rdp-write-granularity.md). The span is drawn first if
+//its last draw predates bytes these pixels need.
 auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   auto& slot = slots[pipe.current];
   auto& info = slot.info;
   auto& w = image == Color ? slot.color : slot.depth;
   const bool direct = info.cycle_type >= 2;
+  if(slot.queued && slot.drawn < endPixel) {
+    //pixels drawn from landed bytes: up to the first segment still reading,
+    //and, if noise is used, up to the last pixel whose clock is known
+    u32 drawn = spanPixels(info);
+    for(auto* s : {&pipe.color, &pipe.depth})
+      for(u32 i = 0; i < s->count && s->segment(i).slot == pipe.current; i++) {
+        auto& g = s->segment(i);
+        if(g.read && (!g.posted || g.reads)) { drawn = min(drawn, g.first); break; }
+      }
+    if(info.noise) drawn = min(drawn, pipe.pixel);
+    draw(drawn >= spanPixels(info));
+    slot.drawn = drawn;
+  }
   auto& port = info.cycle_type == 3 ? fillPort : memory;
   const u32 bpp = image == Color ? bytesPerPixel(info.fb_size) : 2;
   const u32 base = (image == Color ? info.fb_address : info.zb_address) & 0xffffff;
@@ -459,7 +602,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   Half* h = nullptr;
   if(!direct) {
     auto& s = image == Color ? pipe.color : pipe.depth;
-    half = ((s.position - 1) / halfPixels(image, bpp)) & 1;
+    half = s.segment(0).instance & 1;
     h = &s.halves[half];
   }
   u32 bursts = 0;
@@ -468,7 +611,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
     u32 end = a;
     while(end < hi && w.written[end - w.lo]) end++;
     splitBursts(a, end, Timing::Behavior::RiMaxBurst, [&](u32 b, u32 n) {
-      port.queue.push_back({b, (u8)n, 1, (u8)pipe.current, (u8)image, half});
+      port.queue.push_back({b, (u8)n, 1, (u8)pipe.current, (u8)image, half, 0});
       bursts++;
     });
     a = end;
@@ -480,17 +623,14 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
 
 auto RDP::pipeline(Clock at) -> void {
   while(true) {
-    prefetch(at);
+    admit(at);
+    postReads();
     if(pipe.chunk) {
       if(pipe.chunkEnd > at) return;
       endChunk(pipe.chunkEnd);
       continue;
     }
-    if(pipe.current < 0) {
-      prefetch(at);
-      if(!startSpan(at)) return;
-      prefetch(at);
-    }
+    if(pipe.current < 0 && !startSpan(at)) return;
     if(!beginChunk(at)) return;
   }
 }

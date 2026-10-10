@@ -57,7 +57,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * LFSRs at its own RDP clock (rdp_render_set_span_clock). */
 static inline rdp_noise_bits rdp_pixel_noise(const rdp_t *rdp, int32_t j)
 {
-    return rdp_noise(rdp->m_noise_clock + (uint64_t)j * rdp->m_noise_step);
+    uint32_t stalled = 0;
+    for (uint32_t i = 0; i < rdp->m_stalls && rdp->m_stall_pixel[i] <= (uint32_t)j; i++)
+        stalled = rdp->m_stall_clocks[i];
+    return rdp_noise(rdp->m_noise_clock + (uint64_t)j * rdp->m_noise_step + stalled);
 }
 
 /* Combiner NOISE: abc100000, a b c the three LFSR outputs (Thar0/RDP-Noise). */

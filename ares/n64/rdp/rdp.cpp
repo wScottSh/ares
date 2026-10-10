@@ -40,7 +40,7 @@ auto RDP::power(bool reset) -> void {
   tmemLoad.active = false;
   tmemLoad.count = tmemLoad.reads = 0;
   for(auto* port : {&memory, &command, &fillPort}) port->reset();
-  for(auto& slot : slots) slot.reads = slot.writes = 0, slot.shaded = false;
+  for(auto& slot : slots) slot.writes = 0, slot.shaded = slot.queued = false;
   for(auto r : {RiBus::Requester::DpColor, RiBus::Requester::DpDepth, RiBus::Requester::DpTexture}) ri.attach(r, &memory);
   ri.attach(RiBus::Requester::DpCommand, &command);
   ri.attach(RiBus::Requester::DpFill, &fillPort);
