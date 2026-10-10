@@ -81,7 +81,7 @@
 - --check "read" test is textual: a comment `//Timing::Behavior::X` counts as a read; pointer resolves if symbol appears anywhere in file. Strip comments / match real uses.
 - ri.refresh-waits-for-burst static_assert guards nothing (flag no one reads).
 - mm:file-select report source names neither a published value nor "none".
-- pidma: log the ROM's COUNT reads in ARES_PILOG to pin the offset; until then a SUCCESS run can't pass the every-offset rule.
+- pidma: log the ROM's COUNT reads in ARES_PILOG to pin the offset. Done in U-PIDMA-EXACT: the replay pairs each DMA with the ROM's own COUNT reads, and hw:pidma-offset is retired.
 - Build pi.io-busy (134 rclk), cpu.pif-ram-read (1974), cpu.uncached-read-dword-total (37) from n64-systembench; each needs its bench ROM (plus si-dma ROM closes 5 checks).
 
 ## From sysbench / verify-75 (PR #75)

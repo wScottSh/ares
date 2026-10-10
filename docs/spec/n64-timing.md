@@ -261,7 +261,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run calib-kit-merge/standing on 214c46421).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/standing on c6169880b).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -349,7 +349,6 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:noise-stall` | pending:calibration-16 | no complete power-on console capture of kit-noise in docs/calibration/hardware |
 | `hw:pi-dma-small` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:pi-row-end` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
-| `hw:pidma-offset` | pending:calibration-16 | no console capture of pi_dma_test (capture name ext-pi_dma_test*) in docs/calibration/hardware |
 | `hw:pipebusy-stall` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
 | `hw:poll-phase` | pending:calibration-16 | no complete power-on console capture of kit-cpu in docs/calibration/hardware |
 | `hw:rdp-atomic` | pending:calibration-16 | no complete power-on console capture of kit-rdp in docs/calibration/hardware |
@@ -421,7 +420,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `noise:b` | pass | ctest Passed |
 | `noise:c` | pass | ctest Passed |
 | `noise:rect-1016` | pass | noise/summary.txt |
-| `pidma:logs` | fail | replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures |
+| `pidma:logs` | fail | exact COUNT replay, replay reproduces 8/8 printed values; sizes 8-382 except 305-352 20706/20928 within +-3% of hardware min..max (all sizes 8-382: 23765/24000); ROM self-check 8 failures; worst by size band 0-31:+15.51% 32-63:+7.11% 64-95:+3.50% 96-127:+2.57% 128-159:+3.15% 160-191:+1.79% 192-223:+1.70% 224-255:+1.83% 256-287:+2.18% 288-319:+2.03% 352-383:+1.39%; excluded 305-352, report only because the golden logs come from the ROM's MODE_GENERATE build, whose cart buffer sits at another PI page phase: this ROM's buffer starts 0xd0 into a 512 B page, so its DMAs cross a page from 305 B on, while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred): worst 288-319:+3.50% 320-351:+3.81% 352-383:+2.25% |
 | `rdpstat:1prim` | fail | 2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px |
 | `rdpstat:current-prefetch` | pending:no-rom |  |
 | `rdpstat:nosync-1cycle` | pass | 20 of 20 tests pass |
@@ -583,7 +582,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `noise:c` | noise | dataset-c | - | pass | Thar0/RDP-Noise four c captures (Unlicense): ctest noise:c, a's outputs give each capture's clock and c one step ahead matches every recoverable bit (plan T14) |
 | `noise:rect-1016` | noise | rect-1016 | - | pass | romgen 1016-px rect ROM (romgen/suites/noise): the dumped a, b, c bits are the LFSR sequences at the ROM's own pixel clocks and dataset A at a phase offset (plan T14) |
 | `unit:noise-lfsr` | unit | n64-timing-noise | noise-lfsr | pass | RDPTimed::NoiseLfsr: GF(2) jump equals stepping, periods 2^29-1, 2^28-1, 2^27-1, all-ones reset with c one step ahead, at() a pure function of the clock (plan T14) |
-| `pidma:logs` | pidma | n64_pi_dma_test/pi_dma_test.z64 | - | self | prebuilt rasky n64_pi_dma_test ROM and its 64 golden logs (no license; run from outside the repo, sha256 pinned in standing.sh). Passes when the ROM's own 10% self-check reports 0 failures and pidma-replay.py --calibrated finds sizes 8-382 within 3% of the golden min..max at every calibrated (read, write) offset (plan T8). A SUCCESS run prints no value, so its offsets are those that keep every point inside the ROM's 10% band. For a synthetic run at the golden midpoint that set spans 448 units (28 ticks) and 830 of 24000 points fail at its worst offset (measured), so a SUCCESS run passes this rule only once the offset is pinned, for example by logging the ROM's COUNT reads. The 16-unit tick is not the limit: one tick is 0.6% of the 158-tick minimum at 8 B |
+| `pidma:logs` | pidma | n64_pi_dma_test/pi_dma_test.z64 | - | self | prebuilt rasky n64_pi_dma_test ROM and its 64 golden logs (no license; run from outside the repo, sha256 pinned in standing.sh). ARES_PILOG logs the ROM's own COP0 COUNT reads, and pidma-replay.py pairs each timed DMA start with the reads around it, so the replay is the ROM's own measurement; it is valid only when it reproduces every value the ROM printed (master 78b4427b8: 8 of 8, 23765/24000 within 3% at sizes 8-382). Passes when every point at sizes 8-382, except 305-352, is within the golden min..max +-3%, and the ROM's own 10% self-check reports 0 failures (green-plan.md section 3); no point count stands in for this rule. Sizes 305-352 are excluded and reported only: the golden logs come from the ROM's MODE_GENERATE build, whose cart buffer sits at another PI page phase, so this ROM's DMAs cross a 512 B page from 305 B on while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred) |
 | `unit:ri-cost-table` | unit | n64-timing-tests | ri-cost-table | pass | RiBus::Channel: read hit 14/18/26/42/74 tc, write hit 8/12/20/36/68 tc for 1/2/4/8/16 octbytes and the clean and dirty miss columns (rdram-bus-arbitration.md s.2); rank, arrival and requester order; no preemption; refresh 52/54 rclk clearing dirty bits (plan T6) |
 | `unit:ri-split` | unit | n64-timing-tests | ri-split | pass | n64brew RDRAM_Interface, 1-16 octbytes per request; a DMA burst never crosses a 2 KiB row (plan T8) |
 | `unit:rdram-private` | unit | n64-timing-rdram-device | rdram-private | pass | ADR 0001 Decision 2: a device-side read of rdram.ram fails to compile on the access check, a Loader read compiles (tests/rdram-private.cmake, plan T8) |
