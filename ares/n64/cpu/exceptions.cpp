@@ -1,12 +1,13 @@
 //Detection stage by exception code (nemu64-test Exceptions, JustFire, measured):
 //RF for Sys, Bp, RI and CpU; EX for Ov, Tr, AdEL and TLBL. AdES, TLBS and Mod
 //have no test and are inferred to share the load's stage; no reference says
-//where a store's address check runs.
-//Interrupts (plan T7c), bus errors, watch and emux have no reference.
+//where a store's address check runs. Watch is inferred to share AdEL's and TLBL's stage:
+//VR4300 UM 4.7.6 lists all three among the DC-stage exceptions; hw:cpu-watch decides it.
+//Interrupts (plan T7c), bus errors and emux have no reference.
 static auto faultStage(u32 code) -> CPU::FaultStage {
   using FaultStage = CPU::FaultStage;
   switch(code) {
-  case 1: case 2: case 3: case 4: case 5: case 12: case 13: return FaultStage::EX;
+  case 1: case 2: case 3: case 4: case 5: case 12: case 13: case 23: return FaultStage::EX;
   case 8: case 9: case 10: case 11: return FaultStage::RF;
   case 15: return FaultStage::FPU;
   }
