@@ -581,9 +581,9 @@ STATUS_MEANING = {
     "pass": "a check other than the row's fit data passed, and none failed",
     "fail": "at least one check failed; the detail in Check results gives the residual",
     "fit only": "only the checks the value was fitted to passed (verify-is-fit)",
-    "consistent-only": "no check failed, but a check passed its consistent rule while the model's phase mean missed the band: "
-                       "some phase of the model agrees with the hardware number, the average does not. Consistent with the "
-                       "hardware, not agreement",
+    "consistent-only": "no check failed, but a check passed its consistent rule while the model's phase mean missed the band, "
+                       "or a bench check's verdict differs between code-layout pads: some phase or layout of the model agrees "
+                       "with the hardware number, not every one does. Consistent with the hardware, not agreement",
     "pass-conditional": "no check failed, but a check passes only through a model choice with no hardware reference (the "
                         "issue named); it is not independent hardware agreement until the issue resolves",
     "model-choice": "a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the "
@@ -630,7 +630,9 @@ def render_spec(rows, checks, found, reports):
         "A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on "
         "report-only. Two results are weaker than pass and never count as one. A bench check is consistent-only when a point "
         "passes its consistent rule (the hardware band overlaps the model's phase range) but the model's mean over the boot "
-        "delays misses the band: consistent with the hardware number, not agreement. Its detail gives each consistent "
+        "delays misses the band: consistent with the hardware number, not agreement. A bench check is also consistent-only "
+        "when its verdict is not the same at every code-layout pad (8 pads, one 32 B I-cache line); its detail names each "
+        "pad's verdict. Every bench range is joint over the pads and boot delays. Its detail gives each consistent "
         "point's acceptance window (half the band plus half the model's phase range, as a % of the hardware number) and the "
         "mean rule's verdict. A check is pass-conditional:#<issue> when it passes only through a model choice with no "
         "hardware reference, tracked in that issue. A Thar0 check passes when the model's count lies inside the console's minimum..maximum "
@@ -906,7 +908,8 @@ def render_closure(root, rows, checks, found, reports):
     out += ["", "## Checks that pass only weakly", "",
             "Check results: " + ", ".join(f"{n} {k}" for k, n in sorted(results_count.items())) + ". "
             "A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean "
-            "misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the "
+            "misses the band, or a bench check's verdict differs between code-layout pads, so it is consistent with the hardware "
+            "number, not agreement. pass-conditional:#<issue>: the "
             "pass rests on a model choice with no hardware reference.", ""]
     if weak:
         out += ["| Check | Result | Detail | Rows (verify) | Rows (fit from) |", "|---|---|---|---|---|"]
@@ -1319,10 +1322,25 @@ def suite_runs(run, pattern, label):
 
 
 def phase_text(r):
-    """A bench value over the boot delays: the one value when every delay agrees, else its range."""
-    if r["min"] == r["max"]:
-        return r["min"]
-    return f"{r['min']}..{r['max']} median {r['median']} mean {r['mean']}"
+    """A bench value over the layout pads and boot delays: the one value when every point agrees, else
+    its joint range, and each pad's verdict when they differ."""
+    text = r["min"] if r["min"] == r["max"] else f"{r['min']}..{r['max']} median {r['median']} mean {r['mean']}"
+    by_pad = pad_labels(r)
+    if len(set(by_pad.values())) > 1:
+        text += " (pads " + " ".join(f"{p}:{v}" for p, v in by_pad.items()) + ")"
+    return text
+
+
+def pad_labels(r):
+    """Each layout pad's verdict, recomputed from its range and mean (report.py pad_phases_text)."""
+    from romgen.suites.bench.report import label
+    if r["kind"] != "check" or r["pad_phases"] == "-":
+        return {}
+    out = {}
+    for entry in r["pad_phases"].split():
+        pad, lo, hi, mean = re.fullmatch(r"(\d+):(\S+)\.\.(\S+)/(\S+)", entry).groups()
+        out[pad] = label(r, float(lo), float(hi), float(mean))
+    return out
 
 
 def window_text(r):
@@ -1331,12 +1349,12 @@ def window_text(r):
 
 
 def bench_label(r):
-    """The row's verdict, recomputed from its phase range and mean with report.py's label, so a
-    results.tsv that calls a consistent-only point pass cannot pass it here."""
-    from romgen.suites.bench.report import label
+    """The row's verdict, recomputed from each layout pad's range and mean with report.py's label and
+    layout rule, so a results.tsv that calls a consistent-only point pass cannot pass it here."""
+    from romgen.suites.bench.report import layout_verdict
     if r["kind"] != "check" or r["min"] == "None":
         return r["verdict"]
-    return label(r, float(r["min"]), float(r["max"]), float(r["mean"]))
+    return layout_verdict(list(pad_labels(r).values()))
 
 
 def bench_tally(verdicts):
@@ -1485,7 +1503,7 @@ READERS = {"nemu64": nemu64_result, "cpu": cpu_result, "det": lambda run, row: s
            "bench": bench_result, "systembench": systembench_result, "thar0": thar0_result, "rdpstat": rdpstat_result, "snapper": snapper_result,
            "unit": ctest_result, "noise": noise_result, "gen": gen_result, "mm": mm_result, "pidma": pidma_result,
            "harness": rdpstat_result}
-ROM_FILES = {"bench": "./bench/boot-*/bench-{}.z64", "systembench": "./systembench/n64-systembench.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
+ROM_FILES = {"bench": "./bench/pad-*/boot-*/bench-{}.z64", "systembench": "./systembench/n64-systembench.z64", "rdpstat": "./rdpstat-{}.z64", "snapper": "./snapper-{}.z64",
              "harness": "./rdpstat-{}.z64"}
 RESULT = re.compile(r"^(pass|fail|consistent-only|pass-conditional:#\d+|pending:[a-z0-9-]+)$")
 #A check that passes, but weakly: consistent with the hardware number at some phase while the model's mean misses it,
@@ -1845,16 +1863,19 @@ def self_test(root):
         run = work / "self-test-run"
         (run / "bench").mkdir(parents=True)
         cols = ["rom", "point", "metric", "min", "median", "max", "mean", "expected", "lo", "hi", "kind", "rule", "condition",
-                "verdict", "mean_verdict", "window_pct", "source"]
+                "verdict", "mean_verdict", "window_pct", "pad_verdicts", "pad_phases", "source"]
         stale = ["r", "p8", "m", "180.0", "189.0", "194.67", "189.0", "193", "191.07", "194.93", "check", "consistent", "-",
-                 "pass", "-", "-", "s"]
-        (run / "bench" / "results.tsv").write_text("\t".join(cols) + "\n" + "\t".join(stale) + "\n", encoding="utf-8")
-        got = bench_result(run, {"target": "r", "selector": "point=p8"})
-        ok = got is not None and got[0] == "consistent-only"
-        print(f"self-test: a consistent pass whose mean misses the band, in a results.tsv that calls it pass: "
-              f"{'ok' if ok else 'FAILED'}: {got} (expected consistent-only)")
-        failures += not ok
-        ran += 1
+                 "pass", "-", "-", "pass,pass", "0:180.0..194.67/189.0 4:180.0..194.67/189.0", "s"]
+        split = ["r", "rspdma", "m", "6.272", "6.498", "6.502", "6.494", "6.5", "6.49", "6.515", "check", "mean", "-",
+                 "pass", "-", "-", "pass,pass", "0:6.492..6.501/6.498 4:6.272..6.502/6.489", "s"]
+        (run / "bench" / "results.tsv").write_text("\n".join("\t".join(r) for r in (cols, stale, split)) + "\n", encoding="utf-8")
+        for name, selector in (("a consistent pass whose mean misses the band", "point=p8"),
+                               ("a pass at layout pad 0 and a fail at pad 4", "point=rspdma")):
+            got = bench_result(run, {"target": "r", "selector": selector})
+            ok = got is not None and got[0] == "consistent-only"
+            print(f"self-test: {name}, in a results.tsv that calls it pass: {'ok' if ok else 'FAILED'}: {got} (expected consistent-only)")
+            failures += not ok
+            ran += 1
         (run / "cpu" / "s").mkdir(parents=True)
         for name, summary, want in [
             ("a cpu ROM whose tests all pass", "CPU: Failed 0 of 12 tests (100% success rate)\n", "pass"),

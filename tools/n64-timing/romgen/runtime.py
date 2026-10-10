@@ -122,6 +122,13 @@ boot_delay:
     nop
 """
 
+
+def layout_pad(words):
+    """Words build.py inserts at boot, after any BOOT_DELAY_LOOP, when the set defines LAYOUT_PAD. They
+    move every later instruction against the 32 B I-cache lines (suites/bench/phases.py PADS); they run
+    once, so they also move the start by a few pclk, which the boot delays walk anyway."""
+    return "    nop\n" * words
+
 RUNTIME = r"""
 _start:
     j boot
