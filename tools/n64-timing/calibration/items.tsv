@@ -47,3 +47,4 @@ fu.hpos-holdoff	followups labels-phase	hpos holdoff_rclk_max from a window that 
 fu.vi-mid-field-blank	issue #84	What hardware does on a VI blank and re-enable mid-field (kit-vi vi-mid-field points; the fork crashed there before #84)
 plan.fit3	green-plan pending.md section 8 (U-FIT3)	Kit points that decide cpu.count-write-hold, cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce without re-running their nemu64-test fit data (cop0hazard count, the cycle SMC cases, cycle ctc1)
 plan.spdma	green-plan pending.md section 2 (U-SPDMA)	The cost of one SP DMA of 8-128 B per direction, which no CPU-polled kit point resolves (verify-85 2a.5)
+cpu.sc-watch-on-fail	verify-121 (PR #121); u-llsc-kit	Does an SC or SCD that fails (LLbit clear) to an address WatchLo matches raise Watch? The manual (U10504EJ7V0UM00 16 SC/SCD) is silent; the fork raises Watch only when the store happens

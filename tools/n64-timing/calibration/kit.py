@@ -56,6 +56,7 @@ KIT_ROMS = {
     "kit-zmem": ("calib", "kit-zmem", True),
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
+    "cpu-llsc": ("cpu", "llsc", False),
 }
 SRAM_BYTES = 0x8000
 
@@ -530,10 +531,10 @@ def histograms(log):
 
 
 def sample_log(body="#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n",
-               rom_sha256="a" * 64):
+               rom_sha256="a" * 64, rom="kit-cpu"):
     field = f" rom_sha256={rom_sha256}" if rom_sha256 else ""
-    text = f"#kit rom=kit-cpu sha=0{field} fmt=1 build=boot-1 ri_mode=0xe\n{body}".encode()
-    return text + f"#kit-end rom=kit-cpu bytes={len(text)} fnv={fnv(text):08x}\n".encode()
+    text = f"#kit rom={rom} sha=0{field} fmt=1 build=boot-1 ri_mode=0xe\n{body}".encode()
+    return text + f"#kit-end rom={rom} bytes={len(text)} fnv={fnv(text):08x}\n".encode()
 
 
 def self_test():
@@ -661,6 +662,26 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: kit-hpos samples give a per-load latency histogram in pclk: {'ok' if ok else 'FAILED'} ({got})")
     cases.append(("hpos hist", None, None))
+    llsc_q = next(q for q in questions() if q["id"] == "cpu-llsc-console")
+
+    def llsc(bad=(), watch=0):
+        body = "".join(f"@{t}.{v} {int(f'{t}.{v}' in bad)}\n" for t in (0, 1) for v in range(6))
+        body += "".join(f"#bench cpu-llsc watch-fail-{op} exc={watch} exccode={23 * watch} rt_lo=0x0\n@2.{i} {watch}\n"
+                        for i, op in enumerate(("sc", "scd")))
+        return Log(sample_log(body, rom="cpu-llsc"))
+    llscs = [("cpu-llsc: the console's verdicts match", llsc(), "pass"),
+             ("cpu-llsc: test 2 (the Watch probe) differs on the console: report-only, not compared", llsc(watch=1), "pass"),
+             ("cpu-llsc: the console fails the SCD ERET case", llsc(bad={"1.1"}), "fail")]
+    for name, hw, want in llscs:
+        got, detail = compare(llsc_q, [hw], [llsc()])
+        ok = got == want and "12 values" in detail if want == "pass" else got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:80]})")
+    watch = llsc(watch=1).records.get(("cpu-llsc", "watch-fail-sc"), {})
+    ok = watch.get("exc") == 1 and watch.get("exccode") == 23
+    failed += not ok
+    print(f"kit: self-test: cpu-llsc: the Watch probe's record survives parsing: {'ok' if ok else 'FAILED'} ({watch})")
+    cases += llscs + [("llsc watch record", None, None)]
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
