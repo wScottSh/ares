@@ -204,11 +204,11 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 
 | Check | Result | Detail | Question |
 |---|---|---|---|
-| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.735..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail | `hw:memset-vi` |
+| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.731..72.792 median 72.737 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail | `hw:memset-vi` |
 | `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 1.31 (expected 3.8, 3.795..3.805, mean) fail | `hw:memset-vi` |
-| `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.492..6.501 median 6.498 mean 6.498 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
-| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.716..17.718 median 17.718 mean 17.717 (expected 18.38, 18.346..18.418, mean) fail | `hw:memset-vi` |
-| `bench:uncached-sizes-u32-banked` | fail | u32-banked net_pclk 131..132 median 131.0 mean 131.125 (expected 134, 133..135, consistent, window ±1.1%, mean rule fail) fail | `hw:cpu-reads` |
+| `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.271..6.503 median 6.499 mean 6.495 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
+| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.691..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `hw:memset-vi` |
+| `bench:uncached-sizes-u32-banked` | consistent-only | u32-banked net_pclk 131..133 median 131.0 mean 131.469 (pads 0:fail 1:fail 2:consistent-only 3:consistent-only 4:fail 5:fail 6:fail 7:fail) (expected 134, 133..135, consistent, window ±1.5%, mean rule | `hw:cpu-reads` |
 | `mm:filesel-named` | fail | filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) | `hw:mm-filesel` |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7846 over 64 phases (band 32.300..40.300), mean 41.642..41.888, median 37 (band 35..37) fail on mean | `hw:vi-cpu-contention`, `hw:nemu64-console` |
 | `nemu64:timing/load-miss-vi-off` | fail | 0 of 8 values pass; with '80000000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80100000': phase mean 41.0000 over 64 phases (ban | `hw:dirty-miss`, `hw:nemu64-console` |
@@ -262,7 +262,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `ri.overhead-write` | derived reference; check bench:mi-memset-rspdma pass-conditional:#77 | `hw:memset-vi` |
 | `ri.overhead-rdp` | derived reference; check thar0:separate-bank, thar0:imrd-1cycle fail | `hw:thar0-console` |
 | `ri.request-latency` | model-choice | not-hardware-decidable: one 750 MHz unit (1.3 ns) between a request's post and the arbiter, chosen so a decision never races a post at the same time; no console measurement resolves 1.3 ns, and the fork's results do not move with it (det, stepcap) |
-| `cpu.uncached-read-total` | measured reference; check bench:uncached-sizes-u32-banked, systembench:u32r-banked fail | `hw:cpu-reads`, `hw:nemu64-console`, `hw:systembench` |
+| `cpu.uncached-read-total` | measured reference; check bench:uncached-sizes-u32-banked, systembench:u32r-banked consistent-only | `hw:cpu-reads`, `hw:nemu64-console`, `hw:systembench` |
 | `cpu.uncached-read-dword-total` | derived reference | `hw:cpu-reads`, `hw:systembench` |
 | `cpu.dfill-total` | measured reference; check nemu64:timing/load-miss-vi-off fail | `hw:dirty-miss`, `hw:nemu64-console` |
 | `cpu.ifill-stall` | inferred; pending:report-only | `hw:ifill` |
@@ -391,7 +391,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `bench:mi-memset-repeat` | result fail | `hw:memset-vi` |
 | `bench:mi-memset-rspdma` | result pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
 | `bench:mi-memset-uncached` | result fail | `hw:memset-vi` |
-| `bench:uncached-sizes-u32-banked` | result fail | `hw:cpu-reads` |
+| `bench:uncached-sizes-u32-banked` | result consistent-only | `hw:cpu-reads` |
 | `mm:filesel-named` | result fail | `hw:mm-filesel` |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | result fail | `hw:vi-cpu-contention`, `hw:nemu64-console` |
 | `nemu64:timing/load-miss-vi-off` | result fail | `hw:dirty-miss`, `hw:nemu64-console` |

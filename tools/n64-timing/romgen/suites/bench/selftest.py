@@ -8,9 +8,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))
 
-from romgen.suites.bench.report import acceptance, derive, phase_of, verdict  # noqa: E402
+from romgen.suites.bench.report import Layout, acceptance, derive, layout_of, phase_of  # noqa: E402
+from romgen.suites.bench.report import verdict as layout_rule_verdict  # noqa: E402
 
 failures = 0
+
+
+def verdict(row, phase):
+    """One layout pad: the phase rule alone."""
+    return layout_rule_verdict(row, Layout({0: phase}) if phase else None)
 
 
 def check(name, got, want):
@@ -105,5 +111,17 @@ check("consistent: a range wholly below the band", verdict({"kind": "check", "lo
 poll = phase_of([{key: 133, key[:2] + ("m_rep_min",): 125.33, key[:2] + ("m_rep_max",): 142.67}], key)
 check("a poll-walked range comes from its reps", (poll.lo, poll.hi, poll.mean), (125.33, 142.67, 133))
 check("a delay that printed nothing is missing", phase_of([{key: 1}, {}], key), None)
+
+grid = {(0, 1): {key: 6.50}, (0, 42): {key: 6.51}, (4, 1): {key: 6.27}, (4, 42): {key: 6.50}}
+pads = layout_of(grid, key)
+check("each pad's range over the delays", [(ph.lo, ph.hi) for ph in pads.pads.values()], [(6.5, 6.51), (6.27, 6.5)])
+check("the joint range spans every pad and delay", (pads.joint.lo, pads.joint.hi, pads.joint.mean), (6.27, 6.51, 6.445))
+mean_row = {**band, "rule": "mean"}
+check("pads that disagree (pass at pad 0, fail at pad 4) are consistent-only, never pass or fail",
+      layout_rule_verdict(mean_row, pads), "consistent-only")
+check("every pad passing passes", layout_rule_verdict(mean_row, layout_of({(0, 1): {key: 6.5}, (4, 1): {key: 6.51}}, key)), "pass")
+check("every pad failing fails", layout_rule_verdict(mean_row, layout_of({(0, 1): {key: 6.2}, (4, 1): {key: 6.3}}, key)), "fail")
+check("a pad that lacks the metric makes the row missing",
+      layout_rule_verdict(mean_row, layout_of({(0, 1): {key: 6.5}, (4, 1): {}}, key)), "missing")
 
 sys.exit(1 if failures else 0)

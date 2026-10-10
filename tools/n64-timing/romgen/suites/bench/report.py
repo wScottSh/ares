@@ -2,13 +2,14 @@
 
 usage: python -m romgen.suites.bench.report ROMS_DIR RESULTS_DIR ROM...
 
-Reads RESULTS_DIR/boot-<K>/<rom>/stdout.txt and ROMS_DIR/boot-<K>/bench-<rom>.tests.tsv for
-every boot delay K in phases.DELAYS. Writes RESULTS_DIR/measurements.tsv (every raw and derived
-value per delay and point), RESULTS_DIR/phases.tsv (each expected.tsv metric at every delay) and
-RESULTS_DIR/results.tsv (one row per expected.tsv entry with the phase min, median, max and mean
-and its verdict under the row's rule; a consistent row also gets the mean rule's verdict and its
-acceptance window, see label and acceptance). Exits 1 when a ROM did not print every point its listing
-promises, which is the format check; value verdicts never change the exit code.
+Reads RESULTS_DIR/pad-<P>/boot-<K>/<rom>/stdout.txt and ROMS_DIR/pad-<P>/boot-<K>/bench-<rom>.tests.tsv
+for every phase point (layout pad P, boot delay K) in phases.POINTS. Writes RESULTS_DIR/measurements.tsv
+(every raw and derived value per phase point and bench point), RESULTS_DIR/phases.tsv (each expected.tsv
+metric at every phase point) and RESULTS_DIR/results.tsv (one row per expected.tsv entry with the joint
+min, median, max and mean over every pad and delay, each pad's range over the delays and its verdict, and
+the row's verdict under the layout rule, see layout_verdict; a consistent row also gets the mean rule's
+verdict and its acceptance window, see label and acceptance). Exits 1 when a ROM did not print every
+point its listing promises, which is the format check; value verdicts never change the exit code.
 
 Units: COUNT ticks at 46.875 MHz; pclk = 2 ticks (VR4300 93.75 MHz); rclk = 4/3 ticks (RCP
 62.5 MHz); DPC clock values are the raw DPC_CLOCK register.
@@ -190,6 +191,28 @@ class Phase:
         return round(statistics.fmean(self.values), 3)
 
 
+@dataclass
+class Layout:
+    """One metric at every layout pad: each pad's Phase over the boot delays."""
+    pads: dict
+
+    @property
+    def joint(self):
+        phases = list(self.pads.values())
+        return Phase([v for ph in phases for v in ph.values], min(ph.lo for ph in phases), max(ph.hi for ph in phases))
+
+
+def layout_of(per_point, key):
+    """per_point: {(pad, delay): measured}. None when any pad lacks the metric at any delay."""
+    pads = {}
+    for p in dict.fromkeys(p for p, _ in per_point):
+        phase = phase_of([m for (pad, _), m in per_point.items() if pad == p], key)
+        if phase is None:
+            return None
+        pads[p] = phase
+    return Layout(pads) if pads else None
+
+
 def phase_of(per_delay, key):
     values = [m.get(key) for m in per_delay]
     if not values or not all(isinstance(v, (int, float)) for v in values):
@@ -222,12 +245,28 @@ def label(row, model_lo, model_hi, mean):
     return "pass" if condition == "-" else f"pass-conditional:{condition}"
 
 
-def verdict(row, phase):
-    if phase is None:
+def layout_verdict(pad_verdicts):
+    """Bench layout pads (docs/design/green-plan.md section 3): a bench verdict holds only if it is the
+    same at every layout pad, or the check reports consistent-only with its range."""
+    first = pad_verdicts[0]
+    return first if all(v == first for v in pad_verdicts) else "consistent-only"
+
+
+def pad_verdicts(row, layout):
+    return [label(row, ph.lo, ph.hi, ph.mean) for ph in layout.pads.values()]
+
+
+def verdict(row, layout):
+    if layout is None:
         return "missing"
     if row["kind"] != "check":
         return "report"
-    return label(row, phase.lo, phase.hi, phase.mean)
+    return layout_verdict(pad_verdicts(row, layout))
+
+
+def pad_phases_text(layout):
+    """Each pad's range and mean over the boot delays, `pad:lo..hi/mean` (behaviors.py parses it back)."""
+    return " ".join(f"{p}:{round(ph.lo, 3)}..{round(ph.hi, 3)}/{ph.mean}" for p, ph in layout.pads.items())
 
 
 def acceptance(row, phase):
@@ -244,21 +283,21 @@ def acceptance(row, phase):
 
 def main():
     roms_dir, results, roms = sys.argv[1], sys.argv[2], sys.argv[3:]
-    per_delay, format_ok = [], True
+    per_point, format_ok = {}, True
     with open(os.path.join(results, "measurements.tsv"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("boot_delay\trom\tpoint\tmetric\tvalue\n")
-        for k in phases.DELAYS:
-            measured = {}
-            per_delay.append(measured)
+        f.write("layout_pad\tboot_delay\trom\tpoint\tmetric\tvalue\n")
+        for pad, k in phases.POINTS:
+            at = phases.point_dir(pad, k)
+            measured = per_point[(pad, k)] = {}
             for rom in roms:
-                points = parse(os.path.join(results, f"boot-{k}", rom, "stdout.txt"))
-                promised = listing(os.path.join(roms_dir, f"boot-{k}"), rom)
+                points = parse(os.path.join(results, at, rom, "stdout.txt"))
+                promised = listing(os.path.join(roms_dir, at), rom)
                 missing = [p for p in promised if p not in points]
                 missing += [f"{p}(samples {len(v.get('samples', []))} of {v['count']})"
                             for p, v in points.items() if "count" in v and len(v.get("samples", [])) != v["count"]]
                 format_ok &= not missing
                 if missing:
-                    print(f"boot-{k} {rom}: {len(promised) - len(missing)}/{len(promised)} points, missing {' '.join(missing)}")
+                    print(f"{at} {rom}: {len(promised) - len(missing)}/{len(promised)} points, missing {' '.join(missing)}")
                     continue
                 derived = derive(rom, points)
                 for name, p in points.items():
@@ -266,30 +305,36 @@ def main():
                     values.update(derived[name])
                     for metric, value in values.items():
                         measured[(rom, name, metric)] = value
-                        f.write(f"{k}\t{rom}\t{name}\t{metric}\t{value}\n")
-    print(f"{len(roms)} ROMs at {len(phases.DELAYS)} boot delays ({','.join(map(str, phases.DELAYS))})")
+                        f.write(f"{pad}\t{k}\t{rom}\t{name}\t{metric}\t{value}\n")
+    print(f"{len(roms)} ROMs at {len(phases.PADS)} layout pads ({','.join(map(str, phases.PADS))}) x "
+          f"{len(phases.DELAYS)} boot delays ({','.join(map(str, phases.DELAYS))}); ranges are joint over both")
     counts = {}
     rows = [r for r in load_expected() if r["rom"] in roms]
     with open(os.path.join(results, "phases.tsv"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("rom\tpoint\tmetric\t" + "\t".join(f"boot-{k}" for k in phases.DELAYS) + "\n")
+        f.write("rom\tpoint\tmetric\t" + "\t".join(phases.point_dir(p, k) for p, k in per_point) + "\n")
         for key in dict.fromkeys((r["rom"], r["point"], r["metric"]) for r in rows):
-            f.write("\t".join(key + tuple(str(m.get(key)) for m in per_delay)) + "\n")
+            f.write("\t".join(key + tuple(str(m.get(key)) for m in per_point.values())) + "\n")
     with open(os.path.join(results, "results.tsv"), "w", encoding="utf-8", newline="\n") as f:
         f.write("rom\tpoint\tmetric\tmin\tmedian\tmax\tmean\texpected\tlo\thi\tkind\trule\tcondition\tverdict\t"
-                "mean_verdict\twindow_pct\tsource\n")
+                "mean_verdict\twindow_pct\tpad_verdicts\tpad_phases\tsource\n")
         for row in rows:
-            phase = phase_of(per_delay, (row["rom"], row["point"], row["metric"]))
-            v = verdict(row, phase)
-            mean_v, window = acceptance(row, phase)
+            layout = layout_of(per_point, (row["rom"], row["point"], row["metric"]))
+            joint = layout.joint if layout else None
+            v = verdict(row, layout)
+            mean_v, window = acceptance(row, joint)
+            by_pad = pad_verdicts(row, layout) if layout and row["kind"] == "check" else []
             counts[v] = counts.get(v, 0) + 1
-            stats = [str(x) for x in (round(phase.lo, 3), phase.median, round(phase.hi, 3), phase.mean)] \
-                if phase else ["None"] * 4
+            stats = [str(x) for x in (round(joint.lo, 3), joint.median, round(joint.hi, 3), joint.mean)] \
+                if joint else ["None"] * 4
             f.write("\t".join([row["rom"], row["point"], row["metric"], *stats, row["expected"],
                                row["lo"], row["hi"], row["kind"], row["rule"], row["condition"], v, mean_v, window,
+                               ",".join(by_pad) or "-", pad_phases_text(layout) if layout else "-",
                                row["source"]]) + "\n")
             extra = f", window ±{window}%, mean rule {mean_v}" if window != "-" else ""
+            split = "; pads " + " ".join(f"{p}:{pv}" for p, pv in zip(layout.pads, by_pad)) \
+                if len(set(by_pad)) > 1 else ""
             print(f"  {v:7} {row['rom']} {row['point']} {row['metric']} = {stats[0]}..{stats[2]} "
-                  f"median {stats[1]} mean {stats[3]} (expected {row['expected']}, {row['lo']}..{row['hi']}, {row['rule']}{extra})")
+                  f"median {stats[1]} mean {stats[3]} (expected {row['expected']}, {row['lo']}..{row['hi']}, {row['rule']}{extra}){split}")
     print("format: " + ("ok" if format_ok else "MISSING POINTS") + "; expected rows: "
           + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     sys.exit(0 if format_ok else 1)

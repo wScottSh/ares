@@ -1,7 +1,7 @@
 """Builds romgen test ROMs.
 
 usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat|snapper|noise|calib --out DIR
-       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE] [--hw]
+       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE] [--hw] [--jobs N]
 
 Writes one .z64 per set of the suite (romgen/suites/<suite>/sets.py), for example
 nemu64-timing.z64 or bench-pi-dma-sizes.z64, and a .tests.tsv next to each listing every value
@@ -19,6 +19,7 @@ suite is always built this way.
 import argparse
 import hashlib
 import importlib
+import multiprocessing
 import os
 import struct
 import subprocess
@@ -40,6 +41,9 @@ DEFAULT_IPL3 = os.path.join(os.environ.get("N64_TIMING_HOME", os.path.expanduser
 IPL3_COMMIT = "e356bf3f56f7afbf7e5246329562f145965cfdfc"
 IPL3_SHA256 = "f522db2e31a701f82597f399e76d55c9487760d015aff9d90176b463ae39a068"
 
+#main's arguments, for build_set in a forked worker: (args, defines, ipl3 bytes, git sha or None).
+_JOB = None
+
 
 def suite_sets(name):
     module = f"romgen.suites.{name}.sets"
@@ -52,9 +56,8 @@ def suite_sets(name):
 
 
 def runtime_text(extra_asm, consts):
-    text = runtime.RUNTIME
-    if "BOOT_DELAY" in consts:
-        text = text.replace("\nboot:\n", "\nboot:\n" + runtime.BOOT_DELAY_LOOP, 1)
+    boot = (runtime.BOOT_DELAY_LOOP if "BOOT_DELAY" in consts else "") + runtime.layout_pad(consts.get("LAYOUT_PAD", 0))
+    text = runtime.RUNTIME.replace("\nboot:\n", "\nboot:\n" + boot, 1)
     return "\n".join([text] + extra_asm)
 
 
@@ -109,6 +112,7 @@ def main():
     ap.add_argument("--hw", action="store_true", help="build the console variant (hwout.py)")
     ap.add_argument("--define", action="append", default=[], metavar="NAME=VALUE",
                     help="override an integer assembler constant of the suite, e.g. RUNS=1000")
+    ap.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1), help="sets built at once (default 8)")
     args = ap.parse_args()
     defines = {k: int(v, 0) for k, v in (d.split("=", 1) for d in args.define)}
     ipl3 = open(args.ipl3, "rb").read()
@@ -119,34 +123,49 @@ def main():
                          f"a console build must boot the stub the kit was verified with")
     os.makedirs(args.out, exist_ok=True)
     hw = args.hw or args.suite == "calib"
-    sha = git_sha() if hw else None
-    for set_def in suite_sets(args.suite):
-        if args.set and set_def.set_name not in args.set:
-            continue
+    global _JOB
+    _JOB = (args, defines, ipl3, git_sha() if hw else None)
+    picked = [i for i, set_def in enumerate(suite_sets(args.suite)) if not args.set or set_def.set_name in args.set]
+    for i in picked:
+        set_def = suite_sets(args.suite)[i]
         unknown = set(defines) - set(set_def.consts)
         if unknown:
             raise SystemExit(f"{set_def.rom_name}: no constant {', '.join(sorted(unknown))}")
-        set_def.consts = {**set_def.consts, **defines}
-        rom_id = os.path.basename(set_def.rom_name)
-        variant = os.path.dirname(set_def.rom_name) or "single"
-        suite, payload = build_payload(set_def, (rom_id, sha, variant) if hw else None)
-        rom = make_rom(ipl3, payload)
-        if hw:
-            rom = hwout.stamp(hwout.header_bytes(rom))
-        path = os.path.join(args.out, f"{set_def.rom_name}.z64")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(rom)
-        with open(path[:-len(".z64")] + ".tests.tsv", "w",
-                  encoding="utf-8", newline="\n") as f:
-            f.write("index\ttest\tvalue\texpected_cycles\n")
-            for ti, t in enumerate(suite.tests):
-                for vi, v in enumerate(t.values):
-                    desc = v.full_desc if v.full_desc is not None else v.desc
-                    expected = ",".join(str(c) for c in v.expected_cycles())
-                    f.write(f"{ti}.{vi}\t{t.name}\t{desc}\t{expected}\n")
-        print(f"{path}: {len(suite.tests)} tests, {suite.value_count()} values, "
-              f"{len(rom)} bytes, payload {len(payload)} bytes")
+    #fork shares the parent's set list, so the sets need not pickle; without it (Windows), build in turn.
+    if args.jobs > 1 and "fork" in multiprocessing.get_all_start_methods():
+        with multiprocessing.get_context("fork").Pool(args.jobs) as pool:
+            lines = pool.map(build_set, picked, chunksize=8)
+    else:
+        lines = map(build_set, picked)
+    for line in lines:
+        print(line)
+
+
+def build_set(index):
+    args, defines, ipl3, sha = _JOB
+    hw = sha is not None
+    set_def = suite_sets(args.suite)[index]
+    set_def.consts = {**set_def.consts, **defines}
+    rom_id = os.path.basename(set_def.rom_name)
+    variant = os.path.dirname(set_def.rom_name) or "single"
+    suite, payload = build_payload(set_def, (rom_id, sha, variant) if hw else None)
+    rom = make_rom(ipl3, payload)
+    if hw:
+        rom = hwout.stamp(hwout.header_bytes(rom))
+    path = os.path.join(args.out, f"{set_def.rom_name}.z64")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(rom)
+    with open(path[:-len(".z64")] + ".tests.tsv", "w",
+              encoding="utf-8", newline="\n") as f:
+        f.write("index\ttest\tvalue\texpected_cycles\n")
+        for ti, t in enumerate(suite.tests):
+            for vi, v in enumerate(t.values):
+                desc = v.full_desc if v.full_desc is not None else v.desc
+                expected = ",".join(str(c) for c in v.expected_cycles())
+                f.write(f"{ti}.{vi}\t{t.name}\t{desc}\t{expected}\n")
+    return (f"{path}: {len(suite.tests)} tests, {suite.value_count()} values, "
+            f"{len(rom)} bytes, payload {len(payload)} bytes")
 
 
 if __name__ == "__main__":
