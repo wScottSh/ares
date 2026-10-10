@@ -98,7 +98,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | # | ROM | Runs for | Log | Film it? | Answers |
 |---|---|---|---|---|---|
 | 1 | `kit-cpu` | 0.2 s | 8.9 KB | no | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
-| 2 | `kit-vi` | 3.6 s | 1.8 KB | yes | `vi-first-line`, `count-per-field` |
+| 2 | `kit-vi` | 4.2 s | 3.3 KB | no | `vi-first-line`, `count-per-field`, `vi-mid-field-blank` |
 | 3 | `kit-dma` | 1.2 s | 15.6 KB | no | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end` |
 | 4 | `kit-hpos` | 0.2 s | 6.6 KB | no | `vi-cpu-contention` |
 | 5 | `kit-rdp` | 0.2 s | 8.2 KB | no | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |

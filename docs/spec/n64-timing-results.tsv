@@ -1,4 +1,4 @@
-# standing run calib-kit-merge/standing on 214c46421
+# standing run after/standing on 39964e72e
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -113,7 +113,7 @@ hw:vi-fetch-modes	pending:calibration-16	no complete power-on console capture of
 hw:vi-fetch-position	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-first-line	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-intr-latency	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
-hw:vi-mid-field-blank	pending:calibration-16	none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists: no kit ROM
+hw:vi-mid-field-blank	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-rcp-phase	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-unfetched-video	pending:calibration-16	none: needs a video capture of the VI output, which the kit's ingestion does not read: no kit ROM
 hw:wb-drain-target	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware

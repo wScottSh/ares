@@ -261,7 +261,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run calib-kit-merge/standing on 214c46421).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/standing on 39964e72e).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -378,7 +378,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:vi-fetch-position` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
 | `hw:vi-first-line` | pending:calibration-16 | no complete power-on console capture of kit-vi in docs/calibration/hardware |
 | `hw:vi-intr-latency` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
-| `hw:vi-mid-field-blank` | pending:calibration-16 | none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists: no kit ROM |
+| `hw:vi-mid-field-blank` | pending:calibration-16 | no complete power-on console capture of kit-vi in docs/calibration/hardware |
 | `hw:vi-rcp-phase` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
 | `hw:vi-unfetched-video` | pending:calibration-16 | none: needs a video capture of the VI output, which the kit's ingestion does not read: no kit ROM |
 | `hw:wb-drain-target` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
