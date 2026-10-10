@@ -108,7 +108,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | `dpc-sequencing` |
 | 10 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | `systemtest-rdp` |
 | 11 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | `unsynced-attrs` |
-| 12 | `nemu64-timing` | 0.8 s | 25.9 KB | no | `nemu64-console` |
+| 12 | `nemu64-timing` | 0.8 s | 26.7 KB | no | `nemu64-console` |
 | 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | `nemu64-cycle-console` |
 | 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | `nemu64-cop0hazard-console` |
 | 15 | `kit-tex` | 0.3 s | 16.3 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
@@ -160,7 +160,6 @@ These ROMs are not built by the kit. Each capture goes in the capture directory 
   ```
 
   The script needs docker. It builds rasky/n64-systembench `50f5066` with its vendored libdragon and GCC 12.2.0 (libdragon `a54ccd736`'s Dockerfile), with the `timeit_average` tie fix; this is the build the `systembench:*` checks run. Its `provenance.txt` must show `fd5ec6c06acb686608c53554950c8b6b12b011dca5b30bf22bd7277a8d986823  n64-systembench.z64`, and `rambuf` sits at 0x800278c0. Run that unpadded `n64-systembench.z64` with one controller in port 1, not a boot-delay build, and save its ISViewer log as `capture/ext-systembench.log` (and `ext-systembench.run2.log` for the second run). Ingestion compares each of the 34 rows with the fork's run of the same file (`run.sh` writes it to `ext/systembench.txt`) under the ROM's own rule (within 1 CPU or 2 RCP cycles, or 0.2 %), and counts the rows that also match the published hardware value. It answers `systembench`. The comparison holds only for this binary: a change of one to three instructions in a poll loop moves the poll rows by up to 10 RCP cycles (verify-83), and `rambuf`'s address decides U32R rand and PI DMA 1 KiB, so a log from any other build decides nothing.
-- **n64_pi_dma_test** (`ext-pi_dma_test`). Run rasky's prebuilt ROM (the sha256 is pinned in `standing.sh`) and save its log as `capture/ext-pi_dma_test.log`. The ROM does not print its COUNT reads, which `pidma-offset` needs, so this capture only re-checks the published logs, and `pidma-offset` has no reader. A build that logs COUNT needs the ROM's source, which has no license.
 - **Majora's Mask bench** (`ext-mm-bench`). Build the BENCH ROMs before `run.sh`, so the fork runs the same files:
 
   ```sh
@@ -200,6 +199,21 @@ The command does these things:
 2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, the ROM's `rom_sha256`, `RI_REFRESH`, the boot (power-on or reset) and the controller ports that answered.
 3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures against the fork's range over its boot delays. A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
+
+### Latency histograms
+
+Two logs record distributions as well as the values the questions compare. No question compares a histogram; they are the console's data behind the means, for the bus investigation (docs/design/green-plan/bus.md, Q2 and section 3):
+
+- `nemu64-timing` prints a `#hist <test>.<value> <cycles>:<count>,...` line before the result of each of its 21 averaged values (Load Miss and uncached loads, VI on and off, 1000 runs each). These are the counts behind `nemu64-console`'s min, max, median and mean. A refresh tail shows as a flat spread over 41..80 at about 1-2 %; a second latency state shows as a second peak at 42-44.
+- `kit-hpos` already logs every load. kit.py derives `hist_pclk`, each latency in pclk with its count, for each `vi-cpu-contention` point.
+
+To print them from stored logs or from the fork's run:
+
+```sh
+tools/n64-timing/calibration/kit.py --hist docs/calibration/hardware/console-<date>/nemu64-timing.*.log docs/calibration/hardware/console-<date>/kit-hpos.*.log
+```
+
+Each line is `<file> <rom>/<point> <metric> <latency>:<count>,...`. The `#hist` lines make `nemu64-timing`'s log about 0.8 KB longer, so it still fits the 32 KiB SRAM. Like every log over 2 KB, it needs the USB or SRAM path (see [Photo fallback](#photo-fallback)).
 
 To see what an ingestion would change without writing to the repository, add `--dry-run`. `tools/n64-timing/calibration/dry-run.sh <run.sh output>` runs the whole path on the fork's own logs as a fake capture: ISViewer logs, real SRAM dumps in both byte orders, a CRLF log, the four-controller run, a cut log, the Thar0 port's output, the fork's n64-systembench log and the published snapper64 dumps.
 

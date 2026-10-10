@@ -142,7 +142,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
-tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
+tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard timing-phase]
 ```
 
 `romgen/build.py` generates the three ROMs from the in-repo Python port of nemu64-test, with no external toolchain. See [romgen/README.md](romgen/README.md).
@@ -159,6 +159,8 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 - `summary.txt` holds the ROM's own category totals, such as `Timing: Failed X of Y tests`.
 - `values.tsv` (romgen ROMs only) has one row per test value: result, measured cycles, and expected cycles.
 - `categories.tsv` (romgen timing ROM only) assigns each failed value to a root-cause category.
+
+`timing-phase` runs the averaged timing tests at every VI phase of `romgen/suites/nemu64/phases.py` ([romgen README, Phase walk](romgen/README.md#phase-walk)). Its directory holds `phase-<K>/` (`stdout.txt`, `stderr.txt` and `values.tsv` per delay), `runs.txt`, `measurements.tsv` (min, max, median and sum of each averaged value at each delay) and `phase.tsv` (each value's phase ranges, phase mean, bands and verdict).
 
 `results/nemu64/summary.txt` concatenates the set summaries.
 
@@ -197,7 +199,7 @@ A `checks.tsv` row whose id ends in `:*` is a suite row. Its expect column is `f
 
 ### Results
 
-`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that reports a number but asserts none is `pending:report-only`, and a check whose ROM the suite does not build is `pending:no-rom`. `pidma/` holds the pi_dma_test run: standing.sh runs the prebuilt ROM from `$PIDMA_DIR` (default `$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test`, sha256 pinned) for 3000 frames with `ARES_PILOG`, then `pidma-replay.py --calibrated` writes the verdict line to `pidma/summary.txt`. A `harness:` check guards a measuring tool, not a behavior, so it gets a result though no row names it. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
+`tools/n64-timing/standing.sh OUT MM_ROM` builds every suite ROM into `$N64_TIMING_HOME/roms` and runs the whole standing set into `OUT` in that layout. `--results RUN_DIR` reads one standing run of every suite and writes one line per check that a row names: `pass`, `fail`, or `pending:<gate>`, with the measured detail. `RUN_DIR` holds `nemu64/`, `bench/`, `thar0/`, `rdpstat/`, `snapper/` and `noise/` (each suite's `$N64_TIMING_HOME/results/<suite>` directory), `mmbench/` (an mmbench `--out` directory), `ctest.txt` (ctest in the build directory), `behaviors.txt` (`--check`, `--self-test` and `lint-literals.py` output), `det-*.txt` and `stepcap-*.txt` (`determinism.sh` and `determinism.sh --step-cap` over the nemu64 ROMs and MM), and `rom-sha256.txt` (`sha256sum` of every suite ROM, paths relative to the ROM directory). The gate comes from the check itself: a check that reports a number but asserts none is `pending:report-only`, and a check whose ROM the suite does not build is `pending:no-rom`. `pidma/` holds the pi_dma_test run: standing.sh runs the prebuilt ROM from `$PIDMA_DIR` (default `$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test`, sha256 pinned) for 3000 frames with `ARES_PILOG`, then `pidma-replay.py` pairs each timed DMA with the ROM's own COUNT reads, writes the verdict line to `pidma/summary.txt` and each point to `pidma/points.tsv`. A `harness:` check guards a measuring tool, not a behavior, so it gets a result though no row names it. Any other check without output is an error. A Thar0 check passes when the model's count lies inside the console's minimum..maximum. Then run `behaviors.py` to regenerate the spec and the closure draft from the results.
 
 ## Clock units
 
