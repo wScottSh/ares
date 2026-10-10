@@ -66,7 +66,8 @@ auto VI::line() -> void {
       io.vcounter = 0;
       io.field += !io.halfLinesPerField.bit(0);
       if(++io.leapCounter == 5) io.leapCounter = 0;
-      latchFrame(false);
+      if(frame.settle == Frame::Settle::Fetched) frame.settle = Frame::Settle::Latched;
+      if(frame.settle == Frame::Settle::Latched) latchFrame();
     }
 
     if(io.vcounter == io.vstart >> 1) {
@@ -106,7 +107,7 @@ auto VI::line() -> void {
     // We do that every 200 simulated lines of 0x800 quarter-clocks. This is just arbitrary,
     // the real VI is not clocking at all when inactive; the period is host liveness, not a cost.
     io.vcounter = 0;
-    frame.live = true;
+    frame.settle = Frame::Settle::Unfetched;
     if(++inactiveCounter >= 200) {
       inactiveCounter = 0;
       refreshed = true;
@@ -115,9 +116,13 @@ auto VI::line() -> void {
   }
 }
 
-//At the HSYNC that starts a field (vi.frame-latch), and at every line of a live frame.
-auto VI::latchFrame(bool live) -> void {
-  frame = {io.vstart, io.vend, io.ysubpixel, (s32)io.vstart, live};
+//At the HSYNC that starts a field (vi.frame-latch), and at every line until the
+//frame settles.
+auto VI::latchFrame() -> void {
+  frame.vstart = io.vstart;
+  frame.vend   = io.vend;
+  frame.y      = io.ysubpixel;
+  frame.row    = io.vstart;
 }
 
 auto VI::sample() const -> Geometry {
@@ -186,12 +191,13 @@ auto VI::compose() -> void {
 auto VI::startFetch() -> void {
   if(io.colorDepth < 2 || !io.width) return;
   if(fetch.next < fetch.count || fetch.inFlight) return;
-  if(frame.live) latchFrame(true);
+  if(frame.settle != Frame::Settle::Latched) latchFrame();
   auto g = sample();
   auto w = g.window();
   s32 dy = 2 * io.vcounter;
   if(!g.drawn(w, dy)) dy++;
   if(!g.drawn(w, dy)) return;
+  if(frame.settle == Frame::Settle::Unfetched) frame.settle = Frame::Settle::Fetched;
   fetch.hsync    = vclk;
   fetch.geometry = g;
   fetch.output   = io.vcounter;

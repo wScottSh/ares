@@ -20,7 +20,7 @@ struct VI : Thread, Memory::RCP<VI> {
   auto step(u32 vclks) -> void;
 
   auto line() -> void;
-  auto latchFrame(bool live) -> void;
+  auto latchFrame() -> void;
   auto startFetch() -> void;
   auto fetchDue() -> void;
   auto refresh() -> void;
@@ -89,10 +89,12 @@ struct VI : Thread, Memory::RCP<VI> {
     n10 vend;
     u32 y;    //the accumulated offset, in the units of compose's y
     s32 row;  //the screen row y belongs to
-    //From power-on or a blank until the next field starts, the frame follows the
-    //registers each line: no reference says what a field the VI enters partway
-    //latches (#77).
-    bool live = true;
+    //From power-on or a blank until a field in which the VI fetched a line ends,
+    //the frame follows the registers each line. While a program sets the VI up,
+    //H_SYNC and V_SYNC may still be 0 and fields last a few VCLKs (vi_init writes
+    //VI_CONTROL first), and no reference says what such a field, or one the VI
+    //enters partway, latches (#77).
+    enum class Settle : u8 { Unfetched, Fetched, Latched } settle = Settle::Unfetched;
   } frame;
 
   //The registers a line is fetched and composed with, read once at its HSYNC
