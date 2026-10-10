@@ -23,19 +23,19 @@ from pathlib import Path
 
 REPO = "wScottSh/mm-decomp-60fps"
 #Head of mm-decomp-60fps bench/filesel (the file-select scenes and DPC counters), while its PR is open.
-COMMIT = "1b3e7f24093128ddfd57efa48c79edc0c1895023"
-BASE_SHA256 = "17b775c5dc05b579eb18690c8336b2888d0bab09cac4d224534daab2aa204be1"
+COMMIT = "32f6c0a2d53cf7ebe39c195e26a76096241e7392"
+BASE_SHA256 = "7ace785964e320052e337768fd891b6290988e6c9ba597a3e78b31cf96dfea72"
 #bench.py's defaults at COMMIT: 120 warmup frames, 600 measured (BENCH_MAX_FRAMES), seed 0x12345678.
 WARMUP, FRAMES, SEED = 120, 600, 0x12345678
 #sBenchScenes in src/code/bench.c at COMMIT: name -> (index, sha256 of the patched ROM). Scene 0 with the
 #defaults is the base ROM unchanged, so its sha256 is BASE_SHA256.
 SCENES = {
-    "south_clock_town": (0, "17b775c5dc05b579eb18690c8336b2888d0bab09cac4d224534daab2aa204be1"),
-    "termina_field": (1, "d6a2daa1993ac7cb8d1b7d5f8ebc1f8971f28ddb88b6b331c4be12d1ab60acfb"),
-    "mountain_village_winter": (2, "b8a1e5f27c34a7c7f0e27d2baf6bd37ac7d1b1418af042f18149b3d562aa9287"),
-    "great_bay_coast": (3, "e29d00662e074e3ef6e2ea5b0aba4ff720291e779e6df3aeb277dd6af724d6b2"),
-    "file_select_empty": (4, "d49246f4608584fcca837eab9c4ac062f6f49ae34db10912aa3700d80b88df16"),
-    "file_select_named": (5, "7a9ac1162988156377937b29649793b020af964a649f04059f9e47aac588a5ce"),
+    "south_clock_town": (0, "7ace785964e320052e337768fd891b6290988e6c9ba597a3e78b31cf96dfea72"),
+    "termina_field": (1, "cb32f3f0b3ac9df3e41a8d7bfdaafa98cd842d12882e8f90a624d0ab216ffa72"),
+    "mountain_village_winter": (2, "7577eade2b2fa41ebb70d71705580ceb35587d7897374f9c72e8d502ba5ffa41"),
+    "great_bay_coast": (3, "290af76ead84a5e159156d3857cfacdaa444bcdf7a514f287c6c8f37335a5bc5"),
+    "file_select_empty": (4, "bf0fae558b591016aae96bb99315a3fb7cc9346f5248ab772aca3fba6f67600d"),
+    "file_select_named": (5, "60f4587dc65594e69d523c42ea03b41e1a4daf1f1030b16c6deba5958429c777"),
 }
 CONFIG_MAGIC = b"BNCH"
 #The CIC boot code checksums ROM 0x1000..0x101000, so a patch there would not boot on a console.
