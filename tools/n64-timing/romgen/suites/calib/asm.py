@@ -85,6 +85,7 @@ kve_vblank:
     sltiu $t2, $t2, 0x200
     bnez $t2, kve_vblank
     nop
+kve_blank:
     sw $zero, 0($t0)
 kve_delay:
     addiu $t1, $t1, -1
@@ -111,6 +112,25 @@ kve_second:
     subu $t6, $t6, $t9
     jr $ra
     sw $t6, 12($a1)
+
+# args = {delay, line}: k_vi_enable with the blank written as V_CURRENT reaches `line`, inside the
+# active field, while that line's fetch is in flight (#84).
+k_vi_enable_mid:
+    lw $t1, 0($a0)
+    lw $t3, 4($a0)
+    li $t0, 0xA4400000
+kvm_before:
+    lw $t2, 0x10($t0)
+    sltu $t2, $t2, $t3
+    beqz $t2, kvm_before
+    nop
+kvm_reach:
+    lw $t2, 0x10($t0)
+    sltu $t2, $t2, $t3
+    bnez $t2, kvm_reach
+    nop
+    b kve_blank
+    nop
 
 # args = {fields}: COUNT ticks over `fields` VI fields, from one V_CURRENT wrap to another.
 # RES[2] = the shortest field, RES[3] = the longest.

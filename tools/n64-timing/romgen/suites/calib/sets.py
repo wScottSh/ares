@@ -69,6 +69,16 @@ def vi_enable(suite):
                   extra=["v_at_enable", "first_ticks", "v_after", "line_ticks"])
 
 
+VI_MID_LINE = 0x100  # V_CURRENT half-line 256: output line 128, inside vi_init's V_VIDEO 0x25..0x1FF
+
+
+def vi_mid_field(suite):
+    rom = Rom(suite, "vi-mid-field")
+    for d in VI_DELAYS:
+        rom.point(f"delay-{d}", "k_vi_enable_mid", [d, VI_MID_LINE], [("delay", d), ("line", VI_MID_LINE)], reps=4,
+                  extra=["v_at_enable", "first_ticks", "v_after", "line_ticks"])
+
+
 def count_fields(suite):
     rom = Rom(suite, "count-fields")
     rom.point("fields-60", "k_count_fields", [60], [("fields", 60)], reps=3, extra=["field_min", "field_max"])
@@ -203,7 +213,7 @@ KITS = {
     "kit-cpu": [benches.uncached_sizes, benches.rcp_reg_read, benches.pif_ram_read, benches.pi_io_read,
                 benches.pi_io_write, benches.si_io_write, benches.dirty_row_sweep, benches.dirty_miss_isolated,
                 dcb, wb_stores, reg_write, ifill, bus_reads],
-    "kit-vi": [vi_enable, count_fields],
+    "kit-vi": [vi_enable, vi_mid_field, count_fields],
     "kit-dma": [benches.mi_memset_uncached, benches.mi_memset_cached, benches.mi_memset_rspdma,
                 benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain, pi_dma_rowend],
     "kit-hpos": [benches.uncached_vs_hpos],
