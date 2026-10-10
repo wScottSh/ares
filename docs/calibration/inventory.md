@@ -56,6 +56,9 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `cache-ops` | What does each CACHE op cost on an absent, clean and dirty line, and what does it leave for the next access? | each I- and D-cache CACHE op over 8 entry phases: the op's lowest ticks, its sum over the 8 (sum / 4 - 1 = phase-averaged pclk; an op that costs only its slot reads 8), and the next load's lowest ticks (hit 1-2, miss 21, dirty writeback then miss 28-29). Fork: Index Load Tag about 6 pclk, I-cache Fill 19 ticks, the rest their slot | kit-cpu2 | cpu2-cache/* | min next_min per point | range:abs:1 | `cpu.cache-index-load-tag` `item:16.cache-ops` | pending:calibration-16 |
 | `nemu64-cycle-console` | Do the nemu64-test cycle cases pass on this console: self-modifying code within a basic block (cpu.fetch-ahead-slots: 2 vs 3 slots) and the CTC1-raised exception's Cause.CE? | every nemu64-test cycle value's pass or fail, the data cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce were fit to, re-measured on this console | nemu64-cycle | * | v0 per point | exact | `cpu.fetch-ahead-slots` `cpu.ctc1-fpe-ce` | pending:calibration-16 |
 | `nemu64-cop0hazard-console` | Do the nemu64-test cop0hazard cases pass on this console: the COUNT write hold, the software-interrupt sample points and Random read early? | every nemu64-test cop0hazard value's pass or fail, the data the COUNT hold, the interrupt sampler and the Random/Wired rules were fit to, re-measured on this console (COMPARE's power-on value shows in the COUNT case, which wraps through Compare = 0) | nemu64-cop0hazard | * | v0 per point | exact | `cpu.count-write-hold` `cpu.irq-sample` `cpu.random-rule` `cpu.wired-write-latency` `item:fu.power-on-compare` `legacy.cpu.interrupt-entry` | pending:calibration-16 |
+| `count-write-hold` | How many slots after an MTC0 COUNT does an MFC0 COUNT still read the value written (cpu.count-write-hold), measured apart from nemu64-test's four back-to-back reads? | COUNT read by one MFC0 at slot 1..6 after an MTC0 COUNT of COUNT + 16, less the value written, nops between: the least (min) and greatest (dmax) over 8 shots entered 0..7 pclk apart. The fork reads 0 0 0 1 1 2 with min = dmax; a 1 pclk hold reads 0 0 1 1 2 2 and a 3 pclk hold 0 0 0 0 1 1 (fork builds with the row at 1 and 3, u-fit3). A console whose COUNT divider keeps its phase through the write reads min < dmax at some slot | kit-cpu2 | cpu2-countw/* | min dmax per point | exact | `cpu.count-write-hold` `item:plan.fit3` | pending:calibration-16 |
+| `fetch-ahead` | How many instructions ahead of a line's first word does the I-fill of that line run, so that an uncached store to the word is or is not executed (cpu.fetch-ahead-slots: 2 vs 3)? | whether the first word of a 32 B line (invalidated in the I-cache, the boundary pinned by .align 32) runs as the value an uncached SW 1, 2, 3 or 4 instructions before it stored, from a warm previous line: 1 = the stored word ran. The fork reads 0 0 1 1 (a store 3 ahead is seen, 2 ahead is not); with 3 slots ahead-3 would read 0 (inferred from the row's rule) | kit-cpu2 | cpu2-smc/* | min per point | exact | `cpu.fetch-ahead-slots` `item:plan.fit3` | pending:calibration-16 |
+| `ctc1-fpe-ce` | Which Cause.CE does an FPU exception raised by CTC1 report when the next instruction is not a COP1 or COP2 instruction (cpu.ctc1-fpe-ce: bits 27-26 of the next opcode)? | Cause.CE (min), Cause.ExcCode, EPC less the CTC1's address and whether the handler ran, for a CTC1 that sets FCSR's V cause and enable, followed by SLL, ADDIU, SLTI or SLTIU (opcode bits 27-26 = 0, 1, 2, 3) or by MFC0. The fork reads CE 0 1 2 3 0, ExcCode 15, EPC at the CTC1; a rule that reports 0 or 1 for an instruction outside COP1-3 reads otherwise at ADDIU, SLTI or SLTIU | kit-cpu2 | cpu2-ctc1ce/* | min exc epc_off fired per point | exact | `cpu.ctc1-fpe-ce` `item:plan.fit3` | pending:calibration-16 |
 | `dom2-read` | What does a cartridge domain-2 word read cost (legacy.pi.cart-read charges 250 pclk)? | an uncached LW from the SRAM the kit logs to, under hw_init's domain-2 timing (LAT 5, PWD 12, PGS 13, RLS 2), against the cached baseline | kit-cpu | bus-reads/* | min per point | range:abs:2 | `legacy.pi.cart-read` | pending:calibration-16 |
 | `pi-row-end` | Does a PI DMA whose first block ends at an RDRAM row end cost what the model charges? | pi-dma-sizes' 8, 128 and 1024 B DMAs into RDRAM 8 B and 64 B before a 2 KiB row end, poll walked | kit-dma | pi-dma-rowend/* | min max2 per point | range:abs:4 | `item:fu.pi-row-end` | pending:calibration-16 |
 | `noise-stall` | Does the noise LFSR step during in-span memory stalls (an IM_RD rectangle stalls on its reads)? | the pixels of a 256 px NOISE rectangle with IM_RD on | kit-noise | snap/im-rd-stall | hash per point | exact | `item:16.noise-idle-stall` `rdp.noise-pixel-offset` | pending:calibration-16 |
@@ -129,10 +132,10 @@ Rows whose only passing checks are their own fit data. 12 rows, 12 with a kit qu
 | `cpu.exc-fpu-detect` | fit only | nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64 hw:nemu64-console hw:fpu-classes | `hw:nemu64-console`, `hw:fpu-classes` |
 | `cpu.fpu-trivial` | fit only | nemu64:timing/cop1instructions32 nemu64:timing/cop1instructions64 hw:nemu64-console hw:fpu-classes | `hw:nemu64-console`, `hw:fpu-classes` |
 | `cpu.eret` | fit only | nemu64:timing/exception-roundtrip hw:nemu64-console hw:cpu-exceptions | `hw:nemu64-console`, `hw:cpu-exceptions` |
-| `cpu.count-write-hold` | fit only | nemu64:cop0hazard/count | `hw:nemu64-cop0hazard-console` |
+| `cpu.count-write-hold` | fit only | nemu64:cop0hazard/count hw:count-write-hold | `hw:nemu64-cop0hazard-console`, `hw:count-write-hold` |
 | `cpu.irq-sample` | fit only | nemu64:cop0hazard/softwareinterrupt hw:cpu-exceptions hw:nemu64-cop0hazard-console | `hw:cpu-exceptions`, `hw:nemu64-cop0hazard-console` |
-| `cpu.fetch-ahead-slots` | fit only | nemu64:cycle/smc-single-write | `hw:nemu64-cycle-console` |
-| `cpu.ctc1-fpe-ce` | fit only | nemu64:cycle/ctc1 | `hw:nemu64-cycle-console` |
+| `cpu.fetch-ahead-slots` | fit only | nemu64:cycle/smc-single-write hw:fetch-ahead | `hw:nemu64-cycle-console`, `hw:fetch-ahead` |
+| `cpu.ctc1-fpe-ce` | fit only | nemu64:cycle/ctc1 hw:ctc1-fpe-ce | `hw:nemu64-cycle-console`, `hw:ctc1-fpe-ce` |
 | `rdp.primitive-base` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle bench:rdp-rectn hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
 | `rdp.span-dead-pixels` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
 | `rdp.span-line-gap` | fit only | thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle hw:rdp-rect-base | `hw:rdp-rect-base`, `hw:thar0-console` |
@@ -224,7 +227,7 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 
 ## Coverage
 
-Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 220 entries: 203 with a question, 7 not hardware-decidable (no console run can decide them), 10 not decidable by this kit (a console could, with what the reason names).
+Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 221 entries: 204 with a question, 7 not hardware-decidable (no console run can decide them), 10 not decidable by this kit (a console could, with what the reason names).
 
 | Entry | Why | Question or reason |
 |---|---|---|
@@ -287,9 +290,9 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `cpu.eret` | fit; verify-is-fit | `hw:nemu64-console`, `hw:cpu-exceptions` |
 | `cpu.mtc0-slow-regs` | measured reference | `hw:nemu64-console` |
 | `cpu.cache-index-load-tag` | measured reference | `hw:nemu64-console`, `hw:cache-ops`, `hw:cache-ops-sum` |
-| `cpu.count-write-hold` | fit; verify-is-fit | `hw:nemu64-cop0hazard-console` |
+| `cpu.count-write-hold` | fit; verify-is-fit | `hw:nemu64-cop0hazard-console`, `hw:count-write-hold` |
 | `cpu.irq-sample` | fit; verify-is-fit; an inference in its reference or note | `hw:cpu-exceptions`, `hw:nemu64-cop0hazard-console` |
-| `cpu.fetch-ahead-slots` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console` |
+| `cpu.fetch-ahead-slots` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console`, `hw:fetch-ahead` |
 | `cpu.dirty-miss-order` | vendor reference; pending:report-only | `hw:dirty-miss` |
 | `cpu.wb-entries` | vendor reference | `hw:nemu64-console` |
 | `cpu.wb-block-entries` | vendor reference; check bench:mi-memset-cached fail | `hw:wb-release`, `hw:wb-drain-target` |
@@ -302,7 +305,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `sysad.register-write` | model-choice; check bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target` |
 | `cpu.random-rule` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.wired-write-latency` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
-| `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console` |
+| `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console`, `hw:ctc1-fpe-ce` |
 | `sp.dma-burst` | model-choice; pending:report-only | `hw:sp-dma-direction` |
 | `rsp.slot` | wiki reference | `hw:nemu64-console` |
 | `pi.page-setup` | wiki reference; check pidma:logs, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
@@ -448,6 +451,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `item:fu.power-on-compare` | followups T7c: The power-on COMPARE value (cop0hazard leaves IP7 set after the COUNT test wraps through Compare = 0) | `hw:nemu64-cop0hazard-console` |
 | `item:fu.hpos-holdoff` | followups labels-phase: hpos holdoff_rclk_max from a window that starts on a refresh | `hw:vi-cpu-contention` |
 | `item:fu.vi-mid-field-blank` | issue #84: What hardware does on a VI blank and re-enable mid-field (the kit blanks only in vertical blank because the fork crashes, #84) | `hw:vi-mid-field-blank` |
+| `item:plan.fit3` | green-plan pending.md section 8 (U-FIT3): Kit points that decide cpu.count-write-hold, cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce without re-running their nemu64-test fit data (cop0hazard count, the cycle SMC cases, cycle ctc1) | `hw:count-write-hold`, `hw:fetch-ahead`, `hw:ctc1-fpe-ce` |
 
 ## Questions without an in-repo kit ROM
 

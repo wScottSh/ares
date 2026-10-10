@@ -30,7 +30,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | no check is consistent-only or pass-conditional | **no** | 3: `bench:mi-memset-rspdma` pass-conditional:#77, `systembench:si-dma-w-rom` consistent-only, `systembench:u32r-banked` consistent-only |
 | every pending check is pending:calibration-16 on a kit question a tool can compare | **no** | other gates: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; hw checks whose question no tool compares: `hw:mm-filesel`, `hw:vi-mid-field-blank`, `hw:vi-unfetched-video` |
 | no check is report-only, no-rom or no-corpus, except on excluded or out-of-kit rows | **no** | report-only or no-rom checks: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; rows gated on no-corpus: none |
-| every row that is not verified names a hardware question independent of its fit data | **no** | 7 rows that are not excluded or out of kit, do not pass, and name no hw:<question> a tool compares that does not re-run their fit: `cpu.count-write-hold`, `cpu.fetch-ahead-slots`, `cpu.ctc1-fpe-ce`, `vi.fetch-overrun`, `vi.unfetched-sample`, `rdp.mem-overhead-write`, `rdp.port-lookahead` |
+| every row that is not verified names a hardware question independent of its fit data | **no** | 4 rows that are not excluded or out of kit, do not pass, and name no hw:<question> a tool compares that does not re-run their fit: `vi.fetch-overrun`, `vi.unfetched-sample`, `rdp.mem-overhead-write`, `rdp.port-lookahead` |
 
 ### MAP_GREEN
 
@@ -39,7 +39,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | SOFTWARE_READY | **no** | 0 of 6 clauses hold |
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
-| every hw:* check is ingested and passes | **no** | 0 of 80 pass, 80 pending:calibration-16 |
+| every hw:* check is ingested and passes | **no** | 0 of 83 pass, 83 pending:calibration-16 |
 | every row that is not excluded or out-of-kit is verified | **no** | 68 of 144 rows that are not excluded pass, counting the 10 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
@@ -81,7 +81,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 2 consistent-only, 21 fail, 88 pass, 1 pass-conditional:#77, 98 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 2 consistent-only, 21 fail, 88 pass, 1 pass-conditional:#77, 101 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
@@ -251,7 +251,9 @@ These checks are gated too, but another check already decides their row.
 | `cpu.eret` | fit only | `hw:nemu64-console` pending (calibration-16); `hw:cpu-exceptions` pending (calibration-16) |
 | `cpu.mtc0-slow-regs` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.cache-index-load-tag` | pass | `hw:cache-ops` pending (calibration-16); `hw:cache-ops-sum` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.count-write-hold` | fit only | `hw:count-write-hold` pending (calibration-16) |
 | `cpu.irq-sample` | fit only | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `cpu.fetch-ahead-slots` | fit only | `hw:fetch-ahead` pending (calibration-16) |
 | `cpu.wb-entries` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.wb-block-entries` | fail | `hw:wb-release` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16) |
 | `cpu.rcp-register-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
@@ -262,6 +264,7 @@ These checks are gated too, but another check already decides their row.
 | `sysad.register-write` | fail | `hw:register-write` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16) |
 | `cpu.random-rule` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
 | `cpu.wired-write-latency` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `cpu.ctc1-fpe-ce` | fit only | `hw:ctc1-fpe-ce` pending (calibration-16) |
 | `rsp.slot` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `pi.page-setup` | fail | `bench:pi-dma-sizes` pending (report-only); `hw:pi-dma-small` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `pi.halfword-bias` | fail | `bench:pi-dma-sizes` pending (report-only); `hw:pi-dma-small` pending (calibration-16); `hw:systembench` pending (calibration-16) |

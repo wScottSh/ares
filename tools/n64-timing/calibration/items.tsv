@@ -45,3 +45,4 @@ fu.pif-ram-dword	followups sysbench / verify-75	An LD from PIF RAM (the fork rea
 fu.power-on-compare	followups T7c	The power-on COMPARE value (cop0hazard leaves IP7 set after the COUNT test wraps through Compare = 0)
 fu.hpos-holdoff	followups labels-phase	hpos holdoff_rclk_max from a window that starts on a refresh
 fu.vi-mid-field-blank	issue #84	What hardware does on a VI blank and re-enable mid-field (the kit blanks only in vertical blank because the fork crashes, #84)
+plan.fit3	green-plan pending.md section 8 (U-FIT3)	Kit points that decide cpu.count-write-hold, cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce without re-running their nemu64-test fit data (cop0hazard count, the cycle SMC cases, cycle ctc1)
