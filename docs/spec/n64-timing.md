@@ -21,8 +21,8 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Status | Meaning | Rows |
 |---|---|---|
-| consistent-only | no check failed, but a check passed its consistent rule while the model's phase mean missed the band, or a bench check's verdict differs between code-layout pads: some phase or layout of the model agrees with the hardware number, not every one does. Consistent with the hardware, not agreement | 1 |
-| fail | at least one check failed; the detail in Check results gives the residual | 27 |
+| consistent-only | no check failed, but a check passed its consistent rule while the model's phase mean missed the band, or a bench check's verdict differs between code-layout pads: some phase or layout of the model agrees with the hardware number, not every one does. Consistent with the hardware, not agreement | 2 |
+| fail | at least one check failed; the detail in Check results gives the residual | 26 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 12 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 4 |
 | pass | a check other than the row's fit data passed, and none failed | 69 |
@@ -88,7 +88,7 @@ From `docs/spec/map-1-closure-draft.md`, which gives each clause and its evidenc
 
 | Behavior | Value | Basis | Reference | Checks | Result | Code | Note |
 |---|---|---|---|---|---|---|---|
-| `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` `bench:uncached-sizes-u32` `bench:uncached-sizes-u32-seq` `bench:uncached-sizes-u32-rand` `bench:uncached-sizes-u32-banked` `hw:cpu-reads` `systembench:u8r` `systembench:u16r` `systembench:u32r` `systembench:u32r-seq` `systembench:u32r-banked` `hw:nemu64-console` `hw:systembench` | **fail**: `nemu64:timing/load-from-uncached-vi-off` pass; `bench:uncached-sizes-u32` pass; `bench:uncached-sizes-u32-seq` pass; `bench:uncached-sizes-u32-rand` pass; `bench:uncached-sizes-u32-banked` fail; `hw:cpu-reads` pending:calibration-16; `systembench:u8r` pass; `systembench:u16r` pass; `systembench:u32r` pass; `systembench:u32r-seq` pass; `systembench:u32r-banked` consistent-only; `hw:nemu64-console` pending:calibration-16; `hw:systembench` pending:calibration-16 | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
+| `cpu.uncached-read-total` | 32 pclk | measured | nemu64-test cache.rs:288-382 median, VI off | `nemu64:timing/load-from-uncached-vi-off` `bench:uncached-sizes-u32` `bench:uncached-sizes-u32-seq` `bench:uncached-sizes-u32-rand` `bench:uncached-sizes-u32-banked` `hw:cpu-reads` `systembench:u8r` `systembench:u16r` `systembench:u32r` `systembench:u32r-seq` `systembench:u32r-banked` `hw:nemu64-console` `hw:systembench` | **consistent-only**: `nemu64:timing/load-from-uncached-vi-off` pass; `bench:uncached-sizes-u32` pass; `bench:uncached-sizes-u32-seq` pass; `bench:uncached-sizes-u32-rand` pass; `bench:uncached-sizes-u32-banked` consistent-only; `hw:cpu-reads` pending:calibration-16; `systembench:u8r` pass; `systembench:u16r` pass; `systembench:u32r` pass; `systembench:u32r-seq` pass; `systembench:u32r-banked` consistent-only; `hw:nemu64-console` pending:calibration-16; `hw:systembench` pending:calibration-16 | reads `Timing::Behavior::CpuUncachedReadTotal` | sysad.fixed-path is derived from this minus modeled wire |
 | `cpu.uncached-read-dword-total` | 35 pclk | derived | n64-systembench @845635c main.c:580 U64R 37 pclk less its 2 pclk harness: its C64R 3 pclk (main.c:575) less the 1 pclk cached hit (nemu64-test, cpu.dcache-hit); research/cpu-memory-costs.md | `bench:uncached-sizes` `hw:cpu-reads` `systembench:u64r` `hw:systembench` | **pass**: `bench:uncached-sizes` pass; `hw:cpu-reads` pending:calibration-16; `systembench:u64r` pass; `hw:systembench` pending:calibration-16 | reads `Timing::Behavior::CpuUncachedReadDwordTotal` | SysAD DwordReadPath (ares/n64/cpu/sysad.hpp) is this less the modeled RI time, as ReadPath is for the word read |
 | `cpu.dfill-total` | 41 pclk | measured | nemu64-test cache.rs:193-286 median, VI off | `nemu64:timing/load-miss-vi-off` `hw:dirty-miss` `hw:nemu64-console` | **fail**: `nemu64:timing/load-miss-vi-off` fail; `hw:dirty-miss` pending:calibration-16; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuDfillTotal` | assumes the nemu64 D-fill measurement is a clean row miss (open row not dirty); a dirty-row miss would add the writeback and the 41 would not be the clean-miss cost. With the VI off the model charges exactly 41 per miss, and load-miss-vi-off, which expects a mean of 42.5, fails: the missing tail of about 1.5 pclk is attributed to RDRAM refresh, which the model runs only while the VI is active (ri.refresh-trigger). That cause is a hypothesis, not measured |
 | `cpu.ifill-stall` | 45 pclk | inferred | NEC Table 11-2 with M from D-fill (cpu-memory-costs.md) | `bench:ifill-isolated` `hw:ifill` | **pending:calibration-16 pending:report-only**: `bench:ifill-isolated` pending:report-only; `hw:ifill` pending:calibration-16 | reads `Timing::Behavior::CpuIfillStall` | no public hardware value and no asserting check (bench:ifill-isolated only reports). cpu-memory-costs.md takes Table 11-2's 1-2 PClock term and M = 31-32 independently and gets a 45-47 range; nemu64-test's '~43 extra cycles' is a source comment, not an assertion. Read jointly with the 41 pclk D-fill as one issue slot plus the Table 11-1 stall (40 = 7 + x + M), the two formulas give 13 + x + M = 46 for either x, so the 45 is the range's low corner, not the joint value. M comes from the D-fill measurement, a clean row miss, so the 45 is the uncontended total at a clean row miss: the SysAD path is 45 less the modeled 32 B clean-miss wire and the mean rclk-edge wait, and the RI adds row state and contention |
@@ -271,22 +271,22 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/standing on aee40c382).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-layout-fix/standing on 14ea5c8d0).
 
 | Check | Result | Detail |
 |---|---|---|
-| `bench:dirty-miss-isolated` | pending:report-only | clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report |
-| `bench:dirty-row-sweep` | pending:report-only | dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points |
-| `bench:ifill-isolated` | pending:report-only | cold cold_minus_warm_pclk 36..38 median 37.0 mean 37.0 (expected -) report; cold pclk 42 (expected -) report; warm pclk 4..6 median 5.0 mean 5.0 (expected -) report |
-| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.735..72.738 median 72.736 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
+| `bench:dirty-miss-isolated` | pending:report-only | clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.914 (expected -) report |
+| `bench:dirty-row-sweep` | pending:report-only | dirty-8 dirty_minus_clean_pclk 0..2 median 0.0 mean 0.336 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..4 median 2.0 mean 2.094 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 0..2 median 2.0 mean 1.977 (expected 3) report; 2 more report points |
+| `bench:ifill-isolated` | pending:report-only | cold cold_minus_warm_pclk 36..38 median 36.0 mean 36.984 (expected -) report; cold pclk 42 (expected -) report; warm pclk 4..6 median 6.0 mean 5.016 (expected -) report |
+| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.731..72.792 median 72.737 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail |
 | `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 1.31 (expected 3.8, 3.795..3.805, mean) fail |
-| `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.492..6.501 median 6.498 mean 6.498 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 |
-| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.716..17.718 median 17.718 mean 17.717 (expected 18.38, 18.346..18.418, mean) fail |
-| `bench:pi-dma-sizes` | pending:report-only | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.0 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass; cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.031 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass; cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778338.0 mean 778338.375 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
-| `bench:pi-dma-sizes-1024` | pass | cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.031 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass |
-| `bench:pi-dma-sizes-128` | pass | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.0 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass |
-| `bench:pi-dma-sizes-65536` | pass | cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778338.0 mean 778338.375 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
-| `bench:pi-dma-sizes-8` | pending:report-only | cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193) report |
+| `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.271..6.503 median 6.499 mean 6.495 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 |
+| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.691..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail |
+| `bench:pi-dma-sizes` | pending:report-only | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.078 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass; cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.477 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass; cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778337.5 mean 778337.59 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
+| `bench:pi-dma-sizes-1024` | pass | cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.477 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass |
+| `bench:pi-dma-sizes-128` | pass | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.078 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass |
+| `bench:pi-dma-sizes-65536` | pass | cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778337.5 mean 778337.59 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
+| `bench:pi-dma-sizes-8` | pending:report-only | cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 189.75 (expected 193) report |
 | `bench:pi-io-read` | pass | rom-word sb_rclk 143 (expected 144, 142..146, consistent, window ±1.4%, mean rule pass) pass |
 | `bench:pif-ram-read` | pass | pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948, consistent, window ±0.2%, mean rule pass) pass |
 | `bench:rcp-reg-read` | pass | vi-control net_pclk 22 (expected 22, 21..23, consistent, window ±4.5%, mean rule pass) pass |
@@ -294,7 +294,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:rdp-loadsz-sweep` | pending:report-only | block-4096-n4 clk_per_byte 0.703 (expected 0.125) report; block-4096-n4 clk_per_byte 0.703 (expected 0.418) report; block-4096-n4 intercept_clk 7.0 (expected 15) report; 1 more report points |
 | `bench:rdp-rectn` | pending:report-only | rect-320x6 clock 2069 (expected 2021) report; duty-320x240 clock 77885 (expected 80287) report |
 | `bench:rdp-setter-sweep` | pass | 4 of 4 points pass |
-| `bench:rdp-sync-sweep` | pass | pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5, every) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5, every) pass; load-256 per_sync_clk 25.051..25.117 median 25.051 mean 25.053 (expected 25, 24.5..25.5, every) pass |
+| `bench:rdp-sync-sweep` | pass | pipe-256 per_sync_clk 50.102 (expected 50, 49.5..50.5, every) pass; tile-256 per_sync_clk 33.109 (expected 33, 32.5..33.5, every) pass; load-256 per_sync_clk 25.051..25.117 median 25.051 mean 25.054 (expected 25, 24.5..25.5, every) pass |
 | `bench:si-dma-accessory` | pass | accessory sb_rclk 36865 (expected 36834, 36760.332..36907.668, consistent, window ±0.2%, mean rule pass) pass |
 | `bench:si-dma-empty-0b` | pass | empty-0b sb_rclk 15025 (expected 15030, 14999.94..15060.06, consistent, window ±0.2%, mean rule pass) pass |
 | `bench:si-dma-empty-1b` | pass | empty-1b sb_rclk 16429 (expected 16424, 16391.152..16456.848, consistent, window ±0.2%, mean rule pass) pass |
@@ -307,14 +307,14 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:si-dma-read64-2` | pending:report-only | read64-2 sb_rclk 57977 (expected 57972) report |
 | `bench:si-dma-read64-3` | pending:report-only | read64-3 sb_rclk 77962 (expected 77924) report |
 | `bench:si-dma-read64-4` | pending:report-only | read64-4 sb_rclk 97948 (expected 97890) report |
-| `bench:sp-dma-sweep` | pending:report-only | wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 6.5) report; rd-4096-off0 b_per_rclk 5.207..5.216 median 5.216 mean 5.213 (expected 5.55) report; wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 5.55) report |
+| `bench:sp-dma-sweep` | pending:report-only | wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.337 (expected 6.5) report; rd-4096-off0 b_per_rclk 4.69..5.216 median 5.216 mean 5.21 (expected 5.55) report; wr-4096-off0 b_per_rclk 6.169..6.693 median 6.334 mean 6.337 (expected 5.55) report |
 | `bench:uncached-sizes` | pass | u64 net_pclk 35 (expected 35, 34..36, consistent, window ±2.9%, mean rule pass) pass |
 | `bench:uncached-sizes-u32` | pass | u32 net_pclk 32 (expected 32, 31..33, consistent, window ±3.1%, mean rule pass) pass |
-| `bench:uncached-sizes-u32-banked` | fail | u32-banked net_pclk 131..132 median 131.0 mean 131.125 (expected 134, 133..135, consistent, window ±1.1%, mean rule fail) fail |
-| `bench:uncached-sizes-u32-rand` | pass | u32-rand net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
-| `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
+| `bench:uncached-sizes-u32-banked` | consistent-only | u32-banked net_pclk 131..133 median 131.0 mean 131.469 (pads 0:fail 1:fail 2:consistent-only 3:consistent-only 4:fail 5:fail 6:fail 7:fail) (expected 134, 133..135, consistent, window ±1.5%, mean rule fail) consistent-only |
+| `bench:uncached-sizes-u32-rand` | pass | u32-rand net_pclk 131..133 median 131.0 mean 131.242 (expected 132, 131..133, consistent, window ±1.5%, mean rule pass) pass |
+| `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131..133 median 131.0 mean 131.352 (expected 132, 131..133, consistent, window ±1.5%, mean rule pass) pass |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
-| `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 16 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
+| `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 14..16 median 16.0 mean 15.781 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
 | `cpu:llsc` | pass | 12 of 12 tests pass |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
