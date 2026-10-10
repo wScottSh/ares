@@ -346,7 +346,8 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:load-interlock-cop` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
 | `hw:loadtile-rows` | pending:calibration-16 | no complete power-on console capture of kit-tex in docs/calibration/hardware |
 | `hw:memset-vi` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
-| `hw:mm-filesel` | pending:calibration-16 | no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware |
+| `hw:mm-bench` | pending:calibration-16 | no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware |
+| `hw:mm-filesel` | pending:calibration-16 | none: the pinned BENCH build (mm_bench.py, mm-decomp-60fps 707602c6) has no file-select scene: Bench_EndFrame records only Play frames (src/code/bench.c), so no BENCH capture shows file select, and it prints no DPC_CLOCK. A file-select bench scene in mm-decomp-60fps would give this question a ROM: no kit ROM |
 | `hw:nemu64-console` | pending:calibration-16 | no complete power-on console capture of nemu64-timing in docs/calibration/hardware |
 | `hw:nemu64-cop0hazard-console` | pending:calibration-16 | no complete power-on console capture of nemu64-cop0hazard in docs/calibration/hardware |
 | `hw:nemu64-cycle-console` | pending:calibration-16 | no complete power-on console capture of nemu64-cycle in docs/calibration/hardware |
