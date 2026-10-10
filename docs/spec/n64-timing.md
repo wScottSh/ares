@@ -271,7 +271,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-layout-fix2/standing on d7f6209d9).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-mm-phase/after on ea12d0a97).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -316,7 +316,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
 | `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 14..16 median 16.0 mean 15.781 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
 | `cpu:llsc` | pass | 14 of 14 tests pass |
-| `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
+| `det` | pass | det-mm: determinism: PASS, 85 files byte-identical, 23405 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
 | `hw:ai-fetch` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
 | `hw:ai-rate` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
@@ -404,9 +404,9 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:write-granularity-pixels` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
 | `hw:xbus-fetch-rate` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
 | `hw:zread-2cyc` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
-| `mm:filesel-empty` | pass | filesel: mean 1.0113, 98.9% of 444 game frames at 1 field(s) |
-| `mm:filesel-named` | fail | filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) |
-| `mm:filesel-options` | pass | filesel-options: mean 1.0000, 100.0% of 598 game frames at 1 field(s) |
+| `mm:filesel-empty` | pass | filesel: median over 5 phases: mean 1.0135 (min 1.0113, max 1.0181), 98.6% (min 98.2%, max 98.9%) of game frames at 1 field(s) |
+| `mm:filesel-named` | fail | filesel-named: median over 5 phases: mean 1.6932 (min 1.6884, max 1.7057), 69.3% (min 68.8%, max 70.6%) of game frames at 2 field(s) |
+| `mm:filesel-options` | pass | filesel-options: median over 5 phases: mean 1.0000 (min 1.0000, max 1.0000), 100.0% (min 100.0%, max 100.0%) of game frames at 1 field(s) |
 | `mm:south-clock-town` | pending:report-only | sct: 3.0000 fields per game frame, 1708022.4 RSP busy clocks per field |
 | `nemu64:cop0hazard/count` | pass | 1 of 1 tests pass |
 | `nemu64:cop0hazard/random-read-early` | pass | 1 of 1 tests pass |
@@ -448,7 +448,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `rdpstat:xbus` | pass | 3 of 3 tests pass |
 | `snapper:rect-nosync` | pass | RDP Rect No-Sync-Env 1C: 20/20 match; RDP Rect No-Sync-Env 2C: 40/40 match; RDP Rect No-Sync-Fill: 20/20 match |
 | `snapper:span-tri` | pass | RDP Test-Mode - Span Tri: 432/432 match |
-| `stepcap` | pass | stepcap-mm: stepcap: PASS, 29 files byte-identical, 8219 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 25 fields with trace_hash |
+| `stepcap` | pass | stepcap-mm: stepcap: PASS, 85 files byte-identical, 23405 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `systembench:joy-1j` | pass | JOY: 1J [64] 37992 RCP cycles (hardware 37987, +5, +0.01%); main.c rule holds in 33 of 33 runs |
 | `systembench:joy-2j` | pending:report-only | JOY: 2J [64] 57977 RCP cycles (hardware 57972, +5, +0.01%); main.c rule holds in 33 of 33 runs |
 | `systembench:joy-3j` | pending:report-only | JOY: 3J [64] 77962 RCP cycles (hardware 77924, +38, +0.05%); main.c rule holds in 33 of 33 runs |
