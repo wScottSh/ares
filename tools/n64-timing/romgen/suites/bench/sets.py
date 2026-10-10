@@ -1,4 +1,4 @@
-"""The bench ROMs romgen builds, one per microbenchmark and boot delay (README.md, phases.py)."""
+"""The bench ROMs romgen builds, one per microbenchmark, layout pad and boot delay (README.md, phases.py)."""
 from dataclasses import dataclass, field
 
 from ... import runtime
@@ -16,6 +16,6 @@ class SetDef:
     consts: dict = field(default_factory=dict)
 
 
-SETS = [SetDef(name, f"boot-{k}/bench-{name}", "Bench", f"(bench={name})", build, [asm.ASM],
-               {"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k})
-        for k in phases.DELAYS for name, build in benches.ROMS.items()]
+SETS = [SetDef(name, f"{phases.point_dir(p, k)}/bench-{name}", "Bench", f"(bench={name})", build, [asm.ASM],
+               {"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k, "LAYOUT_PAD": p})
+        for p, k in phases.POINTS for name, build in benches.ROMS.items()]

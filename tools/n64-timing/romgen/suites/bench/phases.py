@@ -1,10 +1,13 @@
-"""The boot delays the bench walks (README.md, Phase).
+"""The phase points the bench walks: each layout pad at each boot delay (README.md, Phase).
 
-usage: python -m romgen.suites.bench.phases   prints the delays, one per line
+usage: python -m romgen.suites.bench.phases   prints each point's directory (pad-<P>/boot-<K>), one per line
 env: N64_BENCH_DELAYS=K,K,...   replaces the delays (for a scan), in build.py, run.sh and report.py alike
+     N64_BENCH_PADS=P,P,...     replaces the pads the same way
 
 Each delay is the iteration count of the runtime's BOOT_DELAY_LOOP, so a delay moves every
 measurement's start against the free-running VI, refresh and poll grids without moving code.
+Each pad is the word count of the runtime's layout pad (runtime.layout_pad), so a pad moves
+every instruction after boot against the 32 B I-cache lines.
 """
 import os
 
@@ -17,5 +20,17 @@ DELAYS = [1 + 41 * i for i in range(32)]
 if os.environ.get("N64_BENCH_DELAYS"):
     DELAYS = [int(k) for k in os.environ["N64_BENCH_DELAYS"].split(",")]
 
+#A VR4300 I-cache line is 32 B, 8 words; a pad of 8 words gives pad 0's values exactly (verify-79).
+PADS = list(range(8))
+if os.environ.get("N64_BENCH_PADS"):
+    PADS = [int(p) for p in os.environ["N64_BENCH_PADS"].split(",")]
+
+POINTS = [(p, k) for p in PADS for k in DELAYS]
+
+
+def point_dir(pad, delay):
+    return f"pad-{pad}/boot-{delay}"
+
+
 if __name__ == "__main__":
-    print("\n".join(str(k) for k in DELAYS))
+    print("\n".join(point_dir(p, k) for p, k in POINTS))
