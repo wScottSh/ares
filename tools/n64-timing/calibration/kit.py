@@ -6,10 +6,12 @@ footer. Records are keyed (rom, point):
   #bench <rom> <point> k=v ...    a measurement point (bench format); rom is the bench ROM name
   @snap <name> <size> <hash>      a dumped surface: key ("snap", name), fields size, hash
   @<test>.<value> <n> ...         a self-checking suite's result: key (<kit rom>, "<test>.<value>"), v0 ...
+  #hist <test>.<value> <c>:<n>,...  the same key's averaged-run histogram, field hist (recorded, not compared)
 A capture is one log from the console. The model side is the same ROM run on the fork at each
 boot delay (calibration/run.sh). A question (questions.tsv) names points and metrics and a rule;
 `compare` turns the console's values and the model's into pass or fail.
 """
+import collections
 import fnmatch
 import math
 import os
@@ -23,6 +25,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 from romgen.suites.bench import report as bench_report  # noqa: E402
 import derived  # noqa: E402
+import mm_bench  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
@@ -112,9 +115,12 @@ class Log:
                 setattr(self, "pi" if parts[0] == "#kit-pi" else "timeouts", regs)
             elif len(parts) == 4 and parts[0] == "@snap":
                 self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3]}
+            elif len(parts) == 3 and parts[0] == "#hist":
+                fields = self.records.setdefault((rom, parts[1]), {})
+                fields["hist"] = ",".join(filter(None, [fields.get("hist"), parts[2]]))
             elif parts and re.match(r"^@\d+\.\d+$", parts[0]):
-                self.records[(rom, parts[0][1:])] = {f"v{i}": int(p) if p.lstrip("-").isdigit() else p
-                                                     for i, p in enumerate(parts[1:])}
+                self.records.setdefault((rom, parts[0][1:]), {}).update(
+                    {f"v{i}": int(p) if p.lstrip("-").isdigit() else p for i, p in enumerate(parts[1:])})
         derive(self.records)
 
     @property
@@ -138,6 +144,12 @@ def derive(records):
                 points[point].update(metrics)
         except (KeyError, ZeroDivisionError, TypeError, ValueError, IndexError):
             pass
+    for p in by_rom.get("uncached-vs-hpos", {}).values():
+        #Every load's latency in pclk (2 per COUNT tick) by count: the console's distribution behind
+        #median_pclk and the outlier metrics q24 compares (green-plan bus.md section 3, step 4).
+        lats = collections.Counter(2 * int(s.split(":")[1]) for s in p.get("samples", []))
+        if lats:
+            p["hist_pclk"] = ",".join(f"{lat}:{n}" for lat, n in sorted(lats.items()))
     for point, p in by_rom.get("count-fields", {}).items():
         p["ticks_per_field"] = round(p["min"] / p["fields"], 3)
     for fn in derived.DERIVED:
@@ -354,6 +366,12 @@ def ext_systembench(root, model_dir, paths):
     return "pass", detail
 
 
+def ext_mm_bench(root, model_dir, paths):
+    """The Majora's Mask BENCH ROM's IS-Viewer text from the console against the fork's run of the same
+    pinned per-scene ROMs (run.sh ext/mm-bench/<scene>.txt), under mm_bench.compare's rule."""
+    return mm_bench.compare(paths, model_dir)
+
+
 #External ROMs a capture can hold: kit column `ext:<name>`, the capture file or directory name
 #prefix `ext-<name>`, and the reader that compares it (None: stored, compared by hand per
 #hardware-run.md until a reader exists).
@@ -361,15 +379,14 @@ EXT_ROMS = {
     "thar0": ext_thar0,
     "snapper64": ext_snapper64,
     "systembench": ext_systembench,
-    #The published ROM logs no COUNT, and its source carries no license, so no build of it can.
-    "pi_dma_test": None,
-    #The fork side needs Scott's BENCH build of mm-decomp-60fps run on n64-run; no in-repo tool builds it.
-    "mm-bench": None,
+    "mm-bench": ext_mm_bench,
 }
+#External ROMs whose output names no ROM identity: ingest refuses a capture these find run on other ROMs
+#than the fork's model side.
+EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch}
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
 #that repeats a row's fit data from an independent one.
-EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "pi_dma_test": "pidma",
-              "mm-bench": "mm"}
+EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "mm-bench": "mm"}
 
 
 def ext_name(path):
@@ -498,6 +515,17 @@ def verify_run(run_dir):
     return errors
 
 
+HIST_METRICS = ("hist", "hist_pclk")
+
+
+def histograms(log):
+    """(rom/point, metric, histogram) for every latency histogram a log records: nemu64-timing's
+    averaged runs (hist, in the test's cycles) and kit-hpos's per-load latencies (hist_pclk). No
+    question compares them; they are the console's distributions behind the means it does compare."""
+    return [(f"{rom}/{point}", m, fields[m]) for (rom, point), fields in sorted(log.records.items())
+            for m in HIST_METRICS if m in fields]
+
+
 def sample_log(body="#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n",
                rom_sha256="a" * 64):
     field = f" rom_sha256={rom_sha256}" if rom_sha256 else ""
@@ -613,6 +641,22 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: a log whose RDP wait gave up twice reads timeouts rdp=2: {'ok' if ok else 'FAILED'} ({hung.timeouts})")
     cases.append(("timeouts", None, None))
+    hist = Log(sample_log("#hist 51.3 41:2,42:1\n#hist 51.3 80:1\n@51.3 0 42\n"))
+    ok = hist.records.get(("kit-cpu", "51.3")) == {"hist": "41:2,42:1,80:1", "v0": 0, "v1": 42}
+    failed += not ok
+    print(f"kit: self-test: a value's #hist lines join and survive its @ record: {'ok' if ok else 'FAILED'} "
+          f"({hist.records.get(('kit-cpu', '51.3'))})")
+    cases.append(("hist", None, None))
+    hpos = Log(sample_log("#bench uncached-vs-hpos bank5 bank=5 lines=3 line_ticks=2981 count=3\n"
+                          "#bench uncached-vs-hpos bank5 samples=0:17,24:40,64:17\n"))
+    got = hpos.records.get(("uncached-vs-hpos", "bank5"), {}).get("hist_pclk")
+    ok = got == "34:2,80:1"
+    failed += not ok
+    print(f"kit: self-test: kit-hpos samples give a per-load latency histogram in pclk: {'ok' if ok else 'FAILED'} ({got})")
+    cases.append(("hpos hist", None, None))
+    mm_cases, mm_failed = mm_bench.self_test()
+    cases += [None] * mm_cases
+    failed += mm_failed
     print(f"kit.py: self-test: {len(cases)} cases, {failed} failed")
     return failed
 
@@ -642,6 +686,11 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--table"]:
         print(run_table(sys.argv[2]))
         sys.exit(0)
+    if sys.argv[1:2] == ["--hist"] and sys.argv[2:]:
+        for path, log in sorted((p, l) for logs in read_logs(sys.argv[2:]).values() for p, l in logs):
+            for key, metric, hist in histograms(log):
+                print(f"{path}\t{key}\t{metric}\t{hist}")
+        sys.exit(0)
     if sys.argv[1:2] == ["--self-test"]:
         sys.exit(1 if self_test() else 0)
     if sys.argv[1:2] == ["--verify-run"]:
@@ -651,4 +700,4 @@ if __name__ == "__main__":
         print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
               file=sys.stderr)
         sys.exit(1 if errs else 0)
-    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --self-test")
+    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --hist LOG... | --self-test")

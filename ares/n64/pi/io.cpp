@@ -1,7 +1,7 @@
-//ARES_PILOG=<file> logs each DMA start and end and each PI_STATUS read with
-//its time in Clock units, for tools/n64-timing/pidma-replay.py. Host-side
-//only; it never changes emulation.
-static FILE* piLog = [] { auto path = getenv("ARES_PILOG"); return path ? fopen(path, "w") : (FILE*)nullptr; }();
+//ARES_PILOG=<file> logs each DMA start and each PI_STATUS read here, and each COP0
+//COUNT read in cpu/interpreter-scc.cpp, with its time in Clock units, for
+//tools/n64-timing/pidma-replay.py. Host-side only; it never changes emulation.
+FILE* const PI::timingLog = [] { auto path = getenv("ARES_PILOG"); return path ? fopen(path, "w") : (FILE*)nullptr; }();
 
 auto PI::ioRead(u32 address, Thread& thread) -> u32 {
   address = (address & 0x3f) >> 2;
@@ -33,7 +33,7 @@ auto PI::ioRead(u32 address, Thread& thread) -> u32 {
     data.bit(1) = io.ioBusy;
     data.bit(2) = io.error;
     data.bit(3) = io.interrupt;
-    if(piLog) fprintf(piLog, "S %u %lld\n", (u32)data.bit(0,1), (long long)thread.clock.units);
+    if(timingLog) fprintf(timingLog, "S %u %lld\n", (u32)data.bit(0,1), (long long)thread.clock.units);
   }
 
   if(address == 5) {
@@ -113,7 +113,7 @@ auto PI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     io.readLength = n24(data);
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
-    if(piLog) fprintf(piLog, "L R %u %06x %08x %lld\n", (u32)io.readLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
+    if(timingLog) fprintf(timingLog, "L R %u %06x %08x %lld\n", (u32)io.readLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
     dmaStart(false, thread.clock);
   }
 
@@ -122,7 +122,7 @@ auto PI::ioWrite(u32 address, u32 data_, Thread& thread) -> void {
     io.writeLength = n24(data);
     io.dmaBusy = 1;
     io.originPc = cpu.ipu.pc;
-    if(piLog) fprintf(piLog, "L W %u %06x %08x %lld\n", (u32)io.writeLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
+    if(timingLog) fprintf(timingLog, "L W %u %06x %08x %lld\n", (u32)io.writeLength + 1, (u32)io.dramAddress, (u32)io.pbusAddress, (long long)thread.clock.units);
     dmaStart(true, thread.clock);
   }
 

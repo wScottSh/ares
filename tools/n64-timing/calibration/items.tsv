@@ -39,7 +39,6 @@ fu.rect-tail-twice	followups T15	A rectangle tail drawn twice: with IM_RD blend 
 fu.exc-entry	followups T7c, verify-85	Interrupt entry cost, CTC1-raised FPE cost, fetch-stage and watch exceptions, an isolated ERET, and the extra pclk before a fetch-fault exception
 fu.pi-edge-wait	verify-85	PiEdgeWait 0.5 rclk and the PI row-hit assumption (code-only constants with no behaviors row)
 fu.pi-row-end	verify-85	A PI DMA whose first block ends at an RDRAM row end
-fu.pidma-offset	followups not-built / verify-74	The COUNT offset the n64_pi_dma_test log starts at (pidma replay offsets)
 fu.systembench-binary	followups systembench	The original n64-systembench 845635c on the console, with rambuf read from its ELF, so every row is a same-binary comparison
 fu.joybus-56-63	followups pif-joy / verify-80	Hardware 56 B and 63 B empty joybus frames (+7 / +15 rclk over 8 B, uncaptured)
 fu.pif-ram-dword	followups sysbench / verify-75	An LD from PIF RAM (the fork reads the word twice)

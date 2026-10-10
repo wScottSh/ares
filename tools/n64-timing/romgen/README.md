@@ -14,7 +14,7 @@ python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/rom
 tools/n64-timing/run-thar0.sh
 ```
 
-- `build.py` writes `nemu64-{timing,cycle,cop0hazard}.z64` and a `<rom>.tests.tsv` listing per ROM. A rebuild from the same sources produces byte-identical files. `--ipl3` overrides the default stub path, `$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z64`.
+- `build.py` writes `nemu64-{timing,cycle,cop0hazard}.z64`, the phase ROMs `phase-<K>/nemu64-timing.z64` (see [Phase walk](#phase-walk)), and a `<rom>.tests.tsv` listing per ROM. A rebuild from the same sources produces byte-identical files. `--ipl3` overrides the default stub path, `$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z64`.
 - `run-nemu64.sh` runs each ROM through `n64-run`. It prints the ROM's own `Timing: Failed X of Y tests` line, or the `Cycle` or `CP0-hazards` line. It also writes `values.tsv`, one row per test value with the result and the measured and expected cycles. For the timing ROM, it writes `categories.tsv`, which assigns each failure to a root-cause category C1-C11 from `docs/research/nemu64-timing-failures.md`. `N64_RUN` defaults to the runner built from the current worktree (`tools/n64-timing/build.sh`).
 - `selftest.py` checks the assembler against encodings worked out by hand from the VR4300 User's Manual instruction chapters (16 and 17). It also checks the nemu64-compatible encoder API against the text assembler.
 
@@ -39,6 +39,14 @@ tools/n64-timing/run-thar0.sh
 | `report.py` | Joins a ROM's `@<test>.<value>` records with its `.tests.tsv` listing |
 
 The ROM decides pass or fail by itself and prints nemu64-test's output format. The host side only parses output.
+
+## Phase walk
+
+Four timing tests average 1000 loads: Load Miss with the VI on and off, and Load from uncached with the VI on and off. nemu64-test compares each mean with one console run. The console's VI crystal runs apart from the CPU's, so that run starts at a random point of the VI line. The emulator is deterministic, so one ROM measures one point (bus.md, section E).
+
+The phase ROMs hold these four tests alone. `measure.py`'s phase variant spins `PHASE_DELAY` loop iterations after each step's VI setup and VSYNC wait. It then prints `avg <min> <max> <median> <sum>` after each averaged run, because the record line carries no averaged result. `suites/nemu64/phases.py` lists the delays: 64 delays that span two active lines and three idle-VI line events.
+
+`run-nemu64.sh timing-phase` runs every phase ROM. `python -m romgen.suites.nemu64.phase` then writes `measurements.tsv` (each value at each delay) and `phase.tsv` (each value's verdict). The rule is green-plan.md section 3, "nemu64 phase walk". A value passes when the model's mean over the phases is within the hardware mean +- the test's published epsilon, and the ROM's min..max and median +-1 checks hold at every phase. No value passes because one phase passes. The checks `nemu64:timing/load-*` read `phase.tsv`.
 
 ## Port notes
 
