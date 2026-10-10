@@ -271,7 +271,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/standing on aee40c382).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-llsc-kit/after on a6effc96d).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -315,7 +315,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
 | `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 16 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
-| `cpu:llsc` | pass | 12 of 12 tests pass |
+| `cpu:llsc` | pass | 14 of 14 tests pass |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
 | `hw:ai-fetch` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |

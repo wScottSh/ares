@@ -108,17 +108,15 @@ CASES = {
 }
 
 
-# case: description. Run like CASES, but only the memory word is checked; the exception count,
-# ExcCode and rt are printed (module docstring).
-REPORT_CASES = {
-    "watch-fail": " (LLbit clear, Watch armed on the address: memory unchanged; whether Watch fires is "
-                  "reported, not checked)",
-}
+# Runs like a CASES entry, but only the memory word is checked; the exception count, ExcCode and rt
+# are printed (module docstring).
+WATCH_FAIL = "watch-fail"
+WATCH_FAIL_DESC = " (LLbit clear, Watch armed on the address: memory unchanged; whether Watch fires is reported, not checked)"
 
 
-def report_line(op, case):
-    label = f"llsc_str_{op}_{case}".lower().replace("-", "_")
-    head = f"#bench cpu-llsc {case}-{op.lower()} exc="
+def report_line(op):
+    label = f"llsc_str_{op}_watch_fail".lower()
+    head = f"#bench cpu-llsc {WATCH_FAIL}-{op.lower()} exc="
     code = f"""    la $a0, {label}
     jal pr_str
     nop
@@ -156,7 +154,7 @@ def routine(op, case):
     if mapped:
         body += [f"    li $t4, {MAP_ADDR:#x}"]
     body += [li64("$t6", rt0), "    sw $zero, 16($a1)", "    sw $zero, 20($a1)", f"    {ll} $t7, 0($t4)"]
-    if case in ("eret", "tlb-fail", "watch-fail"):
+    if case in ("eret", "tlb-fail", WATCH_FAIL):
         body += [ERET_CLEARS_LLBIT.format(exl=STATUS_EXL, name=name)]
     if mapped:
         body += ["    jal step_clear_tlb", "    nop"]
@@ -164,10 +162,10 @@ def routine(op, case):
     if case == "watch-reexec":
         body += [REEXEC.format(name=name, sc=sc)]
     else:
-        if case in ("watch-skip", "watch-fail"):
+        if case in ("watch-skip", WATCH_FAIL):
             body += [WATCH_ON]
         body += [f"    {sc} $t6, 0($t4)"]
-        if case in ("watch-skip", "watch-fail"):
+        if case in ("watch-skip", WATCH_FAIL):
             body += [WATCH_OFF]
     body += [save_rt(0)]
     if mapped:
@@ -176,9 +174,9 @@ def routine(op, case):
              "    sw $t0, 8($a1)", "    sw $t5, 12($a1)",
              "    addiu $a0, $a1, 32", "    jal expect_end", "    nop",
              "    lw $t5, 36($a1)", "    andi $t5, $t5, 0x7C", "    sw $t5, 36($a1)"]
-    if case in REPORT_CASES:
-        body += [report_line(op, case)[0]]
-    body += [             "    ld $ra, 0($sp)", "    jr $ra", "    addiu $sp, $sp, 16"]
+    if case == WATCH_FAIL:
+        body += [report_line(op)[0]]
+    body += ["    ld $ra, 0($sp)", "    jr $ra", "    addiu $sp, $sp, 16"]
     return name, "\n".join(body)
 
 
@@ -230,18 +228,15 @@ llsc_tlb_map:
 
 
 def asm():
-    report = [(routine(op, case)[1], report_line(op, case)[1]) for op in OPS for case in REPORT_CASES]
     strings = [f"llsc_str_exccode: .asciiz {rt.asm_string(' exccode=')}",
-               f"llsc_str_rt: .asciiz {rt.asm_string(' rt_lo=')}"] + [s for _, s in report]
+               f"llsc_str_rt: .asciiz {rt.asm_string(' rt_lo=')}"] + [report_line(op)[1] for op in OPS]
     return "\n".join([TLB_MAP] + [routine(op, case)[1] for op in OPS for case in CASES] +
-                     [code for code, _ in report] + strings + [".align 4"])
+                     [routine(op, WATCH_FAIL)[1] for op in OPS] + strings + [".align 4"])
 
 
 def build(suite):
     for op in OPS:
         suite.tests.append(Test(op, [Value(CASES[case][0], [Step(routine(op, case)[0], [], 0)], checks(op, case))
                                      for case in CASES]))
-    for case, desc in REPORT_CASES.items():
-        suite.tests.append(Test("Watch on a failing SC",
-                                [Value(f" {op}{desc}", [Step(routine(op, case)[0], [], 0)], report_checks(op))
-                                 for op in OPS]))
+    suite.tests.append(Test("Watch on a failing SC", [
+        Value(f" {op}{WATCH_FAIL_DESC}", [Step(routine(op, WATCH_FAIL)[0], [], 0)], report_checks(op)) for op in OPS]))
