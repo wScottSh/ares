@@ -8,6 +8,12 @@ Expected values come from the manual, not from an emulator run:
 - 6.2 "Precision of Exceptions": the excepting instruction is aborted and can be re-executed, so
   an SC that raises an exception leaves rt and memory as they were.
 
+What the manual leaves open is run and reported, not checked: whether an SC that fails (LLbit
+clear) to an address WatchLo matches raises Watch. The fork does not (it raises Watch only when the
+store happens; verify-121). The "Watch on a failing SC" test checks only what holds either way, the
+memory word unchanged, and prints `#bench cpu-llsc watch-fail-<op> exc=<n> exccode=<code> rt_lo=<rt>`,
+which the calibration kit records from a console capture without comparing it.
+
 Each value records RES[0..1] = rt (hi, lo) after the sequence, RES[2..3] = the memory word or
 doubleword (hi, lo), RES[4..5] = rt as an exception handler sees it, RES[8] = exceptions taken
 and RES[9] = Cause.ExcCode << 2.
@@ -102,6 +108,39 @@ CASES = {
 }
 
 
+# Runs like a CASES entry, but only the memory word is checked; the exception count, ExcCode and rt
+# are printed (module docstring).
+WATCH_FAIL = "watch-fail"
+WATCH_FAIL_DESC = " (LLbit clear, Watch armed on the address: memory unchanged; whether Watch fires is reported, not checked)"
+
+
+def report_line(op):
+    label = f"llsc_str_{op}_watch_fail".lower()
+    head = f"#bench cpu-llsc {WATCH_FAIL}-{op.lower()} exc="
+    code = f"""    la $a0, {label}
+    jal pr_str
+    nop
+    jal pr_dec
+    lw $a0, 32($a1)
+    la $a0, llsc_str_exccode
+    jal pr_str
+    nop
+    lw $a0, 36($a1)
+    jal pr_dec
+    srl $a0, $a0, 2
+    la $a0, llsc_str_rt
+    jal pr_str
+    nop
+    jal pr_hex
+    lw $a0, 4($a1)
+    la $a0, str_nl
+    jal pr_str
+    nop
+    jal pr_flush
+    nop"""
+    return code, f"{label}: .asciiz {rt.asm_string(head)}"
+
+
 def routine(op, case):
     ll, sc, load, store, mem0, rt0 = OPS[op]
     name = f"llsc_{op}_{case}".lower().replace("-", "_")
@@ -115,7 +154,7 @@ def routine(op, case):
     if mapped:
         body += [f"    li $t4, {MAP_ADDR:#x}"]
     body += [li64("$t6", rt0), "    sw $zero, 16($a1)", "    sw $zero, 20($a1)", f"    {ll} $t7, 0($t4)"]
-    if case in ("eret", "tlb-fail"):
+    if case in ("eret", "tlb-fail", WATCH_FAIL):
         body += [ERET_CLEARS_LLBIT.format(exl=STATUS_EXL, name=name)]
     if mapped:
         body += ["    jal step_clear_tlb", "    nop"]
@@ -123,10 +162,10 @@ def routine(op, case):
     if case == "watch-reexec":
         body += [REEXEC.format(name=name, sc=sc)]
     else:
-        if case == "watch-skip":
+        if case in ("watch-skip", WATCH_FAIL):
             body += [WATCH_ON]
         body += [f"    {sc} $t6, 0($t4)"]
-        if case == "watch-skip":
+        if case in ("watch-skip", WATCH_FAIL):
             body += [WATCH_OFF]
     body += [save_rt(0)]
     if mapped:
@@ -134,9 +173,17 @@ def routine(op, case):
     body += [f"    {load} $t5, 0($t4)", "    dsrl32 $t0, $t5, 0" if load == "ld" else "    move $t0, $zero",
              "    sw $t0, 8($a1)", "    sw $t5, 12($a1)",
              "    addiu $a0, $a1, 32", "    jal expect_end", "    nop",
-             "    lw $t5, 36($a1)", "    andi $t5, $t5, 0x7C", "    sw $t5, 36($a1)",
-             "    ld $ra, 0($sp)", "    jr $ra", "    addiu $sp, $sp, 16"]
+             "    lw $t5, 36($a1)", "    andi $t5, $t5, 0x7C", "    sw $t5, 36($a1)"]
+    if case == WATCH_FAIL:
+        body += [report_line(op)[0]]
+    body += ["    ld $ra, 0($sp)", "    jr $ra", "    addiu $sp, $sp, 16"]
     return name, "\n".join(body)
+
+
+def report_checks(op):
+    mem0 = OPS[op][4]
+    return [Check(rt.CHK_EQ_HEX, 2, mem0 >> 32, msg="memory after (high word)"),
+            Check(rt.CHK_EQ_HEX, 3, mem0 & 0xFFFFFFFF, msg="memory after (low word)")]
 
 
 def checks(op, case):
@@ -181,10 +228,15 @@ llsc_tlb_map:
 
 
 def asm():
-    return TLB_MAP + "\n".join(routine(op, case)[1] for op in OPS for case in CASES)
+    strings = [f"llsc_str_exccode: .asciiz {rt.asm_string(' exccode=')}",
+               f"llsc_str_rt: .asciiz {rt.asm_string(' rt_lo=')}"] + [report_line(op)[1] for op in OPS]
+    return "\n".join([TLB_MAP] + [routine(op, case)[1] for op in OPS for case in CASES] +
+                     [routine(op, WATCH_FAIL)[1] for op in OPS] + strings + [".align 4"])
 
 
 def build(suite):
     for op in OPS:
         suite.tests.append(Test(op, [Value(CASES[case][0], [Step(routine(op, case)[0], [], 0)], checks(op, case))
                                      for case in CASES]))
+    suite.tests.append(Test("Watch on a failing SC", [
+        Value(f" {op}{WATCH_FAIL_DESC}", [Step(routine(op, WATCH_FAIL)[0], [], 0)], report_checks(op)) for op in OPS]))

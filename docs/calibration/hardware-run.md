@@ -47,7 +47,7 @@ Allow about two hours for the required runs and three for the recommended ones. 
 2. Copy the console builds to the flashcart's SD card:
 
    - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-tex`, `kit-zmem`, `kit-noise`).
-   - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`.
+   - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
 
    Each ROM prints a first line `#kit rom=<id> sha=<commit> rom_sha256=<hash> fmt=1 build=<boot-K or single>`. `sha` is the commit you built from. `rom_sha256` identifies the ROM's bytes: it is the SHA-256 of the `.z64` file with the `sha` and `rom_sha256` values set to zeros (`romgen/hwout.py`), so a later commit that does not change the kit gives the same value. The zeroed fields keep their length, so a `sha` of another length moves the code after it and changes the value. A build from a tree with uncommitted changes under `tools/n64-timing` (`sha` ends in `-dirty`) or from outside a git checkout (`sha=unknown`) does not match a clean build of the same commit. Build the console ROMs and the fork's model run from clean checkouts of the same commit. Ingestion compares each log's `rom_sha256` with the fork's run of the same build and refuses the capture if they differ. Copy the ROMs from the same `run.sh` output that ingestion uses. If you run `run.sh` again after a change to the kit, copy the ROMs again.
@@ -115,6 +115,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 16 | `kit-zmem` | 1.8 s | 29.2 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
 | 17 | `kit-cpu2` | 0.2 s | 18.9 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
 | 18 | `kit-bus` | 1.5 s | 10.6 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
+| 19 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | `cpu-llsc-console` |
 
 For each ROM:
 
@@ -214,6 +215,16 @@ tools/n64-timing/calibration/kit.py --hist docs/calibration/hardware/console-<da
 ```
 
 Each line is `<file> <rom>/<point> <metric> <latency>:<count>,...`. The `#hist` lines make `nemu64-timing`'s log about 0.8 KB longer, so it still fits the 32 KiB SRAM. Like every log over 2 KB, it needs the USB or SRAM path (see [Photo fallback](#photo-fallback)).
+
+### Watch on a failing SC
+
+`cpu-llsc` checks SC and SCD against the VR4300 User's Manual and prints its own verdict per case, like the nemu64 ROMs. `cpu-llsc-console` compares the verdicts of tests 0 and 1 (12 cases) exactly. Test 2 asks what the manual leaves open: does an SC or SCD that fails (the LLbit is clear) raise Watch when WatchLo matches its address? The fork does not. The ROM prints the console's answer as one line per instruction, and no question compares it:
+
+```
+#bench cpu-llsc watch-fail-sc exc=<0 or 1> exccode=<23 when Watch fired> rt_lo=<rt after>
+```
+
+`exc=0` with `rt_lo=0x0` means no Watch: the SC failed and wrote 0 to rt, as on the fork. `exc=1 exccode=23` with `rt_lo=0x5a5a0001` (SCD `0x5a5a0002`) means Watch fired and the exception aborted the SC. Test 2's own check, the memory word unchanged, holds in both cases. To read the line from a stored capture, run `grep watch-fail docs/calibration/hardware/console-<date>/cpu-llsc.*.log`. Report a Watch that fires; `item:cpu.sc-watch-on-fail` in [inventory.md](inventory.md) tracks it, and the fork's SC would then need to raise Watch before it tests the LLbit.
 
 To see what an ingestion would change without writing to the repository, add `--dry-run`. `tools/n64-timing/calibration/dry-run.sh <run.sh output>` runs the whole path on the fork's own logs as a fake capture: ISViewer logs, real SRAM dumps in both byte orders, a CRLF log, the four-controller run, a cut log, the Thar0 port's output, the fork's n64-systembench log and the published snapper64 dumps.
 

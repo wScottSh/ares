@@ -118,7 +118,7 @@ From `docs/spec/map-1-closure-draft.md`, which gives each clause and its evidenc
 | `cpu.fpu-convert` | 5 pclk | measured | nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` `nemu64:timing/cop1-register-dependency` `hw:nemu64-console` | **pass**: `nemu64:timing/cop1instructions32` pass; `nemu64:timing/cop1instructions64` pass; `nemu64:timing/cop1-register-dependency` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuFpuConvert` |  |
 | `cpu.fpu-cvt-s-d` | 2 pclk | measured | nemu64-test COP1 tables (CVT.S.D) | `nemu64:timing/cop1instructions64` `nemu64:timing/cop1-register-dependency` `hw:nemu64-console` | **pass**: `nemu64:timing/cop1instructions64` pass; `nemu64:timing/cop1-register-dependency` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuFpuCvtSD` |  |
 | `cpu.likely-nullified` | 1 pclk | measured | nemu64-test Likely branch (C8) | `nemu64:timing/likely-branch` `hw:nemu64-console` | **pass**: `nemu64:timing/likely-branch` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuLikelyNullified` |  |
-| `cpu.sc-llbit` | rt-is-llbit-store-only-when-llbit-exception-first rule | vendor | VR4300 User's Manual U10504EJ7V0UM00 16 SC (pp. 487-488) and SCD (pp. 489-490): AddressTranslation runs first, StoreMemory only if LLbit, then GPR[rt] = LLbit; if the instruction both fails and causes an exception, the exception takes precedence. 16 ERET clears LLbit; 6.2: an excepting SC is aborted, so rt and memory keep their values | `cpu:llsc` | **pass**: `cpu:llsc` pass | ares/n64/cpu/interpreter-ipu.cpp:CPU::SC ares/n64/cpu/interpreter-ipu.cpp:CPU::SCD | the manual does not say whether a failing SC raises Watch; the fork raises Watch only when the store happens (LLbit set) |
+| `cpu.sc-llbit` | rt-is-llbit-store-only-when-llbit-exception-first rule | vendor | VR4300 User's Manual U10504EJ7V0UM00 16 SC (pp. 487-488) and SCD (pp. 489-490): AddressTranslation runs first, StoreMemory only if LLbit, then GPR[rt] = LLbit; if the instruction both fails and causes an exception, the exception takes precedence. 16 ERET clears LLbit; 6.2: an excepting SC is aborted, so rt and memory keep their values | `cpu:llsc` `hw:cpu-llsc-console` | **pass**: `cpu:llsc` pass; `hw:cpu-llsc-console` pending:calibration-16 | ares/n64/cpu/interpreter-ipu.cpp:CPU::SC ares/n64/cpu/interpreter-ipu.cpp:CPU::SCD | the manual does not say whether a failing SC raises Watch; the fork raises Watch only when the store happens (LLbit set); cpu-llsc's report-only probe records the console's answer (item:cpu.sc-watch-on-fail) |
 | `cpu.eret` | 3 pclk | fit | nemu64-test Exceptions Roundtrip (BREAK, SYSCALL + handler + ERET) 15, less the modeled BREAK fault (cpu.exc-rf) and handler: the ERET costs 3 including its issue slot | **fit only, no independent check:** `nemu64:timing/exception-roundtrip` `hw:nemu64-console` `hw:cpu-exceptions` (fit from `nemu64:timing/exception-roundtrip`) | **fit only**: `nemu64:timing/exception-roundtrip` pass; `hw:nemu64-console` pending:calibration-16; `hw:cpu-exceptions` pending:calibration-16 | reads `Timing::Behavior::CpuEret` | verify-is-fit: the two Roundtrip values are the only measurement of ERET |
 | `cpu.mtc0-slow-regs` | 2 pclk | measured | nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5) | `nemu64:timing/individual-instructions` `hw:nemu64-console` | **pass**: `nemu64:timing/individual-instructions` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuMtc0SlowRegs` |  |
 | `cpu.cache-index-load-tag` | 6 pclk | measured | nemu64-test CPURegisterDependency 'LD; CACHE (DataIndexLoadTag)' 7, 8, 8: the CACHE costs 6 including its issue slot (C10) | `nemu64:timing/cache` `hw:cache-ops` `hw:cache-ops-sum` `hw:nemu64-console` | **pass**: `nemu64:timing/cache` pass; `hw:cache-ops` pending:calibration-16; `hw:cache-ops-sum` pending:calibration-16; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuCacheIndexLoadTag` | the other CACHE ops have no measurement and cost their issue slot. That is a policy, not a reference: I-cache Hit Write Back lost its former 48 pclk charge under it (no hardware reference for either), and costs its slot plus the wait for write-buffer entries, as a D-cache writeback does |
@@ -273,7 +273,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/standing on aee40c382).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-llsc-kit/after on a6effc96d).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -318,7 +318,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
 | `bench:vi-frame-latch` | pending:no-rom |  |
 | `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 16 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
-| `cpu:llsc` | pass | 12 of 12 tests pass |
+| `cpu:llsc` | pass | 14 of 14 tests pass |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
 | `hw:ai-fetch` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
@@ -337,6 +337,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:count-per-field` | pending:calibration-16 | no complete power-on console capture of kit-vi in docs/calibration/hardware |
 | `hw:count-write-hold` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
 | `hw:cpu-exceptions` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
+| `hw:cpu-llsc-console` | pending:calibration-16 | no complete power-on console capture of cpu-llsc in docs/calibration/hardware |
 | `hw:cpu-reads` | pending:calibration-16 | no complete power-on console capture of kit-cpu in docs/calibration/hardware |
 | `hw:cpu-watch` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
 | `hw:ctc1-fpe-ce` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
