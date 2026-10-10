@@ -18,7 +18,7 @@ from ..rdpstat import routines
 from ..rdpstat.routines import fill32
 from ..snapper import asm as snapper_asm
 from ..snapper.cases import UNCACHED, Lists, emit, run_sync
-from . import asm, bus, cpu2, tex, zmem
+from . import asm, bus, cpu2, rspdma, tex, zmem
 
 DELAYS = [int(k) for k in os.environ.get("N64_CALIB_DELAYS", "1,165,329,493,657,821,985,1149").split(",")]
 CAL_BUF = 0x005D0000       # bank 5, clear of the bench buffers (SB_BUF 0x5C0000, HPOS 0x5A0000)
@@ -30,8 +30,8 @@ def dcb(suite):
         rom.point(name[6:].replace("_", "-"), name, [KSEG0 | CAL_BUF], [("pairs", asm.UNROLL)], reps=8)
 
 
-def wb_stores(suite):
-    rom = Rom(suite, "wb-stores")
+def wb_stores(suite, name="wb-stores"):
+    rom = Rom(suite, name)
     for n in asm.WB_COUNTS:
         for tail in ("", "_lw"):
             rom.point(f"sw-{n}{tail.replace('_', '-')}", f"k_sw{n}{tail}", [KSEG1 | (CAL_BUF + 0x1000), 0],
@@ -53,8 +53,8 @@ def reg_write(suite):
                           [("stores", n), ("target", dev)], reps=8)
 
 
-def ifill(suite):
-    rom = Rom(suite, "ifill")
+def ifill(suite, name="ifill"):
+    rom = Rom(suite, name)
     for name, cold in (("warm", 0), ("cold", 1)):
         rom.point(name, "k_ifill", [cold], [("cold", cold)], reps=8)
 
@@ -215,7 +215,8 @@ KITS = {
                 dcb, wb_stores, reg_write, ifill, bus_reads],
     "kit-vi": [vi_enable, count_fields, vi_mid_field],
     "kit-dma": [benches.mi_memset_uncached, benches.mi_memset_cached, benches.mi_memset_rspdma,
-                benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain, pi_dma_rowend],
+                benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain, pi_dma_rowend,
+                *rspdma.BUILDERS],
     "kit-hpos": [benches.uncached_vs_hpos],
     "kit-rdp": [benches.rdp_sync_sweep, benches.rdp_setter_sweep, benches.rdp_atomic_sweep, benches.rdp_rectn,
                 fifo_depth, cmd_fetch],
@@ -226,7 +227,7 @@ KITS = {
     "kit-bus": bus.BUILDERS,
 }
 KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM],
-           "kit-vi": [asm.VI_MID_ASM]}
+           "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.

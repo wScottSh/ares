@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 RUNNING = re.compile(r"^Running (.+)\.\.\.$")
 FAILURE = re.compile(r"^Test '.+ failed")
-SUMMARY = re.compile(r"(Base|Timing|Cycle|CP0-hazards|Poorly-understood-quirk): Failed (\d+) of (\d+) tests")
+SUMMARY = re.compile(r"(Base|Timing|Cycle|CP0-hazards|Poorly-understood-quirk|CPU): Failed (\d+) of (\d+) tests")
 
 
 def main():

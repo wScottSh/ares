@@ -139,6 +139,24 @@ def derive(rom, points):
             if p["atomic"]:
                 off = points[name.replace("atomic1", "atomic0")]
                 per(name, "per_prim_extra_clk", (p["clock"] - off["clock"]) / p["n"])
+    if rom == "ifill-isolated":
+        per("cold", "cold_minus_warm_pclk", 2 * (points["cold"]["min"] - points["warm"]["min"]))
+    if rom == "wb-fifth-store":
+        for name, p in points.items():
+            prev = points.get(name.replace(f"sw-{p['stores']}", f"sw-{p['stores'] - 1}", 1))
+            if prev:
+                per(name, "minus_prev_pclk", 2 * (p["min"] - prev["min"]))
+    if rom == "rdp-loadsz-sweep":
+        #calibration/derived.py tex: one load is (4 loads less 1) / 3 of TMEMBUSY, fit against bytes; the
+        #fit is reported on the op's 4096 B, 4-load point.
+        for op in ("block", "tile"):
+            sizes = sorted(p["bytes"] for p in points.values() if p["op"] == op and p["n"] == 1)
+            per_load = [(points[f"{op}-{b}-n4"]["tmembusy"] - points[f"{op}-{b}-n1"]["tmembusy"]) / 3 for b in sizes]
+            for b, clk in zip(sizes, per_load):
+                per(f"{op}-{b}-n4", "per_load_clk", clk)
+            slope, intercept = statistics.linear_regression(sizes, per_load)
+            per(f"{op}-{sizes[-1]}-n4", "clk_per_byte", slope, 4)
+            per(f"{op}-{sizes[-1]}-n4", "intercept_clk", intercept, 1)
     return out
 
 
