@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))
 
-from romgen.suites.bench.report import Layout, acceptance, derive, layout_of, phase_of  # noqa: E402
+from romgen.suites.bench.report import Layout, acceptance, derive, layout_of, pad_phases_text, phase_of  # noqa: E402
 from romgen.suites.bench.report import verdict as layout_rule_verdict  # noqa: E402
 
 failures = 0
@@ -105,6 +105,12 @@ check("a pass that rests on a model choice names its issue", verdict({**band, "r
 check("a conditional row that fails is a fail", verdict({**band, "rule": "mean", "condition": "#77"}, phase), "fail")
 check("only a consistent row has a window", acceptance({**band, "rule": "mean"}, phase), ("-", "-"))
 check("mean: the phase mean is outside the band", verdict({**band, "rule": "mean"}, phase), "fail")
+below = phase_of([{key: 6.47962}, {key: 6.5}], key)
+check("mean: an unrounded mean 0.0002 below the floor fails though it displays as 6.49",
+      (below.mean, verdict({**band, "rule": "mean"}, below)), (6.49, "fail"))
+check("consistent: the same mean is consistent-only", verdict({**band, "rule": "consistent"}, below), "consistent-only")
+check("the pad text keeps the unrounded mean behaviors.py recomputes from", pad_phases_text(Layout({6: below})),
+      "6:6.48..6.5/6.48981")
 check("every: not every phase is inside the band", verdict({**band, "rule": "every"}, phase), "fail")
 check("every: every phase inside the band", verdict({**band, "rule": "every"}, inside), "pass")
 check("consistent: a range wholly below the band", verdict({"kind": "check", "lo": "7", "hi": "8", "rule": "consistent"}, phase), "fail")
