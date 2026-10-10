@@ -44,7 +44,8 @@ def tex(recs):
 
 def zmem(records):
     """kit-zmem (written in place, after the zmem module's report): write-run fits over the Z comb, the
-    per-primitive atomic cost, IM_RD/Z_CMP overlap, 1 px triangle cost, the clobber verdict, the X-bus
+    per-primitive atomic cost, IM_RD/Z_CMP overlap in 1- and 2-cycle, the 2-cycle read-only
+    per-line and per-rectangle costs, 1 px triangle cost, the clobber verdict, the X-bus
     and RDRAM command rates, the hold summary and PIPEBUSY's share of memory time."""
     def p(rom, point):
         return records.get((f"zmem-{rom}", point))
@@ -82,13 +83,22 @@ def zmem(records):
             on = c[(1, 64)]["clock"] - c[(1, 16)]["clock"]
             off = c[(0, 64)]["clock"] - c[(0, 16)]["clock"]
             records[("zmem-atomic", f"{mode}-cost")] = {"atomic_rclk": round((on - off) / 48, 2)}
-    for w in (8, 16, 24, 32, 48, 64, 96, 128, 192, 320):
-        m = {k: p("slots", f"{k}-w{w}") for k in ("plain", "imrd", "zcmp", "imrd-zcmp")}
-        if all(m.values()):
-            a, b = m["imrd"]["clock"] - m["plain"]["clock"], m["zcmp"]["clock"] - m["plain"]["clock"]
-            both = m["imrd-zcmp"]["clock"] - m["plain"]["clock"]
-            records[("zmem-slots", f"overlap-w{w}")] = {"both_over_sum": round(both / (a + b), 3) if a + b else None,
-                                                     "both_over_max": round(both / max(a, b), 3) if max(a, b) else None}
+    for rom, widths in (("slots", (8, 16, 24, 32, 48, 64, 96, 128, 192, 320)), ("slots2", (8, 32, 48, 64, 128, 320))):
+        for w in widths:
+            m = {k: p(rom, f"{k}-w{w}") for k in ("plain", "imrd", "zcmp", "imrd-zcmp")}
+            if all(m.values()):
+                a, b = m["imrd"]["clock"] - m["plain"]["clock"], m["zcmp"]["clock"] - m["plain"]["clock"]
+                both = m["imrd-zcmp"]["clock"] - m["plain"]["clock"]
+                records[(f"zmem-{rom}", f"overlap-w{w}")] = {
+                    "both_over_sum": round(both / (a + b), 3) if a + b else None,
+                    "both_over_max": round(both / max(a, b), 3) if max(a, b) else None}
+    for mode in ("plain", "imrd", "zcmp", "imrd-zcmp"):
+        for w in (32, 320):
+            h8, h16 = p("read2", f"{mode}-w{w}-h8"), p("read2", f"{mode}-w{w}-h16")
+            if h8 and h16:
+                line = (h16["clock"] - h8["clock"]) / 8
+                records[("zmem-read2", f"{mode}-w{w}-fit")] = {"rclk_per_line": round(line, 2),
+                                                             "rclk_per_rect": round(h8["clock"] - 8 * line, 1)}
     for t in ("fill", "z", "shade", "shade-z"):
         lo, hi = p("tri", f"{t}-16"), p("tri", f"{t}-64")
         if lo and hi:
