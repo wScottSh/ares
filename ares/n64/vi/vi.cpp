@@ -60,13 +60,13 @@ auto VI::line() -> void {
     //type 0 sends no sync) pushes the systembench uncached reads out of band, and nemu64-test's
     //VI-off loads do not ask for it (behaviors.tsv ri.refresh-trigger).
     ri.refresh(Thread::clock);
-    if(io.vcounter == 0) latchFrame();
     ++io.vcounter;
     int halfline = io.vcounter << 1 | io.field;
     if(halfline >= io.halfLinesPerField+1) {
       io.vcounter = 0;
       io.field += !io.halfLinesPerField.bit(0);
       if(++io.leapCounter == 5) io.leapCounter = 0;
+      latchFrame(false);
     }
 
     if(io.vcounter == io.vstart >> 1) {
@@ -106,6 +106,7 @@ auto VI::line() -> void {
     // We do that every 200 simulated lines of 0x800 quarter-clocks. This is just arbitrary,
     // the real VI is not clocking at all when inactive; the period is host liveness, not a cost.
     io.vcounter = 0;
+    frame.live = true;
     if(++inactiveCounter >= 200) {
       inactiveCounter = 0;
       refreshed = true;
@@ -114,10 +115,9 @@ auto VI::line() -> void {
   }
 }
 
-//At the HSYNC that ends a field's line 0, or the first HSYNC after the VI is
-//enabled (vi.frame-latch).
-auto VI::latchFrame() -> void {
-  frame = {io.vstart, io.vend, io.ysubpixel, (s32)io.vstart};
+//At the HSYNC that starts a field (vi.frame-latch), and at every line of a live frame.
+auto VI::latchFrame(bool live) -> void {
+  frame = {io.vstart, io.vend, io.ysubpixel, (s32)io.vstart, live};
 }
 
 auto VI::sample() const -> Geometry {
@@ -186,6 +186,7 @@ auto VI::compose() -> void {
 auto VI::startFetch() -> void {
   if(io.colorDepth < 2 || !io.width) return;
   if(fetch.next < fetch.count || fetch.inFlight) return;
+  if(frame.live) latchFrame(true);
   auto g = sample();
   auto w = g.window();
   s32 dy = 2 * io.vcounter;

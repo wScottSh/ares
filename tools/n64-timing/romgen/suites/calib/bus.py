@@ -143,8 +143,10 @@ VI_CASES = [
     ("hvideo-half", [(VI_H_VIDEO, 0x006C01AC)], 0),
     ("vvideo-outside", [(VI_V_VIDEO, V_VIDEO_EARLY_OFF)], 0),
     ("x-2.0-late", [(VI_X_SCALE, 0x800)], 1),
-    ("vi-blank-late", [(VI_CTRL, ctrl(kind=0))], 1),
+    # before vi-blank-late: a VI re-enabled from a blank follows V_VIDEO per line until its next field
+    # (vi.frame-latch, #77), and vi-blank-late re-enables it after its window
     ("vvideo-outside-late", [(VI_V_VIDEO, V_VIDEO_EARLY_OFF)], 1),
+    ("vi-blank-late", [(VI_CTRL, ctrl(kind=0))], 1),
 ]
 # V_VIDEO opened from V 8: the window (V 12 to 32, half-lines) lies inside it but above ares's display
 # window, which starts at half-line 34 on NTSC (vi.cpp window(), vi.display-window).
