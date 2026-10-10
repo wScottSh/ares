@@ -368,8 +368,6 @@ EXT_ROMS = {
     "thar0": ext_thar0,
     "snapper64": ext_snapper64,
     "systembench": ext_systembench,
-    #The published ROM logs no COUNT, and its source carries no license, so no build of it can.
-    "pi_dma_test": None,
     "mm-bench": ext_mm_bench,
 }
 #External ROMs whose output names no ROM identity: ingest refuses a capture these find run on other ROMs
@@ -377,8 +375,7 @@ EXT_ROMS = {
 EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch}
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
 #that repeats a row's fit data from an independent one.
-EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "pi_dma_test": "pidma",
-              "mm-bench": "mm"}
+EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "mm-bench": "mm"}
 
 
 def ext_name(path):
