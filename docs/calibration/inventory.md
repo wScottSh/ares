@@ -146,7 +146,7 @@ Rows whose only passing checks are their own fit data. 12 rows, 12 with a kit qu
 
 ## Model-choice rows
 
-Rows with no published value: the console decides the choice. 24 rows, 19 with a kit question.
+Rows with no published value: the console decides the choice. 23 rows, 18 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
@@ -158,7 +158,6 @@ Rows with no published value: the console decides the choice. 24 rows, 19 with a
 | `ri.rank.other` | pass | nemu64:timing/load-miss-vi-on hw:ri-priority hw:nemu64-console | `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.overhead-vi` | pass | nemu64:timing/load-from-uncached-vi-on-other-bank nemu64:timing/load-miss-vi-on hw:nemu64-console | `hw:nemu64-console` |
 | `ri.request-latency` | model-choice | ~det ~stepcap | **no kit question** |
-| `sysad.register-write` | fail | bench:mi-memset-repeat hw:register-write hw:wb-drain-target | `hw:register-write`, `hw:wb-drain-target` |
 | `sp.dma-burst` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
 | `vi.burst` | pass | bench:uncached-vs-hpos hw:vi-cpu-contention hw:vi-fetch-modes | `hw:vi-cpu-contention`, `hw:vi-fetch-modes` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes | `hw:vi-fetch-modes` |
@@ -306,7 +305,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `cpu.pi-io-read` | derived reference | `hw:cpu-reads`, `hw:systembench` |
 | `sysad.rdram-write-period` | fit; verify-is-fit; check bench:mi-memset-uncached fail | `hw:memset-vi` |
 | `sysad.rdram-block-write-period` | fit; verify-is-fit; check bench:mi-memset-cached fail | `hw:memset-vi` |
-| `sysad.register-write` | model-choice; check bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target` |
+| `sysad.register-write` | fit; check pidma:logs, bench:mi-memset-repeat, systembench:pi-io-w, systembench:si-io-w, systembench:si-dma-w-rom, systembench:pi-dma-128 fail | `hw:register-write`, `hw:wb-drain-target` |
 | `cpu.random-rule` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.wired-write-latency` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console`, `hw:ctc1-fpe-ce` |
