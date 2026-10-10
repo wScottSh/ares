@@ -251,13 +251,13 @@ Labels: **[M]** measured this session (the command and file are named), **[C]** 
    - One hardware run per value. It is a TIMEIT_MULTI(50) trimmed integer mean, so the resolution is 1 COUNT tick = 2 pclk [C main.c:105-123].
    - The -2 is one tick (followups, verify-88) [C].
 3. **Root cause.**
-   - (a) Cross-device turnaround: banks 0-3 = modules 0/1, and consecutive reads alternate device or bank. The NEC datasheet gives a post-read gap for the same device only [C B8]. A different-device turnaround is unmodeled [G].
+   - (a) Cross-device turnaround: banks 0-3 = modules 0/1, and consecutive reads alternate device or bank. The NEC datasheet gives no different-device read turnaround: tPostMemReadDelay (2 tc) applies to the next transaction on any device, and only the write gaps are same-device [C NEC p44; research/u32r-banked-turnaround.md, U-RES]. So (a) has no datasheet cost.
    - (b) The MultiBank (RI_REFRESH[22:19]) shared-resource timing, "Research Needed" on n64brew [C].
    - (c) Refresh at TYPE=0: under `PB_BLANK=2` the port reads 132..134 (consistent-only), but seq/rand inflate too, so this is not the mechanism [M].
 4. **Coupling.** Any device-switch cost moves every multi-bank access: the RDP color/Z in different banks (thar0 separate-bank) and the VI-vs-CPU other-bank row.
 5. **Path to green.**
    - #16 q18 `cpu-reads` and q35 `systembench` (same binary, row by row) decide whether 136 reproduces and whether banked − seq = 2.
-   - If yes, add a cross-device read-to-read gap only if the datasheet gives one. Check the NEC µPD488170L pp. 44-45 transaction timing first: this is a cheap no-hardware research step. Otherwise the honest state is "consistent-only, 1 tick, unmodeled".
+   - If yes, the honest state is "consistent-only, 1 tick, unmodeled": the NEC µPD488170L pp. 44-45 give no cross-device read-to-read gap (U-RES, research/u32r-banked-turnaround.md).
 6. **Do not.** Add a 2-pclk banked penalty fitted to this row.
 
 ### G. Report-only rows (dirty-miss-isolated, dirty-row-sweep, ifill-isolated, wb-fifth-store)
