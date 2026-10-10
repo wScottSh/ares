@@ -565,6 +565,30 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: ROM identity, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     cases += roms
+    import subprocess
+    run_store = ("import importlib.util, sys\n"
+                 "spec = importlib.util.spec_from_file_location('ingest', sys.argv[1])\n"
+                 "ingest = importlib.util.module_from_spec(spec)\n"
+                 "spec.loader.exec_module(ingest)\n"
+                 "ingest.store(*sys.argv[2:])\n")
+    stores = [("ingest stores a capture of the ROM the fork ran", same, 0),
+              ("ingest refuses a capture whose rom_sha256 differs and stores nothing", other, 1)]
+    for name, console_sha, want in stores:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model, capture = Path(tmp) / "root", Path(tmp) / "model", Path(tmp) / "capture"
+            (root / "tools").mkdir(parents=True)
+            (root / "tools" / "n64-timing").symlink_to(HERE.parent, target_is_directory=True)
+            capture.mkdir()
+            (capture / "kit-cpu.isviewer.log").write_bytes(sample_log(rom_sha256=console_sha))
+            (model / "boot-1").mkdir(parents=True)
+            (model / "boot-1" / "kit-cpu.txt").write_bytes(sample_log(rom_sha256=same))
+            proc = subprocess.run([sys.executable, "-c", run_store, str(HERE / "ingest.py"), str(root), str(capture),
+                                   "c", str(model)], capture_output=True, text=True)
+            stored = sorted(p.name for p in (root / HARDWARE).rglob("*") if p.is_file())
+        ok = proc.returncode == want and (stored == ["kit-cpu.1.log", "manifest.tsv"] if want == 0 else not stored)
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}, stored {stored or 'nothing'})")
+    cases += stores
     from romgen import hwout
     rom = hwout.stamp(b"\0" * 64 + f"#kit rom=kit-cpu sha=78b4427b8d86 rom_sha256={hwout.UNSTAMPED} fmt=1\0".encode() + b"code")
     stamped = Log(rom).header["rom_sha256"]
