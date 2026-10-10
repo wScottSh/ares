@@ -15,6 +15,9 @@ class SetDef:
     asm: list = field(default_factory=list)
     consts: dict = field(default_factory=dict)
 
+    def __post_init__(self):
+        self.asm = self.asm + benches.ROM_ASM.get(self.set_name, [])
+
 
 SETS = [SetDef(name, f"{phases.point_dir(p, k)}/bench-{name}", "Bench", f"(bench={name})", build, [asm.ASM],
                {"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k, "LAYOUT_PAD": p})

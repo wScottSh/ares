@@ -66,6 +66,28 @@ walked = derive("pi-io-write", {"rom-word": {"unit": "rclk", "reps": 50, "walk":
 check("a poll-walked point spans its kept reps: 94 ticks = 125.33 rclk", walked["sb_rclk_rep_min"], 125.33)
 check("the second highest rep, not the cold first one: 107 ticks = 142.67 rclk", walked["sb_rclk_rep_max"], 142.67)
 
+ifill = derive("ifill-isolated", {"warm": {"min": 3}, "cold": {"min": 25}})
+check("one I-cache fill is the cold call less the warm one: 22 ticks = 44 pclk", ifill["cold"]["cold_minus_warm_pclk"], 44)
+
+wb = derive("wb-fifth-store", {f"sw-{n}{t}": {"stores": n, "min": 10 + (8 * (n - 4) if n > 4 else 0) + (2 if t else 0)}
+                               for n in range(1, 7) for t in ("", "-lw")})
+check("a store into a free entry costs nothing more", wb["sw-4"]["minus_prev_pclk"], 0)
+check("the fifth store waits 8 ticks = 16 pclk", wb["sw-5"]["minus_prev_pclk"], 16)
+check("a load point steps from the load point before it", wb["sw-5-lw"]["minus_prev_pclk"], 16)
+check("the first store has no step", "minus_prev_pclk" in wb["sw-1"], False)
+
+load = {}
+for b in (8, 64, 512, 4096):
+    for n in (1, 4):
+        load[f"block-{b}-n{n}"] = {"op": "block", "bytes": b, "n": n, "tmembusy": 30 + n * (7 + b // 2)}
+        load[f"tile-{b}-n{n}"] = {"op": "tile", "bytes": b, "n": n, "tmembusy": 30 + n * (15 + b // 8)}
+loadsz = derive("rdp-loadsz-sweep", load)
+check("one load is (4 loads less 1) / 3, without the list's fixed cost", loadsz["block-512-n4"]["per_load_clk"], 263.0)
+check("Load Block fit: 0.5 clk/B + 7", (loadsz["block-4096-n4"]["clk_per_byte"], loadsz["block-4096-n4"]["intercept_clk"]),
+      (0.5, 7.0))
+check("Load Tile fit: 8 B/clk + 15", (loadsz["tile-4096-n4"]["clk_per_byte"], loadsz["tile-4096-n4"]["intercept_clk"]),
+      (0.125, 15.0))
+
 key = ("r", "p", "m")
 delays = [{key: v} for v in (6.169, 6.169, 6.334, 6.495, 6.678)]
 phase = phase_of(delays, key)

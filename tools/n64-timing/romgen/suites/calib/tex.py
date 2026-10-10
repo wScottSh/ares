@@ -117,13 +117,13 @@ LOAD_COUNTS = (1, 4)
 TILE_MAX_TEXELS = 1024
 
 
-def tmem_load_rate(suite):
+def tmem_load_rate(suite, name="tex-load"):
     """Load Block and Load Tile of RGBA16 against size, each list one load or four back to back:
     (clock at n=4 - clock at n=1) / 3 is one load with the list's fixed cost removed, and its fit over
     bytes gives slope and intercept. 8 B/rclk (MiSTer RDP_raster.vhd) puts 4096 B at 512 clocks, the
     jgemu dpc_probe law (15 + 0.418/B) at 1727. Load Tile is one row up to 1024 texels (2048 B), two
     rows at 4096 B."""
-    rom = Rom(suite, "tex-load")
+    rom = Rom(suite, name)
     for nbytes in LOAD_BYTES:
         texels = nbytes // 2
         block = [set_texture_image(TEX_SRC, TILE_MAX_TEXELS), set_tile(LOAD_TILE, 0, 0)]

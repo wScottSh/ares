@@ -1057,6 +1057,9 @@ def calibration_errors(root, rows, checks, found):
         if q["kit"] not in kit.KIT_ROMS and not q["kit"].startswith(("ext:", "none: ")):
             errors.append(f"{where}: kit `{q['kit']}` is not a kit ROM ({', '.join(kit.KIT_ROMS)}), `ext:<rom>` or "
                           f"`none: <reason>`")
+        if q["kit"] == "ext:mm-bench" and not (q["points"].split() and set(q["points"].split()) <= set(kit.mm_bench.SCENES)):
+            errors.append(f"{where}: points `{q['points']}` must name the BENCH scenes the question reads "
+                          f"({' '.join(kit.mm_bench.SCENES)})")
         if not kit.RULE.match(q.get("rule", "")) or (q["kit"] in kit.KIT_ROMS) == (q.get("rule") == "-"):
             errors.append(f"{where}: rule `{q.get('rule')}` must be exact or range:abs|rel:<tolerance> for a kit ROM "
                           f"question, `-` otherwise")
@@ -1654,10 +1657,11 @@ def self_test(root):
         def row_field(row_id, column, value):
             def change(text):
                 lines = text.split("\n")
+                at = lines[0].split("\t").index(column)
                 for i, line in enumerate(lines):
                     fields = line.split("\t")
                     if fields[0] == row_id:
-                        fields[COLUMNS.index(column)] = value
+                        fields[at] = value
                         lines[i] = "\t".join(fields)
                 return "\n".join(lines)
             return change
@@ -1684,8 +1688,10 @@ def self_test(root):
              "waits on pending:calibration-16 with no kit test. Name the hw:<question>"),
             ("a hardware check its question does not close", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:dcb"),
              "but the question's closes column does not list it"),
-            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:mm-filesel"),
-             "not an in-repo kit ROM"),
+            ("a row's hardware check without a kit ROM", "tools/n64-timing/calibration/questions.tsv",
+             row_field("dcb", "kit", "none: self-test"), "`cpu.dcb` names hw:dcb, whose kit is `none: self-test`, not an in-repo kit ROM"),
+            ("an mm-bench question with no points", "tools/n64-timing/calibration/questions.tsv",
+             row_field("mm-filesel", "points", ""), "points `` must name the BENCH scenes the question reads"),
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
             ("a question with more rules than metrics", "tools/n64-timing/calibration/questions.tsv",

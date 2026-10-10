@@ -10,6 +10,7 @@ import struct
 
 from ...suite import Step, Test, Value
 from ... import rcp
+from ..calib import asm as kit_asm
 
 KSEG0, KSEG1 = 0x80000000, 0xA0000000
 
@@ -355,6 +356,24 @@ def si_dma(suite):
                  50, "rclk", [("dir", "read64"), ("commands", commands)])
 
 
+# Bench ROMs that run a calibration kit builder under the bench check's name, so the fork's bench and the
+# console kit measure one way (calibration/questions.tsv ifill, wb-release, tmem-load-rate). The kit modules
+# import this one, so each is imported at build time.
+def ifill_isolated(suite):
+    from ..calib import sets
+    sets.ifill(suite, "ifill-isolated")
+
+
+def wb_fifth_store(suite):
+    from ..calib import sets
+    sets.wb_stores(suite, "wb-fifth-store")
+
+
+def rdp_loadsz_sweep(suite):
+    from ..calib import tex
+    tex.tmem_load_rate(suite, "rdp-loadsz-sweep")
+
+
 ROMS = {
     "mi-memset-uncached": mi_memset_uncached,
     "mi-memset-cached": mi_memset_cached,
@@ -376,4 +395,9 @@ ROMS = {
     "pi-io-write": pi_io_write,
     "si-io-write": si_io_write,
     "si-dma": si_dma,
+    "ifill-isolated": ifill_isolated,
+    "wb-fifth-store": wb_fifth_store,
+    "rdp-loadsz-sweep": rdp_loadsz_sweep,
 }
+#Kernels a ROM needs beyond asm.ASM.
+ROM_ASM = {"ifill-isolated": [kit_asm.ASM], "wb-fifth-store": [kit_asm.ASM]}
