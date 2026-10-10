@@ -1666,7 +1666,7 @@ def self_test(root):
              "waits on pending:calibration-16 with no kit test. Name the hw:<question>"),
             ("a hardware check its question does not close", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:dcb"),
              "but the question's closes column does not list it"),
-            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:vi-mid-field-blank"),
+            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:mm-filesel"),
              "not an in-repo kit ROM"),
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
