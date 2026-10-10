@@ -9,7 +9,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | Basis | Meaning | Rows |
 |---|---|---|
 | measured | a hardware measurement: a test ROM result or a console capture | 33 |
-| vendor | Nintendo, NEC or SGI documentation, or a patent | 14 |
+| vendor | Nintendo, NEC or SGI documentation, or a patent | 15 |
 | datasheet | a component datasheet | 8 |
 | wiki | a community reference: n64brew, or a test suite author's notes | 17 |
 | rtl | a hardware description (MiSTer RTL) | 1 |
@@ -25,7 +25,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 | fail | at least one check failed; the detail in Check results gives the residual | 27 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 12 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 4 |
-| pass | a check other than the row's fit data passed, and none failed | 68 |
+| pass | a check other than the row's fit data passed, and none failed | 69 |
 | pass-conditional:#77 | no check failed, but a check passes only through a model choice with no hardware reference (the issue named); it is not independent hardware agreement until the issue resolves | 1 |
 | pending:calibration-16 | no check decided the row: calibration-16: no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it | 9 |
 | pending:calibration-16 pending:report-only | no check decided the row: calibration-16: no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; report-only: the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it | 14 |
@@ -117,6 +117,7 @@ From `docs/spec/map-1-closure-draft.md`, which gives each clause and its evidenc
 | `cpu.fpu-convert` | 5 pclk | measured | nemu64-test COP1 tables (CVT.W/L, CVT.S/D from W/L); ROUND, TRUNC, CEIL, FLOOR assumed equal to CVT.W/L | `nemu64:timing/cop1instructions32` `nemu64:timing/cop1instructions64` `nemu64:timing/cop1-register-dependency` `hw:nemu64-console` | **pass**: `nemu64:timing/cop1instructions32` pass; `nemu64:timing/cop1instructions64` pass; `nemu64:timing/cop1-register-dependency` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuFpuConvert` |  |
 | `cpu.fpu-cvt-s-d` | 2 pclk | measured | nemu64-test COP1 tables (CVT.S.D) | `nemu64:timing/cop1instructions64` `nemu64:timing/cop1-register-dependency` `hw:nemu64-console` | **pass**: `nemu64:timing/cop1instructions64` pass; `nemu64:timing/cop1-register-dependency` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuFpuCvtSD` |  |
 | `cpu.likely-nullified` | 1 pclk | measured | nemu64-test Likely branch (C8) | `nemu64:timing/likely-branch` `hw:nemu64-console` | **pass**: `nemu64:timing/likely-branch` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuLikelyNullified` |  |
+| `cpu.sc-llbit` | rt-is-llbit-store-only-when-llbit-exception-first rule | vendor | VR4300 User's Manual U10504EJ7V0UM00 16 SC (pp. 487-488) and SCD (pp. 489-490): AddressTranslation runs first, StoreMemory only if LLbit, then GPR[rt] = LLbit; if the instruction both fails and causes an exception, the exception takes precedence. 16 ERET clears LLbit; 6.2: an excepting SC is aborted, so rt and memory keep their values | `cpu:llsc` | **pass**: `cpu:llsc` pass | ares/n64/cpu/interpreter-ipu.cpp:CPU::SC ares/n64/cpu/interpreter-ipu.cpp:CPU::SCD | the manual does not say whether a failing SC raises Watch; the fork raises Watch only when the store happens (LLbit set) |
 | `cpu.eret` | 3 pclk | fit | nemu64-test Exceptions Roundtrip (BREAK, SYSCALL + handler + ERET) 15, less the modeled BREAK fault (cpu.exc-rf) and handler: the ERET costs 3 including its issue slot | **fit only, no independent check:** `nemu64:timing/exception-roundtrip` `hw:nemu64-console` `hw:cpu-exceptions` (fit from `nemu64:timing/exception-roundtrip`) | **fit only**: `nemu64:timing/exception-roundtrip` pass; `hw:nemu64-console` pending:calibration-16; `hw:cpu-exceptions` pending:calibration-16 | reads `Timing::Behavior::CpuEret` | verify-is-fit: the two Roundtrip values are the only measurement of ERET |
 | `cpu.mtc0-slow-regs` | 2 pclk | measured | nemu64-test Random, EntryLo0/1, EntryHi, reg7 (C5) | `nemu64:timing/individual-instructions` `hw:nemu64-console` | **pass**: `nemu64:timing/individual-instructions` pass; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuMtc0SlowRegs` |  |
 | `cpu.cache-index-load-tag` | 6 pclk | measured | nemu64-test CPURegisterDependency 'LD; CACHE (DataIndexLoadTag)' 7, 8, 8: the CACHE costs 6 including its issue slot (C10) | `nemu64:timing/cache` `hw:cache-ops` `hw:cache-ops-sum` `hw:nemu64-console` | **pass**: `nemu64:timing/cache` pass; `hw:cache-ops` pending:calibration-16; `hw:cache-ops-sum` pending:calibration-16; `hw:nemu64-console` pending:calibration-16 | reads `Timing::Behavior::CpuCacheIndexLoadTag` | the other CACHE ops have no measurement and cost their issue slot. That is a policy, not a reference: I-cache Hit Write Back lost its former 48 pclk charge under it (no hardware reference for either), and costs its slot plus the wait for write-buffer entries, as a D-cache writeback does |
@@ -270,7 +271,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-roms/after2 on 9f1ab593f).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/standing on aee40c382).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -314,6 +315,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:uncached-sizes-u32-seq` | pass | u32-seq net_pclk 131 (expected 132, 131..133, consistent, window ±0.8%, mean rule pass) pass |
 | `bench:uncached-vs-hpos` | pass | bank5 outliers_per_line 1.0 (expected 1, 1..1, every) pass |
 | `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 16 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
+| `cpu:llsc` | pass | 12 of 12 tests pass |
 | `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
 | `hw:ai-fetch` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
@@ -351,7 +353,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:loadtile-rows` | pending:calibration-16 | no complete power-on console capture of kit-tex in docs/calibration/hardware |
 | `hw:memset-vi` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:mm-bench` | pending:calibration-16 | no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware |
-| `hw:mm-filesel` | pending:calibration-16 | none: the pinned BENCH build (mm_bench.py, mm-decomp-60fps 707602c6) has no file-select scene: Bench_EndFrame records only Play frames (src/code/bench.c), so no BENCH capture shows file select, and it prints no DPC_CLOCK. A file-select bench scene in mm-decomp-60fps would give this question a ROM: no kit ROM |
+| `hw:mm-filesel` | pending:calibration-16 | no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware |
 | `hw:nemu64-console` | pending:calibration-16 | no complete power-on console capture of nemu64-timing in docs/calibration/hardware |
 | `hw:nemu64-cop0hazard-console` | pending:calibration-16 | no complete power-on console capture of nemu64-cop0hazard in docs/calibration/hardware |
 | `hw:nemu64-cycle-console` | pending:calibration-16 | no complete power-on console capture of nemu64-cycle in docs/calibration/hardware |
@@ -515,6 +517,7 @@ From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file
 | `mm:filesel-empty` | mm | tools/n64-timing/mmbench | filesel_check.py row=empty | self | mm-filesel-slowdown.md acceptance (#11), primary row: empty files, main screen idle at 1 field per game frame (filesel_check.py). Fit data: it chose byte scaling for rdp.mem-overhead-read/-write |
 | `mm:filesel-options` | mm | tools/n64-timing/mmbench | filesel_check.py row=options | self | mm-filesel-slowdown.md acceptance (#11), secondary row: Options screen idle at 1 field per game frame (filesel_check.py). Fit data: it chose byte scaling for rdp.mem-overhead-read/-write |
 | `mm:filesel-named` | mm | tools/n64-timing/mmbench | filesel_check.py row=named | self | mm-filesel-slowdown.md acceptance (#11), primary row: two named files, main screen idle at 2 fields per game frame (filesel_check.py). Independent of the RDP memory fit |
+| `cpu:llsc` | cpu | llsc | - | self | romgen cpu suite (cpu-llsc.z64), ROM self-check: its `CPU: Failed X of Y` line; expected values from the VR4300 User's Manual U10504EJ7V0UM00 16 SC/SCD (pp. 487-490), ERET and 6.2 (llsc.py) |
 | `nemu64:timing/random` | nemu64 | timing | Random (decrement)\|Random (masking) | self | nemu64-test timing set, ROM self-check |
 | `nemu64:timing/just-nops` | nemu64 | timing | Timing: Just NOPs | self | nemu64-test timing set, ROM self-check |
 | `nemu64:timing/individual-instructions` | nemu64 | timing | Timing: Individual instructions (CPU) | self | nemu64-test timing set, ROM self-check |
