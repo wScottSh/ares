@@ -358,15 +358,12 @@ EXT_ROMS = {
     "thar0": ext_thar0,
     "snapper64": ext_snapper64,
     "systembench": ext_systembench,
-    #The published ROM logs no COUNT, and its source carries no license, so no build of it can.
-    "pi_dma_test": None,
     #The fork side needs Scott's BENCH build of mm-decomp-60fps run on n64-run; no in-repo tool builds it.
     "mm-bench": None,
 }
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
 #that repeats a row's fit data from an independent one.
-EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "pi_dma_test": "pidma",
-              "mm-bench": "mm"}
+EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "mm-bench": "mm"}
 
 
 def ext_name(path):
