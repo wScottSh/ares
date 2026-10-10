@@ -56,14 +56,17 @@ hw:color-half-16bpp	pending:calibration-16	no complete power-on console capture 
 hw:copy-passfail	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:copy-passfail-pixels	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:count-per-field	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
+hw:count-write-hold	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cpu-exceptions	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cpu-reads	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:cpu-watch	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
+hw:ctc1-fpe-ce	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:dcb	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dirty-miss	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dirty-row	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dom2-read	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dpc-sequencing	pending:calibration-16	no complete power-on console capture of rdpstat-dpc in docs/calibration/hardware
+hw:fetch-ahead	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:fill-copy-rate	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:fpu-classes	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:ifill	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
@@ -114,7 +117,7 @@ hw:vi-fetch-modes	pending:calibration-16	no complete power-on console capture of
 hw:vi-fetch-position	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-first-line	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-intr-latency	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
-hw:vi-mid-field-blank	pending:calibration-16	none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists: no kit ROM
+hw:vi-mid-field-blank	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-rcp-phase	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:wb-drain-target	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:wb-release	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware

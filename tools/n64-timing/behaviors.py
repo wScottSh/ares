@@ -1544,9 +1544,27 @@ def run_label(path):
     return "/".join(Path(path).resolve().parts[-2:])
 
 
-def write_results(root, run, out):
-    commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
-    head = f"# standing run {run_label(run)} on {commit or 'an unknown commit'}"
+RUN_COMMIT = "run-commit.txt"
+
+
+def run_commit(run, given=None):
+    """The commit a standing run was built and run from: standing.sh records it in RUN_COMMIT as `<sha>` or
+    `<sha> dirty`. A run made before that record existed needs --run-commit. Never the scoring tree's HEAD,
+    which is rarely the tree that ran."""
+    recorded = (text(Path(run) / RUN_COMMIT) or "").split()
+    if recorded and given and not (recorded[0].startswith(given) or given.startswith(recorded[0])):
+        return None, (f"{run_label(run)}/{RUN_COMMIT} records {recorded[0]} but --run-commit names {given}. "
+                      f"Drop --run-commit; the record is the run's own.")
+    if recorded:
+        return recorded[0] + (" with uncommitted changes" if recorded[1:] == ["dirty"] else ""), None
+    if given:
+        return given, None
+    return None, (f"{run_label(run)} has no {RUN_COMMIT}, so the commit it ran is unknown. Pass --run-commit <sha> "
+                  f"naming the tree that built and ran it (see tools/n64-timing/README.md), or rerun standing.sh.")
+
+
+def write_results(root, run, out, commit):
+    head = f"# standing run {run_label(run)} on {commit}"
     lines = [head, "check\tresult\tdetail"] + [f"{c}\t{r}\t{d}" for c, r, d in out]
     (Path(root) / RESULTS).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
@@ -1651,7 +1669,7 @@ def self_test(root):
              "waits on pending:calibration-16 with no kit test. Name the hw:<question>"),
             ("a hardware check its question does not close", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:dcb"),
              "but the question's closes column does not list it"),
-            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:vi-mid-field-blank"),
+            ("a row's hardware check without a kit ROM", TABLE, row_field("ri.read-hit", "verify", "unit:ri-cost-table hw:mm-filesel"),
              "not an in-repo kit ROM"),
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
@@ -1816,6 +1834,33 @@ def self_test(root):
         print(f"self-test: a systembench row that fails at every run: {'ok' if ok else 'FAILED'}: {got} (expected fail, 130, -4)")
         failures += not ok
         ran += 1
+        git = ["git", "-C", str(work), "-c", "user.name=self-test", "-c", "user.email=self-test@invalid"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "scoring tree"], check=True)
+        head = subprocess.run(git + ["rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+        elsewhere = "0123abcde" if not head.startswith("0123abcde") else "fedc98765"
+        stamp = work / "self-test-stamp" / "standing"
+        stamp.mkdir(parents=True)
+        for name, record, given, want in [
+            ("a run made on another commit", f"{elsewhere}\n", None, f"on {elsewhere}"),
+            ("a run made on a dirty tree", f"{elsewhere} dirty\n", None, f"on {elsewhere} with uncommitted changes"),
+            ("a run with no record, given --run-commit", None, elsewhere, f"on {elsewhere}"),
+            ("a run with no record", None, None, "--run-commit"),
+            ("a record that --run-commit contradicts", f"{elsewhere}\n", "fedcba987", "Drop --run-commit"),
+        ]:
+            (stamp / RUN_COMMIT).unlink(missing_ok=True)
+            if record:
+                (stamp / RUN_COMMIT).write_text(record, encoding="utf-8")
+            (work / RESULTS).unlink(missing_ok=True)
+            cmd = [sys.executable, str(work / "tools/n64-timing/behaviors.py"), "--root", str(work), "--results", str(stamp)]
+            proc = subprocess.run(cmd + (["--run-commit", given] if given else []), capture_output=True, text=True)
+            first = text(work / RESULTS)
+            first = (first or proc.stderr).split("\n")[0]
+            ok = want in first and head not in first and (want.startswith("on ") or not (work / RESULTS).exists())
+            print(f"self-test: the results header for {name}: {'ok' if ok else 'FAILED'}: {first.strip()[:160]} "
+                  f"(expected `{want}`, never the scoring HEAD {head})")
+            failures += not ok
+            ran += 1
         print(f"behaviors.py: self-test: {ran} cases, {failures} failed")
         return failures
     finally:
@@ -1829,6 +1874,7 @@ def main():
     parser.add_argument("--fix-lines", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--results", metavar="RUN_DIR")
+    parser.add_argument("--run-commit", metavar="SHA", help=f"the commit a --results run was made on, for a run without {RUN_COMMIT}")
     args = parser.parse_args()
     root = args.root
 
@@ -1850,8 +1896,11 @@ def main():
         print(f"behaviors.py: --fix-lines rewrote {fix_lines(root)} reference(s)")
         return 0
     if args.results:
+        commit, error = run_commit(args.results, args.run_commit)
+        if error:
+            return report([error], "results")
         errors, out = results(root, args.results)
-        write_results(root, args.results, out)
+        write_results(root, args.results, out, commit)
         print(f"behaviors.py: wrote {RESULTS} ({len(out)} checks); run behaviors.py to regenerate the spec")
         return report(errors, "results") if errors else 0
     errors, outputs = generated(root)
