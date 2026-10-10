@@ -12,11 +12,15 @@ every emux instruction. Each line the runtime prints goes three ways:
 - The screen: when the ROM ends it shows the log in pages of 26 lines, 8 s per page, looping, for
   the photographed fallback.
 
-The log starts with `#kit rom=<id> sha=<git sha> fmt=1 build=<boot-K or single>` and the RI and MI registers, and ends with
+The log starts with `#kit rom=<id> sha=<git sha> rom_sha256=<rom_sha256()> fmt=1 build=<boot-K or single>`
+and the RI and MI registers, and ends with
 `#kit-end rom=<id> bytes=<n> fnv=<FNV-1a 32 of the n bytes before the footer>`, so ingestion can tell
 a complete capture from a cut one. A done word at DATA_BASE + D_HW_DONE lets the fork's runner stop
 (calibration/run.sh).
 """
+import hashlib
+import re
+
 from . import font8x8, runtime
 
 D_HW_LOGPOS = 0x0E0
@@ -42,6 +46,28 @@ FB = runtime.FB0 | 0xA0000000
 PAGE_ROWS = 26           # rows and columns inside a one-glyph margin, which TV overscan keeps visible
 COLS = 38
 PAGE_FIELDS = 480         # 8 s at 60 fields per second
+
+
+HEADER = b"#kit rom="
+UNSTAMPED = "0" * 64
+
+
+def rom_sha256(rom):
+    """A console build's identity: sha256 of the ROM with its header's sha= and rom_sha256= values
+    zeroed. A ROM cannot hold its own hash, and a later commit that leaves the kit's bytes alone must
+    still match the console's capture."""
+    rom = bytearray(rom)
+    start = rom.index(HEADER)
+    line = bytes(rom[start:rom.index(b"\0", start)])
+    for m in re.finditer(rb" (sha|rom_sha256)=(\S+)", line):
+        rom[start + m.start(2):start + m.end(2)] = b"0" * len(m.group(2))
+    return hashlib.sha256(rom).hexdigest()
+
+
+def stamp(rom):
+    """Writes rom_sha256(rom) into the header's rom_sha256= field."""
+    at = rom.index(b" rom_sha256=", rom.index(HEADER)) + len(b" rom_sha256=")
+    return rom[:at] + rom_sha256(rom).encode() + rom[at + len(UNSTAMPED):]
 
 
 def header_bytes(rom):
@@ -135,7 +161,7 @@ def asm(rom_id, sha, variant):
     """variant is padded to a fixed width so every boot-delay build keeps one code layout."""
     glyphs = ",".join(f"{g >> 32:#010x},{g & 0xFFFFFFFF:#010x}" for g in font8x8.GLYPHS)
     return rf"""
-hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha} fmt=1 build={variant:<12}")}
+hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha} rom_sha256={UNSTAMPED} fmt=1 build={variant:<12}")}
 hw_str_end: .asciiz {runtime.asm_string(f"#kit-end rom={rom_id} bytes=")}
 hw_str_fnv: .asciiz " fnv="
 hw_str_hex: .asciiz "#hex "
