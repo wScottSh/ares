@@ -158,7 +158,6 @@ noise:c	pass	ctest Passed
 noise:rect-1016	pass	noise/summary.txt
 pidma:logs	fail	replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures
 rdpstat:1prim	fail	2 of 4 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px
-rdpstat:current-prefetch	pending:no-rom	
 rdpstat:nosync-1cycle	pass	20 of 20 tests pass
 rdpstat:unsynced-combiner	pass	2 of 2 tests pass
 rdpstat:xbus	pass	3 of 3 tests pass

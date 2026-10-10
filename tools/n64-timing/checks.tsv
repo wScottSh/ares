@@ -13,7 +13,7 @@ stepcap	stepcap	tools/n64-timing/determinism.sh --step-cap	every mm scene and ne
 unit:timeline	unit	n64-timing-tests	timeline	pass	scripted actors: (time, rank) ordering, tie-breaks, nesting bound, no step past an on-stack actor, Parked and Blocked never stepped, event heap order and cancel, horizon and wake (plan T5)
 unit:dpc-regs	unit	n64-timing-dpc-regs	dpc-regs	pass	DPC register transitions without a timeline: n64-systemtest tests/rdp START/END masking, START_VALID, status sequencing; n64brew and MiSTer START/END double buffering, DMA_BUSY, counters (plan T12)
 gen	gen	tools/n64-timing/behaviors.py --check	-	pass	this manifest, the behavior table, the generated header and spec, and the literal lint agree, and the behaviors.py and pidma-replay.py self-tests pass (plan T3)
-mm:file-select	mm	tools/n64-timing/mmbench	file-select	report	Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench)
+mm:file-select	mm	tools/n64-timing/mmbench	file-select	report	Majora's Mask NTSC-U 1.0 file select, 600 fields (mmbench), the empty-files main screen. Reports fields per game frame and RSP busy clocks per field and asserts none: no hardware value is published for RSP busy clocks, and the #11 fields-per-frame criterion for this screen is asserted by mm:filesel-empty
 mm:south-clock-town	mm	tools/n64-timing/mmbench	south-clock-town	report	Majora's Mask NTSC-U 1.0 South Clock Town, 600 fields (mmbench). Reports fields per game frame and RSP busy clocks per field; no hardware value is published for them
 mm:filesel-empty	mm	tools/n64-timing/mmbench	filesel_check.py row=empty	self	mm-filesel-slowdown.md acceptance (#11), primary row: empty files, main screen idle at 1 field per game frame (filesel_check.py). Fit data: it chose byte scaling for rdp.mem-overhead-read/-write
 mm:filesel-options	mm	tools/n64-timing/mmbench	filesel_check.py row=options	self	mm-filesel-slowdown.md acceptance (#11), secondary row: Options screen idle at 1 field per game frame (filesel_check.py). Fit data: it chose byte scaling for rdp.mem-overhead-read/-write
@@ -61,7 +61,7 @@ bench:dirty-miss-isolated	bench	dirty-miss-isolated	-	suite	report only; nemu64-
 bench:rdp-sync-sweep	bench	rdp-sync-sweep	-	suite	n64brew Commands, SYNC_PIPE 50, SYNC_TILE 33, SYNC_LOAD 25
 bench:rdp-setter-sweep	bench	rdp-setter-sweep	-	suite	n64brew Pipeline, 1 clock per setter
 bench:rdp-atomic-sweep	bench	rdp-atomic-sweep	-	suite	SDK pro-man 12.2.3, 30 to 40 null cycles
-bench:rdp-rectn	bench	rdp-rectn	-	suite	cen64 RECTN 2021 and DUTY 80,287 (reported, not asserted)
+bench:rdp-rectn	bench	rdp-rectn	-	suite	cen64 RECTN 2021 and DUTY 80,287, measured on a console with dpc_probe; reported, not asserted, because the conditions are unpublished: which DPC counter was read, how start and end were bracketed, and the othermodes (research/jgemu-dpc-probe.md, Questions for the author 2-3). hw:rdp-rect-base decides
 bench:ifill-isolated	bench	ifill-isolated	-	report	no ROM in plan R1 yet; no public hardware value (cpu-memory-costs.md)
 bench:uncached-sizes	bench	uncached-sizes	point=u64 metric=net_pclk	suite	n64-systembench main.c:580 U64R 37 pclk less its 2 pclk harness = 35; the port subtracts its own (expected.tsv)
 bench:uncached-sizes-u32	bench	uncached-sizes	point=u32 metric=net_pclk	suite	n64-systembench main.c:579 U32R 34 pclk less its 2 pclk harness = 32; the port subtracts its own (expected.tsv)
@@ -91,7 +91,6 @@ thar0:fill-mode	thar0	fill-mode	-	report	Thar0 hw_data has no fill-mode config a
 thar0:imrd-1cycle	thar0	nozb-vioff-imrd-1cyc	-	suite	plan T13: IM_RD 1-cycle 163,436
 thar0:zcmp	thar0	ac-zcmp-zbsame-vioff-noimrd-1cyc	-	suite	Thar0 hw_data
 thar0:separate-bank	thar0	zbrw-pass-zbsep-vioff-noimrd-1cyc	-	suite	plan T13: FB+ZB separate banks 225,518
-rdpstat:current-prefetch	rdpstat	current-prefetch	-	240	n64-systemtest rdp/mod.rs:21-23 TODO comment, the author's intent and not a recorded result: CURRENT reaches START+240 while the RDP is frozen
 rdpstat:nosync-1cycle	rdpstat	repeater64	RDP 1-Cycle No-Sync	self	repeater64 RDPNoSync1C, 20 console references (assets/10000000-10000013.test; the other 45 assets belong to other demos)
 snapper:span-tri	snapper	span-tri	-	suite	snapper64 RDP Test-Mode Span Tri, 216 DPS dumps
 snapper:rect-nosync	snapper	rect-nosync	-	suite	snapper64 RDPRectNoSync captures
