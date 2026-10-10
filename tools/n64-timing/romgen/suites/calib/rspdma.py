@@ -6,7 +6,7 @@ an RSP program writes SP_MEM_ADDR and SP_DRAM_ADDR, reads DPC_CLOCK (COP0 $12), 
 register, polls SP_DMA_BUSY (COP0 $6) and reads DPC_CLOCK again. DPC_CLOCK counts RCP clocks, the
 RSP's own clock (nemu64-test rsp_timing ClockCPUvsRSP, CyclesSLL). Each run walks the poll's phase:
 block s puts s extra NOPs between the length write and the first poll, so one block's first poll
-lands on the first idle clock, whatever the poll period. The point records the least and greatest
+lands on the first idle clock for any poll period up to WALK. The point records the least and greatest
 block (min and walk_max), in RCP clocks.
 """
 from ... import mips
@@ -24,8 +24,8 @@ TRIGGERS = {"rd": f"mtc0 $t1, ${RD_LEN}", "wr": f"mtc0 $t1, ${WR_LEN}", "poll": 
 
 def program(trigger):
     """RSP code for one direction; DMEM 0 = {DRAM address, length - 1}, results at DMEM RESULTS.
-    NOPs keep every MTC0 and MFC0 off the slot two after another, where the RSP stalls a store
-    after a load and counts both as each (n64brew RSP CPU Pipeline)."""
+    The RSP counts MTC0 and MFC0 as both a load and a store and stalls a store two slots after a
+    load (n64brew Reality_Signal_Processor/CPU_Pipeline), so NOPs keep them apart."""
     lines = ["lw $t0, 0($zero)", "lw $t1, 4($zero)", f"addiu $t4, $zero, {DMEM_TARGET}", "nop", "nop"]
     for s in range(WALK):
         lines += [f"mtc0 $t4, ${MEM_ADDR}", f"mtc0 $t0, ${DRAM_ADDR}", "nop", "nop", f"mfc0 $t5, ${CLOCK}",
