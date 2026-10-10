@@ -240,7 +240,7 @@ def compare(question, hw, model):
     """(result, detail): pass or fail, from the console's logs and the model's, under the question's rule."""
     metrics, rules = question["metric"].split(), question["rule"].split()
     rule_of = dict(zip(metrics, rules if len(rules) > 1 else rules * len(metrics)))
-    bad, lacking, checked = [], [], 0
+    bad, lacking, shown_all = [], [], []
     for pattern in question["points"].split():
         for metric in metrics:
             rule = rule_of[metric]
@@ -252,7 +252,6 @@ def compare(question, hw, model):
                 mv = want.get(key)
                 if mv is None:
                     continue
-                checked += 1
                 if rule == "exact":
                     ok = set(hv) <= set(mv)
                     shown = f"{key} {metric} console {sorted(set(hv))} model {sorted(set(mv))}"
@@ -262,19 +261,21 @@ def compare(question, hw, model):
                     lo, hi = min(mv), max(mv)
                     slack = tol if kind == "abs" else tol / 100 * max(abs(lo), abs(hi))
                     ok = min(hv) <= hi + slack and max(hv) >= lo - slack
-                    shown = f"{key} {metric} console {min(hv)}..{max(hv)} model {lo}..{hi} ({rule})"
+                    shown = f"{key} {metric} console {min(hv)}..{max(hv)} model {lo}..{hi}"
+                shown_all.append(shown)
                 if not ok:
-                    bad.append(shown)
+                    bad.append(shown if rule == "exact" else f"{shown} ({rule})")
+    checked = len(shown_all)
     if not checked:
         return "fail", f"no console value matches {question['points']} {question['metric']}; the capture lacks the points"
     if lacking:
         return "fail", f"the capture lacks {len(lacking)} of {len(lacking) + checked} model values; first {lacking[0]}"
     if bad:
         return "fail", f"{len(bad)} of {checked} values differ; first {bad[0]}"
-    return "pass", f"{checked} values agree ({question['rule']})"
+    return "pass", f"{checked} values agree ({question['rule']}): {'; '.join(shown_all)}"
 
 
-def ext_thar0(root, model_dir, paths):
+def ext_thar0(root, model_dir, paths, points):
     """Thar0/RDP-Timing-Tests on the console (its usblog text) against the fork's run of the romgen port
     (run.sh ext/thar0.txt), per configuration's pruned average BUFBUSY and PIPEBUSY within 1%; the
     detail also counts the configurations within 1% of Thar0's own console (expected.tsv)."""
@@ -310,7 +311,7 @@ def ext_thar0(root, model_dir, paths):
     return "pass", detail
 
 
-def ext_snapper64(root, model_dir, paths):
+def ext_snapper64(root, model_dir, paths, points):
     """snapper64's .test dumps from the console against the published console dumps byte for byte
     (romgen/suites/snapper/compare.py default_corpus), over every dump the snapper sets read."""
     from romgen.suites.snapper import compare as snap, sets as snap_sets
@@ -329,7 +330,7 @@ def ext_snapper64(root, model_dir, paths):
     return "pass", f"{len(wanted)} dumps equal the published console dumps"
 
 
-def ext_systembench(root, model_dir, paths):
+def ext_systembench(root, model_dir, paths, points):
     """n64-systembench's ISViewer text from the console against the fork's run of the same binary, the
     hardware-era build (build-systembench-era.sh, run.sh ext/systembench.txt), every row of systembench/rows.tsv under main.c's own pass rule with the
     fork's reading as the expected value. Pointwise for that binary only: a one to three instruction
@@ -366,15 +367,17 @@ def ext_systembench(root, model_dir, paths):
     return "pass", detail
 
 
-def ext_mm_bench(root, model_dir, paths):
+def ext_mm_bench(root, model_dir, paths, points):
     """The Majora's Mask BENCH ROM's IS-Viewer text from the console against the fork's run of the same
-    pinned per-scene ROMs (run.sh ext/mm-bench/<scene>.txt), under mm_bench.compare's rule."""
-    return mm_bench.compare(paths, model_dir)
+    pinned per-scene ROMs (run.sh ext/mm-bench/<scene>.txt), under mm_bench.compare's rule, for the
+    scenes the question's points name."""
+    return mm_bench.compare(paths, model_dir, points)
 
 
 #External ROMs a capture can hold: kit column `ext:<name>`, the capture file or directory name
 #prefix `ext-<name>`, and the reader that compares it (None: stored, compared by hand per
-#hardware-run.md until a reader exists).
+#hardware-run.md until a reader exists). A reader gets the question's points: mm-bench reads them as
+#scene names, the others need `-`.
 EXT_ROMS = {
     "thar0": ext_thar0,
     "snapper64": ext_snapper64,
@@ -452,7 +455,7 @@ def result_from(root, model_dir, qid):
         if reader is None:
             return "pending:calibration-16", (f"{len(paths)} files of {name} stored in {HARDWARE}; no reader yet, "
                                               f"compare by hand per hardware-run.md")
-        return reader(root, model_dir, paths)
+        return reader(root, model_dir, paths, q["points"].split())
     hw, ids = captures(root)
     boot = q.get("boot", "power-on")
     logs = [log for log in hw.get(kit, []) if log.complete and log.boot == boot]
@@ -575,9 +578,13 @@ def self_test():
     min_off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=25 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
     compares += [("per-metric rules, max 39 off under its abs:50", [Log(max_off)], "pass", per_metric),
                  ("per-metric rules, min 1 off under its exact", [Log(min_off)], "fail", per_metric)]
+    near = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=25 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    compares += [("a pass inside the band names each point's console and model values", [Log(near)], "pass", q,
+                  "2 values agree (range:abs:1): dcb/nop-nop min console 16..16 model 16..16; "
+                  "dcb/sw-lw min console 25..25 model 24..24")]
     for name, hw, want, *rule in compares:
         got, detail = compare(rule[0] if rule else q, hw, model)
-        ok = got == want
+        ok = got == want and (len(rule) < 2 or detail == rule[1])
         failed += not ok
         print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     cases += compares

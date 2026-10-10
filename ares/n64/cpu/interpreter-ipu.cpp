@@ -655,21 +655,21 @@ auto CPU::SB(cr64& rt, cr64& rs, s16 imm) -> void {
   write<Byte>(rs.u64 + imm, rt.u32);
 }
 
+//VR4300 UM U10504EJ7V0UM00 16 SC/SCD: the address translates whether or not LLbit is set, and an
+//exception takes precedence over a failure. 6.2: the excepting SC is aborted, so rt keeps its value.
 auto CPU::SC(r64& rt, cr64& rs, s16 imm) -> void {
-  if(scc.llbit) {
-    rt.u64 = write<Word>(rs.u64 + imm, rt.u32);
-  } else {
-    rt.u64 = 0;
-  }
+  auto access = devirtualize<Write, Word>(rs.u64 + imm);
+  if(!access) return;
+  if(scc.llbit && !write<Word>(access, rt.u32)) return;
+  rt.u64 = scc.llbit;
 }
 
 auto CPU::SCD(r64& rt, cr64& rs, s16 imm) -> void {
   if(!context.kernelMode() && context.bits == 32) return exception.reservedInstruction();
-  if(scc.llbit) {
-    rt.u64 = write<Dual>(rs.u64 + imm, rt.u64);
-  } else {
-    rt.u64 = 0;
-  }
+  auto access = devirtualize<Write, Dual>(rs.u64 + imm);
+  if(!access) return;
+  if(scc.llbit && !write<Dual>(access, rt.u64)) return;
+  rt.u64 = scc.llbit;
 }
 
 auto CPU::SD(cr64& rt, cr64& rs, s16 imm) -> void {
