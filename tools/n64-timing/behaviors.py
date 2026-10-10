@@ -905,7 +905,8 @@ def render_closure(root, rows, checks, found, reports):
     out += ["", "## Checks that pass only weakly", "",
             "Check results: " + ", ".join(f"{n} {k}" for k, n in sorted(results_count.items())) + ". "
             "A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean "
-            "misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the "
+            "misses the band, or a bench check's verdict differs between code-layout pads, so it is consistent with the hardware "
+            "number, not agreement. pass-conditional:#<issue>: the "
             "pass rests on a model choice with no hardware reference.", ""]
     if weak:
         out += ["| Check | Result | Detail | Rows (verify) | Rows (fit from) |", "|---|---|---|---|---|"]
