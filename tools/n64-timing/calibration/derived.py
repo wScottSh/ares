@@ -4,6 +4,7 @@ Each function takes one log's records ({(rom, point): fields}) and returns {(rom
 add, or raises KeyError when the log lacks its points (kit.derive skips it). The points are named in
 romgen/suites/calib/<module>.py.
 """
+from romgen.suites.bench import report as bench_report
 
 
 def fit(xs, ys):
@@ -204,11 +205,21 @@ def bus(recs):
         f = recs[("bus-refresh", f"bank{bank}")]
         out[f"refresh-bank{bank}-hits"] = f["slow"]
         out[f"refresh-bank{bank}-excess"] = f["lat_max"] - f["lat_min"]
-    out["vi-vvideo-outside-late-minus-base-loads-lost"] = g("bus-vi", "base", "n") - g("bus-vi", "vvideo-outside-late", "n")
-    out["vi-y-late-bank3-minus-bank2"] = g("bus-vi-latch", "y-late-bank3", "n") - g("bus-vi-latch", "y-late-bank2", "n")
     v = recs[("bus-vintr", "v-intr")]
     out["vintr-mean-lag"] = round((v["sum"] - v["min"] - v["max"]) / (v["reps"] - 2) - v["bias"], 1)
     return {("bus-derived", "all"): out}
 
 
-DERIVED = [tex, zmem, cpu2, bus]
+def vi_latch(recs):
+    """kit-bus's frame-latch points read as bench:vi-frame-latch reads them (bench report.py), so the
+    console and the fork's bench decide the same two categories: fetches (1 when the late V_VIDEO
+    case's loads are nearer the no-write case's than the no-fetch case's) and vi_bank (the bank whose
+    loads lose more after the late Y write)."""
+    points = {pt: recs[("bus-vi", pt)] for pt in ("base", "vvideo-outside", "vvideo-outside-late")}
+    points.update((pt, recs[("bus-vi-latch", pt)]) for pt in ("y-late-bank2", "y-late-bank3"))
+    got = bench_report.derive("vi-frame-latch", points)
+    return {("bus-derived", "vi-latch"): {"fetches": got["vvideo-outside-late"]["fetches"],
+                                          "vi_bank": got["y-late-bank2"]["vi_bank"]}}
+
+
+DERIVED = [tex, zmem, cpu2, bus, vi_latch]
