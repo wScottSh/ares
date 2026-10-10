@@ -582,7 +582,7 @@ STATUS_MEANING = {
     "fail": "at least one check failed; the detail in Check results gives the residual",
     "fit only": "only the checks the value was fitted to passed (verify-is-fit)",
     "consistent-only": "no check failed, but a check passed its consistent rule while the model's phase mean missed the band, "
-                       "or a bench check's verdict differs between code-layout pads: some phase or layout of the model agrees "
+                       "or a bench or hardware check's verdict differs between code-layout pads: some phase or layout of the model agrees "
                        "with the hardware number, not every one does. Consistent with the hardware, not agreement",
     "pass-conditional": "no check failed, but a check passes only through a model choice with no hardware reference (the "
                         "issue named); it is not independent hardware agreement until the issue resolves",
@@ -632,7 +632,9 @@ def render_spec(rows, checks, found, reports):
         "passes its consistent rule (the hardware band overlaps the model's phase range) but the model's mean over the boot "
         "delays misses the band: consistent with the hardware number, not agreement. A bench check is also consistent-only "
         "when its verdict is not the same at every code-layout pad (8 pads, one 32 B I-cache line); its detail names each "
-        "pad's verdict. Every bench range is joint over the pads and boot delays. Its detail gives each consistent "
+        "pad's verdict. Every bench range is joint over the pads and boot delays. A hardware check follows the same layout "
+        "rule: each pad's console capture is compared with the fork's run at that pad, and a question whose fork values "
+        "differ by pad fails until the console has run every pad. A bench check's detail gives each consistent "
         "point's acceptance window (half the band plus half the model's phase range, as a % of the hardware number) and the "
         "mean rule's verdict. A check is pass-conditional:#<issue> when it passes only through a model choice with no "
         "hardware reference, tracked in that issue. A Thar0 check passes when the model's count lies inside the console's minimum..maximum "
@@ -908,7 +910,7 @@ def render_closure(root, rows, checks, found, reports):
     out += ["", "## Checks that pass only weakly", "",
             "Check results: " + ", ".join(f"{n} {k}" for k, n in sorted(results_count.items())) + ". "
             "A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean "
-            "misses the band, or a bench check's verdict differs between code-layout pads, so it is consistent with the hardware "
+            "misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware "
             "number, not agreement. pass-conditional:#<issue>: the "
             "pass rests on a model choice with no hardware reference.", ""]
     if weak:
