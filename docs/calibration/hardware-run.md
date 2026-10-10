@@ -97,23 +97,23 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 <!-- From a run.sh output: tools/n64-timing/calibration/kit.py --table RUN_DIR -->
 | # | ROM | Runs for | Log | Film it? | Answers |
 |---|---|---|---|---|---|
-| 1 | `kit-cpu` | 0.2 s | 8.9 KB | no | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
-| 2 | `kit-vi` | 3.6 s | 1.8 KB | yes | `vi-first-line`, `count-per-field` |
-| 3 | `kit-dma` | 1.2 s | 15.6 KB | no | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end` |
-| 4 | `kit-hpos` | 0.2 s | 6.6 KB | no | `vi-cpu-contention` |
-| 5 | `kit-rdp` | 0.2 s | 8.2 KB | no | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
-| 6 | `kit-span` | 0.2 s | 9.1 KB | no | `color-half-16bpp`, `span-width` |
-| 7 | `kit-noise` | 0.2 s | 29.5 KB | no | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
-| 8 | `rdpstat-1prim` | 0.2 s | 1.0 KB | yes | `stale-read` |
+| 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
+| 2 | `kit-vi` | 3.6 s | 1.9 KB | yes | `vi-first-line`, `count-per-field` |
+| 3 | `kit-dma` | 1.2 s | 15.7 KB | no | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end` |
+| 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | `vi-cpu-contention` |
+| 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
+| 6 | `kit-span` | 0.2 s | 9.2 KB | no | `color-half-16bpp`, `span-width` |
+| 7 | `kit-noise` | 0.2 s | 29.6 KB | no | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
+| 8 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | `stale-read` |
 | 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | `dpc-sequencing` |
-| 10 | `rdpstat-systemtest` | 0.2 s | 0.8 KB | yes | `systemtest-rdp` |
-| 11 | `rdpstat-unsynced` | 0.2 s | 0.6 KB | yes | `unsynced-attrs` |
+| 10 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | `systemtest-rdp` |
+| 11 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | `unsynced-attrs` |
 | 12 | `nemu64-timing` | 0.8 s | 25.9 KB | no | `nemu64-console` |
-| 13 | `nemu64-cycle` | 0.2 s | 1.4 KB | yes | `nemu64-cycle-console` |
-| 14 | `nemu64-cop0hazard` | 0.2 s | 0.7 KB | yes | `nemu64-cop0hazard-console` |
-| 15 | `kit-tex` | 0.3 s | 16.2 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
-| 16 | `kit-zmem` | 1.3 s | 20.3 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 17 | `kit-cpu2` | 0.2 s | 17.7 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | `nemu64-cycle-console` |
+| 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | `nemu64-cop0hazard-console` |
+| 15 | `kit-tex` | 0.3 s | 16.3 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
+| 16 | `kit-zmem` | 1.3 s | 20.4 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
+| 17 | `kit-cpu2` | 0.2 s | 17.8 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
 | 18 | `kit-bus` | 1.5 s | 10.6 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
 
 For each ROM:
