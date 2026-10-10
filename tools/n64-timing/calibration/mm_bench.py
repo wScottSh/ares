@@ -22,8 +22,8 @@ import sys
 from pathlib import Path
 
 REPO = "wScottSh/mm-decomp-60fps"
-#Head of mm-decomp-60fps bench/filesel (the file-select scenes and DPC counters), while its PR is open.
-COMMIT = "32f6c0a2d53cf7ebe39c195e26a76096241e7392"
+#mm-decomp-60fps main at the merge of #2 (bench/filesel: the file-select scenes and DPC counters).
+COMMIT = "bff939cac321daee240f2d015433c44863d8eca6"
 BASE_SHA256 = "7ace785964e320052e337768fd891b6290988e6c9ba597a3e78b31cf96dfea72"
 #bench.py's defaults at COMMIT: 120 warmup frames, 600 measured (BENCH_MAX_FRAMES), seed 0x12345678.
 WARMUP, FRAMES, SEED = 120, 600, 0x12345678
