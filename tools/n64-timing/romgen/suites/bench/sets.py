@@ -3,6 +3,9 @@ from dataclasses import dataclass, field
 
 from ... import runtime
 from . import asm, benches, phases
+from ..calib import bus
+
+EXTRA_ASM = {"vi-frame-latch": [bus.ASM]}
 
 
 @dataclass
@@ -16,6 +19,6 @@ class SetDef:
     consts: dict = field(default_factory=dict)
 
 
-SETS = [SetDef(name, f"boot-{k}/bench-{name}", "Bench", f"(bench={name})", build, [asm.ASM],
+SETS = [SetDef(name, f"boot-{k}/bench-{name}", "Bench", f"(bench={name})", build, [asm.ASM] + EXTRA_ASM.get(name, []),
                {"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k})
         for k in phases.DELAYS for name, build in benches.ROMS.items()]

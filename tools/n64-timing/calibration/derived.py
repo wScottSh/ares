@@ -204,6 +204,8 @@ def bus(recs):
         f = recs[("bus-refresh", f"bank{bank}")]
         out[f"refresh-bank{bank}-hits"] = f["slow"]
         out[f"refresh-bank{bank}-excess"] = f["lat_max"] - f["lat_min"]
+    out["vi-vvideo-outside-late-minus-base-loads-lost"] = g("bus-vi", "base", "n") - g("bus-vi", "vvideo-outside-late", "n")
+    out["vi-y-late-bank3-minus-bank2"] = g("bus-vi-latch", "y-late-bank3", "n") - g("bus-vi-latch", "y-late-bank2", "n")
     v = recs[("bus-vintr", "v-intr")]
     out["vintr-mean-lag"] = round((v["sum"] - v["min"] - v["max"]) / (v["reps"] - 2) - v["bias"], 1)
     return {("bus-derived", "all"): out}
