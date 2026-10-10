@@ -32,7 +32,7 @@ sha256sum "$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z6
 
 That path is the default `romgen/build.py --ipl3` reads. The file is not committed to this repository.
 
-Allow about two hours for the required runs and three for the recommended ones. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
+Allow about six and a half hours for the required runs and seven and a half for the recommended ones. About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
 
 ## Build the kit
 
@@ -42,15 +42,16 @@ Allow about two hours for the required runs and three for the recommended ones. 
    tools/n64-timing/calibration/run.sh
    ```
 
-   This builds every kit ROM and runs each one on the fork: the walked kit ROMs at 8 boot delays, `kit-dma` also with four controllers, the romgen Thar0 port, and n64-systembench when its ROM is built (see n64-systembench under [External ROMs](#external-roms); without it `hw:systembench` reads `missing`). That run is the model side of each comparison. It writes `$N64_TIMING_HOME/results/calib/` and takes about one minute. It fails if any ROM's cartridge SRAM copy differs from its ISViewer copy, if a ROM left the PI domain-1 timing changed, or if any wait gave up (see [A hang](#a-hang)).
+   This builds every kit ROM at 8 layout pads and runs each one on the fork: the walked kit ROMs at 8 boot delays per pad, `kit-dma` also with four controllers, the romgen Thar0 port, and n64-systembench when its ROM is built (see n64-systembench under [External ROMs](#external-roms); without it `hw:systembench` reads `missing`). That run is the model side of each comparison. It writes `$N64_TIMING_HOME/results/calib/` and takes about five minutes on a loaded 32-core host. It fails if any ROM's cartridge SRAM copy differs from its ISViewer copy, if a ROM left the PI domain-1 timing changed, or if any wait gave up (see [A hang](#a-hang)).
 
 2. Copy the console builds to the flashcart's SD card:
 
    - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-tex`, `kit-zmem`, `kit-noise`).
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`.
+   - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
 
-   Each ROM prints a first line `#kit rom=<id> sha=<commit> rom_sha256=<hash> fmt=1 build=<boot-K or single>`. `sha` is the commit you built from. `rom_sha256` identifies the ROM's bytes: it is the SHA-256 of the `.z64` file with the `sha` and `rom_sha256` values set to zeros (`romgen/hwout.py`), so a later commit that does not change the kit gives the same value. The zeroed fields keep their length, so a `sha` of another length moves the code after it and changes the value. A build from a tree with uncommitted changes under `tools/n64-timing` (`sha` ends in `-dirty`) or from outside a git checkout (`sha=unknown`) does not match a clean build of the same commit. Build the console ROMs and the fork's model run from clean checkouts of the same commit. Ingestion compares each log's `rom_sha256` with the fork's run of the same build and refuses the capture if they differ. Copy the ROMs from the same `run.sh` output that ingestion uses. If you run `run.sh` again after a change to the kit, copy the ROMs again.
+   Each ROM prints a first line `#kit rom=<id> sha=<commit> rom_sha256=<hash> fmt=1 build=<boot-K or single>`, with `p<P>/` before the build for layout pad P. `sha` is the commit you built from. `rom_sha256` identifies the ROM's bytes: it is the SHA-256 of the `.z64` file with the `sha` and `rom_sha256` values set to zeros (`romgen/hwout.py`), so a later commit that does not change the kit gives the same value. The zeroed fields keep their length, so a `sha` of another length moves the code after it and changes the value. A build from a tree with uncommitted changes under `tools/n64-timing` (`sha` ends in `-dirty`) or from outside a git checkout (`sha=unknown`) does not match a clean build of the same commit. Build the console ROMs and the fork's model run from clean checkouts of the same commit. Ingestion compares each log's `rom_sha256` with the fork's run of the same build and refuses the capture if they differ. Copy the ROMs from the same `run.sh` output that ingestion uses. If you run `run.sh` again after a change to the kit, copy the ROMs again.
 
 ## Set up the flashcart
 
@@ -88,34 +89,34 @@ Each kit ROM is compared with the fork's run from power-on. A Reset is a warm bo
 
 - Turn the console off and on before every ROM. Wait 5 seconds while it is off.
 - On the ED64, press Reset first (it writes SRAM to the SD card only then), return to the menu, and then turn the console off. On the SC64 with `upload`, turn the console off, upload the next ROM, start the listener and turn it on.
-- The one exception is the reset run in step 3 of [Repeat runs](#repeat-runs). It is the only capture taken after Reset.
+- The one exception is the reset run in step 3 of [Repeat runs](#repeat-runs), once for each layout pad. Those are the only captures taken after Reset.
 
 ### Order
 
 Run the ROMs in this order. The times are the fork's emulated time from boot to the `#kit-end` line. The console's time is the same to within its boot time. Every log fits the 32 KiB SRAM.
 
 <!-- From a run.sh output: tools/n64-timing/calibration/kit.py --table RUN_DIR -->
-| # | ROM | Runs for | Log | Film it? | Answers |
-|---|---|---|---|---|---|
-| 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
-| 2 | `kit-vi` | 4.2 s | 3.3 KB | no | `vi-first-line`, `count-per-field`, `vi-mid-field-blank` |
-| 3 | `kit-dma` | 1.2 s | 16.8 KB | no | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end`, `sp-dma-rsp` |
-| 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | `vi-cpu-contention` |
-| 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
-| 6 | `kit-span` | 0.2 s | 9.2 KB | no | `color-half-16bpp`, `span-width` |
-| 7 | `kit-noise` | 0.2 s | 29.6 KB | no | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
-| 8 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | `stale-read` |
-| 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | `dpc-sequencing` |
-| 10 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | `systemtest-rdp` |
-| 11 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | `unsynced-attrs` |
-| 12 | `nemu64-timing` | 0.8 s | 26.7 KB | no | `nemu64-console` |
-| 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | `nemu64-cycle-console` |
-| 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | `nemu64-cop0hazard-console` |
-| 15 | `kit-tex` | 0.3 s | 16.3 KB | no | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
-| 16 | `kit-zmem` | 1.8 s | 29.2 KB | no | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 17 | `kit-cpu2` | 0.2 s | 18.9 KB | no | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 18 | `kit-bus` | 1.5 s | 10.6 KB | no | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
-| 19 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | `cpu-llsc-console` |
+| # | ROM | Runs for | Log | Film it? | Layout pads | Answers |
+|---|---|---|---|---|---|---|
+| 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | 0-7 | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
+| 2 | `kit-vi` | 4.2 s | 3.4 KB | no | 0-7 | `vi-first-line`, `count-per-field`, `vi-mid-field-blank` |
+| 3 | `kit-dma` | 1.2 s | 16.8 KB | no | 0-7 | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end`, `sp-dma-rsp` |
+| 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | 0-7 | `vi-cpu-contention` |
+| 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | 0-7 | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
+| 6 | `kit-span` | 0.2 s | 9.2 KB | no | 0-7 | `color-half-16bpp`, `span-width` |
+| 7 | `kit-noise` | 0.2 s | 29.6 KB | no | 0-7 | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
+| 8 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | 0 | `stale-read` |
+| 9 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
+| 10 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
+| 11 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
+| 12 | `nemu64-timing` | 0.8 s | 26.7 KB | no | 0 | `nemu64-console` |
+| 13 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
+| 14 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
+| 15 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
+| 16 | `kit-zmem` | 1.8 s | 29.2 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
+| 17 | `kit-cpu2` | 0.2 s | 18.9 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 18 | `kit-bus` | 1.5 s | 10.6 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
+| 19 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
 
 For each ROM:
 
@@ -125,9 +126,19 @@ For each ROM:
 4. Check that the log ends with `#kit-end rom=<id> bytes=<n> fnv=<hash>`. On the SC64 it is the last line of the listener output. On the screen it is on the last page.
 5. On the ED64, press Reset and return to the menu, so the SRAM reaches the SD card. On the SC64, download the save.
 
+### Layout pads
+
+A kit ROM's timing can depend on where its code sits against the CPU's 32-byte instruction cache lines. Moving the code by 76 bytes changed 8 of 72 kit verdicts on the fork (issue #100). So `run.sh` builds every kit ROM at 8 layout pads. Pad P inserts P instructions at boot, which moves every later instruction by 4P bytes. Pads 0 to 7 cover one cache line. Pad 0 is the build in `roms/boot-1/`.
+
+A question is layout-sensitive when the fork's values for it differ between pads. `tools/n64-timing/calibration/kit.py --layout RUN_DIR` lists each question, how many of its values differ by pad, and the value whose range moves most. In the table above, a ROM with a layout-sensitive question has `0-7` in its Layout pads column.
+
+For each of those ROMs, run the build for each pad 1 to 7 once from a power cycle, in addition to the pad 0 runs. Do the same for the `kit-dma` four-controller run and the `kit-noise` reset run (see [Repeat runs](#repeat-runs)) at each pad. That is 91 more runs: 77 for the 11 ROMs, 7 for `kit-dma` with four controllers, and 7 Reset runs of `kit-noise`. At about three minutes for each power cycle, load and copy, they add about four and a half hours. The logs are the same size as pad 0's, and each fits the 32 KiB SRAM. Together they add about 1.5 MB to the capture.
+
+Ingestion reads each log's pad from its first line. It compares each pad's captures with the fork's run at the same pad, under the question's rule. A question's verdict holds only if it is the same at every pad; otherwise the result is `consistent-only`, and the detail names each pad's verdict. This is the bench layout rule (docs/design/green-plan.md section 3, Bench layout pads). A layout-sensitive question whose capture lacks a pad fails, as a capture that lacks a point does. A question that is not layout-sensitive is judged from the pads its captures hold.
+
 ### kit-dma with four controllers
 
-Run `kit-dma` twice: once with one controller in port 1 and nothing else, and once with four controllers in ports 1-4. Name the second capture `kit-dma.pads4.isviewer.log` (or `.pads4.srm`). Ingestion reads which ports answered from the log itself and compares each capture with the fork's run with the same controllers. The two setups answer `joybus-pads`, which decides the 2J-4J joybus fit.
+Run `kit-dma` twice: once with one controller in port 1 and nothing else, and once with four controllers in ports 1-4. Name the second capture `kit-dma.pads4.isviewer.log` (or `.pads4.srm`), and `kit-dma.pads4.p<P>.isviewer.log` for layout pad P. Ingestion reads which ports answered from the log itself and compares each capture with the fork's run with the same controllers. The two setups answer `joybus-pads`, which decides the 2J-4J joybus fit.
 
 ### A hang
 
@@ -144,9 +155,9 @@ If a ROM hangs or logs a nonzero `#kit-timeout`, turn the console off and run it
 
 A single run is one point on the console's boot phase. The fork's side spans 8 boot delays, and a pass needs the console's values to overlap the fork's range (preference 27).
 
-1. Required: run every ROM in the table twice, each from a power cycle. Name the second capture `<rom>.run2.isviewer.log` and so on; ingestion keeps every log and takes the range over them.
+1. Required: run every ROM in the table twice, each from a power cycle. These are the pad 0 builds. The layout-pad builds (see [Layout pads](#layout-pads)) run once each. Name the second capture `<rom>.run2.isviewer.log` and so on; ingestion keeps every log and takes the range over them.
 2. Recommended: run the seven other boot-delay builds of `kit-cpu`, `kit-dma` and `kit-vi` once each, from a power cycle. These ROMs hold the poll-phase and VI-start points, where one boot phase can miss a narrow dip (issue #77 shows one at K = 1300-1316).
-3. Required, once: after `kit-noise` finishes from a power cycle, press Reset and run `kit-noise` again without turning the console off. Name that capture `kit-noise.reset.isviewer.log` (or `.reset.srm`). It answers `noise-reset`: does a reset reload the noise LFSR's power-on state.
+3. Required, once for each layout pad: after `kit-noise` finishes from a power cycle, press Reset and run the same `kit-noise` build again without turning the console off. Name that capture `kit-noise.reset.isviewer.log` (or `.reset.srm`), and `kit-noise.reset.p<P>.isviewer.log` for pad P. It answers `noise-reset`: does a reset reload the noise LFSR's power-on state.
 
 ### External ROMs
 
@@ -197,8 +208,8 @@ tools/n64-timing/calibration/ingest.py capture/ --id console-<date>
 The command does these things:
 
 1. It parses every file and prints one line for each log, with the ROM, the record count, and `INCOMPLETE` when the footer is missing or does not match. It prints one line for each external ROM's files. Before it stores anything, it compares each kit log's `rom_sha256` with the fork's log of the same ROM and build. If one differs, the console ran a different ROM from the fork's. The command then stops, stores nothing, and prints both values and the commit that built the console's ROM. To continue, run `run.sh` at that commit and give its output to `--model`, or run the kit again on the console with the current ROMs.
-2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, the ROM's `rom_sha256`, `RI_REFRESH`, the boot (power-on or reset) and the controller ports that answered.
-3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures against the fork's range over its boot delays. A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
+2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, the ROM's `rom_sha256`, `RI_REFRESH`, the boot (power-on or reset), the controller ports that answered and the build (boot delay and layout pad).
+3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures at a layout pad against the fork's range over its boot delays at that pad (see [Layout pads](#layout-pads)). A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
 
 ### Latency histograms

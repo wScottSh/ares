@@ -16,7 +16,8 @@ The script builds `n64-run` with `../build.sh`, then runs `mmbench.py`. Pass the
 |---|---|
 | `--out DIR` | Result directory. Default `$N64_TIMING_HOME/mmbench/results/latest`. |
 | `--scenes LIST` | Comma-separated subset of `title,filesel,filesel-named,filesel-options,filesel-rotate,sct,field`. Default all. |
-| `--jobs N` | Parallel runs. Default one per scene. |
+| `--jobs N` | Parallel runs. Default one per scene and phase. |
+| `--phases N` | Runs `filesel`, `filesel-named` and `filesel-options` at phases 0 to N-1 (see [Phase](#phase)). Phase 0 is `DIR`; phase k is `DIR/phase-<k>`, a result directory of its own. Default 5. `--phases 1` runs phase 0 only, and the file-select check then reports its rows missing. |
 | `--check-determinism` | Runs the bench twice into `DIR/run1` and `DIR/run2` and fails unless every output except `wall.tsv` and `rdp.txt` is byte-identical. `--shots` makes `script.txt` differ too (the shot paths name the run directory), so do not combine the two. |
 | `--shots` | Saves `start.ppm` and `end.ppm` per scene from the RDRAM image the VI samples. Use it only to check the scenes visually. |
 
@@ -43,6 +44,16 @@ The file-select routes read `FileSelectState` at its fixed address, `0x803E6B20`
 The `sct` loops keep Link in the plaza. A straight walk reaches an NPC that opens a textbox and stops Link.
 
 All addresses are for NTSC-U 1.0 and come from zeldaret/mm `56fa21dd` (`tools/disasm/n64-us/variables.txt` and the struct layouts in `include/`). `mmbench.py` lists them with their sources.
+
+## Phase
+
+One run of a scene is one point on a phase sawtooth (`docs/design/green-plan.md`, section 3, "MM file select"). The file-select scenes therefore run at several phases. Phase k waits `k * 3` fields before the Start that opens file select, so the scene starts 3k fields later against the free-running audio and VI. Phase 0 is the route above, unchanged.
+
+The step is one title game frame. The title runs at 3 fields per game frame (`update_divisor` 3 in the `title` window), so the game reads a press held 1 or 2 fields longer on the same game frame. Waits of 0, 1 and 2 fields gave byte-identical summaries, and so did 3 to 5 and 6 to 8 (measured, a 12-field pilot).
+
+A pilot of 16 steps (48 fields, on master `3b6b910ed`) found no period of 15 steps or fewer: only step 13 repeats an earlier step's game-frame counts (step 5's) in both scenes, and step 0 and step 8 differ. So the sweep samples the entry phase rather than covering one period. The empty screen's 2-field frames sit 530 to 570 fields after the window starts at every step; only their count moves (5 to 8). Over the 16 steps, the `filesel` mean ran 1.0113 to 1.0181 (median 1.0124), `filesel-named` 1.6836 to 1.7057 (median 1.69365), and `filesel-options` 1.0000 at every step. Five steps are the fewest odd count whose range holds the empty screen's whole 16-step range, and their medians are 1.0135 and 1.6932. The named screen's 16-step minimum, 1.6836, lies 0.0048 below the five-step one; that row is 0.2 below its 1.90 floor at every step.
+
+`filesel-rotate` runs at phase 0 only. Its row is secondary and no check in `checks.tsv` reads it.
 
 ## Rendering
 
@@ -83,7 +94,7 @@ A rotation frame's length is measured on the update side. `FileSelect_RotateToOp
 python tools/n64-timing/mmbench/filesel_check.py RESULTS_DIR
 ```
 
-`filesel_check.py` evaluates the acceptance table at the end of `docs/research/mm-filesel-slowdown.md` (branch `research/mm-filesel-slowdown`) against one bench result directory (`DIR`, or `DIR/run1` after `--check-determinism`):
+`filesel_check.py` evaluates the acceptance table at the end of `docs/research/mm-filesel-slowdown.md` (branch `research/mm-filesel-slowdown`) against one bench result directory (`DIR`, or `DIR/run1` after `--check-determinism`). Each idle row takes the median, over the phases in `DIR` and `DIR/phase-<k>`, of each quantity its pass rule reads (the mean, and the share of game frames at the named length), applies the rule to those medians, and prints the minimum and maximum beside each. A run that lacks any phase of the sweep leaves the row missing.
 
 | Row | Scene | Pass | Rank |
 |---|---|---|---|

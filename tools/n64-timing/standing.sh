@@ -67,7 +67,7 @@ for suite in nemu64 bench systembench systembench-845635c rdpstat snapper noise 
 done
 (cd "$n64_build" && ctest > "$out/ctest.txt" 2>&1)
 (cd "$n64_repo" && "$PYTHON" tools/n64-timing/behaviors.py --check && "$PYTHON" tools/n64-timing/behaviors.py --self-test \
-  && "$PYTHON" tools/n64-timing/lint-literals.py && "$PYTHON" tools/n64-timing/pidma-replay.py --self-test \
+  && "$PYTHON" tools/n64-timing/lint-literals.py && "$PYTHON" tools/n64-timing/pidma-replay.py --self-test && "$PYTHON" tools/n64-timing/mmbench/filesel_check.py --self-test \
   && "$PYTHON" tools/n64-timing/systembench/report.py --self-test \
   && "$PYTHON" tools/n64-timing/calibration/kit.py --self-test \
   && (cd tools/n64-timing && "$PYTHON" -m romgen.suites.nemu64.phase --self-test)) > "$out/behaviors.txt" 2>&1

@@ -215,14 +215,50 @@ def read_logs(paths):
 
 #The fork runs per controller setup the joybus-setup probe can report (calibration/run.sh).
 PAD_SETUPS = {None: "", 0b0001: "", 0b1111: "pads-4/"}
+LAYOUT_BUILD = re.compile(r"^p(\d+)/")
 
 
-def model_logs(run_dir, rom, pads=None):
-    """The fork's logs of one kit ROM in a calibration/run.sh output, one per boot delay, run with the
-    controllers whose ports answered as `pads` did."""
-    run_dir = Path(run_dir) / PAD_SETUPS[pads]
+def layout(log):
+    """The layout pad a kit log's ROM was built at (build.py --layout-pad): build p<P>/..., else 0."""
+    m = LAYOUT_BUILD.match(log.header.get("build", ""))
+    return int(m.group(1)) if m else 0
+
+
+def model_logs(run_dir, rom, pads=None, pad=0):
+    """The fork's logs of one kit ROM in a calibration/run.sh output, one per boot delay, at layout pad
+    `pad`, run with the controllers whose ports answered as `pads` did."""
+    run_dir = Path(run_dir) / PAD_SETUPS[pads] / (f"p{pad}" if pad else "")
     paths = sorted(run_dir.glob(f"boot-*/{rom}.txt")) + sorted(run_dir.glob(f"single/{rom}.txt"))
     return [Log(p.read_bytes()) for p in paths]
+
+
+def model_layouts(run_dir, rom, pads=None):
+    """{layout pad: the fork's complete logs at that pad} for one kit ROM in a calibration/run.sh output."""
+    base = Path(run_dir) / PAD_SETUPS[pads]
+    found = [0] + sorted(int(d.name[1:]) for d in base.glob("p*") if re.fullmatch(r"p\d+", d.name))
+    out = {pad: [m for m in model_logs(run_dir, rom, pads, pad) if m.complete] for pad in found}
+    return {pad: logs for pad, logs in out.items() if logs}
+
+
+def spread(question, logs):
+    """{(rom/point, metric): what the question's rule compares} over logs: the value set for an exact
+    rule, else the range lo..hi."""
+    metrics, rules = question["metric"].split(), question["rule"].split()
+    rule_of = dict(zip(metrics, rules if len(rules) > 1 else rules * len(metrics)))
+    out = {}
+    for pattern in question["points"].split():
+        for metric in metrics:
+            for key, vs in values(logs, pattern, metric).items():
+                out[(key, metric)] = tuple(sorted(set(vs), key=str)) if rule_of[metric] == "exact" else (min(vs), max(vs))
+    return out
+
+
+def layout_moved(question, model):
+    """(the compared values whose spread differs by layout pad, {pad: spread}) over the fork's
+    {layout pad: logs}. A question with any such value is layout-sensitive."""
+    spreads = {pad: spread(question, logs) for pad, logs in model.items()}
+    keys = sorted(set().union(*spreads.values()))
+    return [k for k in keys if len({spreads[pad].get(k) for pad in spreads}) > 1], spreads
 
 
 def values(logs, pattern, metric):
@@ -478,15 +514,43 @@ def result_from(root, model_dir, qid):
         group = [log for log in logs if log.pads == pads]
         if pads not in PAD_SETUPS:
             return "fail", f"{kit}: controller ports {pads:04b} answered; the fork runs 1 pad (0001) or 4 (1111)"
-        model = [m for m in model_logs(model_dir, kit, pads) if m.complete]
+        model = model_layouts(model_dir, kit, pads)
         if not model:
             return "missing", f"no fork run of {kit} in {model_dir}/{PAD_SETUPS[pads]}; run tools/n64-timing/calibration/run.sh there"
-        res, detail = compare(q, group, model)
+        res, detail = compare_layouts(q, group, model)
         results.append(res)
         setup = "" if pads is None else f"{bin(pads).count('1')} pads: "
-        details.append(f"{setup}{detail}, {len(group)} console and {len(model)} fork logs")
-    res = "fail" if "fail" in results else "pass"
+        details.append(f"{setup}{detail}, {len(group)} console and {sum(map(len, model.values()))} fork logs")
+    res = next((r for r in ("missing", "fail", "consistent-only") if r in results), "pass")
     return res, f"{'; '.join(details)}; capture {','.join(ids)}"
+
+
+def compare_layouts(q, hw, model):
+    """(result, detail) of the console's logs against the fork's {layout pad: logs}, each pad's logs
+    against the fork's at the same pad, under the bench layout-pad rule (docs/design/green-plan.md
+    section 3, bench report.py layout_verdict): a verdict holds only if it is the same at every pad,
+    else consistent-only. A question whose fork values differ by pad (layout-sensitive) needs a
+    capture at every pad the fork ran; one that lacks a pad fails, as one that lacks a point does."""
+    by_pad = {}
+    for log in hw:
+        by_pad.setdefault(layout(log), []).append(log)
+    unknown = sorted(set(by_pad) - set(model))
+    if unknown:
+        return "missing", f"no fork run at layout pad {unknown[0]}; run tools/n64-timing/calibration/run.sh"
+    sensitive = bool(layout_moved(q, model)[0])
+    lacking = sorted(set(model) - set(by_pad))
+    if sensitive and lacking:
+        return "fail", (f"layout-sensitive (the fork's values differ by layout pad) and the capture lacks pads "
+                        f"{','.join(map(str, lacking))} of {len(model)}; run every pad build (hardware-run.md, Layout pads)")
+    verdicts = {pad: compare(q, logs, model[pad]) for pad, logs in sorted(by_pad.items())}
+    if len(verdicts) == 1:
+        return next(iter(verdicts.values()))
+    res = bench_report.layout_verdict([r for r, _ in verdicts.values()])
+    first = {}
+    for pad, (r, d) in verdicts.items():
+        first.setdefault(r, f"pad {pad}: {d}")
+    return res, (f"layout pads {' '.join(f'{pad}:{r}' for pad, (r, _) in verdicts.items())}; "
+                 + "; ".join(first.values()))
 
 
 def verify_run(run_dir):
@@ -531,9 +595,9 @@ def histograms(log):
 
 
 def sample_log(body="#bench dcb sw-lw pairs=16 reps=8 min=24 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n",
-               rom_sha256="a" * 64, rom="kit-cpu"):
+               rom_sha256="a" * 64, rom="kit-cpu", build="boot-1"):
     field = f" rom_sha256={rom_sha256}" if rom_sha256 else ""
-    text = f"#kit rom={rom} sha=0{field} fmt=1 build=boot-1 ri_mode=0xe\n{body}".encode()
+    text = f"#kit rom={rom} sha=0{field} fmt=1 build={build} ri_mode=0xe\n{body}".encode()
     return text + f"#kit-end rom={rom} bytes={len(text)} fnv={fnv(text):08x}\n".encode()
 
 
@@ -589,6 +653,21 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     cases += compares
+
+    def at(pad, sw_lw=24):
+        return Log(sample_log(f"#bench dcb sw-lw pairs=16 reps=8 min={sw_lw} max=101\n", build=f"p{pad}/boot-1" if pad else "boot-1"))
+    flat, moved = {0: [at(0)], 1: [at(1)]}, {0: [at(0)], 1: [at(1, 30)]}
+    layouts = [("layout pads: the fork's values agree at every pad, a pad-0 capture keeps its verdict", [at(0)], flat, "pass"),
+               ("layout pads: the fork's values differ by pad, a pad-0 capture lacks pad 1", [at(0)], moved, "fail"),
+               ("layout pads: a capture at every pad agrees with the fork at each", [at(0), at(1, 30)], moved, "pass"),
+               ("layout pads: pass at pad 0, fail at pad 1 reads consistent-only", [at(0), at(1)], moved, "consistent-only"),
+               ("layout pads: a capture at a pad the fork did not run", [at(0), at(2)], flat, "missing")]
+    for name, hw, model, want in layouts:
+        got, detail = compare_layouts(q, hw, model)
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:100]})")
+    cases += layouts
     same, other = "a" * 64, "b" * 64
     q = {"id": "t", "kit": "kit-cpu", "points": "dcb/*", "metric": "min", "rule": "range:abs:1", "boot": "power-on"}
     roms = [("a capture of the ROM the fork ran", same, "pass"),
@@ -689,30 +768,72 @@ def self_test():
     return failed
 
 
+def layout_rows(run_dir, root=ROOT):
+    """(question, controller setup, values that differ by pad, all compared values, pads whose fork logs
+    read as a capture fail against pad 0's, {pad: spread}) for every kit-ROM question in a
+    calibration/run.sh output."""
+    for q in questions(root):
+        if q["kit"] not in KIT_ROMS:
+            continue
+        for pads in [None, 0b1111] if q["kit"] == "kit-dma" else [None]:
+            model = model_layouts(run_dir, q["kit"], pads)
+            moved, spreads = layout_moved(q, model)
+            flips = [pad for pad in model if pad and compare(q, model[pad], model[0])[0] != "pass"]
+            yield q, pads, moved, sorted(set().union(*spreads.values())), flips, spreads
+
+
+def layout_table(run_dir, root=ROOT):
+    """Each kit question's layout sensitivity in a calibration/run.sh output: how many of its compared
+    values differ by layout pad, the pads at which the fork's own logs, read as a capture, fail against
+    pad 0's (a verdict a pad-0 console run could not see), and the value whose range moves most."""
+    out = ["| Question | Kit | Controllers | Layout-sensitive | Values that differ by pad | Pads whose fork logs fail against pad 0 | Widest: value, pad 0, all pads |",
+           "|---|---|---|---|---|---|---|"]
+    numeric = lambda vs: vs and all(isinstance(v, (int, float)) for v in vs)  # noqa: E731
+    show = lambda vs: f"{min(vs)}..{max(vs)}" if numeric(vs) else f"{len(set(vs))} distinct"  # noqa: E731
+    for q, pads, moved, keys, flips, spreads in layout_rows(run_dir, root):
+        widest = "-"
+        if moved:
+            joint = lambda k, among=spreads: [v for pad in among for v in spreads[pad].get(k, ())]  # noqa: E731
+            width = lambda vs: max(vs) - min(vs) if numeric(vs) else len(set(vs))  # noqa: E731
+            k = max(moved, key=lambda k: (width(joint(k)) - width(joint(k, [0]) or [0]), k))
+            widest = f"{k[0]} {k[1]}: {show(joint(k, [0]))}, {show(joint(k))}"
+        out.append(f"| `{q['id']}` | `{q['kit']}` | {4 if pads else 1} | {'yes' if moved else 'no'} | {len(moved)} of {len(keys)} | "
+                   f"{','.join(map(str, flips)) or 'none'} | {widest} |")
+    return "\n".join(out)
+
+
 PHOTO_BYTES = 2048
 
 
 def run_table(run_dir, root=ROOT):
     """hardware-run.md's run-order table from a calibration/run.sh output: each console build's fork
-    run time, log size, whether it is short enough to film, and the questions it answers."""
+    run time, log size, whether it is short enough to film, the layout pads the console runs it at
+    (every pad when one of its questions is layout-sensitive, see compare_layouts), and the questions
+    it answers."""
     run_dir = Path(run_dir)
     asks = {}
     for q in questions(root):
         asks.setdefault(q["kit"], []).append(q["id"])
-    out = ["| # | ROM | Runs for | Log | Film it? | Answers |", "|---|---|---|---|---|---|"]
+    padded = {q["kit"] for q, _, moved, *_ in layout_rows(run_dir, root) if moved}
+    pads = sorted(model_layouts(run_dir, "kit-cpu"))
+    out = ["| # | ROM | Runs for | Log | Film it? | Layout pads | Answers |", "|---|---|---|---|---|---|---|"]
     for n, (rom, (_, _, walks)) in enumerate(KIT_ROMS.items(), 1):
         base = run_dir / ("boot-1" if walks else "single") / rom
         err = base.with_suffix(".err").read_text(errors="replace")
         secs = float(re.search(r"emulated_s=([\d.]+)", err).group(1))
         size = len(base.with_suffix(".txt").read_bytes())
+        layouts = f"{pads[0]}-{pads[-1]}" if rom in padded and len(pads) > 1 else "0"
         out.append(f"| {n} | `{rom}` | {secs:.1f} s | {size / 1000:.1f} KB | {'yes' if size <= PHOTO_BYTES else 'no'} | "
-                   f"{', '.join(f'`{q}`' for q in asks.get(rom, []))} |")
+                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, []))} |")
     return "\n".join(out)
 
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--table"]:
         print(run_table(sys.argv[2]))
+        sys.exit(0)
+    if sys.argv[1:2] == ["--layout"]:
+        print(layout_table(sys.argv[2]))
         sys.exit(0)
     if sys.argv[1:2] == ["--hist"] and sys.argv[2:]:
         for path, log in sorted((p, l) for logs in read_logs(sys.argv[2:]).values() for p, l in logs):
@@ -728,4 +849,4 @@ if __name__ == "__main__":
         print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
               file=sys.stderr)
         sys.exit(1 if errs else 0)
-    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --hist LOG... | --self-test")
+    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --layout RUN_DIR | --hist LOG... | --self-test")

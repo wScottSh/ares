@@ -5,6 +5,7 @@ flashcart load measures many questions. build.py always builds this suite with -
 Every line is "#bench <rom> <point> key=value ...", the bench format, so suites/bench/report.py
 derive() reads kit and bench output alike. `N64_CALIB_DELAYS=K,K,...` sets the boot delays of the
 fork's builds (calibration/run.sh walks phase as the bench does); the console build is boot-1.
+`N64_CALIB_PADS=P,P,...` sets the layout pads run.sh builds every kit ROM at (build.py --layout-pad).
 """
 import os
 from dataclasses import dataclass, field
@@ -21,6 +22,8 @@ from ..snapper.cases import UNCACHED, Lists, emit, run_sync
 from . import asm, bus, cpu2, rspdma, tex, zmem
 
 DELAYS = [int(k) for k in os.environ.get("N64_CALIB_DELAYS", "1,165,329,493,657,821,985,1149").split(",")]
+#One 32 B I-cache line of pads, as the bench walks (suites/bench/phases.py PADS).
+PADS = [int(p) for p in os.environ.get("N64_CALIB_PADS", "0,1,2,3,4,5,6,7").split(",")]
 CAL_BUF = 0x005D0000       # bank 5, clear of the bench buffers (SB_BUF 0x5C0000, HPOS 0x5A0000)
 
 
