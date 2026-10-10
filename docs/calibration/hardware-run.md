@@ -50,7 +50,7 @@ Allow about two hours for the required runs and three for the recommended ones. 
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
 
-   Each ROM prints a first line `#kit rom=<id> sha=<commit> fmt=1 build=<boot-K or single>`. The commit must be the one you built from. Ingestion records it.
+   Each ROM prints a first line `#kit rom=<id> sha=<commit> rom_sha256=<hash> fmt=1 build=<boot-K or single>`. `sha` is the commit you built from. `rom_sha256` identifies the ROM's bytes: it is the SHA-256 of the `.z64` file with the `sha` and `rom_sha256` values set to zeros (`romgen/hwout.py`), so a later commit that does not change the kit gives the same value. Ingestion compares each log's `rom_sha256` with the fork's run of the same build and refuses the capture if they differ. Copy the ROMs from the same `run.sh` output that ingestion uses. If you run `run.sh` again after a change to the kit, copy the ROMs again.
 
 ## Set up the flashcart
 
@@ -178,7 +178,7 @@ ingest.py undoes what capture tools add to a log: CRLF or CR line ends (a Window
 
 Use the screen only when neither USB nor SRAM works, and only for the short logs. Each page shows 26 lines for 8 seconds, and the pages loop. A log over about 2 KB is many pages, and one wrong character in the transcription voids it, so for those ROMs fix the USB or SRAM path instead. The table above marks the ROMs short enough to film.
 
-Film one full loop for each ROM. Make sure each frame shows the bottom status line (`<id> page <n>`), so the pages can be ordered. Type the pages into `<rom>.photo.txt`, one screen line per text line, and join the lines that the 38-column screen wrapped.
+Film one full loop for each ROM. Make sure each frame shows the bottom status line (`<id> page <n>`), so the pages can be ordered. Type the pages into `<rom>.photo.txt`, one screen line per text line, and join the lines that the 38-column screen wrapped. Type the 64 characters of `rom_sha256` in the first line exactly: ingestion uses them to identify the ROM.
 
 ## Ingest
 
@@ -190,8 +190,8 @@ tools/n64-timing/calibration/ingest.py capture/ --id console-<date>
 
 The command does these things:
 
-1. It parses every file and prints one line for each log, with the ROM, the record count, and `INCOMPLETE` when the footer is missing or does not match. It prints one line for each external ROM's files.
-2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, `RI_REFRESH`, the boot (power-on or reset) and the controller ports that answered.
+1. It parses every file and prints one line for each log, with the ROM, the record count, and `INCOMPLETE` when the footer is missing or does not match. It prints one line for each external ROM's files. Before it stores anything, it compares each kit log's `rom_sha256` with the fork's log of the same ROM and build. If one differs, the console ran a different ROM from the fork's. The command then stops, stores nothing, and prints both values and the commit that built the console's ROM. To continue, run `run.sh` at that commit and give its output to `--model`, or run the kit again on the console with the current ROMs.
+2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, the ROM's `rom_sha256`, `RI_REFRESH`, the boot (power-on or reset) and the controller ports that answered.
 3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures against the fork's range over its boot delays. A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
 
