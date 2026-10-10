@@ -12,7 +12,8 @@ capture after the Reset button. A file or directory named ext-<rom>* holds an ex
 
 1. parses each log and checks its #kit-end byte count and FNV (an incomplete log is stored, never
    compared), and stops, storing nothing, when a kit log's header rom_sha256 differs from the fork's log
-   of the same build in the model side (the console ran another ROM than the fork; romgen/hwout.py),
+   of the same build in the model side (the console ran another ROM than the fork; romgen/hwout.py), or
+   when an external ROM's capture is of other ROMs than the model side ran (kit.py EXT_IDENTITY),
 2. stores every log under docs/calibration/hardware/<NAME>/ as <rom>.<n>.log with a manifest.tsv
    (NAME defaults to console-<date>),
 3. recomputes every hw:<question> row of docs/spec/n64-timing-results.tsv against the fork's run of
@@ -72,6 +73,8 @@ def store(root, capture, name, model):
                          f"hardware-run.md, Capture")
     differ = [m for rom, entries in sorted(logs.items()) if rom in kit.KIT_ROMS
               for m in (kit.rom_mismatch(log, model) for _, log in entries) if m]
+    differ += [f"ext-{rom}: {m}" for rom, paths in sorted(ext.items()) if rom in kit.EXT_IDENTITY
+               for m in [kit.EXT_IDENTITY[rom](paths, model)] if m]
     if differ:
         raise SystemExit("ingest: the console ran other ROMs than the fork's model side; nothing stored\n  "
                          + "\n  ".join(differ))

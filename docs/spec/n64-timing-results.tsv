@@ -1,4 +1,4 @@
-# standing run after/run on a4ee7a032
+# standing run u-pidma-fix/standing on f6fab4dc0
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -72,7 +72,8 @@ hw:joybus-pads	pending:calibration-16	no complete power-on console capture of ki
 hw:load-interlock-cop	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:loadtile-rows	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:memset-vi	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
-hw:mm-filesel	pending:calibration-16	no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware
+hw:mm-bench	pending:calibration-16	no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware
+hw:mm-filesel	pending:calibration-16	none: the pinned BENCH build (mm_bench.py, mm-decomp-60fps 707602c6) has no file-select scene: Bench_EndFrame records only Play frames (src/code/bench.c), so no BENCH capture shows file select, and it prints no DPC_CLOCK. A file-select bench scene in mm-decomp-60fps would give this question a ROM: no kit ROM
 hw:nemu64-console	pending:calibration-16	no complete power-on console capture of nemu64-timing in docs/calibration/hardware
 hw:nemu64-cop0hazard-console	pending:calibration-16	no complete power-on console capture of nemu64-cop0hazard in docs/calibration/hardware
 hw:nemu64-cycle-console	pending:calibration-16	no complete power-on console capture of nemu64-cycle in docs/calibration/hardware
@@ -85,7 +86,6 @@ hw:noise-reset	pending:calibration-16	no complete reset console capture of kit-n
 hw:noise-stall	pending:calibration-16	no complete power-on console capture of kit-noise in docs/calibration/hardware
 hw:pi-dma-small	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:pi-row-end	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
-hw:pidma-offset	pending:calibration-16	no console capture of pi_dma_test (capture name ext-pi_dma_test*) in docs/calibration/hardware
 hw:pipebusy-stall	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:poll-phase	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:rdp-atomic	pending:calibration-16	no complete power-on console capture of kit-rdp in docs/calibration/hardware
@@ -157,7 +157,7 @@ noise:a	pass	ctest Passed
 noise:b	pass	ctest Passed
 noise:c	pass	ctest Passed
 noise:rect-1016	pass	noise/summary.txt
-pidma:logs	fail	replay sizes 8-382 23776..23833/24000 within +-3% of hardware min..max over 448 calibrated offsets (calibration error 1 tick); worst offset (167, 15) by size band 0-31:+14.97% 32-63:+6.86% 64-95:+3.38% 96-127:+2.78% 128-159:+3.30% 160-191:+1.92% 192-223:+1.69% 224-255:+1.92% 256-287:+2.14% 288-319:+3.46% 320-351:+3.78% 352-383:+2.22%; ROM self-check 8 failures
+pidma:logs	fail	exact COUNT replay, replay reproduces 8/8 printed values; sizes 8-382 except 305-352 20706/20928 within +-3% of hardware min..max (all sizes 8-382: 23765/24000); ROM self-check 8 failures; worst by size band 0-31:+15.51% 32-63:+7.11% 64-95:+3.50% 96-127:+2.57% 128-159:+3.15% 160-191:+1.79% 192-223:+1.70% 224-255:+1.83% 256-287:+2.18% 288-319:+2.03% 352-383:+1.39%; excluded 305-352, report only because the golden logs come from the ROM's MODE_GENERATE build, whose cart buffer sits at another PI page phase: this ROM's buffer starts 0xd0 into a 512 B page, so its DMAs cross a page from 305 B on, while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred): worst 288-319:+3.50% 320-351:+3.81% 352-383:+2.25%
 rdpstat:1prim	pass	2 of 2 tests pass
 rdpstat:1prim-32px	pending:report-only	0 of 2 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px
 rdpstat:nosync-1cycle	pass	20 of 20 tests pass

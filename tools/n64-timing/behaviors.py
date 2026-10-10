@@ -1653,7 +1653,7 @@ def self_test(root):
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
             ("a question with more rules than metrics", "tools/n64-timing/calibration/questions.tsv",
-             lambda t: t.replace("\texact range:abs:13.5\t", "\texact range:abs:13.5 exact\t", 1),
+             lambda t: t.replace("\texact range:abs:14\t", "\texact range:abs:14 exact\t", 1),
              "names 3 rules for 2 metrics; give one rule, or one per metric"),
             ("a model-choice row with neither a question nor a reason", "tools/n64-timing/calibration/undecidable.tsv",
              lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("scheduler.tie-rank\t")),

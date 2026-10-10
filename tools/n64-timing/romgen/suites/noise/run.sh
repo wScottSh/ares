@@ -25,6 +25,6 @@ status=0
      "$checker" rect "$out/bits.txt"; then
     echo "noise:rect-1016 pass"
   else
-    echo "noise:rect-1016 FAIL"
+    echo "noise:rect-1016 fail"
   fi
 } 2>&1 | tee "$out/summary.txt"

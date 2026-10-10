@@ -8,9 +8,11 @@
 # OUT_DIR/pads-4/boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture),
 # OUT_DIR/ext/thar0.txt (the romgen Thar0 port, the fork side of ext:thar0),
 # OUT_DIR/ext/systembench.txt (the unpadded hardware-era n64-systembench ROM from $SYSBENCH_ROMS, default
-# $N64_TIMING_HOME/roms/systembench where standing.sh builds it; the fork side of ext:systembench)
+# $N64_TIMING_HOME/roms/systembench where standing.sh builds it; the fork side of ext:systembench),
+# OUT_DIR/ext/mm-bench/<scene>.txt (each Majora's Mask BENCH scene ROM from $MM_BENCH_ROMS, default
+# $N64_TIMING_HOME/roms/mm-bench where build-mm-bench.sh writes them; the fork side of ext:mm-bench)
 # and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
-# env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, SYSBENCH_ROMS.
+# env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, SYSBENCH_ROMS, MM_BENCH_ROMS.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../host.sh"
 out="${1:-$N64_TIMING_HOME/results/calib}"
@@ -41,6 +43,19 @@ else
 fi
 "$run" "$out/ext/thar0-rdp.z64" --emulated-seconds 3600 --wall-seconds 3600 > "$out/ext/thar0.txt" 2> "$out/ext/thar0.err" &
 thar0_pid=$!
+mmroms="${MM_BENCH_ROMS:-$N64_TIMING_HOME/roms/mm-bench}"
+mm_pids=()
+if compgen -G "$mmroms/mm-bench-*.z64" >/dev/null; then
+  mkdir -p "$out/ext/mm-bench"
+  (cd "$mmroms" && sha256sum mm-bench-*.z64) >> "$out/rom-sha256.txt"
+  for rom in "$mmroms"/mm-bench-*.z64; do
+    scene="$(basename "$rom" .z64)"
+    "$run" "$rom" --wall-seconds 1800 > "$out/ext/mm-bench/${scene#mm-bench-}.txt" 2> "$out/ext/mm-bench/${scene#mm-bench-}.err" &
+    mm_pids+=($!)
+  done
+else
+  echo "no $mmroms/mm-bench-*.z64 (calibration/build-mm-bench.sh): hw:mm-bench stays missing" >&2
+fi
 printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
 find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   rel="${rom#$out/roms/}"
@@ -51,5 +66,8 @@ done | xargs -P "${CALIB_JOBS:-4}" -n 3 sh -c '
   "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
 ' sh
 wait "$thar0_pid" || echo "thar0 port run failed (see $out/ext/thar0.err)" >&2
+for pid in "${mm_pids[@]}"; do
+  wait "$pid" || echo "an mm-bench run failed (see $out/ext/mm-bench/*.err)" >&2
+done
 "$PYTHON" "$here/calibration/kit.py" --verify-run "$out"
 echo "$out"
