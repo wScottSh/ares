@@ -506,6 +506,10 @@ auto RDP::beginChunk(Clock at) -> bool {
     clocks = RDPTimed::pixelClocks(info.cycle_type, k);
     if(pipe.pixel + k == pixels) clocks += RDPTimed::spanTail(info.cycle_type);
   } else {
+    //fill and copy bypass the span buffers ("committed straight to RDRAM",
+    //span-ram.md row 13): a span runs once the previous one's writes are in the RI
+    auto& port = info.cycle_type == 3 ? fillPort : memory;
+    for(auto& p : port.queue) if(p.write) return false;
     const u32 bpp = bytesPerPixel(info.fb_size);
     u64 words = bpp && pixels ? ((u64)(info.x0 + pixels) * bpp + 7) / 8 - (u64)info.x0 * bpp / 8 : 0;
     clocks = RDPTimed::wordClocks(words);
@@ -624,6 +628,8 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
 auto RDP::pipeline(Clock at) -> void {
   while(true) {
     admit(at);
+    //an admitted span can move a stream past an instance that has otherwise drained
+    drain(Color, at), drain(Depth, at);
     postReads();
     if(pipe.chunk) {
       if(pipe.chunkEnd > at) return;
