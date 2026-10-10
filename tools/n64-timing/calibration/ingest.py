@@ -102,6 +102,8 @@ def store(root, capture, name, model):
                                        log.header.get("ri_refresh", "-"), log.boot,
                                        "-" if log.pads is None else f"{log.pads:04b}"]))
             note = "" if log.complete else "  INCOMPLETE: footer missing or FNV mismatch; stored, not compared"
+            hists = len(kit.histograms(log))
+            note += f"; {hists} latency histograms, recorded (kit.py --hist {dest.name})" if hists else ""
             print(f"ingest: {path.name}: {rom} ({'kit ROM' if known else 'not a kit ROM'}), {len(log.records)} "
                   f"records{note}")
     (out / "manifest.tsv").write_text("\n".join(manifest) + "\n", encoding="utf-8", newline="\n")
