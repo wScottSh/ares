@@ -270,7 +270,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run calib-kit-merge/standing on 214c46421).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run after/run on a4ee7a032).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -281,11 +281,11 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 1.31 (expected 3.8, 3.795..3.805, mean) fail |
 | `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.492..6.501 median 6.498 mean 6.498 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 |
 | `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.716..17.718 median 17.718 mean 17.717 (expected 18.38, 18.346..18.418, mean) fail |
-| `bench:pi-dma-sizes` | pending:report-only | 3 of 4 points pass, 1 consistent-only; first not passing cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193, 191.07..194.93) consistent-only; cart-to-ram-8 window ±4.8%, mean rule fail; cart-to-ram-128 window ±1.5%, mean rule pass; cart-to-ram-1024 window ±1.1%, mean rule pass; cart-to-ram-65536 window ±1.0%, mean rule pass |
+| `bench:pi-dma-sizes` | pending:report-only | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.0 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass; cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.031 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass; cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778338.0 mean 778338.375 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
 | `bench:pi-dma-sizes-1024` | pass | cart-to-ram-1024 sb_rclk 12156.0..12169.33 median 12163.0 mean 12163.031 (expected 12168, 12046.32..12289.68, consistent, window ±1.1%, mean rule pass) pass |
 | `bench:pi-dma-sizes-128` | pass | cart-to-ram-128 sb_rclk 1574.67..1592.0 median 1583.0 mean 1583.0 (expected 1591, 1575.09..1606.91, consistent, window ±1.5%, mean rule pass) pass |
 | `bench:pi-dma-sizes-65536` | pass | cart-to-ram-65536 sb_rclk 778332.0..778348.0 median 778338.0 mean 778338.375 (expected 777807, 770028.93..785585.07, consistent, window ±1.0%, mean rule pass) pass |
-| `bench:pi-dma-sizes-8` | pending:report-only | cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193, 191.07..194.93, consistent, window ±4.8%, mean rule fail) consistent-only |
+| `bench:pi-dma-sizes-8` | pending:report-only | cart-to-ram-8 sb_rclk 180.0..194.67 median 190.0 mean 190.0 (expected 193) report |
 | `bench:pi-io-read` | pass | rom-word sb_rclk 143 (expected 144, 142..146, consistent, window ±1.4%, mean rule pass) pass |
 | `bench:pif-ram-read` | pass | pif-ram sb_rclk 1973 (expected 1974, 1970.052..1977.948, consistent, window ±0.2%, mean rule pass) pass |
 | `bench:rcp-reg-read` | pass | vi-control net_pclk 22 (expected 22, 21..23, consistent, window ±4.5%, mean rule pass) pass |
@@ -306,7 +306,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:si-dma-read64-2` | pending:report-only | read64-2 sb_rclk 57977 (expected 57972) report |
 | `bench:si-dma-read64-3` | pending:report-only | read64-3 sb_rclk 77962 (expected 77924) report |
 | `bench:si-dma-read64-4` | pending:report-only | read64-4 sb_rclk 97948 (expected 97890) report |
-| `bench:sp-dma-sweep` | pending:report-only | wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 6.5, 6.49..6.515, mean) fail |
+| `bench:sp-dma-sweep` | pending:report-only | wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 6.5) report; rd-4096-off0 b_per_rclk 5.207..5.216 median 5.216 mean 5.213 (expected 5.55) report; wr-4096-off0 b_per_rclk 6.169..6.678 median 6.334 mean 6.35 (expected 5.55) report |
 | `bench:uncached-sizes` | pass | u64 net_pclk 35 (expected 35, 34..36, consistent, window ±2.9%, mean rule pass) pass |
 | `bench:uncached-sizes-u32` | pass | u32 net_pclk 32 (expected 32, 31..33, consistent, window ±3.1%, mean rule pass) pass |
 | `bench:uncached-sizes-u32-banked` | fail | u32-banked net_pclk 131..132 median 131.0 mean 131.125 (expected 134, 133..135, consistent, window ±1.1%, mean rule fail) fail |
@@ -419,11 +419,11 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `nemu64:timing/individual-instructions` | pass | 1 of 1 tests pass |
 | `nemu64:timing/just-nops` | pass | 1 of 1 tests pass |
 | `nemu64:timing/likely-branch` | pass | 1 of 1 tests pass |
-| `nemu64:timing/load-from-uncached-vi-off` | pass | 1 of 1 tests pass |
-| `nemu64:timing/load-from-uncached-vi-on-other-bank` | pass | 1 of 1 values pass |
-| `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass |
-| `nemu64:timing/load-miss-vi-off` | fail | 0 of 1 tests pass |
-| `nemu64:timing/load-miss-vi-on` | pass | 1 of 1 tests pass |
+| `nemu64:timing/load-from-uncached-vi-off` | pass | 9 of 9 values pass; with 'a0000000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0100000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0200000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0300000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0400000': phase mean 33.0010 over 64 phases (band 31.540..33.540), mean 33.001, median 33 (band 31..33) pass; with 'a0500000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0600000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0700000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass; with 'a0700000': phase mean 32.9970 over 64 phases (band 31.540..33.540), mean 32.997, median 33 (band 31..33) pass |
+| `nemu64:timing/load-from-uncached-vi-on-other-bank` | pass | 1 of 1 values pass; with '(false, 20, "32.5f32")': phase mean 34.7943 over 64 phases (band 28.500..36.500), mean 34.605..34.943, median 33 (band 31..33) pass |
+| `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7846 over 64 phases (band 32.300..40.300), mean 41.642..41.888, median 37 (band 35..37) fail on mean |
+| `nemu64:timing/load-miss-vi-off` | fail | 0 of 8 values pass; with '80000000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80100000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80200000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80300000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80400000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80500000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80600000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80700000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean |
+| `nemu64:timing/load-miss-vi-on` | pass | 2 of 2 values pass; with 'true': phase mean 42.4220 over 64 phases (band 42.250..44.250), mean 42.324..42.474, median 41 (band 41..43) pass; with 'false': phase mean 43.1264 over 64 phases (band 42.250..44.250), mean 43.002..43.245, median 41 (band 41..43) pass |
 | `nemu64:timing/mult-div-interlock` | pass | 1 of 1 tests pass |
 | `nemu64:timing/random` | pass | 2 of 2 tests pass |
 | `nemu64:timing/uncached-write-buffer` | pass | 1 of 1 tests pass |
