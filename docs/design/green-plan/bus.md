@@ -65,7 +65,7 @@ Labels: **[M]** measured this session (the command and file are named), **[C]** 
   - u32r-seq and u32r-rand read 136..137 against hardware 134, and rand fails at 33/33 delays.
   - Single loads read 35..36 against 34. This holds at both the 0x800 and the 3094 line length.
 - So a hardware run at VI_CTRL=0 shows no refresh inflation that the model's refresh would cause. This also holds at the NTSC rate, where TIMEIT_MULTI's trimmed mean should hide most of one hit per run [I].
-- Either refresh is off at TYPE=0 on hardware, which leaves the nemu64 VI-off tails unexplained, or the model's per-hit refresh cost to a CPU load is too large. The hpos report row `holdoff_rclk_max` reads 74.67 rclk against the 52/54 RI field [M], which points to the latter [G].
+- Either refresh is off at TYPE=0 on hardware, which leaves the nemu64 VI-off tails unexplained, or the model's per-hit refresh cost to a CPU load is too large. The hpos report row `holdoff_rclk_max` reads 74.67 rclk against the 52/54 RI field [M], but that is not a per-hit refresh cost: it is the window's first sample, which adds a cold I-cache line and a bank-5 row miss to 45.25 rclk of refresh. Pure refresh hits cost at most 44.67 rclk [M] (U-REFRESH, [refresh-holdoff.md](../../research/refresh-holdoff.md)). So the 74.67 does not support the latter.
 - Both hardware suites are TYPE=0 measurements. No reading I tested satisfies both.
 
 **Other candidates for a 42.5 mean [G, none referenced].**
@@ -235,7 +235,7 @@ Labels: **[M]** measured this session (the command and file are named), **[C]** 
    - **Harness fix, no hardware.** Give the nemu64 averaged tests a VI-phase walk, the same pattern as bench's BOOT_DELAY: build the ROM at N boot delays and take the mean over phases for the mean checks. This makes the comparison honest whatever the mechanism. It does not make C7 green by itself, because the model has no tail.
      - Scope: romgen nemu64 runtime, run-nemu64.sh, report.
      - Acceptance: values.tsv per delay, and the phase-mean verdict documented in checks.tsv.
-   - **Mechanism, needs hardware.** q34 `nemu64-console` with the D_HIST dump add-on (Q2), q16 `dirty-miss`, and q77 `vi-blank-counting`. If the histogram shows a refresh-shaped tail and q77 shows counting while blank, implement refresh at TYPE=0 at the H_TOTAL rate. Investigate the model's per-hit refresh cost first (hpos 74.67 vs 52/54 rclk, and why systembench inflates by +3), because that is a model-side defect candidate checkable without hardware.
+   - **Mechanism, needs hardware.** q34 `nemu64-console` with the D_HIST dump add-on (Q2), q16 `dirty-miss`, and q77 `vi-blank-counting`. If the histogram shows a refresh-shaped tail and q77 shows counting while blank, implement refresh at TYPE=0 at the H_TOTAL rate. Investigate why systembench inflates by +3 first. The hpos 74.67 is explained and is not a model defect (U-REFRESH, [refresh-holdoff.md](../../research/refresh-holdoff.md)): the per-hit refresh cost stays within 52 rclk [M].
    - Acceptance: C7 phase-mean in 42.5±0.5; VI-off uncached 32.54±1; systembench rows unchanged.
 6. **Do not.**
    - Turn on refresh-at-blank now (it breaks systembench in the model [M]).
@@ -251,13 +251,13 @@ Labels: **[M]** measured this session (the command and file are named), **[C]** 
    - One hardware run per value. It is a TIMEIT_MULTI(50) trimmed integer mean, so the resolution is 1 COUNT tick = 2 pclk [C main.c:105-123].
    - The -2 is one tick (followups, verify-88) [C].
 3. **Root cause.**
-   - (a) Cross-device turnaround: banks 0-3 = modules 0/1, and consecutive reads alternate device or bank. The NEC datasheet gives a post-read gap for the same device only [C B8]. A different-device turnaround is unmodeled [G].
+   - (a) Cross-device turnaround: banks 0-3 = modules 0/1, and consecutive reads alternate device or bank. The NEC datasheet gives no different-device read turnaround: tPostMemReadDelay (2 tc) applies to the next transaction on any device, and only the write gaps are same-device [C NEC p44; research/u32r-banked-turnaround.md, U-RES]. So (a) has no datasheet cost.
    - (b) The MultiBank (RI_REFRESH[22:19]) shared-resource timing, "Research Needed" on n64brew [C].
    - (c) Refresh at TYPE=0: under `PB_BLANK=2` the port reads 132..134 (consistent-only), but seq/rand inflate too, so this is not the mechanism [M].
 4. **Coupling.** Any device-switch cost moves every multi-bank access: the RDP color/Z in different banks (thar0 separate-bank) and the VI-vs-CPU other-bank row.
 5. **Path to green.**
    - #16 q18 `cpu-reads` and q35 `systembench` (same binary, row by row) decide whether 136 reproduces and whether banked − seq = 2.
-   - If yes, add a cross-device read-to-read gap only if the datasheet gives one. Check the NEC µPD488170L pp. 44-45 transaction timing first: this is a cheap no-hardware research step. Otherwise the honest state is "consistent-only, 1 tick, unmodeled".
+   - If yes, the honest state is "consistent-only, 1 tick, unmodeled": the NEC µPD488170L pp. 44-45 give no cross-device read-to-read gap (U-RES, research/u32r-banked-turnaround.md).
 6. **Do not.** Add a 2-pclk banked penalty fitted to this row.
 
 ### G. Report-only rows (dirty-miss-isolated, dirty-row-sweep, ifill-isolated, wb-fifth-store)
@@ -283,7 +283,7 @@ Units without hardware: ROMs for ifill-isolated and wb-fifth-store (romgen bench
 - **cpu.dfill-total 41.** Measured median, sound. Its check fails on the tail (E), not on the median.
 - **vi.\* fetch rows.** These are 7 model-choice rows plus vi.burst. Hardware q44 `vi-fetch-modes`, q76 `vi-fetch-position` and q24 decide them. None can go green without hardware.
 - **ri.refresh-trigger.** The note's quantitative claim ("would raise by about 2") is false on current master [M]. Update the note to the measured 0.3 at the NTSC line, and the systembench conflict [M]. Labeling only, no hardware.
-- **ri.refresh-clean/-dirty 52/54.** Vendor values, sound. The model's observed per-hit CPU cost (hpos holdoff_rclk_max 74.67 rclk) exceeds them. That is a model-side investigation, done without hardware: trace one refresh-hit load in uncached-vs-hpos bank5 and attribute the extra ~20 rclk (VI bursts queued at rank 1 ahead of the CPU during the holdoff are the likely cause [G]).
+- **ri.refresh-clean/-dirty 52/54.** Vendor values, sound. The model's per-hit CPU cost stays within them: pure refresh hits in uncached-vs-hpos bank5 cost 36.00..44.67 rclk over the median [M]. The 74.67 in holdoff_rclk_max is sample 0 of the window: 45.25 rclk of refresh, a 23.83 rclk cold I-cache fill and a 5.5 rclk row miss, with no VI burst involved (U-REFRESH, [refresh-holdoff.md](../../research/refresh-holdoff.md)). The statistic, not the model, is off; a harness fix is a follow-up.
 - **Missing row.** The "HSYNC adds no refresh while one waits" latch still has no model-choice row (followups verify-57) [C].
 
 ## 3. Dependency order
@@ -292,7 +292,7 @@ Units without hardware: ROMs for ifill-isolated and wb-fifth-store (romgen bench
    - C (sp-dma reclassify);
    - H (relabel ri.overhead-vi; correct the ri.refresh-trigger note; add the refresh-latch row);
    - G (ROMs for ifill-isolated and wb-fifth-store).
-2. Model-side investigation, no hardware: trace the per-hit refresh cost (hpos 74.67, and the systembench +3 under refresh-at-blank). If it is a model defect, fix it before any refresh-at-TYPE=0 decision.
+2. Model-side investigation, no hardware: trace the systembench +3 under refresh-at-blank. The hpos 74.67 is traced and is not a model defect (U-REFRESH). If the +3 is a model defect, fix it before any refresh-at-TYPE=0 decision.
 3. Harness, no hardware: the nemu64 VI-phase walk (E), so every nemu64 mean check is phase-honest before hardware arrives.
 4. Kit add-ons, no hardware to build, hardware to run:
    - the D_HIST histogram dump in q34;

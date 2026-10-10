@@ -132,7 +132,7 @@ def main():
         suite, payload = build_payload(set_def, (rom_id, sha, variant) if hw else None)
         rom = make_rom(ipl3, payload)
         if hw:
-            rom = hwout.header_bytes(rom)
+            rom = hwout.stamp(hwout.header_bytes(rom))
         path = os.path.join(args.out, f"{set_def.rom_name}.z64")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
