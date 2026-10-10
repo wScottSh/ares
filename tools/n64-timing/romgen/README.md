@@ -12,6 +12,8 @@ N64_RUN=<path to n64-run.exe> tools/n64-timing/run-nemu64.sh
 python tools/n64-timing/romgen/selftest.py
 python tools/n64-timing/romgen/build.py --suite thar0 --out $N64_TIMING_HOME/roms
 tools/n64-timing/run-thar0.sh
+python tools/n64-timing/romgen/build.py --suite cpu --out $N64_TIMING_HOME/roms
+tools/n64-timing/romgen/suites/cpu/run.sh
 ```
 
 - `build.py` writes `nemu64-{timing,cycle,cop0hazard}.z64`, the phase ROMs `phase-<K>/nemu64-timing.z64` (see [Phase walk](#phase-walk)), and a `<rom>.tests.tsv` listing per ROM. A rebuild from the same sources produces byte-identical files. `--ipl3` overrides the default stub path, `$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z64`.
@@ -35,6 +37,7 @@ tools/n64-timing/run-thar0.sh
 | `suites/snapper/` | Port of snapper64's RDP test-mode, fill-triangle and no-sync tests, with a fetch script for its console dumps and a comparator. See [suites/snapper/README.md](suites/snapper/README.md) |
 | `suites/noise/` | Port of Thar0/RDP-Noise's 1016x1 NOISE rectangle, checked against the noise LFSRs. See [suites/noise/README.md](suites/noise/README.md) |
 | `hwout.py` | The console output layer for `build.py --hw`: no emux instruction; each line goes to the ISViewer, cartridge SRAM and, at the end, paged screen text (`font8x8.py`), between a `#kit` header and a `#kit-end` footer with the log's FNV-1a. See [docs/calibration/hardware-run.md](../../../docs/calibration/hardware-run.md) |
+| `suites/cpu/` | Fork-authored CPU ROMs checked against the VR4300 User's Manual's stated results, not timings. `cpu-llsc` covers SC and SCD: success, failure after ERET, and Watch and TLB refill exceptions on the store. `run.sh` exits 1 on any failure; the standing run writes `cpu.txt` |
 | `suites/calib/` | The calibration kit ROMs: bench ROMs combined, plus the kit's own points. Always built with `--hw`. See `tools/n64-timing/calibration/` |
 | `report.py` | Joins a ROM's `@<test>.<value>` records with its `.tests.tsv` listing |
 
