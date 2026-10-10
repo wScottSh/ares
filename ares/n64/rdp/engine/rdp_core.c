@@ -161,13 +161,13 @@ static void rdp_fill_haz_post(rdp_t *rdp, int32_t cmd);
  * all three. Every shape the hardware produces follows from that arithmetic.
  *
  * The primitive is held unqueued until the window closes, collecting the
- * writes that land inside it, then emitted as the base primitive plus one
- * re-render per change. Each re-render carries its own object snapshot, so
+ * writes that land inside it, then emitted as disjoint pixel ranges, one per
+ * state between change points. Each range carries its own object snapshot, so
  * published objects stay immutable and the worker race-freedom argument is
  * untouched. Sub-scanline boundaries are cut by narrowing the clip rectangle
  * rather than by mutating m_spans: poly_manager_render_extents clamps BOTH
- * endpoints into the clip, so raising min_x moves the left edge whichever of
- * startx/stopx happens to hold it.
+ * endpoints into the clip, so moving min_x or max_x moves that edge whichever
+ * of startx/stopx happens to hold it.
  *
  * For the combiner, which samples the environment colour, depth is
  * rdp.pipeline-depth (m_pipeline_depth, 25). Every other register in the n64brew
@@ -303,24 +303,48 @@ static int rdp_haz_env_in_cycle(const combine_modes_t *c, int cycle)
            c->add_a1     == 5;
 }
 
+/* Queues box pixels [a, b) of the held primitive with the most recently
+ * allocated object. A row cut part-way is narrowed by its clip rectangle;
+ * the span walk draws one position past the clip's max_x (j <= length in
+ * the span callbacks), so a range ending before column ce clips at ce - 2. */
+static void rdp_haz_render(rdp_t *rdp, poly_render_cb cb, int32_t a, int32_t b)
+{
+    const rdp_haz_state *const h = &rdp->m_haz;
+    const extent_t *spans = rdp->m_spans + h->offset;
+    int32_t k = a / h->w, c = a - k * h->w;
+    const int32_t ke = b / h->w, ce = b - ke * h->w;
+
+    while (k < ke || (k == ke && c < ce))
+    {
+        poly_rect clip = h->clip;
+        int32_t rows = 1;
+
+        if (c > 0 && h->lo + c > clip.min_x)
+            clip.min_x = h->lo + c;
+        if (k == ke && h->lo + ce - 2 < clip.max_x)
+            clip.max_x = h->lo + ce - 2;
+        if (c == 0 && k < ke)
+            rows = ke - k;
+        poly_manager_render_extents(&rdp->m_pool, &clip, cb,
+            h->start + k, rows, spans + k);
+        k += rows;
+        c = 0;
+    }
+}
+
 static void rdp_haz_publish(rdp_t *rdp)
 {
     rdp_haz_state *const h = &rdp->m_haz;
     const rdp_poly_state *prev;
-    extent_t *spans;
     poly_render_cb cb;
-    int32_t nlines, i, j;
+    int32_t end, from, i, j;
 
     if (!h->active)
         return;
     h->active = 0;
 
-    spans  = rdp->m_spans;
-    cb     = (h->cyc == 1) ? rdp_span_draw_1cycle : rdp_span_draw_2cycle;
-    nlines = (h->end - h->start) + 1;
-
-    poly_manager_render_extents(&rdp->m_pool, &h->clip, cb,
-        h->start, nlines, spans + h->offset);
+    cb  = (h->cyc == 1) ? rdp_span_draw_1cycle : rdp_span_draw_2cycle;
+    end = ((h->end - h->start) + 1) * h->w;
 
     /* Stages land out of command order; a stable sort keeps the writes to
      * one stage in order. */
@@ -332,40 +356,26 @@ static void rdp_haz_publish(rdp_t *rdp)
         h->seg[j] = w;
     }
 
+    /* Each pixel is drawn once, with the state in effect at its emission:
+     * the ranges between change points are disjoint, so a pixel the new
+     * state rejects is not left holding the old state's write. */
     prev = h->object;
-    for (i = 0; i < h->nseg;)
+    from = 0;
+    for (i = 0; i < h->nseg && h->seg[i].px < end;)
     {
-        const int32_t p   = h->seg[i].px;
-        const int32_t k   = p / h->w;
-        const int32_t col = p - k * h->w;
+        const int32_t p = h->seg[i].px;
         rdp_poly_state *o;
-        int32_t k2;
 
-        if (p >= h->n || k >= nlines)
-            break;
-
+        if (p > from)
+            rdp_haz_render(rdp, cb, from, p);
         o = poly_manager_object_next(&rdp->m_pool);
         memcpy(o, prev, sizeof(rdp_poly_state));
         for (; i < h->nseg && h->seg[i].px == p; i++)
             rdp_haz_apply(o, &h->seg[i]);
         prev = o;
-
-        if (col > 0)
-        {
-            poly_rect c2 = h->clip;
-            if (h->lo + col > c2.min_x)
-                c2.min_x = h->lo + col;
-            poly_manager_render_extents(&rdp->m_pool, &c2, cb,
-                h->start + k, 1, spans + h->offset + k);
-        }
-
-        k2 = (col > 0) ? (k + 1) : k;
-        if (k2 < nlines)
-        {
-            poly_manager_render_extents(&rdp->m_pool, &h->clip, cb,
-                h->start + k2, nlines - k2, spans + h->offset + k2);
-        }
+        from = p;
     }
+    rdp_haz_render(rdp, cb, from, end);
 }
 
 void rdp_state_quiesce(rdp_t *rdp)
@@ -5255,7 +5265,6 @@ static void rdp_render_spans(rdp_t *rdp, int32_t start, int32_t end, int32_t til
                 h->lo     = slo;
                 h->w      = sw;
                 h->h      = (end_box - start) + 1;
-                h->n      = sw * h->h;
                 h->cyc    = haz_cyc;
                 h->clock  = 0;
                 h->nseg   = 0;
