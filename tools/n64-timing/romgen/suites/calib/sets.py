@@ -213,7 +213,7 @@ KITS = {
     "kit-cpu": [benches.uncached_sizes, benches.rcp_reg_read, benches.pif_ram_read, benches.pi_io_read,
                 benches.pi_io_write, benches.si_io_write, benches.dirty_row_sweep, benches.dirty_miss_isolated,
                 dcb, wb_stores, reg_write, ifill, bus_reads],
-    "kit-vi": [vi_enable, vi_mid_field, count_fields],
+    "kit-vi": [vi_enable, count_fields, vi_mid_field],
     "kit-dma": [benches.mi_memset_uncached, benches.mi_memset_cached, benches.mi_memset_rspdma,
                 benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain, pi_dma_rowend],
     "kit-hpos": [benches.uncached_vs_hpos],
@@ -225,7 +225,8 @@ KITS = {
     "kit-cpu2": cpu2.BUILDERS,
     "kit-bus": bus.BUILDERS,
 }
-KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM]}
+KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM],
+           "kit-vi": [asm.VI_MID_ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
