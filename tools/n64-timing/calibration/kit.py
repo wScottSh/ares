@@ -23,6 +23,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 from romgen.suites.bench import report as bench_report  # noqa: E402
 import derived  # noqa: E402
+import mm_bench  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
@@ -354,6 +355,12 @@ def ext_systembench(root, model_dir, paths):
     return "pass", detail
 
 
+def ext_mm_bench(root, model_dir, paths):
+    """The Majora's Mask BENCH ROM's IS-Viewer text from the console against the fork's run of the same
+    pinned per-scene ROMs (run.sh ext/mm-bench/<scene>.txt), under mm_bench.compare's rule."""
+    return mm_bench.compare(paths, model_dir)
+
+
 #External ROMs a capture can hold: kit column `ext:<name>`, the capture file or directory name
 #prefix `ext-<name>`, and the reader that compares it (None: stored, compared by hand per
 #hardware-run.md until a reader exists).
@@ -363,9 +370,11 @@ EXT_ROMS = {
     "systembench": ext_systembench,
     #The published ROM logs no COUNT, and its source carries no license, so no build of it can.
     "pi_dma_test": None,
-    #The fork side needs Scott's BENCH build of mm-decomp-60fps run on n64-run; no in-repo tool builds it.
-    "mm-bench": None,
+    "mm-bench": ext_mm_bench,
 }
+#External ROMs whose output names no ROM identity: ingest refuses a capture these find run on other ROMs
+#than the fork's model side.
+EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch}
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
 #that repeats a row's fit data from an independent one.
 EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "pi_dma_test": "pidma",
@@ -613,6 +622,9 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: a log whose RDP wait gave up twice reads timeouts rdp=2: {'ok' if ok else 'FAILED'} ({hung.timeouts})")
     cases.append(("timeouts", None, None))
+    mm_cases, mm_failed = mm_bench.self_test()
+    cases += [None] * mm_cases
+    failed += mm_failed
     print(f"kit.py: self-test: {len(cases)} cases, {failed} failed")
     return failed
 
