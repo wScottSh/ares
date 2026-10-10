@@ -576,7 +576,7 @@ auto RDP::writeBack(u32 image, u32 firstPixel, u32 endPixel, Clock at) -> void {
   auto& info = slot.info;
   auto& w = image == Color ? slot.color : slot.depth;
   const bool direct = info.cycle_type >= 2;
-  if(slot.queued && slot.drawn < endPixel) {
+  if(slot.queued && (slot.drawn < endPixel || endPixel >= spanPixels(info))) {
     //pixels drawn from landed bytes: up to the first segment still reading,
     //and, if noise is used, up to the last pixel whose clock is known
     u32 drawn = spanPixels(info);
