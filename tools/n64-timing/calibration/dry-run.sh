@@ -5,7 +5,9 @@
 # these swapped in for the ways a real capture arrives: kit-span as the cartridge SRAM the fork's run
 # left (console byte order) and kit-rdp as that SRAM byte-swapped, both in place of their ISViewer
 # logs; kit-vi with CRLF line ends; kit-noise also as a capture after Reset; kit-dma also as its four-controller run; and kit-cpu as an extra
-# cut log, which ingestion must store and not compare. The external ROMs go in as the fork's
+# cut log, which ingestion must store and not compare. Every layout pad's console builds (p<P>/boot-1,
+# p<P>/single, and kit-dma's four-controller and kit-noise's Reset runs) go in the same way as plain
+# ISViewer logs. The external ROMs go in as the fork's
 # Thar0 port output (ext-thar0), the fork's n64-systembench output (ext-systembench), the fork's runs of
 # the Majora's Mask BENCH scenes with their ROMs' sha256 (ext-mm-bench) and the published snapper64
 # console dumps (ext-snapper64).
@@ -21,6 +23,15 @@ done
 rm "$capture/kit-span.isviewer.log" "$capture/kit-rdp.isviewer.log"
 cp "$model/boot-1/kit-span.srm" "$capture/kit-span.srm"
 cp "$model/pads-4/boot-1/kit-dma.txt" "$capture/kit-dma.pads4.isviewer.log"
+for dir in "$model"/p[0-9]*; do
+  [ -d "$dir" ] || continue
+  pad="$(basename "$dir")"
+  for f in "$dir"/boot-1/*.txt "$dir"/single/*.txt; do
+    cp "$f" "$capture/$(basename "$f" .txt).$pad.isviewer.log"
+  done
+  cp "$model/pads-4/$pad/boot-1/kit-dma.txt" "$capture/kit-dma.pads4.$pad.isviewer.log"
+  cp "$dir/boot-1/kit-noise.txt" "$capture/kit-noise.reset.$pad.isviewer.log"
+done
 "$PYTHON" - "$model" "$capture" <<'PY'
 import sys
 model, capture = sys.argv[1:]

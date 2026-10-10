@@ -158,7 +158,8 @@ def regs_asm(label, regs):
 
 
 def asm(rom_id, sha, variant):
-    """variant is padded to a fixed width so every boot-delay build keeps one code layout."""
+    """variant is padded to a fixed width so every boot-delay and layout-pad build keeps one code layout."""
+    assert len(variant) <= 12, f"build name {variant} is longer than the header's 12 columns"
     glyphs = ",".join(f"{g >> 32:#010x},{g & 0xFFFFFFFF:#010x}" for g in font8x8.GLYPHS)
     return rf"""
 hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha} rom_sha256={UNSTAMPED} fmt=1 build={variant:<12}")}

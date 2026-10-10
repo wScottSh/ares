@@ -1,34 +1,41 @@
 #!/usr/bin/env bash
 # Builds the calibration kit and runs every kit ROM on the fork: the model side of each hardware
-# comparison (docs/calibration/hardware-run.md). The calib suite runs at each boot delay
-# (romgen/suites/calib/sets.py DELAYS), the other kit ROMs (kit.py KIT_ROMS) once.
+# comparison (docs/calibration/hardware-run.md). Every kit ROM is built at each layout pad
+# (romgen/suites/calib/sets.py PADS, build.py --layout-pad); the calib suite runs at each boot delay
+# (sets.py DELAYS), the other kit ROMs (kit.py KIT_ROMS) once per pad.
 # usage: tools/n64-timing/calibration/run.sh [OUT_DIR]
 # OUT_DIR defaults to $N64_TIMING_HOME/results/calib. Writes OUT_DIR/roms/{boot-<K>,single}/*.z64
 # (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log),
-# OUT_DIR/pads-4/boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture),
+# the same under OUT_DIR/roms/p<P>/ and OUT_DIR/p<P>/ for each layout pad P > 0,
+# OUT_DIR/pads-4/[p<P>/]boot-<K>/kit-dma.txt (kit-dma with four controllers, for a four-pad capture),
 # OUT_DIR/ext/thar0.txt (the romgen Thar0 port, the fork side of ext:thar0),
 # OUT_DIR/ext/systembench.txt (the unpadded hardware-era n64-systembench ROM from $SYSBENCH_ROMS, default
 # $N64_TIMING_HOME/roms/systembench where standing.sh builds it; the fork side of ext:systembench),
 # OUT_DIR/ext/mm-bench/<scene>.txt (each Majora's Mask BENCH scene ROM from $MM_BENCH_ROMS, default
 # $N64_TIMING_HOME/roms/mm-bench where build-mm-bench.sh writes them; the fork side of ext:mm-bench)
 # and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
-# env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, SYSBENCH_ROMS, MM_BENCH_ROMS.
+# env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, N64_CALIB_PADS,
+# SYSBENCH_ROMS, MM_BENCH_ROMS.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../host.sh"
 out="${1:-$N64_TIMING_HOME/results/calib}"
 run="${N64_RUN:-$(n64_target n64-run)}"
 here="$n64_repo/tools/n64-timing"
-mkdir -p "$out/roms/single"
-"$PYTHON" "$here/romgen/build.py" --suite calib --out "$out/roms" >/dev/null
-"$PYTHON" - "$here" <<'PY' | while read -r suite set; do
+pads="$("$PYTHON" -c 'import sys; sys.path.insert(0, sys.argv[1]); from romgen.suites.calib import sets; print(*sets.PADS)' "$here")"
+singles="$("$PYTHON" - "$here" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1] + "/calibration")
 import kit
-for rom, (suite, set_name, walks) in kit.KIT_ROMS.items():
-    if not walks:
-        print(suite, set_name)
+print(" ".join(f"{suite}:{set_name}" for suite, set_name, walks in kit.KIT_ROMS.values() if not walks))
 PY
-  "$PYTHON" "$here/romgen/build.py" --suite "$suite" --set "$set" --hw --out "$out/roms/single" >/dev/null
+)"
+for pad in $pads; do
+  if [ "$pad" = 0 ]; then dir="$out/roms" flag=(); else dir="$out/roms/p$pad" flag=(--layout-pad "$pad"); fi
+  mkdir -p "$dir/single"
+  "$PYTHON" "$here/romgen/build.py" --suite calib "${flag[@]}" --out "$dir" >/dev/null
+  for single in $singles; do
+    "$PYTHON" "$here/romgen/build.py" --suite "${single%%:*}" --set "${single#*:}" --hw "${flag[@]}" --out "$dir/single" >/dev/null
+  done
 done
 mkdir -p "$out/ext"
 "$PYTHON" "$here/romgen/build.py" --suite thar0 --out "$out/ext" >/dev/null
@@ -60,7 +67,7 @@ printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
 find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   rel="${rom#$out/roms/}"
   echo "$rom $out/${rel%.z64} 1"
-  case "$rel" in boot-*/kit-dma.z64) echo "$rom $out/pads-4/${rel%.z64} 4" ;; esac
+  case "$rel" in boot-*/kit-dma.z64 | p*/boot-*/kit-dma.z64) echo "$rom $out/pads-4/${rel%.z64} 4" ;; esac
 done | xargs -P "${CALIB_JOBS:-4}" -n 3 sh -c '
   mkdir -p "$(dirname "$2")"
   "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
