@@ -195,6 +195,21 @@ The command does these things:
 3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures against the fork's range over its boot delays. A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
 
+### Latency histograms
+
+Two logs record distributions as well as the values the questions compare. No question compares a histogram; they are the console's data behind the means, for the bus investigation (docs/design/green-plan/bus.md, Q2 and section 3):
+
+- `nemu64-timing` prints a `#hist <test>.<value> <cycles>:<count>,...` line before the result of each of its 21 averaged values (Load Miss and uncached loads, VI on and off, 1000 runs each). These are the counts behind `nemu64-console`'s min, max, median and mean. A refresh tail shows as a flat spread over 41..80 at about 1-2 %; a second latency state shows as a second peak at 42-44.
+- `kit-hpos` already logs every load. kit.py derives `hist_pclk`, each latency in pclk with its count, for each `vi-cpu-contention` point.
+
+To print them from stored logs or from the fork's run:
+
+```sh
+tools/n64-timing/calibration/kit.py --hist docs/calibration/hardware/console-<date>/nemu64-timing.*.log docs/calibration/hardware/console-<date>/kit-hpos.*.log
+```
+
+Each line is `<file> <rom>/<point> <metric> <latency>:<count>,...`. The `#hist` lines make `nemu64-timing`'s log about 0.8 KB longer, so it still fits the 32 KiB SRAM. Like every log over 2 KB, it needs the USB or SRAM path (see [Photo fallback](#photo-fallback)).
+
 To see what an ingestion would change without writing to the repository, add `--dry-run`. `tools/n64-timing/calibration/dry-run.sh <run.sh output>` runs the whole path on the fork's own logs as a fake capture: ISViewer logs, real SRAM dumps in both byte orders, a CRLF log, the four-controller run, a cut log, the Thar0 port's output, the fork's n64-systembench log and the published snapper64 dumps.
 
 ## What to send back
