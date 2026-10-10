@@ -203,8 +203,8 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 | `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.716..17.718 median 17.718 mean 17.717 (expected 18.38, 18.346..18.418, mean) fail | `hw:memset-vi` |
 | `bench:uncached-sizes-u32-banked` | fail | u32-banked net_pclk 131..132 median 131.0 mean 131.125 (expected 134, 133..135, consistent, window ±1.1%, mean rule fail) fail | `hw:cpu-reads` |
 | `mm:filesel-named` | fail | filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) | `hw:mm-filesel` |
-| `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass | `hw:vi-cpu-contention`, `hw:nemu64-console` |
-| `nemu64:timing/load-miss-vi-off` | fail | 0 of 1 tests pass | `hw:dirty-miss`, `hw:nemu64-console` |
+| `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7846 over 64 phases (band 32.300..40.300), mean 41.642..41.888, median 37 (band 35..37) fail on mean | `hw:vi-cpu-contention`, `hw:nemu64-console` |
+| `nemu64:timing/load-miss-vi-off` | fail | 0 of 8 values pass; with '80000000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80100000': phase mean 41.0000 over 64 phases (ban | `hw:dirty-miss`, `hw:nemu64-console` |
 | `pidma:logs` | fail | exact COUNT replay, replay reproduces 8/8 printed values; sizes 8-382 except 305-352 20706/20928 within +-3% of hardware min..max (all sizes 8-382: 23765/24000); ROM self-check 8 failures; worst by si | `hw:pi-dma-small` |
 | `systembench:pi-dma-128` | fail | PI DMA [128] 1580 RCP cycles (hardware 1591, -11, -0.69%); main.c rule holds in 0 of 33 runs | `hw:systembench` |
 | `systembench:pi-dma-8` | fail | PI DMA [8] 187 RCP cycles, 186..187 over the boot delays (hardware 193, -6, -3.11%); main.c rule holds in 0 of 33 runs | `hw:systembench` |

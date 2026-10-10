@@ -142,7 +142,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
-tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
+tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard timing-phase]
 ```
 
 `romgen/build.py` generates the three ROMs from the in-repo Python port of nemu64-test, with no external toolchain. See [romgen/README.md](romgen/README.md).
@@ -159,6 +159,8 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard]
 - `summary.txt` holds the ROM's own category totals, such as `Timing: Failed X of Y tests`.
 - `values.tsv` (romgen ROMs only) has one row per test value: result, measured cycles, and expected cycles.
 - `categories.tsv` (romgen timing ROM only) assigns each failed value to a root-cause category.
+
+`timing-phase` runs the averaged timing tests at every VI phase of `romgen/suites/nemu64/phases.py` ([romgen README, Phase walk](romgen/README.md#phase-walk)). Its directory holds `phase-<K>/` (`stdout.txt`, `stderr.txt` and `values.tsv` per delay), `runs.txt`, `measurements.tsv` (min, max, median and sum of each averaged value at each delay) and `phase.tsv` (each value's phase ranges, phase mean, bands and verdict).
 
 `results/nemu64/summary.txt` concatenates the set summaries.
 
