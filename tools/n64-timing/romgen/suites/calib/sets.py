@@ -30,8 +30,8 @@ def dcb(suite):
         rom.point(name[6:].replace("_", "-"), name, [KSEG0 | CAL_BUF], [("pairs", asm.UNROLL)], reps=8)
 
 
-def wb_stores(suite):
-    rom = Rom(suite, "wb-stores")
+def wb_stores(suite, name="wb-stores"):
+    rom = Rom(suite, name)
     for n in asm.WB_COUNTS:
         for tail in ("", "_lw"):
             rom.point(f"sw-{n}{tail.replace('_', '-')}", f"k_sw{n}{tail}", [KSEG1 | (CAL_BUF + 0x1000), 0],
@@ -53,8 +53,8 @@ def reg_write(suite):
                           [("stores", n), ("target", dev)], reps=8)
 
 
-def ifill(suite):
-    rom = Rom(suite, "ifill")
+def ifill(suite, name="ifill"):
+    rom = Rom(suite, name)
     for name, cold in (("warm", 0), ("cold", 1)):
         rom.point(name, "k_ifill", [cold], [("cold", cold)], reps=8)
 
