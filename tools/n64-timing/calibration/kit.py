@@ -240,7 +240,7 @@ def compare(question, hw, model):
     """(result, detail): pass or fail, from the console's logs and the model's, under the question's rule."""
     metrics, rules = question["metric"].split(), question["rule"].split()
     rule_of = dict(zip(metrics, rules if len(rules) > 1 else rules * len(metrics)))
-    bad, lacking, checked = [], [], 0
+    bad, lacking, shown_all = [], [], []
     for pattern in question["points"].split():
         for metric in metrics:
             rule = rule_of[metric]
@@ -252,7 +252,6 @@ def compare(question, hw, model):
                 mv = want.get(key)
                 if mv is None:
                     continue
-                checked += 1
                 if rule == "exact":
                     ok = set(hv) <= set(mv)
                     shown = f"{key} {metric} console {sorted(set(hv))} model {sorted(set(mv))}"
@@ -262,16 +261,18 @@ def compare(question, hw, model):
                     lo, hi = min(mv), max(mv)
                     slack = tol if kind == "abs" else tol / 100 * max(abs(lo), abs(hi))
                     ok = min(hv) <= hi + slack and max(hv) >= lo - slack
-                    shown = f"{key} {metric} console {min(hv)}..{max(hv)} model {lo}..{hi} ({rule})"
+                    shown = f"{key} {metric} console {min(hv)}..{max(hv)} model {lo}..{hi}"
+                shown_all.append(shown)
                 if not ok:
-                    bad.append(shown)
+                    bad.append(shown if rule == "exact" else f"{shown} ({rule})")
+    checked = len(shown_all)
     if not checked:
         return "fail", f"no console value matches {question['points']} {question['metric']}; the capture lacks the points"
     if lacking:
         return "fail", f"the capture lacks {len(lacking)} of {len(lacking) + checked} model values; first {lacking[0]}"
     if bad:
         return "fail", f"{len(bad)} of {checked} values differ; first {bad[0]}"
-    return "pass", f"{checked} values agree ({question['rule']})"
+    return "pass", f"{checked} values agree ({question['rule']}): {'; '.join(shown_all)}"
 
 
 def ext_thar0(root, model_dir, paths):
@@ -575,9 +576,13 @@ def self_test():
     min_off = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=25 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
     compares += [("per-metric rules, max 39 off under its abs:50", [Log(max_off)], "pass", per_metric),
                  ("per-metric rules, min 1 off under its exact", [Log(min_off)], "fail", per_metric)]
+    near = sample_log("#bench dcb sw-lw pairs=16 reps=8 min=25 max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n")
+    compares += [("a pass inside the band names each point's console and model values", [Log(near)], "pass", q,
+                  "2 values agree (range:abs:1): dcb/nop-nop min console 16..16 model 16..16; "
+                  "dcb/sw-lw min console 25..25 model 24..24")]
     for name, hw, want, *rule in compares:
         got, detail = compare(rule[0] if rule else q, hw, model)
-        ok = got == want
+        ok = got == want and (len(rule) < 2 or detail == rule[1])
         failed += not ok
         print(f"kit: self-test: compare, {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     cases += compares
