@@ -20,6 +20,7 @@ export N64_TIMING_HOME N64_BUILD_DIR="$n64_build" N64_RUN="${N64_RUN:-$(n64_targ
 roms="$N64_TIMING_HOME/roms"
 results="$N64_TIMING_HOME/results"
 mkdir -p "$roms"
+exits=
 
 for s in nemu64 rdpstat snapper thar0 noise cpu; do
   (cd "$n64_repo" && "$PYTHON" tools/n64-timing/romgen/build.py --suite "$s" --out "$roms") > "$out/romgen-$s.txt" 2>&1
@@ -36,16 +37,20 @@ OUT="$roms/systembench-845635c" SYSBENCH_STAGE="$N64_TIMING_HOME/systembench-845
 uptime > "$out/load-start.txt"
 ( "$N64_RUN" "$mm" --frames 600 --stats "$out/mm600.tsv" > /dev/null 2> "$out/mm600.err" ) &
 ( "$PYTHON" "$here/mmbench/mmbench.py" --exe "$N64_RUN" "$mm" --out "$out/mmbench" > "$out/mmbench.txt" 2>&1 ) &
-"$here/run-nemu64.sh" > "$out/nemu64.txt" 2>&1
-"$here/romgen/suites/bench/run.sh" > "$out/bench.txt" 2>&1
-"$here/romgen/suites/rdpstat/run.sh" > "$out/rdpstat.txt" 2>&1
-"$here/romgen/suites/snapper/run.sh" > "$out/snapper.txt" 2>&1
-"$here/romgen/suites/noise/run.sh" > "$out/noise.txt" 2>&1
-"$here/run-thar0.sh" > "$out/thar0.txt" 2>&1
-"$here/romgen/suites/cpu/run.sh" > "$out/cpu.txt" 2>&1
-[ -d "$roms/systembench" ] && SYSBENCH_ROMS="$roms/systembench" "$here/systembench/run.sh" > "$out/systembench.txt" 2>&1
-[ -d "$roms/systembench-845635c" ] && SYSBENCH_ROMS="$roms/systembench-845635c" SYSBENCH_RESULTS="$results/systembench-845635c" \
-  "$here/systembench/run.sh" > "$out/systembench-845635c.txt" 2>&1
+"$here/run-nemu64.sh" > "$out/nemu64.txt" 2>&1 || exits="$exits nemu64"
+"$here/romgen/suites/bench/run.sh" > "$out/bench.txt" 2>&1 || exits="$exits bench"
+"$here/romgen/suites/rdpstat/run.sh" > "$out/rdpstat.txt" 2>&1 || exits="$exits rdpstat"
+"$here/romgen/suites/snapper/run.sh" > "$out/snapper.txt" 2>&1 || exits="$exits snapper"
+"$here/romgen/suites/noise/run.sh" > "$out/noise.txt" 2>&1 || exits="$exits noise"
+"$here/run-thar0.sh" > "$out/thar0.txt" 2>&1 || exits="$exits thar0"
+"$here/romgen/suites/cpu/run.sh" > "$out/cpu.txt" 2>&1 || exits="$exits cpu"
+if [ -d "$roms/systembench" ]; then
+  SYSBENCH_ROMS="$roms/systembench" "$here/systembench/run.sh" > "$out/systembench.txt" 2>&1 || exits="$exits systembench"
+fi
+if [ -d "$roms/systembench-845635c" ]; then
+  SYSBENCH_ROMS="$roms/systembench-845635c" SYSBENCH_RESULTS="$results/systembench-845635c" \
+    "$here/systembench/run.sh" > "$out/systembench-845635c.txt" 2>&1 || exits="$exits systembench-845635c"
+fi
 pidma="${PIDMA_DIR:-$N64_TIMING_HOME/scratch/r29/clones/n64_pi_dma_test}"
 mkdir -p "$out/pidma"
 if echo "1d2c999c42baa57b9c16a21c0bd75b984901ee615ab30482fdec6ed7fcf156cb  $pidma/pi_dma_test.z64" \
@@ -73,8 +78,12 @@ for set in timing cycle cop0hazard; do
 done
 DET_OUT="$out/det-mm" "$here/determinism.sh" "$mm" > "$out/det-mm.txt" 2>&1
 DET_OUT="$out/stepcap-mm" "$here/determinism.sh" --step-cap "$mm" > "$out/stepcap-mm.txt" 2>&1
-OUT="$out/state-roundtrip" "$here/state-roundtrip.sh" "$mm" > "$out/state-roundtrip.txt" 2>&1
+OUT="$out/state-roundtrip" "$here/state-roundtrip.sh" "$mm" > "$out/state-roundtrip.txt" 2>&1 || exits="$exits state-roundtrip"
 wait
 "$PYTHON" "$here/mmbench/filesel_check.py" "$out/mmbench" > "$out/filesel.txt" 2>&1
 uptime > "$out/load-end.txt"
+{
+  echo "standing: scripts that exited nonzero:${exits:- none}"
+  "$PYTHON" "$here/behaviors.py" --failing "$out"
+} | tee "$out/failing.txt"
 echo "standing: $out"

@@ -229,7 +229,7 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 
 ## Coverage
 
-Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 222 entries: 203 with a question, 7 not hardware-decidable (no console run can decide them), 12 not decidable by this kit (a console could, with what the reason names).
+Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 223 entries: 203 with a question, 7 not hardware-decidable (no console run can decide them), 13 not decidable by this kit (a console could, with what the reason names).
 
 | Entry | Why | Question or reason |
 |---|---|---|
@@ -289,6 +289,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `cpu.fpu-convert` | measured reference | `hw:nemu64-console` |
 | `cpu.fpu-cvt-s-d` | measured reference | `hw:nemu64-console` |
 | `cpu.likely-nullified` | measured reference | `hw:nemu64-console` |
+| `cpu.sc-llbit` | vendor reference | not decidable by this kit: the kit ROMs time instructions and do not run SC or SCD. What would decide it: the romgen cpu suite ROM cpu-llsc.z64 run on a console (it self-checks and prints CPU: Failed X of Y), which also answers what the manual leaves open, whether a failing SC raises Watch |
 | `cpu.eret` | fit; verify-is-fit | `hw:nemu64-console`, `hw:cpu-exceptions` |
 | `cpu.mtc0-slow-regs` | measured reference | `hw:nemu64-console` |
 | `cpu.cache-index-load-tag` | measured reference | `hw:nemu64-console`, `hw:cache-ops`, `hw:cache-ops-sum` |
