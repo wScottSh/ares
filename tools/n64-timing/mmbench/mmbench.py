@@ -48,6 +48,13 @@ STICK = 32767
 # by walking the arena list. The routes check the node size and state.gfxCtx before using it.
 FILESEL_STATE = 0x803E6B20
 
+# The file-select phase sweep (README.md, Phase). Phase k holds the Start that opens file select
+# k * PHASE_STEP fields longer. The title updates once per 3 fields (framerateDivisor 3), so a
+# shorter step reads the press on the same game frame and repeats phase 0 byte for byte.
+PHASES = 5
+PHASE_STEP = 3
+PHASE_SCENES = ("filesel", "filesel-named", "filesel-options")
+
 
 def fs(offset):
     return f"0x{FILESEL_STATE + offset:08X}"
@@ -135,12 +142,13 @@ def circle(fields, period, step=5):
     return moves
 
 
-def title_to_filesel():
+def title_to_filesel(phase=0):
     # EnMag (z_en_mag.c): a first Start during the title fade-in skips to MAG_STATE_DISPLAY,
     # which ignores input for 20 game frames; a second Start after that opens file select.
     # Later in the title, a cutscene flag fades it out, so the presses come early.
     return scene_settled(0x08) + [f"until {GAME_FRAMES} w >= 10", "input Start", "wait 10", "input",
-                                  f"until {GAME_FRAMES} w >= 60", "input Start", "wait 10", "input",
+                                  f"until {GAME_FRAMES} w >= 60"] + ([f"wait {phase * PHASE_STEP}"] if phase else []) + [
+                                  "input Start", "wait 10", "input",
                                   f"until 0x{SAVE_GAME_MODE:08X} w == 2",
                                   overlay_loaded(OVERLAY_FILE_SELECT)]
 
@@ -151,10 +159,10 @@ def press(pad, reacted):
     return [f"input {pad}", reacted, "input", f"until {FS_PAD_BUTTONS} h == 0", f"until {FS_PAD_STICK} h == 0"]
 
 
-def filesel_main_menu():
+def filesel_main_menu(phase=0):
     # The arena node size (sizeof(FileSelectState) rounded to 16) fails on a moved FileSelectState,
     # and GameState_Init sets state.gfxCtx after the bzero.
-    return title_to_filesel() + [f"until {fs(-0xC)} w == 0x24560", f"until {FS_GFX_CTX} w == {GFX_CTX}",
+    return title_to_filesel(phase) + [f"until {fs(-0xC)} w == 0x24560", f"until {FS_GFX_CTX} w == {GFX_CTX}",
                                  f"until {FS_CONFIG_MODE} h == {CM_MAIN_MENU}"]
 
 
@@ -215,18 +223,18 @@ BUFFER_POINTERS = [
 ]
 
 
-def scene_scripts():
+def scene_scripts(phase=0):
     title_route = scene_settled(0x08)
     return {
         "title": title_route + ["mark window"] + play_counters("start")
         + [f"wait {WINDOW}"] + play_counters("end") + ["stop"],
-        "filesel": title_to_filesel() + ["mark window"] + counters("start")
+        "filesel": title_to_filesel(phase) + ["mark window"] + counters("start")
         + [f"wait {WINDOW}"] + counters("end") + ["stop"],
-        "filesel-named": filesel_main_menu() + create_file() + move_cursor(STICK, FS_BTN_MAIN_FILE_2)
+        "filesel-named": filesel_main_menu(phase) + create_file() + move_cursor(STICK, FS_BTN_MAIN_FILE_2)
         + create_file() + move_cursor(-STICK, FS_BTN_MAIN_FILE_1) + ["mark window"] + counters("start")
         + [f"wait {WINDOW}"] + counters("end")
         + [f"peek end.name{i + 1} {fs(0x24414 + 8 * i)} w" for i in range(2)] + ["stop"],
-        "filesel-options": filesel_main_menu() + move_cursor(-STICK, FS_BTN_MAIN_OPTIONS)
+        "filesel-options": filesel_main_menu(phase) + move_cursor(-STICK, FS_BTN_MAIN_OPTIONS)
         + press("A", f"until {FS_CONFIG_MODE} h == {CM_MAIN_TO_OPTIONS}")
         + [f"until {FS_CONFIG_MODE} h == {CM_OPTIONS_MENU}", "mark window"] + counters("start")
         + [f"wait {WINDOW}"] + counters("end") + ["stop"],
@@ -444,18 +452,29 @@ def confirm_buffers(sct_fields, peeks):
     return rows
 
 
-def bench(args, out, extra=()):
-    scripts = scene_scripts()
-    names = args.scenes.split(",")
-    out.mkdir(parents=True, exist_ok=True)
-    began = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=args.jobs or len(names)) as pool:
-        futures = {n: pool.submit(run_scene, args.exe, args.rom, n, scripts[n], out, args.shots,
-                                  (*extra, "--behaviors", str(out / "behaviors.tsv")) if n == names[0] else extra)
-                   for n in names}
-        results = {n: f.result() for n, f in futures.items()}
-    total_wall = time.perf_counter() - began
+def phase_dir(out, phase):
+    return out / f"phase-{phase}" if phase else out
 
+
+def bench(args, out, extra=()):
+    names = args.scenes.split(",")
+    runs = [(0, n) for n in names] + [(k, n) for k in range(1, args.phases) for n in names if n in PHASE_SCENES]
+    scripts = {k: scene_scripts(k) for k in range(args.phases)}
+    began = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=args.jobs or len(runs)) as pool:
+        futures = {(k, n): pool.submit(run_scene, args.exe, args.rom, n, scripts[k][n], phase_dir(out, k), args.shots,
+                                       (*extra, "--behaviors", str(out / "behaviors.tsv")) if (k, n) == runs[0] else extra)
+                   for k, n in runs}
+        results = {kn: f.result() for kn, f in futures.items()}
+    total_wall = time.perf_counter() - began
+    for k in range(args.phases):
+        phase_names = [n for kk, n in runs if kk == k]
+        if phase_names:
+            write_results(phase_dir(out, k), phase_names, {n: results[(k, n)] for n in phase_names},
+                          total_wall if k == 0 else None)
+
+
+def write_results(out, names, results, total_wall):
     all_fields, all_gframes, all_rotations, all_bus, summary, sct = [], [], [], [], [], None
     for n in names:
         marks, peeks, buses = parse_events(results[n][0])
@@ -479,7 +498,7 @@ def bench(args, out, extra=()):
     if all_bus:
         write_tsv(out / "bus.tsv", all_bus)
 
-    walls = {"total": total_wall, **{n: results[n][1] for n in names}}
+    walls = {**({"total": total_wall} if total_wall is not None else {}), **{n: results[n][1] for n in names}}
     (out / "wall.tsv").write_text("run\twall_s\n" + "".join(f"{k}\t{v:.3f}\n" for k, v in walls.items()),
                                   newline="\n")
 
@@ -511,7 +530,9 @@ def main():
     p.add_argument("--exe", required=True, help="n64-run binary")
     p.add_argument("--out", type=Path, default=home / "mmbench" / "results" / "latest")
     p.add_argument("--scenes", default=",".join(scene_scripts()))
-    p.add_argument("--jobs", type=int, default=0, help="parallel runs (default: one per scene)")
+    p.add_argument("--jobs", type=int, default=0, help="parallel runs (default: one per scene and phase)")
+    p.add_argument("--phases", type=int, default=PHASES,
+                   help=f"run {', '.join(PHASE_SCENES)} at phases 0..N-1 too, into OUT/phase-<k> (default {PHASES})")
     p.add_argument("--shots", action="store_true",
                    help="save start.ppm/end.ppm per scene from the RDRAM image the VI samples (visual check only)")
     p.add_argument("--check-determinism", action="store_true",

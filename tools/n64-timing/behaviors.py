@@ -1483,11 +1483,9 @@ def mm_result(run, row):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         index = {"empty": 0, "options": 1, "named": 2}[m.group(1)]
-        _, _, scene, evaluate = module.ROWS[index]
-        if scene not in summary:
-            return None
-        ok, measured = evaluate(summary[scene])
-        return ("pass" if ok else "fail"), f"{scene}: {measured}"
+        scene = module.ROWS[index][2]
+        ok, measured = module.row_verdict(run / "mmbench", index)
+        return ("missing" if ok is None else "pass" if ok else "fail"), f"{scene}: {measured}"
     scene = summary.get(MM_SCENES.get(row["selector"], row["selector"]))
     return ("report", f"{scene['scene']}: {scene['fields_per_gframe_mean']} fields per game frame, "
                       f"{scene['rsp_busy_clocks_per_field_mean']} RSP busy clocks per field") if scene else None
