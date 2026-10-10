@@ -4,7 +4,7 @@
 
 This is the timing model's specification (map [#1](https://github.com/wScottSh/ares/issues/1)). Each row is one behavior: its value, the basis of that value, the reference it comes from, the checks that decide it, and their results. There is no unverified status. A behavior is built from its reference (or, as a model choice, from the reason its reference states), or it is not built. The Code column says where it is built: the constant the code reads, or the code that implements a rule. A row whose value the code does not use is not built, and its Code column says what the code does instead. A check written `pending (gate)` names a corpus the program cannot run yet, and it never counts as verified. A fit row names the checks its value was solved from (fit from). A pass on those verifies the arithmetic, not the model, so a fit row whose other checks only report is labeled **fit only, no independent check**, and its note says why. A check marked (guard) runs and can fail its row, but it never passes it, because it does not measure the row's value: det and stepcap show a run repeats, not that a value is right.
 
-Results come from `behaviors.py --results` over one standing run of every suite, recorded in `docs/spec/n64-timing-results.tsv`. A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on report-only. Two results are weaker than pass and never count as one. A bench check is consistent-only when a point passes its consistent rule (the hardware band overlaps the model's phase range) but the model's mean over the boot delays misses the band: consistent with the hardware number, not agreement. A bench check is also consistent-only when its verdict is not the same at every code-layout pad (8 pads, one 32 B I-cache line); its detail names each pad's verdict. Every bench range is joint over the pads and boot delays. Its detail gives each consistent point's acceptance window (half the band plus half the model's phase range, as a % of the hardware number) and the mean rule's verdict. A check is pass-conditional:#<issue> when it passes only through a model choice with no hardware reference, tracked in that issue. A Thar0 check passes when the model's count lies inside the console's minimum..maximum over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data and its guards passes and none passes only weakly (then it takes that weak result), fit only when only its fit data passes, model-choice when a model-choice row has only guards, and otherwise the gates of its pending checks.
+Results come from `behaviors.py --results` over one standing run of every suite, recorded in `docs/spec/n64-timing-results.tsv`. A check is pass, fail, or pending on a named gate. A check that reports its number but asserts none is pending on report-only. Two results are weaker than pass and never count as one. A bench check is consistent-only when a point passes its consistent rule (the hardware band overlaps the model's phase range) but the model's mean over the boot delays misses the band: consistent with the hardware number, not agreement. A bench check is also consistent-only when its verdict is not the same at every code-layout pad (8 pads, one 32 B I-cache line); its detail names each pad's verdict. Every bench range is joint over the pads and boot delays. A hardware check follows the same layout rule: each pad's console capture is compared with the fork's run at that pad, and a question whose fork values differ by pad fails until the console has run every pad. A bench check's detail gives each consistent point's acceptance window (half the band plus half the model's phase range, as a % of the hardware number) and the mean rule's verdict. A check is pass-conditional:#<issue> when it passes only through a model choice with no hardware reference, tracked in that issue. A Thar0 check passes when the model's count lies inside the console's minimum..maximum over its runs. A row's status is fail when any of its checks fails, pass when a check other than its fit data and its guards passes and none passes only weakly (then it takes that weak result), fit only when only its fit data passes, model-choice when a model-choice row has only guards, and otherwise the gates of its pending checks.
 
 | Basis | Meaning | Rows |
 |---|---|---|
@@ -21,7 +21,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 
 | Status | Meaning | Rows |
 |---|---|---|
-| consistent-only | no check failed, but a check passed its consistent rule while the model's phase mean missed the band, or a bench check's verdict differs between code-layout pads: some phase or layout of the model agrees with the hardware number, not every one does. Consistent with the hardware, not agreement | 2 |
+| consistent-only | no check failed, but a check passed its consistent rule while the model's phase mean missed the band, or a bench or hardware check's verdict differs between code-layout pads: some phase or layout of the model agrees with the hardware number, not every one does. Consistent with the hardware, not agreement | 2 |
 | fail | at least one check failed; the detail in Check results gives the residual | 26 |
 | fit only | only the checks the value was fitted to passed (verify-is-fit) | 12 |
 | model-choice | a model-choice row whose only checks are guards: they passed, which shows the choice is built and runs the same every time, not that its value is right | 4 |
@@ -272,7 +272,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-107-fix/standing on 3182eaf20).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-mm-phase/after on ea12d0a97).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -318,7 +318,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `bench:vi-frame-latch` | pass | vvideo-outside-late fetches 1 (expected 1, 1..1, every) pass; y-late-bank2 vi_bank 2 (expected 2, 2..2, every) pass |
 | `bench:wb-fifth-store` | pending:report-only | sw-5 minus_prev_pclk 14..16 median 16.0 mean 15.781 (expected -) report; sw-4 minus_prev_pclk 0 (expected -) report; sw-5-lw minus_prev_pclk 18 (expected -) report |
 | `cpu:llsc` | pass | 14 of 14 tests pass |
-| `det` | pass | det-mm: determinism: PASS, 29 files byte-identical, 8219 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
+| `det` | pass | det-mm: determinism: PASS, 85 files byte-identical, 23405 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `harness:emux-bus` | pass | 4 of 4 tests pass |
 | `hw:ai-fetch` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
 | `hw:ai-rate` | pending:calibration-16 | no complete power-on console capture of kit-bus in docs/calibration/hardware |
@@ -407,9 +407,9 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:write-granularity-pixels` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
 | `hw:xbus-fetch-rate` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
 | `hw:zread-2cyc` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
-| `mm:filesel-empty` | pass | filesel: mean 1.0113, 98.9% of 444 game frames at 1 field(s) |
-| `mm:filesel-named` | fail | filesel-named: mean 1.6941, 69.4% of 353 game frames at 2 field(s) |
-| `mm:filesel-options` | pass | filesel-options: mean 1.0000, 100.0% of 598 game frames at 1 field(s) |
+| `mm:filesel-empty` | pass | filesel: median over 5 phases: mean 1.0135 (min 1.0113, max 1.0181), 98.6% (min 98.2%, max 98.9%) of game frames at 1 field(s) |
+| `mm:filesel-named` | fail | filesel-named: median over 5 phases: mean 1.6932 (min 1.6884, max 1.7057), 69.3% (min 68.8%, max 70.6%) of game frames at 2 field(s) |
+| `mm:filesel-options` | pass | filesel-options: median over 5 phases: mean 1.0000 (min 1.0000, max 1.0000), 100.0% (min 100.0%, max 100.0%) of game frames at 1 field(s) |
 | `mm:south-clock-town` | pending:report-only | sct: 3.0000 fields per game frame, 1708022.4 RSP busy clocks per field |
 | `nemu64:cop0hazard/count` | pass | 1 of 1 tests pass |
 | `nemu64:cop0hazard/random-read-early` | pass | 1 of 1 tests pass |
@@ -451,7 +451,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `rdpstat:xbus` | pass | 3 of 3 tests pass |
 | `snapper:rect-nosync` | pass | RDP Rect No-Sync-Env 1C: 20/20 match; RDP Rect No-Sync-Env 2C: 40/40 match; RDP Rect No-Sync-Fill: 20/20 match |
 | `snapper:span-tri` | pass | RDP Test-Mode - Span Tri: 432/432 match |
-| `stepcap` | pass | stepcap-mm: stepcap: PASS, 29 files byte-identical, 8219 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 25 fields with trace_hash |
+| `stepcap` | pass | stepcap-mm: stepcap: PASS, 85 files byte-identical, 23405 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 25 fields with trace_hash |
 | `systembench:joy-1j` | pass | JOY: 1J [64] 37992 RCP cycles (hardware 37987, +5, +0.01%); main.c rule holds in 33 of 33 runs |
 | `systembench:joy-2j` | pending:report-only | JOY: 2J [64] 57977 RCP cycles (hardware 57972, +5, +0.01%); main.c rule holds in 33 of 33 runs |
 | `systembench:joy-3j` | pending:report-only | JOY: 3J [64] 77962 RCP cycles (hardware 77924, +38, +0.05%); main.c rule holds in 33 of 33 runs |

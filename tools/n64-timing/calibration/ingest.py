@@ -80,14 +80,14 @@ def store(root, capture, name, model):
                          + "\n  ".join(differ))
     out = Path(root) / kit.HARDWARE / name
     out.mkdir(parents=True, exist_ok=True)
-    manifest = ["log\tsource\tsha256\tcomplete\tbytes\tkit_sha\trom_sha256\tri_refresh\tboot\tpads"]
+    manifest = ["log\tsource\tsha256\tcomplete\tbytes\tkit_sha\trom_sha256\tri_refresh\tboot\tpads\tbuild"]
     for rom, paths in sorted(ext.items()):
         (out / f"ext-{rom}").mkdir(exist_ok=True)
         for path in paths:
             dest = out / f"ext-{rom}" / path.name
             shutil.copyfile(path, dest)
             manifest.append("\t".join([str(dest.relative_to(out)), path.name, hashlib.sha256(path.read_bytes()).hexdigest(),
-                                       "-", str(path.stat().st_size), "-", "-", "-", "-", "-"]))
+                                       "-", str(path.stat().st_size), "-", "-", "-", "-", "-", "-"]))
         print(f"ingest: ext-{rom}: {len(paths)} files of the external ROM {rom}")
     for rom, entries in sorted(logs.items()):
         known = rom in kit.KIT_ROMS
@@ -100,7 +100,7 @@ def store(root, capture, name, model):
                                        "yes" if log.complete else "no", str(len(log.text)),
                                        log.header.get("sha", "-"), log.header.get("rom_sha256", "-"),
                                        log.header.get("ri_refresh", "-"), log.boot,
-                                       "-" if log.pads is None else f"{log.pads:04b}"]))
+                                       "-" if log.pads is None else f"{log.pads:04b}", log.header.get("build", "-")]))
             note = "" if log.complete else "  INCOMPLETE: footer missing or FNV mismatch; stored, not compared"
             hists = len(kit.histograms(log))
             note += f"; {hists} latency histograms, recorded (kit.py --hist {dest.name})" if hists else ""

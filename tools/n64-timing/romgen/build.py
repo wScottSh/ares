@@ -1,7 +1,7 @@
 """Builds romgen test ROMs.
 
 usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat|snapper|noise|calib --out DIR
-       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE] [--hw] [--jobs N]
+       [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE] [--hw] [--jobs N] [--layout-pad P]
 
 Writes one .z64 per set of the suite (romgen/suites/<suite>/sets.py), for example
 nemu64-timing.z64 or bench-pi-dma-sizes.z64, and a .tests.tsv next to each listing every value
@@ -15,6 +15,10 @@ header word 0x8, with the payload size in header word 0x10.
 --hw builds the console variant (hwout.py): no emux instruction, output through the ISViewer,
 cartridge SRAM and the screen, and a `#kit` header naming the ROM and the git commit. The calib
 suite is always built this way.
+
+--layout-pad P inserts P nops at boot (runtime.layout_pad), moving every later instruction against
+the 32 B I-cache lines, and names the build p<P>/<boot-K or single> in the `#kit` header: the
+calibration kit's layout axis (calibration/run.sh). Pad 0 is the build without the flag.
 """
 import argparse
 import hashlib
@@ -113,6 +117,7 @@ def main():
     ap.add_argument("--define", action="append", default=[], metavar="NAME=VALUE",
                     help="override an integer assembler constant of the suite, e.g. RUNS=1000")
     ap.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1), help="sets built at once (default 8)")
+    ap.add_argument("--layout-pad", type=int, default=0, metavar="P", help="words of boot padding (default 0)")
     args = ap.parse_args()
     defines = {k: int(v, 0) for k, v in (d.split("=", 1) for d in args.define)}
     ipl3 = open(args.ipl3, "rb").read()
@@ -145,9 +150,11 @@ def build_set(index):
     args, defines, ipl3, sha = _JOB
     hw = sha is not None
     set_def = suite_sets(args.suite)[index]
-    set_def.consts = {**set_def.consts, **defines}
+    set_def.consts = {**set_def.consts, **defines, **({"LAYOUT_PAD": args.layout_pad} if args.layout_pad else {})}
     rom_id = os.path.basename(set_def.rom_name)
     variant = os.path.dirname(set_def.rom_name) or "single"
+    if args.layout_pad:
+        variant = f"p{args.layout_pad}/{variant}"
     suite, payload = build_payload(set_def, (rom_id, sha, variant) if hw else None)
     rom = make_rom(ipl3, payload)
     if hw:
