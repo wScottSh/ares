@@ -270,7 +270,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-pidma-fix/standing on f3264cf0d).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-pidma-fix/standing on f6fab4dc0).
 
 | Check | Result | Detail |
 |---|---|---|
