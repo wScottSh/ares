@@ -273,6 +273,15 @@ def decides(cid, explicit, suite_files):
     return any(r.get("kind", "check") != "report" for r in rows)
 
 
+def check_target(cid, explicit, suites):
+    """(runner, target, selector) a check runs: two ids with the same one are one check."""
+    row = explicit.get(cid)
+    if row:
+        return row["runner"], row["target"], row["selector"]
+    prefix, _, rest = cid.partition(":")
+    return (suites[prefix]["runner"] if prefix in suites else prefix), rest, "-"
+
+
 def check_defined(cid, explicit, suite_files):
     if cid in explicit:
         return True
@@ -365,7 +374,7 @@ def validate(root):
     """Returns (errors, rows, checks, sites)."""
     errors = []
     rows = read_tsv(root, TABLE, COLUMNS, errors)
-    checks, explicit, _, suite_files = load_checks(root, errors)
+    checks, explicit, suites, suite_files = load_checks(root, errors)
     lint_errors, sites = lint_module().lint(root)
     errors += lint_errors
     seen = {}
@@ -451,6 +460,14 @@ def validate(root):
             elif not m or (m.group(1), int(m.group(2))) not in here:
                 errors.append(f"{where}: legacy row `{rid}` cites {row['reference']}, which is not one of its code sites "
                               f"({', '.join(f'{p}:{n}' for p, n in here[:3])}). Run tools/n64-timing/behaviors.py --fix-lines.")
+    measures = {}
+    for cid in referenced_checks(rows, checks):
+        if check_defined(cid, explicit, suite_files):
+            measures.setdefault(check_target(cid, explicit, suites), []).append(cid)
+    for same in measures.values():
+        if len(same) > 1:
+            errors.append(f"{TABLE}: checks {' and '.join(f'`{c}`' for c in same)} measure the same thing (runner, target and "
+                          f"selector). Keep one and name it in every row that names the others.")
     legacy_ids = {r["id"] for r in rows if r["basis"] == "legacy"}
     for rid in sorted(set(sites) - legacy_ids):
         if rid in seen:
@@ -585,7 +602,7 @@ def statuses(rows, found):
     return count
 
 
-def render_spec(rows, checks, found):
+def render_spec(rows, checks, found, reports):
     count = {b: sum(1 for r in rows if r["basis"] == b) for b in BASES}
     gates = {c["id"]: c for c in checks if c["runner"] == "pending"}
     out = [
@@ -627,6 +644,9 @@ def render_spec(rows, checks, found):
         meaning = status_meaning(s) or "no check decided the row: " + "; ".join(
             f"{g[8:]}: {gates[g]['source']}" for g in s.split() if g in gates)
         out.append(f"| {s} | {cell(meaning)} | {n} |")
+    out += ["", "## Green predicates", "",
+            f"From `{CLOSURE}`, which gives each clause and its evidence (`docs/design/green-plan.md` section 1).", ""]
+    out += [f"- {predicate_line(n, c)}" for n, c in reports.items()]
     groups = {}
     for row in rows:
         if row["basis"] != "legacy":
@@ -708,7 +728,134 @@ def destination(root, found):
     ]
 
 
-def render_closure(root, rows, checks, found):
+COMMIT = re.compile(r"\b[0-9a-f]{7,40}\b")
+
+
+def ids(items):
+    return ", ".join(f"`{i}`" for i in items) or "none"
+
+
+def predicates(root, rows, checks, found):
+    """The three reports of docs/design/green-plan.md section 1, as {report: [(clause, holds, evidence)]}. holds is
+    None for a clause the repository cannot decide."""
+    kit = kit_module(root)
+    _, explicit, _, _ = load_checks(root, [])
+    qs = {q["id"]: q for q in question_rows(root)}
+    links = question_links(root)
+    reasons = {u["id"]: u["reason"] for u in calibration_tsv(root, "undecidable.tsv")}
+    excluded = {i for i, r in reasons.items() if r.startswith(UNDECIDABLE_PREFIX)}
+    out_of_kit = {i for i, r in reasons.items() if r.startswith(KIT_LIMIT_PREFIX)}
+    status = {r["id"]: row_status(r, found) for r in rows}
+    result = {c: res for c, (res, _) in found.items() if c != "#source"}
+    fit_data = {c for r in rows for c in r["fit-from"].split()}
+    open_rows = [r for r in rows if r["id"] not in excluded | out_of_kit]
+
+    non_green = sorted(c for c, res in result.items() if res != "pass" and not c.startswith("hw:"))
+    undecided = [c for c in non_green if c not in links and c not in reasons]
+    fit_green = [r["id"] for r in rows if status[r["id"]] == "pass" and all(
+        c in fit_data for c, guard in verify_checks(r) if not guard and c not in r["fit-from"].split() and result.get(c) == "pass")]
+    no_rom = sorted(c for c, res in result.items() if res == "pending:no-rom")
+    no_reader = sorted(c for c in result if c.startswith("hw:") and c[3:] in qs and not comparable(kit, qs[c[3:]]))
+    complete = [
+        ("every P0-P4 unit has landed or is closed with a stated reason", None,
+         "not computed from the repository: docs/design/green-plan.md section 4 lists the units, and the program ledger tracks them"),
+        ("every non-green check names the kit question or console condition that decides it", not undecided,
+         f"{len(non_green) - len(undecided)} of {len(non_green)} non-green checks (hw:* excluded: each is its own console "
+         f"question) are in a question's closes column or {CALIBRATION}/undecidable.tsv; missing: {ids(undecided)}"),
+        ("no check is green through its own fit data or a fitted third-party threshold", not fit_green,
+         f"no row passes through its own fit data (its status is then fit only); rows that pass only through checks another "
+         f"row's value was fit to, so a joint fit can hide their error: {ids(fit_green)}. A fitted third-party threshold is not "
+         f"machine-readable: each check's source in {CHECKS} names its own"),
+        ("no check is dead (no ROM, no reader, or duplicate)", not no_rom and not no_reader,
+         f"no ROM: {ids(no_rom)}; hw checks whose question has no reader: {ids(no_reader)}; duplicates: none, since "
+         f"--check fails on two ids for one check"),
+    ]
+
+    det, stepcap = found_result(found, "det")[0], found_result(found, "stepcap")[0]
+    walls = tsv_rows(Path(root) / WALL_BUDGET)
+    slow = max(walls, key=lambda r: float(r["wall_s"]))
+    run_commits = COMMIT.findall(results_source(found))
+    wall_commits = {c for r in walls for c in COMMIT.findall(r["source"])}
+    retimed = any(a.startswith(b) or b.startswith(a) for a in run_commits for b in wall_commits)
+    weak = sorted(c for c, res in result.items() if WEAK.match(res))
+    failing = sorted(c for c, res in result.items() if res == "fail")
+    other_gates = sorted(c for c, res in result.items() if res.startswith("pending:") and res != "pending:calibration-16")
+    uncomparable = sorted(c for c in result if c.startswith("hw:") and result[c] == "pending:calibration-16"
+                          and not (c[3:] in qs and comparable(kit, qs[c[3:]])))
+    named_by = {}
+    for r in rows:
+        for c, _ in verify_checks(r):
+            named_by.setdefault(c, []).append(r["id"])
+    gated = sorted(c for c, res in result.items() if res in ("pending:report-only", "pending:no-rom")
+                   and any(rid not in excluded | out_of_kit for rid in named_by.get(c, [c])))
+    no_corpus = [r["id"] for r in open_rows if "pending:no-corpus" in r["verify"].split()]
+
+    def independent_question(r):
+        return any(c.startswith("hw:") and not guard and c[3:] in qs and comparable(kit, qs[c[3:]])
+                   and not reruns_fit(kit, qs[c[3:]], r, explicit) for c, guard in verify_checks(r))
+    no_question = [r["id"] for r in open_rows if status[r["id"]] != "pass" and not independent_question(r)]
+    ready = [
+        (f"det and stepcap pass, and the 600-field MM run takes <= {BUDGET_S} s, re-timed on current master",
+         det == stepcap == "pass" and float(slow["wall_s"]) <= BUDGET_S and retimed,
+         f"det {det}, stepcap {stepcap}; slowest scene {slow['run']} {float(slow['wall_s']):g} s; the wall times name "
+         f"{ids(sorted(wall_commits))} and the standing run {ids(run_commits)}, and the clause holds only when they match"),
+        ("no check is fail", not failing, f"{len(failing)} fail: {ids(failing)}"),
+        ("no check is consistent-only or pass-conditional", not weak,
+         f"{len(weak)}: " + ", ".join(f"`{c}` {result[c]}" for c in weak) if weak else "none"),
+        ("every pending check is pending:calibration-16 on a kit question a tool can compare", not other_gates and not uncomparable,
+         f"other gates: {ids(other_gates)}; hw checks whose question no tool compares: {ids(uncomparable)}"),
+        ("no check is report-only, no-rom or no-corpus, except on excluded or out-of-kit rows", not gated and not no_corpus,
+         f"report-only or no-rom checks: {ids(gated)}; rows gated on no-corpus: {ids(no_corpus)}"),
+        ("every row that is not verified names a hardware question independent of its fit data", not no_question,
+         f"{len(no_question)} rows that are not excluded or out of kit, do not pass, and name no hw:<question> a tool compares "
+         f"that does not re-run their fit: {ids(no_question)}"),
+    ]
+
+    hw = sorted(c for c in result if c.startswith("hw:"))
+    filesel = [(c, found_result(found, c)[0]) for c in ("mm:filesel-empty", "mm:filesel-named")]
+    verified = [r for r in rows if r["id"] not in excluded and status[r["id"]] == "pass"]
+    in_scope = [r for r in rows if r["id"] not in excluded]
+    held = sum(1 for _, h, _ in ready if h)
+    green = [
+        ("SOFTWARE_READY", held == len(ready), f"{held} of {len(ready)} clauses hold"),
+        ("mm:filesel-empty and mm:filesel-named pass", all(r == "pass" for _, r in filesel),
+         ", ".join(f"`{c}` {r}" for c, r in filesel)),
+        ("wScottSh/mm-decomp-60fps#1 is merged", None, "not computed from the repository: Scott's merge (decision D3)"),
+        ("every hw:* check is ingested and passes", all(result[c] == "pass" for c in hw),
+         f"{sum(1 for c in hw if result[c] == 'pass')} of {len(hw)} pass, "
+         f"{sum(1 for c in hw if result[c] == 'pending:calibration-16')} pending:calibration-16"),
+        ("every row that is not excluded or out-of-kit is verified", len(verified) == len(in_scope),
+         f"{len(verified)} of {len(in_scope)} rows that are not excluded pass, counting the "
+         f"{sum(1 for r in rows if r['id'] in out_of_kit)} out-of-kit rows in scope until Scott rules (decision D1); "
+         f"{sum(1 for r in rows if r['id'] in excluded)} rows are excluded as not hardware-decidable"),
+    ]
+    return {"SOFTWARE_COMPLETE": complete, "SOFTWARE_READY": ready, "MAP_GREEN": green}
+
+
+def predicate_line(name, clauses):
+    decided = [h for _, h, _ in clauses if h is not None]
+    held = sum(1 for h in decided if h)
+    if name == "SOFTWARE_READY":
+        return f"SOFTWARE_READY: {held} of {len(clauses)} clauses hold."
+    unknown = len(clauses) - len(decided)
+    verdict = "does not hold" if held < len(decided) else "not decided" if unknown else "holds"
+    return f"{name}: {verdict}. {held} of {len(decided)} computed clauses hold" + (
+        f"; {unknown} {'is' if unknown == 1 else 'are'} not computed from the repository." if unknown else ".")
+
+
+def render_predicates(reports):
+    out = ["## Green predicates", "",
+           "The three reports of `docs/design/green-plan.md` section 1, computed from the tables and the results. "
+           "SOFTWARE_COMPLETE is the software-only end state; SOFTWARE_READY cannot hold without the console run (#16); "
+           "MAP_GREEN is the map's destination.", ""]
+    out += [f"- {predicate_line(n, c)}" for n, c in reports.items()]
+    for name, clauses in reports.items():
+        out += ["", f"### {name}", "", "| Clause | Holds | Evidence |", "|---|---|---|"]
+        out += [f"| {cell(c)} | {'not computed' if h is None else 'yes' if h else '**no**'} | {cell(e)} |" for c, h, e in clauses]
+    return out
+
+
+def render_closure(root, rows, checks, found, reports):
     gates = {c["id"]: c for c in checks if c["runner"] == "pending"}
     by_status = {}
     for r in rows:
@@ -725,7 +872,12 @@ def render_closure(root, rows, checks, found):
         + ", ".join(f"{n} {s}" for s, n in sorted(count.items())) + ". "
         + (f"{len(by_status.get('not-built', []))} behaviors are not built: the code does not use their value ("
            + ", ".join(f"`{r['id']}`" for r in by_status.get("not-built", [])) + "). Behaviors not built says what the code "
-           "does instead." if by_status.get("not-built") else "Every behavior is built: the code reads each value or implements each rule."),
+           "does instead." if by_status.get("not-built") else
+           "Every behavior that is not a legacy cost is built: the code reads each value or implements each rule.")
+        + f" The {sum(1 for r in rows if r['basis'] == 'legacy')} legacy rows are a third class, apart from built and not-built "
+        "rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).",
+        "",
+    ] + render_predicates(reports) + [
         "",
         "## Destination",
         "",
@@ -805,8 +957,9 @@ def generated(root):
     errors, rows, checks, sites = validate(root)
     found = load_results(root, rows, checks, errors)
     errors += calibration_errors(root, rows, checks, found)
-    return errors, {HEADER: render_header(rows), SPEC: render_spec(rows, checks, found),
-                    CLOSURE: render_closure(root, rows, checks, found),
+    reports = predicates(root, rows, checks, found)
+    return errors, {HEADER: render_header(rows), SPEC: render_spec(rows, checks, found, reports),
+                    CLOSURE: render_closure(root, rows, checks, found, reports),
                     INVENTORY: render_inventory(root, rows, checks, found)}
 
 
@@ -895,7 +1048,7 @@ def calibration_errors(root, rows, checks, found):
         where = f"tools/n64-timing/calibration/questions.tsv:{q['line']}"
         for rid in q["closes"].split():
             r = by_id.get(rid)
-            if r and comparable(kit, q) and f"hw:{q['id']}" not in r["verify"].split() and not reruns_fit(kit, q, r, explicit):
+            if r and comparable(kit, q) and f"hw:{q['id']}" not in {c for c, _ in verify_checks(r)} and not reruns_fit(kit, q, r, explicit):
                 errors.append(f"{TABLE}:{r['line']}: `{rid}` is closed by hw:{q['id']}, but its verify column does not "
                               f"name it, so a console result never reaches the row. Add `hw:{q['id']}` there.")
         if q["kit"] not in kit.KIT_ROMS and not q["kit"].startswith(("ext:", "none: ")):
@@ -1216,10 +1369,10 @@ def rdpstat_result(run, row):
     path = run / "rdpstat" / row["target"] / "values.tsv"
     if not path.exists():
         return None
-    selector = row["selector"]
-    picked = [r for r in tsv_rows(path) if selector == "-" or r["test"].startswith(selector)]
+    prefixes = row["selector"].split("|")
+    picked = [r for r in tsv_rows(path) if prefixes == ["-"] or r["test"].startswith(tuple(prefixes))]
     if not picked:
-        return "missing", f"no test `{selector}` in rdpstat/{row['target']}"
+        return "missing", f"no test `{row['selector']}` in rdpstat/{row['target']}"
     result, detail = tally([r["result"] for r in picked], "tests")
     failing = sorted({r["test"] for r in picked if r["result"] != "pass"})
     return result, detail + (f"; failing: {', '.join(failing)}" if failing else "")
@@ -1504,6 +1657,9 @@ def self_test(root):
              "inferred row `cpu.ifill-stall` has no note. State the inference"),
             ("removing a reference", TABLE, row_field("ri.read-hit", "reference", ""), "has no reference. Cite the hardware reference"),
             ("an unknown check id", TABLE, row_field("ri.read-hit", "verify", "bench:no-such-rom"), "check `bench:no-such-rom` is not defined in tools/n64-timing/checks.tsv. Add a row there"),
+            ("two ids for one check", TABLE,
+             row_field("rdp.read-gate", "verify", "thar0:imrd-1cycle thar0:nozb-vioff-imrd-1cyc thar0:zcmp hw:thar0-console"),
+             "checks `thar0:imrd-1cycle` and `thar0:nozb-vioff-imrd-1cyc` measure the same thing"),
             ("an empty check list", TABLE, row_field("ri.write-hit", "verify", ""), "has no check. Name the check"),
             ("adding a timing literal", "ares/n64/cpu/memory.cpp", lambda t: t + new_function, "timing literal [7, 2, 14] in `step(7 * 2);`. Add a row to ares/n64/timing/behaviors.tsv"),
             ("changing a legacy literal", "ares/n64/pi/bus.hpp", lambda t: t.replace("thread.step(pclk(250));", "thread.step(pclk(251));", 1), "If the code no longer charges this cost, delete the entry"),
