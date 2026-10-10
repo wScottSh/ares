@@ -81,7 +81,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 2 consistent-only, 21 fail, 90 pass, 1 pass-conditional:#77, 104 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 2 consistent-only, 21 fail, 90 pass, 1 pass-conditional:#77, 104 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
