@@ -1,4 +1,4 @@
-# standing run u-pidma-fix/standing on f6fab4dc0
+# standing run u-pidma-fix/standing on f3264cf0d
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.875 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.875 (expected 3) report; dirty-1000 dirty_minus_clean_pclk 2 (expected 3) report; 2 more report points
@@ -116,7 +116,6 @@ hw:vi-first-line	pending:calibration-16	no complete power-on console capture of 
 hw:vi-intr-latency	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-mid-field-blank	pending:calibration-16	none: blocked by #84, the fork crashes in VI::compose on a mid-field blank, so no model side exists: no kit ROM
 hw:vi-rcp-phase	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
-hw:vi-unfetched-video	pending:calibration-16	none: needs a video capture of the VI output, which the kit's ingestion does not read: no kit ROM
 hw:wb-drain-target	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:wb-release	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:write-granularity	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
