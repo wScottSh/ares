@@ -960,6 +960,9 @@ def self_test():
     repeat_cases = repeat_self_test()
     failed += repeat_cases.count(False)
     cases += repeat_cases
+    block_cases = block_write_slope_self_test()
+    failed += block_cases.count(False)
+    cases += block_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -1267,6 +1270,37 @@ def repeat_self_test():
         got, detail = compare(q, [hw], [repeat_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-dma: repeat-write, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+#The fork's pad-0 boot-1 COUNT mins of kit-dma's block-write-slope points (N = 16, N = 64).
+BLOCK_SLOPE_FORK = {"memset-cached": (539, 2195)}
+
+
+def block_write_slope_log(shift=0, reads=(0, 0)):
+    """A kit-dma log of the block-write-slope points at the fork's COUNTs, the N = 64 point moved shift ticks and
+    the N = 16 and N = 64 readings moved reads[0] and reads[1] ticks."""
+    body = "".join(f"#bench block-write-slope {op}-n{n} op={op} n={n} vi=off reps=8 "
+                   f"min={ticks + reads[i] + (shift if n == 64 else 0)} max=0\n"
+                   for op, pair in BLOCK_SLOPE_FORK.items() for i, (n, ticks) in enumerate(zip((16, 64), pair)))
+    return Log(sample_log(body, rom="kit-dma"))
+
+
+def block_write_slope_self_test():
+    """block-write-slope's per-line value and its rule at the COUNT bound (2 ticks over 48 lines)."""
+    out = []
+    got = block_write_slope_log().records.get(("block-write-slope", "memset-cached-fit"), {}).get("rclk_per_block")
+    out.append(got == 46.0)
+    print(f"kit: self-test: kit-dma: the fork's block-write-slope points derive 46.0 rclk per line: "
+          f"{'ok' if got == 46.0 else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "block-write-slope")
+    for name, hw, want in [
+            ("both readings at opposite ends of the COUNT bound, 2 ticks over 48 lines", block_write_slope_log(reads=(-1, 1)), "pass"),
+            ("2 ticks under the fork over 48 lines", block_write_slope_log(-2), "pass"),
+            ("3 ticks over the fork over 48 lines, just past the bound", block_write_slope_log(3), "fail"),
+            ("3 ticks under the fork over 48 lines", block_write_slope_log(-3), "fail")]:
+        got, detail = compare(q, [hw], [block_write_slope_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-dma: block-write-slope, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 #The mappings of the a, b and c LFSRs a reader tests for each noise use (noise.py). ad is G_AD_NOISE, two

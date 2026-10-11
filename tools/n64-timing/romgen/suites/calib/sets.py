@@ -19,7 +19,7 @@ from ..rdpstat import routines
 from ..rdpstat.routines import fill32
 from ..snapper import asm as snapper_asm
 from ..snapper.cases import UNCACHED, Lists, emit, run_sync
-from . import asm, bus, cpu2, repeat, rspdma, tex, zmem
+from . import asm, blockslope, bus, cpu2, repeat, rspdma, tex, zmem
 
 DELAYS = [int(k) for k in os.environ.get("N64_CALIB_DELAYS", "1,165,329,493,657,821,985,1149").split(",")]
 #One 32 B I-cache line of pads, as the bench walks (suites/bench/phases.py PADS).
@@ -258,7 +258,7 @@ KITS = {
     "kit-vi": [vi_enable, count_fields, vi_mid_field],
     "kit-dma": [benches.mi_memset_uncached, benches.mi_memset_cached, benches.mi_memset_rspdma,
                 benches.mi_memset_repeat, benches.sp_dma_sweep, benches.pi_dma_sizes, benches.si_dma, joybus_setup, sp_dma_chain, pi_dma_rowend,
-                *rspdma.BUILDERS, *repeat.BUILDERS],
+                *rspdma.BUILDERS, *repeat.BUILDERS, *blockslope.BUILDERS],
     "kit-hpos": [benches.uncached_vs_hpos],
     "kit-rdp": [benches.rdp_sync_sweep, benches.rdp_setter_sweep, benches.rdp_atomic_sweep, benches.rdp_rectn,
                 fifo_depth, cmd_fetch],
@@ -271,7 +271,7 @@ KITS = {
     "kit-bus": bus.BUILDERS,
 }
 KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-zread": [zmem.ASM], "kit-cpu2": [cpu2.ASM],
-           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM, repeat.ASM]}
+           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM, repeat.ASM, blockslope.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
