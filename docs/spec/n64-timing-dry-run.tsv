@@ -31,6 +31,7 @@ hw:fpu-classes	pass
 hw:ifill	pass
 hw:imrd-zcmp-slots	pass
 hw:imrd-zcmp-slots-2cyc	pass
+hw:irq-clear	fail
 hw:joybus-pads	pass
 hw:load-interlock-cop	pass
 hw:loadtile-rows	pass
