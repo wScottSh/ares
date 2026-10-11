@@ -723,7 +723,9 @@ def self_test():
     def built(sha):
         line = next(l for l in hwout.asm("kit-cpu", sha, "single").splitlines() if l.startswith("hw_str_header:"))
         return hwout.stamp(b"\0" * 64 + line[line.index('"') + 1:line.rindex('"')].encode() + b"\0code")
-    clean, dirty = built("78b4427b8d86"), built("78b4427b8d86-dirty")
+    from romgen import build
+    full = "78b4427b8d86e64a7a1b8bb15d9c5c3f9a9b2c11"
+    clean, dirty = built(build.sha_stamp(full, False)), built(build.sha_stamp(full, True))
     idents.append(("a dirty tree's build keeps the clean build's layout and rom_sha256",
                    len(clean) == len(dirty) and hwout.rom_sha256(clean) == hwout.rom_sha256(dirty)))
     for name, ok in idents:
