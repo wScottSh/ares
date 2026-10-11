@@ -117,8 +117,8 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 17 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
 | 18 | `kit-zmem` | 1.9 s | 30.1 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `filesel-glyph`, `pipebusy-stall` |
 | 19 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
-| 20 | `kit-cpu2` | 0.2 s | 20.2 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cpu-watch-edge`, `irq-clear`, `cache-ops`, `count-write-hold`, `count-write-phase`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 21 | `kit-bus` | 1.6 s | 12.4 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ri-write-gap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun` |
+| 20 | `kit-cpu2` | 0.2 s | 20.1 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cpu-watch-edge`, `irq-clear`, `cache-ops`, `count-write-hold`, `count-write-phase`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target`, `eret-chain`, `fpu-trivial-chain` |
+| 21 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun`, `ri-write-gap` |
 | 22 | `kit-vilb` | 0.2 s | 2.4 KB | no | 0 | a report, no question |
 | 23 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
 | 24 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
