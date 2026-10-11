@@ -100,7 +100,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 |---|---|---|---|---|---|---|
 | 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | 0-7 | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
 | 2 | `kit-vi` | 4.2 s | 3.4 KB | no | 0-7 | `vi-first-line`, `count-per-field`, `vi-mid-field-blank` |
-| 3 | `kit-dma` | 1.2 s | 16.8 KB | no | 0-7 | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end`, `sp-dma-rsp` |
+| 3 | `kit-dma` | 1.2 s | 18.0 KB | no | 0-7 | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `si-write64-poll`, `pi-row-end`, `sp-dma-rsp` |
 | 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | 0-7 | `vi-cpu-contention` |
 | 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | 0-7 | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
 | 6 | `kit-span` | 0.2 s | 9.2 KB | no | 0-7 | `color-half-16bpp`, `span-width` |
