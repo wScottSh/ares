@@ -1,4 +1,4 @@
-# standing run u-drain-fix2/standing on abecdf764
+# standing run after/standing on e5d9853aa
 check	result	detail
 bench:dirty-miss-isolated	pending:report-only	clean-single pclk 46 (expected 41) report; dirty-single pclk 46 (expected -) report; dirty-gap0 dirty_minus_clean_pclk 18..20 median 20.0 mean 19.93 (expected -) report
 bench:dirty-row-sweep	pending:report-only	dirty-8 dirty_minus_clean_pclk 0..2 median 0.0 mean 0.164 (expected 0) report; dirty-800 dirty_minus_clean_pclk -2..4 median 2.0 mean 2.148 (expected 3) report; dirty-1000 dirty_minus_clean_pclk -2..2 median 2.0 mean 1.984 (expected 3) report; 2 more report points
@@ -168,7 +168,7 @@ noise:a	pass	ctest Passed
 noise:b	pass	ctest Passed
 noise:c	pass	ctest Passed
 noise:rect-1016	pass	noise/summary.txt
-pidma:logs	fail	exact COUNT replay, replay reproduces 1/1 printed values; sizes 8-382 except 305-352 20892/20928 within +-3% of hardware min..max (all sizes 8-382: 23960/24000); ROM self-check 1 failures; worst by size band 0-31:-6.08% 32-63:-3.92% 64-95:+2.46% 96-127:+1.43% 128-159:+1.30% 160-191:+1.09% 192-223:+1.04% 224-255:+1.05% 256-287:+0.87% 288-319:+0.73% 352-383:+0.87%; excluded 305-352, report only because the golden logs come from the ROM's MODE_GENERATE build, whose cart buffer sits at another PI page phase: this ROM's buffer starts 0xd0 into a 512 B page, so its DMAs cross a page from 305 B on, while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred): worst 288-319:+3.18% 320-351:+2.82% 352-383:+2.28%
+pidma:logs	fail	exact COUNT replay, replay reproduces 0/0 printed values; sizes 8-382 except 305-352 20906/20928 within +-3% of hardware min..max (all sizes 8-382: 23975/24000); ROM self-check 0 failures; worst by size band 0-31:+5.69% 32-63:+3.50% 64-95:+2.51% 96-127:+1.60% 128-159:+1.51% 160-191:+1.09% 192-223:+1.00% 224-255:+1.05% 256-287:+0.87% 288-319:+0.94% 352-383:+0.76%; excluded 305-352, report only because the golden logs come from the ROM's MODE_GENERATE build, whose cart buffer sits at another PI page phase: this ROM's buffer starts 0xd0 into a 512 B page, so its DMAs cross a page from 305 B on, while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred): worst 288-319:+3.18% 320-351:+2.85% 352-383:+2.28%
 rdpstat:1prim	pass	2 of 2 tests pass
 rdpstat:1prim-32px	pending:report-only	0 of 2 tests pass; failing: 1PRIMITIVE stale read: 1-cycle, 32 px, 1PRIMITIVE stale read: 2-cycle, 32 px
 rdpstat:nosync-1cycle	pass	20 of 20 tests pass
