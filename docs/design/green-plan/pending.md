@@ -47,7 +47,7 @@ MAP_GREEN  (the map's destination; needs #16)
   AND verified(row) for every row not excluded and not out-of-kit
 ```
 
-Report form: "SOFTWARE_READY: <n> of <m> conditions; MAP_GREEN: <k> of <N> in-scope rows verified; excluded 7 (not hardware-decidable); out-of-kit 12 (9 when written)." Today SOFTWARE_READY is false on 4 counts: 23 fail checks plus 5 weak checks, 14 report-only checks, 1 no-rom check, and 4 hw questions that no tool can compare (measured from the results tsv and inventory.md). Sections 2, 3 and 6 table every pending check. Section 6.5 tables every pending row.
+Report form: "SOFTWARE_READY: <n> of <m> conditions; MAP_GREEN: <k> of <N> in-scope rows verified; excluded 7 (not hardware-decidable); out-of-kit 12 (9 when written)." At plan time SOFTWARE_READY was false on 4 counts: 23 fail checks plus 5 weak checks, 14 report-only checks, 1 no-rom check, and 4 hw questions that no tool can compare (measured from the results tsv and inventory.md at plan time; `docs/spec/n64-timing-results.tsv` now has 17 fail). Sections 2, 3 and 6 table every pending check. Section 6.5 tables every pending row.
 
 ### 1.3 What cannot be green without hardware, and what cannot be green even with this kit
 
