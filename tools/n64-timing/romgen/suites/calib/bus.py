@@ -151,11 +151,16 @@ VI_CASES = [
 # V_VIDEO opened from V 8: the window (V 12 to 32, half-lines) lies inside it but above ares's display
 # window, which starts at half-line 34 on NTSC (vi.cpp window(), vi.display-window).
 VVIDEO_EARLY = ("vvideo-early", [(VI_V_VIDEO, 0x000801FF)], 0, 0x0A)
+# vi.register-sample with a short fetch (U-VI-LATE-BLANK): H_VIDEO 80 of 640 px, and a blank written in the
+# window's third-last line, half a line from either HSYNC, so a per-line VI stops fetching for the last two
+# lines and a VI that latches its registers once per field fetches all ten.
+HVIDEO8_LATE = ("hvideo8-late", [(VI_H_VIDEO, 0x006C00BC)], (VI_CTRL, ctrl(kind=0)),
+                (V_LINES - 2) * LINE_TICKS - LINE_TICKS // 2)
 
 
-def vline_point(rom, point, addr, writes, late, consts, target=V_TARGET):
+def vline_point(rom, point, addr, writes, late, consts, target=V_TARGET, mid=()):
     regs = [w for pair in writes for w in pair]
-    rom.point(point, "k_bus_vline", [KSEG1 | addr, target, V_LINES, SLOW_TICKS, late, len(writes), *regs],
+    rom.point(point, "k_bus_vline", [KSEG1 | addr, target, V_LINES, SLOW_TICKS, late, len(writes), *regs, *mid],
               list(consts) + [("bank", addr >> 20), ("v", target), ("lines", V_LINES), ("late", late)], reps=1,
               extra=VLINE_EXTRA)
 
@@ -166,6 +171,8 @@ def vi_fetch_modes(suite):
     rom = Rom(suite, "bus-vi")
     for name, writes, late in VI_CASES:
         vline_point(rom, name, VI_BANK_LOAD, writes, late, [("case", name)])
+    name, writes, mid, late = HVIDEO8_LATE
+    vline_point(rom, name, VI_BANK_LOAD, writes, late, [("case", name)], mid=mid)
     name, writes, late, target = VVIDEO_EARLY
     vline_point(rom, name, VI_BANK_LOAD, writes, late, [("case", name)], target)
     vline_point(rom, "base-bank5", LOAD_BANK5, [], 0, [("case", "base")])
@@ -600,8 +607,9 @@ bus_ai_end:
     jr $ra
     sw $zero, 0xC($t0)
 
-# args = {{load addr, target V_CURRENT, lines, slow ticks, late, n, (VI register, value) x n}}. Applies the
-# writes (late: once V_CURRENT reads the target), then from the line start after the target takes
+# args = {{load addr, target V_CURRENT, lines, slow ticks, late, n, (VI register, value) x n[, (VI register,
+# value)]}}. Applies the writes (late 1: once V_CURRENT reads the target; late 2 or more: before the wait, and
+# the extra pair once the window has run `late` ticks), then from the line start after the target takes
 # back-to-back timed uncached LWs for `lines` x LINE_TICKS (bench_hpos's loop), then takes the line as
 # the mean of the next 4 V_CURRENT change intervals. Reduces the loads to RES[2] = loads, RES[3] =
 # summed ticks, RES[4] = loads of at least `slow` ticks, RES[5] / RES[6] = shortest / longest, RES[7] =
@@ -609,13 +617,14 @@ bus_ai_end:
 # summed ticks by eighth of the line, RES[16..23] = loads by eighth, RES[24] = 1 on a timeout. Then
 # writes vi_init's values back. v0 = RES[3].
 k_bus_vline:
-    addiu $sp, $sp, -48
+    addiu $sp, $sp, -56
     sd $ra, 0($sp)
     sd $s0, 8($sp)
     sd $s1, 16($sp)
     sd $s2, 24($sp)
     sd $s3, 32($sp)
     sd $s4, 40($sp)
+    sd $s5, 48($sp)
     move $s0, $a0
     move $s1, $a1
     move $t0, $a1
@@ -626,7 +635,8 @@ bus_vl_zero:
     bnez $t1, bus_vl_zero
     addiu $t0, $t0, 4
     lw $t0, 16($s0)
-    bnez $t0, bus_vl_touch
+    addiu $t1, $zero, 1
+    beq $t0, $t1, bus_vl_touch
     nop
     jal bus_vi_writes
     move $a0, $s0
@@ -651,10 +661,20 @@ bus_vl_touch_loop:
     nop
     lw $t0, 16($s0)
     beqz $t0, bus_vl_start
+    sltiu $t1, $t0, 2
+    beqz $t1, bus_vl_start
     nop
     jal bus_vi_writes
     move $a0, $s0
 bus_vl_start:
+    lw $s5, 16($s0)
+    sltiu $t0, $s5, 2
+    beqz $t0, bus_vl_go
+    lw $t9, 8($s0)
+    addiu $t8, $zero, {LINE_TICKS}
+    multu $t8, $t9
+    mflo $s5
+bus_vl_go:
     jal bus_vchg
     lw $a0, 4($s0)
     beq $v0, $a0, bus_vl_timeout
@@ -681,9 +701,18 @@ bus_vl_loop:
     addiu $s4, $s4, 1
     beq $s4, $t5, bus_vl_reduce
     addiu $t4, $t4, 4
-    sltu $t1, $t6, $a3
+    sltu $t1, $t6, $s5
     bnez $t1, bus_vl_loop
     nop
+    beq $s5, $a3, bus_vl_reduce
+    lw $t0, 20($s0)
+    sll $t0, $t0, 3
+    addu $t0, $t0, $s0
+    lw $t2, 24($t0)
+    lw $t3, 28($t0)
+    sw $t3, 0($t2)
+    b bus_vl_loop
+    move $s5, $a3
 bus_vl_reduce:
     addiu $s2, $zero, {LINE_TICKS}
     li $t0, 0xA4400010
@@ -781,8 +810,9 @@ bus_vl_rloop:
     ld $s2, 24($sp)
     ld $s3, 32($sp)
     ld $s4, 40($sp)
+    ld $s5, 48($sp)
     jr $ra
-    addiu $sp, $sp, 48
+    addiu $sp, $sp, 56
 
 # bench_multi kernel. args = {{target, step}}; a2 = reps left less one. V_INTR = target; at target - 4
 # clears the VI interrupt, spins a2 x step iterations, then loops COUNT, MI_INTR, V_CURRENT until it has
