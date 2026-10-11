@@ -38,7 +38,7 @@ enum class Direction : u8 { Read, Write };
 //so a pending burst holds no host pointer and survives a save state.
 struct Burst {
   u32       address;
-  u8        bytes;      //1..128; 0 for Refresh
+  u8        bytes;      //1..128; 0 for Refresh and for a PI first block's empty-mask write
   Direction direction;
   Requester requester;
   u16       tag;
