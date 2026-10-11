@@ -39,7 +39,6 @@ systembench:pi-dma-8	check	C	systembench	-	-	prehw-plan 2.1: rasky/n64-systemben
 systembench:u32r-banked	check	A	systembench	U-SB-PR2	-	-
 thar0:ac-zbsame-vioff-imrd-1cyc	check	B	thar0-console	U-ZREAD-1CYC	-	-
 thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	check	B	thar0-console	U-ZREAD-1CYC	-	-
-thar0:fill-mode	check	A	fill-copy-rate	U-LABELS-2	-	-
 thar0:imrd-1cycle	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
 thar0:nozb-visame-noimrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: n64brew Set Color Image is the only F1 reference; verify-139 (#139 moves it to -1.14%, held under D5)
 thar0:nozb-visep-imrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
