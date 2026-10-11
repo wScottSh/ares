@@ -1,4 +1,4 @@
-static const string SerializerVersion = "v153.12-ri-write-gap";
+static constexpr char SerializerVersion[] = "v153.12-ri-wgap";
 
 auto System::serialize(bool synchronize) -> serializer {
   serializer s;
@@ -6,7 +6,8 @@ auto System::serialize(bool synchronize) -> serializer {
   u32  signature = SerializerSignature;
   char version[16] = {};
   char description[512] = {};
-  memory::copy(&version, (const char*)SerializerVersion, SerializerVersion.size());
+  static_assert(sizeof(SerializerVersion) <= sizeof(version), "SerializerVersion and its terminator must fit the saved version field");
+  memory::copy(&version, SerializerVersion, sizeof(SerializerVersion));
 
   s(signature);
   s(synchronize);
