@@ -1014,12 +1014,18 @@ def self_test():
     glyph_cases = glyph_self_test()
     failed += glyph_cases.count(False)
     cases += glyph_cases
+    span_cost_cases = span_cost_self_test()
+    failed += span_cost_cases.count(False)
+    cases += span_cost_cases
     vilb_cases = vilb_self_test()
     failed += vilb_cases.count(False)
     cases += vilb_cases
     repeat_cases = repeat_self_test()
     failed += repeat_cases.count(False)
     cases += repeat_cases
+    block_cases = block_write_slope_self_test()
+    failed += block_cases.count(False)
+    cases += block_cases
     op_slope_cases = op_slope_self_test()
     failed += op_slope_cases.count(False)
     cases += op_slope_cases
@@ -1282,6 +1288,35 @@ def zread1_self_test():
     return out
 
 
+def span_cost_log(per_rect=0.0, poll=(0, 0)):
+    """A kit-span2 log of the span-cost points at the fork's pad-0 clocks (20748 and 82572: 1288.0 rclk per
+    rectangle), each rectangle moved `per_rect` rclk and the N = 16 and N = 64 clocks moved `poll` rclk."""
+    body = "".join(f"#bench span-cost acfail-n{n} bpp=16 w=1 h=256 ac=fail n={n} vi=off reps=4 "
+                   f"clock={clock + round(per_rect * n) + moved}\n"
+                   for n, clock, moved in ((16, 20748, poll[0]), (64, 82572, poll[1])))
+    return Log(sample_log(body, rom="kit-span2"))
+
+
+def span_cost_self_test():
+    """span-cost's per-rectangle value, its rule at the poll bound and against one stored unit of per-span cost
+    (rdp.span-line-gap + 1/750 MHz on 256 spans: 21.33 rclk per rectangle, prehw-plan.md U-SCT-SPAN)."""
+    out = []
+    got = span_cost_log().records.get(("span-cost", "fit"), {}).get("rclk_per_rect")
+    out.append(got == 1288.0)
+    print(f"kit: self-test: kit-span2: the fork's span-cost points derive 1288.0 rclk per rectangle: "
+          f"{'ok' if got == 1288.0 else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "span-cost")
+    for name, hw, want in [
+            ("a console whose two readings sit at opposite ends of the poll bound", span_cost_log(poll=(-24, 24)), "pass"),
+            ("one stored unit of per-span cost, 21.33 rclk per rectangle over the fork", span_cost_log(per_rect=21.33), "fail"),
+            ("a console 1.0 rclk per rectangle over the fork, inside the abs:1.014 poll bound", span_cost_log(per_rect=1.0), "pass"),
+            ("a console 2 rclk per rectangle under the fork", span_cost_log(per_rect=-2), "fail")]:
+        got, detail = compare(q, [hw], [span_cost_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-span2: span-cost, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
 def vilb_log(words, timeout=0):
     """A kit-vilb log whose x201 point read `words` back (the fork's run reads 128 zeros)."""
     body = (f"#bench vi-linebuf x201 x_scale=513 y_scale=2048 aa_mode=3 target=100 reps=1 min=1 max=1 "
@@ -1376,6 +1411,37 @@ def repeat_self_test():
         got, detail = compare(q, [hw], [repeat_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-dma: repeat-write, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+#The fork's pad-0 boot-1 COUNT mins of kit-dma's block-write-slope points (N = 16, N = 64).
+BLOCK_SLOPE_FORK = {"memset-cached": (539, 2195)}
+
+
+def block_write_slope_log(shift=0, reads=(0, 0)):
+    """A kit-dma log of the block-write-slope points at the fork's COUNTs, the N = 64 point moved shift ticks and
+    the N = 16 and N = 64 readings moved reads[0] and reads[1] ticks."""
+    body = "".join(f"#bench block-write-slope {op}-n{n} op={op} n={n} vi=off reps=8 "
+                   f"min={ticks + reads[i] + (shift if n == 64 else 0)} max=0\n"
+                   for op, pair in BLOCK_SLOPE_FORK.items() for i, (n, ticks) in enumerate(zip((16, 64), pair)))
+    return Log(sample_log(body, rom="kit-dma"))
+
+
+def block_write_slope_self_test():
+    """block-write-slope's per-line value and its rule at the COUNT bound (2 ticks over 48 lines)."""
+    out = []
+    got = block_write_slope_log().records.get(("block-write-slope", "memset-cached-fit"), {}).get("rclk_per_block")
+    out.append(got == 46.0)
+    print(f"kit: self-test: kit-dma: the fork's block-write-slope points derive 46.0 rclk per line: "
+          f"{'ok' if got == 46.0 else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "block-write-slope")
+    for name, hw, want in [
+            ("both readings at opposite ends of the COUNT bound, 2 ticks over 48 lines", block_write_slope_log(reads=(-1, 1)), "pass"),
+            ("2 ticks under the fork over 48 lines", block_write_slope_log(-2), "pass"),
+            ("3 ticks over the fork over 48 lines, just past the bound", block_write_slope_log(3), "fail"),
+            ("3 ticks under the fork over 48 lines", block_write_slope_log(-3), "fail")]:
+        got, detail = compare(q, [hw], [block_write_slope_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-dma: block-write-slope, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 #The fork's pad-0 boot-1 COUNT mins of kit-cpu's op-slope points (N = 16, N = 64) per operation.
