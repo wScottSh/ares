@@ -2500,6 +2500,25 @@ def self_test(root):
             GIT_ROOT[str(work)] = root
             if restore:
                 restore()
+        def only_named(*scenes):
+            return wall_edit(lambda r: r.update(commit=run_commit, same_tree_as="-") if r["run"] in scenes
+                             else r.update(commit=stale_commit, same_tree_as="-"))
+        every_scene = [r["run"] for r in current_walls(work)]
+        for name, scenes, want in [
+            ("every scene's last wall row names the run's commit", every_scene, True),
+            ("only the first scene's last wall row names the run's commit", every_scene[:1], False),
+            ("all but one scene's last wall row names the run's commit", every_scene[:-1], False),
+            ("no scene's last wall row names the run's commit", [], False),
+        ]:
+            restore = edit(WALL_BUDGET, only_named(*scenes))
+            errors, rows, checks, _ = validate(work)
+            found = load_results(work, rows, checks, errors)
+            got = predicates(work, rows, checks, found)["SOFTWARE_READY"][0][1]
+            ok = got is want
+            print(f"self-test: SOFTWARE_READY clause 1 when {name}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
+            failures += not ok
+            ran += 1
+            restore()
         repeat = ("memset-vi", "mi-memset-repeat/vi-on", "min")
         repeat_fork = fork_cell(*repeat)
         repeat_hi = float(repeat_fork.partition("..")[2])
