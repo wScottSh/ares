@@ -77,7 +77,7 @@ legacy.cpu.interrupt-entry	row	B	B	cpu-exceptions nemu64-cop0hazard-console	U-SE
 legacy.cpu.nmi-entry	row	D	D	legacy.cpu.nmi-entry	-	-	-	-
 legacy.cpu.sysad-frozen-step	row	D	D	legacy.cpu.sysad-frozen-step	-	-	-	-
 legacy.pi.cart-read	row	B	B	dom2-read	U-SEPARATES	-	-	-
-legacy.pif.boot-timeout	row	A	A	-	U-PIF-TIMEOUT	-	-	-
+legacy.pif.boot-timeout	row	C	A	legacy.pif.boot-timeout	U-PIF-TIMEOUT	-	verify-164	-
 legacy.pif.step-quantum	row	D	D	legacy.pif.step-quantum	-	-	-	-
 pi.block-bytes	row	B	C	pi-dma-small	U-SEPARATES	-	-	n64brew PI (128 B, the fork); n64_pi_dma_test (different loop); systembench main.c:589-592 (other binary); MiSTer PI.vhd (no kit-metric value)
 pi.block-writeback	row	B	C	pi-dma-small	U-SEPARATES	-	-	dma-timing.md (the fit); systembench main.c:589-592 and bench pi-dma-sizes (fit data); n64_pi_dma_test (different loop); n64brew PI (no writeback figure)

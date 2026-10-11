@@ -59,7 +59,12 @@ KIT_ROMS = {
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
     "cpu-llsc": ("cpu", "llsc", False),
+    "kit-pif": ("pif", "kit-pif", False),
 }
+#kit-pif never sends the PIF terminate-boot command, so the PIF halts it and its log has no footer
+#(romgen/suites/pif). It answers no question: its last COUNT is a report (hardware-run.md).
+PIF_ROM = "kit-pif"
+COUNT_HZ = 46_875_000
 SRAM_BYTES = 0x8000
 
 
@@ -555,8 +560,26 @@ def compare_layouts(q, hw, model):
                  + "; ".join(first.values()))
 
 
+def pif_report(log):
+    """(the last COUNT kit-pif logged, its sample number, halted). A complete log ran all its samples
+    unhalted: boot was terminated before the ROM ran."""
+    last = log.records.get((PIF_ROM, "count"), {})
+    return last.get("count"), last.get("n"), not log.complete
+
+
+def pif_line(log):
+    count, n, halted = pif_report(log)
+    if count is None:
+        return "no COUNT line"
+    if not halted:
+        return (f"never halted in {count / COUNT_HZ:.3f} s of COUNT: boot was terminated before the ROM ran (a menu "
+                f"launch, not sc64deployer upload)")
+    return f"last COUNT {count} ({count / COUNT_HZ:.3f} s, sample {n}) before the PIF halted the CPU"
+
+
 def verify_run(run_dir):
-    """Errors in a calibration/run.sh output: a log without a valid footer, a cartridge SRAM copy that
+    """Errors in a calibration/run.sh output: a log without a valid footer (for kit-pif, a log the PIF did
+    not halt), a cartridge SRAM copy that
     differs from the ISViewer copy (the flashcart SD path), or domain-1 PI timing that the output
     layer left changed (hwout.py PI_REGS)."""
     from romgen import hwout
@@ -567,7 +590,10 @@ def verify_run(run_dir):
             continue
         data = txt.read_bytes()
         log = Log(data)
-        if not log.complete:
+        pif = log.rom == PIF_ROM
+        if pif and (pif_report(log)[0] is None or not pif_report(log)[2]):
+            errors.append(f"{txt}: the PIF did not halt kit-pif: {pif_line(log)}")
+        if not log.complete and not pif:
             errors.append(f"{txt}: no valid #kit-end footer")
             continue
         srm = txt.with_suffix(".srm")
@@ -575,9 +601,9 @@ def verify_run(run_dir):
             errors.append(f"{txt}: the run left no cartridge SRAM ({srm.name})")
         elif srm.read_bytes() != data[:SRAM_BYTES].ljust(SRAM_BYTES, b"\0"):
             errors.append(f"{srm}: the SRAM copy differs from the ISViewer copy")
-        if log.pi != hwout.DOM1_HEADER:
+        if not pif and log.pi != hwout.DOM1_HEADER:
             errors.append(f"{txt}: domain-1 PI timing at the end {log.pi}, the ROM header's {hwout.DOM1_HEADER}")
-        if log.timeouts != {"pi": 0, "rdp": 0}:
+        if not pif and log.timeouts != {"pi": 0, "rdp": 0}:
             errors.append(f"{txt}: #kit-timeout {log.timeouts or 'missing'}; on the fork no wait may give up")
         rom = Path(run_dir) / "roms" / log.header.get("build", "?") / f"{log.rom}.z64"
         if not rom.exists() or hwout.rom_sha256(rom.read_bytes()) != log.header.get("rom_sha256"):
@@ -753,6 +779,17 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: kit-hpos samples give a per-load latency histogram in pclk: {'ok' if ok else 'FAILED'} ({got})")
     cases.append(("hpos hist", None, None))
+    samples = "".join(f"#bench kit-pif count n={n} count={2922075 + 468750 * n}\n" for n in range(3))
+    for name, data, want in [
+            ("kit-pif cut by the PIF's halt reports its last COUNT",
+             sample_log(samples, rom="kit-pif", build="single").split(b"#kit-end")[0], (3859575, 2, True)),
+            ("kit-pif with a footer was never halted", sample_log(samples, rom="kit-pif", build="single"),
+             (3859575, 2, False))]:
+        got = pif_report(Log(data))
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {pif_line(Log(data))})")
+        cases.append((name, None, None))
     llsc_q = next(q for q in questions() if q["id"] == "cpu-llsc-console")
 
     def llsc(bad=(), watch=0):
@@ -1110,9 +1147,9 @@ PHOTO_BYTES = 2048
 
 def run_table(run_dir, root=ROOT):
     """hardware-run.md's run-order table from a calibration/run.sh output: each console build's fork
-    run time, log size, whether it is short enough to film, the layout pads the console runs it at
-    (every pad when one of its questions is layout-sensitive, see compare_layouts), and the questions
-    it answers."""
+    run time (kit-pif's: to its last COUNT), log size, whether it is short enough to film, the layout pads
+    the console runs it at (every pad when one of its questions is layout-sensitive, see compare_layouts),
+    and the questions it answers."""
     run_dir = Path(run_dir)
     asks = {}
     for q in questions(root):
@@ -1124,10 +1161,12 @@ def run_table(run_dir, root=ROOT):
         base = run_dir / ("boot-1" if walks else "single") / rom
         err = base.with_suffix(".err").read_text(errors="replace")
         secs = float(re.search(r"emulated_s=([\d.]+)", err).group(1))
+        if rom == PIF_ROM:
+            secs = pif_report(Log(base.with_suffix(".txt").read_bytes()))[0] / COUNT_HZ
         size = len(base.with_suffix(".txt").read_bytes())
         layouts = f"{pads[0]}-{pads[-1]}" if rom in padded and len(pads) > 1 else "0"
         out.append(f"| {n} | `{rom}` | {secs:.1f} s | {size / 1000:.1f} KB | {'yes' if size <= PHOTO_BYTES else 'no'} | "
-                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, []))} |")
+                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, [])) or 'a report, no question'} |")
     return "\n".join(out)
 
 
