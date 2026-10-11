@@ -97,7 +97,7 @@ Every question a console run can answer for the timing model (calibration #16), 
 
 ## Rows pending calibration #16
 
-Rows whose checks wait on the console run. 25 rows, 25 with a kit question.
+Rows whose checks wait on the console run. 27 rows, 27 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
@@ -110,6 +110,8 @@ Rows whose checks wait on the console run. 25 rows, 25 with a kit question.
 | `cpu.dirty-miss-order` | pending:calibration-16 pending:report-only | bench:dirty-miss-isolated hw:dirty-miss | `hw:dirty-miss` |
 | `cpu.wb-release` | pending:calibration-16 pending:report-only | bench:wb-fifth-store hw:wb-release hw:wb-drain-target | `hw:wb-release`, `hw:wb-drain-target` |
 | `sp.dma-burst` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
+| `pi.io-busy` | pending:calibration-16 | hw:poll-phase ~systembench:pi-io-w hw:systembench | `hw:poll-phase`, `hw:systembench` |
+| `si.io-busy` | pending:calibration-16 | hw:poll-phase ~systembench:si-io-w hw:systembench | `hw:poll-phase`, `hw:systembench` |
 | `si.write64` | pending:calibration-16 | ~systembench:si-dma-w-ram hw:systembench | `hw:systembench` |
 | `si.write64-rom` | pending:calibration-16 | ~systembench:si-dma-w-rom hw:systembench | `hw:systembench` |
 | `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads`, `hw:systembench` |
@@ -200,38 +202,34 @@ Rows whose deciding check reports a number and asserts none. 15 rows, 14 with a 
 
 ## Failing and weakly passing checks
 
-Checks that fail, pass only consistent with the console, or pass on a model choice. Each residual's cause is open until a console measurement isolates it. 24 checks, 24 with a kit question.
+Checks that fail, pass only consistent with the console, or pass on a model choice. Each residual's cause is open until a console measurement isolates it. 20 checks, 20 with a kit question.
 
 | Check | Result | Detail | Question |
 |---|---|---|---|
-| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.731..72.792 median 72.737 mean 72.736 (expected 71.24, 71.17..71.31, mean) fail | `hw:memset-vi` |
-| `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 1.31 (expected 3.8, 3.795..3.805, mean) fail | `hw:memset-vi` |
-| `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.271..6.503 median 6.499 mean 6.495 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
-| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.691..17.734 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `hw:memset-vi` |
-| `bench:uncached-sizes-u32-banked` | consistent-only | u32-banked net_pclk 131..133 median 131.0 mean 131.469 (pads 0:fail 1:fail 2:consistent-only 3:consistent-only 4:fail 5:fail 6:fail 7:fail) (expected 134, 133..135, consistent, window ±1.5%, mean rule | `hw:cpu-reads` |
-| `mm:filesel-named` | fail | filesel-named: median over 5 phases: mean 1.6932 (min 1.6884, max 1.7057), 69.3% (min 68.8%, max 70.6%) of game frames at 2 field(s) | `hw:mm-filesel` |
-| `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7846 over 64 phases (band 32.300..40.300), mean 41.642..41.888, median 37 (band 35..37) fail on mean | `hw:vi-cpu-contention`, `hw:nemu64-console` |
+| `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.734..72.788 median 72.742 mean 72.741 (expected 71.24, 71.17..71.31, mean) fail | `hw:memset-vi` |
+| `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `hw:memset-vi` |
+| `bench:mi-memset-rspdma` | consistent-only | vi-on b_per_rclk 6.271..6.502 median 6.498 mean 6.493 (pads 0:pass-conditional:#77 1:pass-conditional:#77 2:pass-conditional:#77 3:pass-conditional:#77 4:pass-conditional:#77 5:pass-conditional:#77 6: | `hw:vi-first-line`, `hw:memset-vi` |
+| `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.69..17.742 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `hw:memset-vi` |
+| `bench:uncached-sizes-u32-banked` | consistent-only | u32-banked net_pclk 131..133 median 131.0 mean 131.742 (pads 0:fail 1:consistent-only 2:consistent-only 3:fail 4:consistent-only 5:fail 6:fail 7:fail) (expected 134, 133..135, consistent, window ±1.5% | `hw:cpu-reads` |
+| `mm:filesel-named` | fail | filesel-named: median over 5 phases: mean 1.6941 (min 1.6884, max 1.7009), 69.4% (min 68.8%, max 70.1%) of game frames at 2 field(s) | `hw:mm-filesel` |
+| `nemu64:timing/load-from-uncached-vi-on-same-bank` | fail | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7851 over 64 phases (band 32.300..40.300), mean 41.683..41.889, median 37 (band 35..37) fail on mean | `hw:vi-cpu-contention`, `hw:nemu64-console` |
 | `nemu64:timing/load-miss-vi-off` | fail | 0 of 8 values pass; with '80000000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80100000': phase mean 41.0000 over 64 phases (ban | `hw:dirty-miss`, `hw:nemu64-console` |
-| `pidma:logs` | fail | exact COUNT replay, replay reproduces 8/8 printed values; sizes 8-382 except 305-352 20706/20928 within +-3% of hardware min..max (all sizes 8-382: 23765/24000); ROM self-check 8 failures; worst by si | `hw:pi-dma-small` |
-| `systembench:pi-dma-128` | fail | PI DMA [128] 1580 RCP cycles (hardware 1591, -11, -0.69%); main.c rule holds in 0 of 33 runs | `hw:systembench` |
-| `systembench:pi-dma-8` | fail | PI DMA [8] 187 RCP cycles, 186..187 over the boot delays (hardware 193, -6, -3.11%); main.c rule holds in 0 of 33 runs | `hw:systembench` |
-| `systembench:pi-io-w` | fail | PI I/O W [4] 130 RCP cycles (hardware 134, -4, -2.99%); main.c rule holds in 0 of 33 runs | `hw:systembench` |
-| `systembench:si-dma-w-rom` | consistent-only | SI DMA W ROM [64] 2140 RCP cycles, 2138..2140 over the boot delays (hardware 2144, -4, -0.19%); main.c rule holds in 1 of 33 runs | `hw:systembench` |
-| `systembench:si-io-w` | fail | SI I/O W [4] 2150 RCP cycles, 2150..2151 over the boot delays (hardware 2158, -8, -0.37%); main.c rule holds in 0 of 33 runs | `hw:systembench` |
+| `pidma:logs` | fail | exact COUNT replay, replay reproduces 1/1 printed values; sizes 8-382 except 305-352 20892/20928 within +-3% of hardware min..max (all sizes 8-382: 23960/24000); ROM self-check 1 failures; worst by si | `hw:pi-dma-small` |
+| `systembench:pi-dma-8` | fail | PI DMA [8] 196 RCP cycles (hardware 193, +3, +1.55%); main.c rule holds in 0 of 33 runs | `hw:systembench` |
 | `systembench:u32r-banked` | consistent-only | RDRAM U32R banked [16] 134 CPU cycles, 134..135 over the boot delays (hardware 136, -2, -1.47%); main.c rule holds in 32 of 33 runs | `hw:systembench` |
 | `thar0:ac-zbsame-vioff-imrd-1cyc` | fail | model 108697 vs console 105999 (105940..106092), +2.55% | `hw:thar0-console` |
 | `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` | fail | model 170392 vs console 166352 (166182..166520), +2.43% | `hw:thar0-console` |
 | `thar0:imrd-1cycle` | fail | model 176749 vs console 163556 (163436..163654), +8.07% | `hw:thar0-console` |
 | `thar0:nozb-visame-noimrd-1cyc` | fail | model 77772 vs console 81791.4 (81654..81868), -4.91% | `hw:thar0-console` |
-| `thar0:nozb-visep-imrd-1cyc` | fail | model 181106 vs console 174059 (173832..174382), +4.05% | `hw:thar0-console` |
+| `thar0:nozb-visep-imrd-1cyc` | fail | model 181118 vs console 174059 (173832..174382), +4.06% | `hw:thar0-console` |
 | `thar0:separate-bank` | fail | model 225260 vs console 225679 (225518..225802), -0.19% | `hw:thar0-console` |
-| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | fail | model 199078 vs console 208861 (208473..209121), -4.68% | `hw:thar0-console`, `hw:zread-2cyc` |
-| `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | fail | model 232657 vs console 245639 (245078..246077), -5.28% | `hw:thar0-console` |
+| `thar0:zbrw-fail-zbsame-visame-imrd-2cyc` | fail | model 199071 vs console 208861 (208473..209121), -4.69% | `hw:thar0-console`, `hw:zread-2cyc` |
+| `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc` | fail | model 232652 vs console 245639 (245078..246077), -5.29% | `hw:thar0-console` |
 | `thar0:zcmp` | fail | model 108697 vs console 106000 (105940..106088), +2.54% | `hw:thar0-console` |
 
 ## Coverage
 
-Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 224 entries: 205 with a question, 7 not hardware-decidable (no console run can decide them), 12 not decidable by this kit (a console could, with what the reason names).
+Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 220 entries: 201 with a question, 7 not hardware-decidable (no console run can decide them), 12 not decidable by this kit (a console could, with what the reason names).
 
 | Entry | Why | Question or reason |
 |---|---|---|
@@ -259,7 +257,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `ri.rank.other` | model-choice | `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.overhead-read` | fit; verify-is-fit; pending:report-only | `hw:sp-dma-direction` |
 | `ri.overhead-vi` | model-choice | `hw:nemu64-console` |
-| `ri.overhead-write` | derived reference; check bench:mi-memset-rspdma pass-conditional:#77 | `hw:memset-vi` |
+| `ri.overhead-write` | derived reference; check bench:mi-memset-rspdma consistent-only | `hw:memset-vi` |
 | `ri.overhead-rdp` | derived reference; check thar0:separate-bank, thar0:imrd-1cycle fail | `hw:thar0-console` |
 | `ri.request-latency` | model-choice | not-hardware-decidable: one 750 MHz unit (1.3 ns) between a request's post and the arbiter, chosen so a decision never races a post at the same time; no console measurement resolves 1.3 ns, and the fork's results do not move with it (det, stepcap) |
 | `cpu.uncached-read-total` | measured reference; check bench:uncached-sizes-u32-banked, systembench:u32r-banked consistent-only | `hw:cpu-reads`, `hw:nemu64-console`, `hw:systembench` |
@@ -307,20 +305,20 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `cpu.pi-io-read` | derived reference | `hw:cpu-reads`, `hw:systembench` |
 | `sysad.rdram-write-period` | fit; verify-is-fit; check bench:mi-memset-uncached fail | `hw:memset-vi` |
 | `sysad.rdram-block-write-period` | fit; verify-is-fit; check bench:mi-memset-cached fail | `hw:memset-vi` |
-| `sysad.register-write` | fit; check pidma:logs, bench:mi-memset-repeat, systembench:pi-io-w, systembench:si-io-w, systembench:si-dma-w-rom, systembench:pi-dma-128 fail | `hw:register-write`, `hw:wb-drain-target` |
+| `sysad.register-write` | fit; check pidma:logs, bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target` |
 | `cpu.random-rule` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.wired-write-latency` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console`, `hw:ctc1-fpe-ce` |
 | `sp.dma-burst` | model-choice; pending:report-only | `hw:sp-dma-direction` |
 | `rsp.slot` | wiki reference | `hw:nemu64-console` |
-| `pi.page-setup` | wiki reference; check pidma:logs, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
-| `pi.halfword-bias` | wiki reference; check pidma:logs, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
+| `pi.page-setup` | wiki reference; check pidma:logs, systembench:pi-dma-8 fail | `hw:pi-dma-small`, `hw:systembench` |
+| `pi.halfword-bias` | wiki reference; check pidma:logs, systembench:pi-dma-8 fail | `hw:pi-dma-small`, `hw:systembench` |
 | `pi.block-bytes` | wiki reference; check pidma:logs fail | `hw:pi-dma-small` |
-| `pi.block-writeback` | fit; check pidma:logs, systembench:pi-dma-8, systembench:pi-dma-128 fail | `hw:pi-dma-small`, `hw:systembench` |
-| `pi.io-busy` | measured reference; check systembench:pi-io-w fail | `hw:poll-phase`, `hw:systembench` |
-| `si.io-busy` | measured reference; check systembench:si-io-w fail | `hw:poll-phase`, `hw:systembench` |
+| `pi.block-writeback` | fit; check pidma:logs, systembench:pi-dma-8 fail | `hw:pi-dma-small`, `hw:systembench` |
+| `pi.io-busy` | measured reference | `hw:poll-phase`, `hw:systembench` |
+| `si.io-busy` | measured reference | `hw:poll-phase`, `hw:systembench` |
 | `si.write64` | measured reference | `hw:systembench` |
-| `si.write64-rom` | measured reference; check systembench:si-dma-w-rom consistent-only | `hw:systembench` |
+| `si.write64-rom` | measured reference | `hw:systembench` |
 | `si.read64-base` | fit | `hw:joybus-pads`, `hw:systembench` |
 | `pif.joybus-skip` | fit | `hw:joybus-pads`, `hw:systembench` |
 | `pif.joybus-escape` | fit; an inference in its reference or note | `hw:joybus-pads`, `hw:systembench` |
@@ -388,18 +386,14 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `legacy.cart.flash-mn63-program` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Matsushita flash with its own timing. What would decide it: a retail cartridge carrying the real Matsushita flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
 | `bench:mi-memset-cached` | result fail | `hw:memset-vi` |
 | `bench:mi-memset-repeat` | result fail | `hw:memset-vi` |
-| `bench:mi-memset-rspdma` | result pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
+| `bench:mi-memset-rspdma` | result consistent-only | `hw:vi-first-line`, `hw:memset-vi` |
 | `bench:mi-memset-uncached` | result fail | `hw:memset-vi` |
 | `bench:uncached-sizes-u32-banked` | result consistent-only | `hw:cpu-reads` |
 | `mm:filesel-named` | result fail | `hw:mm-filesel` |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | result fail | `hw:vi-cpu-contention`, `hw:nemu64-console` |
 | `nemu64:timing/load-miss-vi-off` | result fail | `hw:dirty-miss`, `hw:nemu64-console` |
 | `pidma:logs` | result fail | `hw:pi-dma-small` |
-| `systembench:pi-dma-128` | result fail | `hw:systembench` |
 | `systembench:pi-dma-8` | result fail | `hw:systembench` |
-| `systembench:pi-io-w` | result fail | `hw:systembench` |
-| `systembench:si-dma-w-rom` | result consistent-only | `hw:systembench` |
-| `systembench:si-io-w` | result fail | `hw:systembench` |
 | `systembench:u32r-banked` | result consistent-only | `hw:systembench` |
 | `thar0:ac-zbsame-vioff-imrd-1cyc` | result fail | `hw:thar0-console` |
 | `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc` | result fail | `hw:thar0-console` |
