@@ -1312,7 +1312,8 @@ def prehw(root, rows, checks, found, reports):
     unmoved = [c for c in hw if dry_head != results_head or c not in {d["check"] for d in dry if d["result"] == "pass"}]
     settled = all(h for _, h, _, _ in complete) and det == stepcap == "pass" and not unmoved
     bad3, bad4, bad5 = failing(3, c_rows + by_class["A"] + by_class["B"]), failing(4), failing(5)
-    seedless = "not computed: git names no seed commit" if seed is None else f"seed {seed[:9]}"
+    seedless = ("not computed: git names no seed commit" if seed is None
+                else f"seed classes from the commit that added {BLOCKERS_SEED}")
     return [
         ("every open item has exactly one blocker row, and no row names an item that is not open",
          not unread and not missing and not shape,
