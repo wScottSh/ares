@@ -46,10 +46,11 @@ def tex(recs):
 
 
 def zmem(records):
-    """kit-zmem (written in place, after the zmem module's report): write-run fits over the Z comb, the
-    per-primitive atomic cost, IM_RD/Z_CMP overlap in 1- and 2-cycle, the 2-cycle read-only
-    per-line and per-rectangle costs, 1 px triangle cost, the clobber verdict, the X-bus
-    and RDRAM command rates, the hold summary and PIPEBUSY's share of memory time."""
+    """kit-zmem and kit-zread (written in place, after the zmem module's report): write-run fits over
+    the Z comb, the per-primitive atomic cost, IM_RD/Z_CMP overlap in 1- and 2-cycle, the 2-cycle and
+    1-cycle read-only per-line and per-rectangle costs, the 1-cycle cost per 64 B read of a 320 px
+    line (10 serial reads), 1 px triangle cost, the clobber verdict, the X-bus and RDRAM command
+    rates, the hold summary and PIPEBUSY's share of memory time."""
     def p(rom, point):
         return records.get((f"zmem-{rom}", point))
 
@@ -102,6 +103,18 @@ def zmem(records):
                 line = (h16["clock"] - h8["clock"]) / 8
                 records[("zmem-read2", f"{mode}-w{w}-fit")] = {"rclk_per_line": round(line, 2),
                                                              "rclk_per_rect": round(h8["clock"] - 8 * line, 1)}
+    #kit-zread's per-line cost is from BUFBUSY, not DPC_CLOCK: the DP-interrupt poll quantizes each clock,
+    #so the clock difference of 16 less 8 lines did not move when the window's row misses did.
+    for mode in ("none", "imrd", "zcmp", "both"):
+        for bank in ("zsep", "zsame"):
+            for w in (8, 32, 64, 128, 320):
+                h8, h16 = p("read1", f"{mode}-{bank}-w{w}-h8"), p("read1", f"{mode}-{bank}-w{w}-h16")
+                if h8 and h16:
+                    line = (h16["bufbusy"] - h8["bufbusy"]) / 8
+                    out = {"rclk_per_line": round(line, 3), "rclk_per_rect": round(h8["bufbusy"] - 8 * line, 1)}
+                    if mode in ("imrd", "zcmp") and w == 320:
+                        out["rclk_per_read"] = round(line / 10, 3)
+                    records[("zmem-read1", f"{mode}-{bank}-w{w}-fit")] = out
     for t in ("fill", "z", "shade", "shade-z"):
         lo, hi = p("tri", f"{t}-16"), p("tri", f"{t}-64")
         if lo and hi:

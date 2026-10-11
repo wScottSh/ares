@@ -1,15 +1,19 @@
-"""Kit points for the zmem kit ROM (sets.py KITS["kit-zmem"]): the RDP's memory side. Write-back
+"""Kit points for the zmem and zread kit ROMs (sets.py KITS["kit-zmem"], KITS["kit-zread"]): the RDP's
+memory side. Write-back
 granularity under Z rejection (rdp-write-granularity.md), 1PRIMITIVE cost under memory traffic (#19),
 color and Z prefetch slots (#20) in 1-cycle and 2-cycle, 2-cycle reads that write nothing (F3,
 green-plan/rdp.md), the IM_RD clobber test (#17), X-bus command fetch, END appended to a
-running list, per-type triangle setup and PIPEBUSY under memory stalls (#16).
+running list, per-type triangle setup and PIPEBUSY under memory stalls (#16). kit-zread holds the
+1-cycle twin of the 2-cycle reads (Thar0's one-image read residual, thar0-zcmp-residual.md), which
+kit-zmem's 32 KiB SRAM log has no room for.
 
 Every point runs zmem_k: it clears a color region and writes a Z comb, runs one list, and reports
 DPC_CLOCK, BUFBUSY and PIPEBUSY with an FNV-1a hash of the region's pixels and a count of pixels of
 one color, so content compares exactly beside time.
 
 Buffers: the color image at COLOR_IMAGE (bank 7, benches.py), the Z image at ZBUF (bank 5), the list
-at LIST_BUF (bank 6) or at DMEM 0 for X-bus fetches.
+at LIST_BUF (bank 6) or at DMEM 0 for X-bus fetches. ZBUF_SAME puts the Z image in the color
+image's bank, right after it, as Thar0's FB + ZB same configs do (thar0.py ZB_ADDR_SAME).
 """
 from dataclasses import dataclass
 
@@ -20,6 +24,7 @@ from ..bench.benches import KSEG1, LIST_BUF, COLOR_IMAGE, VI_OFF, Rom
 ZBUF = 0x00540000
 DMEM = 0xA4000000
 WIDTH = 320
+ZBUF_SAME = COLOR_IMAGE + 2 * WIDTH * 240
 PLAIN = rcp.CYC_1CYCLE | rcp.CD_DISABLE | rcp.AD_DISABLE
 NEAR, FAR = rcp.zdz(0, 0), rcp.zdz(rcp.MAXFBZ, 0)
 PRIM_Z = 0x4000
@@ -56,17 +61,18 @@ class Comb:
     n: int
     near: int = NEAR
     far: int = FAR
+    base: int = ZBUF
 
     def args(self):
-        return [KSEG1 | (ZBUF + 2 * WIDTH * self.y), self.rows, WIDTH, self.n, self.near, self.far]
+        return [KSEG1 | (self.base + 2 * WIDTH * self.y), self.rows, WIDTH, self.n, self.near, self.far]
 
 
 NO_COMB = [0, 0, 0, 0, 0, 0]
 
 
-def prologue(mode0=PLAIN, mode1=0, prim=RED, extra=()):
+def prologue(mode0=PLAIN, mode1=0, prim=RED, extra=(), zbuf=ZBUF):
     return [rcp.set_color_image(rcp.IM_FMT_RGBA, rcp.IM_SIZ_16b, WIDTH, COLOR_IMAGE),
-            rcp.set_depth_image(ZBUF), rcp.set_scissor(0, 0, WIDTH, 240),
+            rcp.set_depth_image(zbuf), rcp.set_scissor(0, 0, WIDTH, 240),
             rcp.set_combine_lerp(*["0", "0", "0", "PRIMITIVE"] * 4), rcp.set_prim_color(prim),
             rcp.set_prim_depth(PRIM_Z, 0), rcp.set_other_mode(mode0, mode1), *extra]
 
@@ -186,6 +192,25 @@ def reads_2cycle(suite):
             for h in (8, 16) if w in (32, 320) else (8,):
                 zpoint(rom, f"{name}-w{w}-h{h}", [("mode", name), ("w", w), ("h", h)], pro,
                        [rcp.fill_rectangle(0, 0, w, h)], 1, Region(0, h), Comb(0, h, 0, near=NEAR))
+
+
+READ1_MODES = [("none", 0), ("imrd", rcp.IM_RD), ("zcmp", rcp.ZS_PRIM | rcp.Z_CMP),
+               ("both", rcp.IM_RD | rcp.ZS_PRIM | rcp.Z_CMP)]
+
+
+def reads_1cycle(suite):
+    """reads_2cycle in 1-cycle mode (kit-zread), with the Z image in its own bank and in the color
+    image's: Thar0's 1-cycle ac-* configs, where a 320 px line that reads one image costs 10 serial
+    64 B reads (thar0-zcmp-residual.md). 8 and 16 lines at every width split a per-line cost from a
+    once-per-rectangle one, so the console's per-read cost shows at each width."""
+    rom = Rom(suite, "zmem-read1")
+    for bank, zbuf in (("zsep", ZBUF), ("zsame", ZBUF_SAME)):
+        for name, mode1 in READ1_MODES:
+            pro = prologue(mode1=mode1 | rcp.AC_THRESHOLD, prim=RED_AC_FAIL, extra=AC_FAIL, zbuf=zbuf)
+            for w in (8, 32, 64, 128, 320):
+                for h in (8, 16):
+                    zpoint(rom, f"{name}-{bank}-w{w}-h{h}", [("mode", name), ("z", bank), ("w", w), ("h", h)], pro,
+                           [rcp.fill_rectangle(0, 0, w, h)], 1, Region(0, h), Comb(0, h, 0, near=NEAR, base=zbuf))
 
 
 #Triangle words (n64brew Reality Display Processor/Commands, Triangle; the layout snapper/tri.py
