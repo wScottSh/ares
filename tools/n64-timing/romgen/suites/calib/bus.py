@@ -207,7 +207,8 @@ def vi_intr(suite):
     rom = Rom(suite, "bus-vintr")
     steps = [Step("bench_multi", ["k_bus_vintr", VINTR_REPS, 0, V_TARGET, VINTR_STEP], 0),
              emit_step(suite, rom.name, "v-intr", [("v_intr", V_TARGET), ("bias", VINTR_BIAS), ("reps", VINTR_REPS)],
-                       TICK_FIELDS + [("sum", 2), ("max2", 3), ("v_at_intr", 4), ("iter_ticks", 5), ("timeout", 6)])]
+                       TICK_FIELDS + [("sum", 2), ("max2", 3), ("v_at_intr", 4), ("iter_ticks", 5), ("timeout", 6),
+                                      ("field", 7)])]
     rom.test.values.append(Value("v-intr", steps, []))
 
 
@@ -648,9 +649,10 @@ bus_vl_rloop:
 
 # bench_multi kernel. args = {{target, step}}; a2 = reps left less one. V_INTR = target; at target - 4
 # clears the VI interrupt, spins a2 x step iterations, then loops COUNT, MI_INTR, V_CURRENT until it has
-# seen both the VI bit and V_CURRENT == target. RES[4] = V_CURRENT read with the first VI bit, RES[5] =
-# ticks of the last loop iteration, RES[6] = 1 on a timeout. v0 = COUNT at the VI bit - COUNT at
-# V_CURRENT == target + {VINTR_BIAS}. Leaves V_INTR at vi_init's value and the interrupt clear.
+# seen both the VI bit and V_CURRENT == target. RES[4] = V_CURRENT read with the first VI bit, its field
+# bit cleared, RES[5] = ticks of the last loop iteration, RES[6] = 1 on a timeout, RES[7] = the field.
+# v0 = COUNT at the VI bit - COUNT at V_CURRENT == target + {VINTR_BIAS}. Leaves V_INTR at vi_init's
+# value and the interrupt clear.
 k_bus_vintr:
     move $t9, $ra
     move $t8, $a0
@@ -660,6 +662,13 @@ k_bus_vintr:
     lw $t3, 0($t8)
     li $t2, 0xA440000C
     sw $t3, 0($t2)
+    # As k_bus_vline: both V_CURRENT waits use the VI's current field (bit 0), or field 1 times out
+    # (#132). V_INTR keeps the even target: ares raises the progressive interrupt on the line,
+    # ignoring bit 0 (ares/n64/vi/vi.cpp line()).
+    lw $t0, 4($t2)
+    andi $t0, $t0, 1
+    or $t3, $t3, $t0
+    sw $t0, 12($t7)
     jal bus_vwait_eq
     addiu $a0, $t3, -4
     beqz $v0, bus_vi_timeout
@@ -710,6 +719,10 @@ bus_vi_timeout:
 bus_vi_both:
     subu $v1, $v0, $a0
     sw $v1, 4($t7)
+    lw $v1, 0($t7)
+    ori $v1, $v1, 1
+    xori $v1, $v1, 1
+    sw $v1, 0($t7)
     subu $v0, $t4, $t2
     addiu $v0, $v0, {VINTR_BIAS}
 bus_vi_end:
