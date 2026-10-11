@@ -103,6 +103,7 @@ hw:rdp-hold	pending:calibration-16	no complete power-on console capture of kit-z
 hw:rdp-rect-base	pending:calibration-16	no complete power-on console capture of kit-rdp in docs/calibration/hardware
 hw:rdp-sync-setter	pending:calibration-16	no complete power-on console capture of kit-rdp in docs/calibration/hardware
 hw:refresh-all-banks	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
+hw:refresh-latch	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:register-write	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:ri-priority	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:ri-priority-overlap	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
@@ -124,6 +125,7 @@ hw:unsynced-attrs	pending:calibration-16	no complete power-on console capture of
 hw:vi-blank-counting	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-cpu-contention	pending:calibration-16	no complete power-on console capture of kit-hpos in docs/calibration/hardware
 hw:vi-fetch-modes	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
+hw:vi-fetch-overrun	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-fetch-position	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-first-line	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-frame-latch	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware

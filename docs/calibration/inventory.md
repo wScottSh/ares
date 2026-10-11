@@ -103,16 +103,19 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `cpu-llsc-console` | Do SC and SCD on this console give the VR4300 User's Manual's stated results (cpu-llsc's 12 self-checked cases), and does an SC or SCD that fails (LLbit clear) to an address WatchLo matches raise Watch? | every cpu-llsc SC and SCD value's pass or fail (tests 0 and 1); the Watch-on-a-failing-SC probe (test 2) is report-only: its `#bench cpu-llsc watch-fail-sc` and `watch-fail-scd` records (exc, exccode, rt_lo) are stored with the capture, not compared | cpu-llsc | 0.* 1.* | v0 per point | exact | `cpu.sc-llbit` `item:cpu.sc-watch-on-fail` | pending:calibration-16 |
 | `span-write-release` | Is a span RAM half reusable once each 16 B segment's write-back lands, or only once the whole 64 B half's has (span-ram.md row 6, open question 4)? | DPC_CLOCK of 256-line 1-cycle write-only rectangles (no IM_RD, no Z) at every width 1-80 px, at 32 and 16 bpp, each line its own 2 KiB RDRAM row (color image 512 px at 32 bpp, 1024 px at 16 bpp). A width is a step when its clock exceeds the previous width's by more than 256 rclk (one pixel per line at rdp.span-1cycle's 1 px/rclk) plus 143.4 rclk; release is the most common spacing of the steps: segment (4 px at 32 bpp, 8 px at 16 bpp), half (16 px, 32 px), no-step, period-<px> for any other spacing or single-<width> for one step. The 32 bpp value decides the item; the 16 bpp value also hangs on a 16 bpp half's size (color-half-16bpp), so period-16 there is a 16 px half. steady_half, the 32 bpp cost per 64 B half, (clock at 320 px - clock at 160 px) / (256 lines x 10 halves), is compared: it decides rdp.mem-overhead-write, which holds the memory port for each 64 B write-back's wire time plus 19.5 rclk, so the fork reads 29.0 against the 16 clocks a 32 bpp half shades in (u-span-kit report, measured); the steps' widths are report values | kit-span2 | span-write/release-b* | release steady_half per point | exact range:abs:0.76 | `item:16.span-write-release` `rdp.mem-overhead-write` | pending:calibration-16 |
 | `mem-overhead-pipelined` | Does the RDP's per-transaction memory overhead (rdp.mem-overhead-read 21, rdp.mem-overhead-write 19.5 rclk, both fit) hold the memory port until it ends (occupancy, as the fork models it), or only delay that transaction's data while the next transaction starts after the RI wire time (pipelined latency)? | DPC_CLOCK of span-write-release's 256-line 32 bpp rectangles with IM_RD on, 1-320 px: the steady cost per 64 B half, (clock at 320 px - clock at 160 px) / (256 lines x 10 halves), against 21.6 rclk, what one 64 B read and one 64 B write-back need on the RDRAM wire. port is wire-bound at or under it: the overhead does not hold the port in a steady line, which refutes occupancy (pipelined latency, or no overhead). It is above-wire over it: what occupancy predicts (about 60 rclk with the fit values); a pipelined RDP with too few span halves to cover its read and write latency also gives it (inferred), so above-wire alone does not prove occupancy and the steady_half value, a report value, is read against the read plus write hold. one_half_read, the cost a 16 px line's single read adds over the write-only rectangle, per line, is a report value | kit-span2 | span-imrd/port | port per point | exact | `item:16.mem-overhead-pipelined` | pending:calibration-16 |
+| `refresh-latch` | When a VI line is shorter than the 52 rclk refresh holdoff, does the RI keep one refresh request and drop an HSYNC that comes while a refresh waits or runs, or does it queue every HSYNC's request (ri.refresh-latch)? | H_SYNC 9, 19 and 35 (lines of 10, 20 and 36 VCLK: 0.25, 0.5 and 0.9 of the holdoff), no line in V_VIDEO, then an 8 B SP DMA polled 4096 times from the I-cache: starved 1 when it never finished. One latch (the fork) holds the channel at most 52 rclk of every 2 to 6 lines and the DMA finishes (starved 0); a queue gains a request each line and drains one per 52 rclk, so the refresh, which outranks every client, never lets the DMA in (starved 1, and the point restores H_SYNC instead of hanging the ROM). The timed loads that follow log lines per holdoff as report values (the fork 5.0, 3.0 and 2.0, bus-derived/hsync); they are not compared, since whether a burst in flight at an HSYNC pushes the holdoff past the next line depends on fitted RI overheads | kit-bus | bus-hsync/refresh-* | starved per point | exact | `ri.refresh-latch` | pending:calibration-16 |
+| `vi-fetch-overrun` | When a VI line ends before its fetch does, does the line keep fetching while the next lines fetch nothing, or does each HSYNC drop the bursts not yet posted (vi.fetch-overrun)? | H_SYNC 399 (lines of 400 VCLK, shorter than H_START's 432 VCLK, so each line ends before its first burst is due) with vi_init's V_VIDEO, against the same window with no line in V_VIDEO, both from the next field (V_VIDEO latches per field, vi.frame-latch): the VI time is the loads the second window gains at its mean load period, and fetched is 1 when that exceeds one 54 rclk holdoff plus each window's longest load. A line that keeps fetching (the fork) fetches its 15 bursts over 8 lines (14.6 COUNT ticks of VI time per line on the fork, a report value); a VI that drops them at each HSYNC never posts one (fetched 0) | kit-bus | bus-derived/hsync | fetch-overrun-fetched per point | exact | `vi.fetch-overrun` | pending:calibration-16 |
 
 ## Rows pending calibration #16
 
-Rows whose checks wait on the console run. 28 rows, 28 with a kit question.
+Rows whose checks wait on the console run. 30 rows, 30 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
 | `clock.vclk` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:count-per-field | `hw:count-per-field` |
 | `ri.post-read-gap` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
 | `ri.post-write-gap` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
+| `ri.refresh-latch` | pending:calibration-16 | ~det ~stepcap hw:refresh-latch | `hw:refresh-latch` |
 | `ri.overhead-read` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
 | `ri.overhead-write` | pass-conditional:#77 pending:calibration-16 pending:report-only | bench:mi-memset-rspdma bench:sp-dma-sweep hw:memset-vi | `hw:memset-vi` |
 | `cpu.ifill-stall` | pending:calibration-16 pending:report-only | bench:ifill-isolated hw:ifill | `hw:ifill` |
@@ -127,6 +130,7 @@ Rows whose checks wait on the console run. 28 rows, 28 with a kit question.
 | `pif.joybus-no-device` | pending:calibration-16 pending:report-only | bench:si-dma-read64-2 bench:si-dma-read64-3 bench:si-dma-read64-4 hw:joybus-pads systembench:joy-2j systembench:joy-3j systembench:joy-4j | `hw:joybus-pads`, `hw:systembench` |
 | `ai.fetch-bytes` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:ai-fetch | `hw:ai-fetch` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes hw:vi-frame-latch | `hw:vi-fetch-modes`, `hw:vi-frame-latch` |
+| `vi.fetch-overrun` | pending:calibration-16 | ~det ~stepcap hw:vi-fetch-overrun | `hw:vi-fetch-overrun` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
 | `rdp.cmd-fifo-dwords` | pending:calibration-16 | hw:cmd-fifo-depth | `hw:cmd-fifo-depth` |
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
@@ -160,13 +164,13 @@ Rows whose only passing checks are their own fit data. 12 rows, 12 with a kit qu
 
 ## Model-choice rows
 
-Rows with no published value: the console decides the choice. 23 rows, 18 with a kit question.
+Rows with no published value: the console decides the choice. 23 rows, 20 with a kit question.
 
 | Behavior | Status | Checks | Question |
 |---|---|---|---|
 | `scheduler.tie-rank` | model-choice | ~det ~stepcap ~unit:timeline | **no kit question** |
 | `ri.refresh-waits-for-burst` | pass | bench:uncached-vs-hpos hw:vi-cpu-contention hw:refresh-all-banks | `hw:vi-cpu-contention`, `hw:refresh-all-banks` |
-| `ri.refresh-latch` | model-choice | ~det ~stepcap | **no kit question** |
+| `ri.refresh-latch` | pending:calibration-16 | ~det ~stepcap hw:refresh-latch | `hw:refresh-latch` |
 | `ri.arbitration` | fail | nemu64:timing/load-miss-vi-on thar0:separate-bank hw:vi-cpu-contention hw:ri-priority hw:ri-reorder hw:ri-priority-overlap hw:thar0-console hw:nemu64-console | `hw:vi-cpu-contention`, `hw:thar0-console`, `hw:nemu64-console`, `hw:ri-priority`, `hw:ri-reorder`, `hw:ri-priority-overlap` |
 | `ri.rank.vi` | fail | nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:ri-priority hw:nemu64-console | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.rank.other` | pass | nemu64:timing/load-miss-vi-on hw:ri-priority hw:nemu64-console | `hw:nemu64-console`, `hw:ri-priority` |
@@ -175,7 +179,7 @@ Rows with no published value: the console decides the choice. 23 rows, 18 with a
 | `sp.dma-burst` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
 | `vi.burst` | pass | bench:uncached-vs-hpos hw:vi-cpu-contention hw:vi-fetch-modes | `hw:vi-cpu-contention`, `hw:vi-fetch-modes` |
 | `vi.register-sample` | pending:calibration-16 pending:report-only | mm:south-clock-town ~det hw:vi-fetch-modes hw:vi-frame-latch | `hw:vi-fetch-modes`, `hw:vi-frame-latch` |
-| `vi.fetch-overrun` | model-choice | ~det ~stepcap | **no kit question** |
+| `vi.fetch-overrun` | pending:calibration-16 | ~det ~stepcap hw:vi-fetch-overrun | `hw:vi-fetch-overrun` |
 | `vi.unfetched-sample` | pending:report-only | mm:south-clock-town | **no kit question** |
 | `vi.aa-mode-lines` | fail | nemu64:timing/load-miss-vi-on nemu64:timing/load-from-uncached-vi-on-same-bank hw:vi-cpu-contention hw:vi-fetch-modes hw:nemu64-console | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.display-window` | pending:calibration-16 pending:report-only | mm:south-clock-town hw:vi-fetch-modes hw:vi-fetch-position | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |
@@ -239,7 +243,7 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 
 ## Coverage
 
-Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 225 entries: 206 with a question, 7 not hardware-decidable (no console run can decide them), 12 not decidable by this kit (a console could, with what the reason names).
+Everything a console could have to decide: every behavior row (a fit, a model choice or an inference, and a reference a console run would confirm), checks with a failing, consistent-only or conditional result, rows that no corpus or only a report checks, and the hardware items of issues and follow-ups (tools/n64-timing/calibration/items.tsv). `behaviors.py --check` fails unless each one has a question or a reason in tools/n64-timing/calibration/undecidable.tsv: `not-hardware-decidable:` when no console run can decide it, `not decidable by this kit:` when a console could but this kit cannot, with what would. 225 entries: 208 with a question, 7 not hardware-decidable (no console run can decide them), 10 not decidable by this kit (a console could, with what the reason names).
 
 | Entry | Why | Question or reason |
 |---|---|---|
@@ -260,7 +264,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `ri.refresh-dirty` | vendor reference | `hw:vi-cpu-contention` |
 | `ri.refresh-trigger` | wiki reference | `hw:vi-cpu-contention`, `hw:vi-blank-counting`, `hw:refresh-all-banks` |
 | `ri.refresh-waits-for-burst` | model-choice | `hw:vi-cpu-contention`, `hw:refresh-all-banks` |
-| `ri.refresh-latch` | model-choice | not decidable by this kit: no kit point runs a VI line shorter than a refresh. What would decide it: a kit point that programs H_SYNC below the 52 rclk refresh holdoff with the VI active and counts the holdoffs per line, as refresh-all-banks counts them per bank |
+| `ri.refresh-latch` | model-choice | `hw:refresh-latch` |
 | `ri.arbitration` | model-choice; check thar0:separate-bank fail | `hw:vi-cpu-contention`, `hw:thar0-console`, `hw:nemu64-console`, `hw:ri-priority`, `hw:ri-reorder`, `hw:ri-priority-overlap` |
 | `ri.rank.refresh` | wiki reference | `hw:vi-cpu-contention` |
 | `ri.rank.vi` | model-choice; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:ri-priority` |
@@ -343,7 +347,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `vi.vclk-per-pixel` | wiki reference | `hw:vi-cpu-contention` |
 | `vi.register-sample` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-fetch-modes`, `hw:vi-frame-latch` |
 | `vi.frame-latch` | wiki reference; an inference in its reference or note | `hw:vi-frame-latch` |
-| `vi.fetch-overrun` | model-choice; an inference in its reference or note | not decidable by this kit: no kit point programs a VI line shorter than its H_VIDEO window, the only VI that reaches the keep-fetching rule. What would decide it: a kit point that programs H_SYNC below the line's fetch time with the VI active and counts the bursts each line fetches through CPU load latency, or a video capture that shows which line the next output line displays. MM never reaches it (cited inputs, inferred conclusion; no run counted overruns): every MM VI mode keeps the NTSC H_SYNC 3093 quarter-px (773 px) against H_VIDEO 108-748 (640 px) (decomp mm-decomp-60fps 56fa21dd0: src/libultra/vimodes/vimodentsclan1.c:14,16; the Bomber's Notebook mode src/code/z_vimode.c:125,146,157), and its 3-line fetch takes about 285-398 of the 3972 rclk line (docs/research/vi-fetch.md, MM bus-occupancy estimate) |
+| `vi.fetch-overrun` | model-choice; an inference in its reference or note | `hw:vi-fetch-overrun` |
 | `vi.unfetched-sample` | model-choice; an inference in its reference or note; pending:report-only | not decidable by this kit: the CPU cannot read the VI's output and the sampled value has no bus-timing signature, so no kit ROM measures it and ingestion reads no video. What would decide it: a video capture of the VI output for a mode that samples past the three fetched lines (a Y_SCALE above one line per output row, or an X_SCALE past the line). MM never reaches it (cited inputs, inferred conclusion; no run counted unfetched samples): NTSC LAN1 runs Y_SCALE 1.0 and X_SCALE 0.5 over a 320-px line (decomp mm-decomp-60fps 56fa21dd0: src/boot/idle.c:107, src/libultra/vimodes/vimodentsclan1.c:11,17,24); the Bomber's Notebook hi-res mode sets Y_SCALE 2.0 but interlaced (src/code/z_vimode.c:81-84, src/code/sys_cfb.c:95), where VI::compose draws one row per output line from the line its fetch began at |
 | `vi.aa-mode-lines` | model-choice; an inference in its reference or note; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:vi-cpu-contention`, `hw:nemu64-console`, `hw:vi-fetch-modes` |
 | `vi.display-window` | model-choice; an inference in its reference or note; pending:report-only | `hw:vi-fetch-modes`, `hw:vi-fetch-position` |

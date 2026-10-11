@@ -428,9 +428,65 @@ EXT_ROMS = {
     "systembench": ext_systembench,
     "mm-bench": ext_mm_bench,
 }
+#The hardware-era n64-systembench build ext:systembench compares: build-systembench-era.sh 2023's
+#provenance.txt (hardware-run.md, n64-systembench; docs/program/reports/sysbench-era.md).
+SYSTEMBENCH_SHA256 = "fd5ec6c06acb686608c53554950c8b6b12b011dca5b30bf22bd7277a8d986823"
+
+
+def thar0_mismatch(paths, model_dir):
+    """Why a Thar0 capture is not a run of the configuration table the romgen port mirrors, or None. The
+    console runs an upstream build, which no pin names, and its text names no ROM, so the identity is the
+    table itself: each file's configurations, in the order printed, must be the first ones of the port's."""
+    from romgen.suites.thar0.configs import SPECS
+    descs = [s.desc for s in SPECS]
+    for path in paths:
+        lines = normalize(Path(path).read_bytes()).decode("ascii", errors="replace").split("\n")
+        printed = [lines[i - 1] for i, line in enumerate(lines) if line == "BUF = [" and i]
+        if not printed:
+            return f"{Path(path).name} holds no Thar0 configuration (no `BUF = [` block)"
+        at = next((i for i, (got, want) in enumerate(zip(printed, descs)) if got != want), None)
+        if at is not None or len(printed) > len(descs):
+            at = len(descs) if at is None else at
+            return (f"{Path(path).name} prints configuration {at} as {printed[at]!r}, the port's table "
+                    f"(romgen/suites/thar0/configs.py) has {descs[at] if at < len(descs) else 'none'!r}: another "
+                    f"build than Thar0/RDP-Timing-Tests a81ced93b28d (hardware-run.md, External ROMs)")
+    return None
+
+
+def systembench_mismatch(paths, model_dir):
+    """Why a systembench capture is not a run of the pinned hardware-era binary the fork ran, or None. Its
+    text names no build, so the capture carries the rom-sha256.txt of the file that was flashed."""
+    shas = mm_bench.read_shas(paths)
+    model = Path(model_dir) / "rom-sha256.txt"
+    fork = mm_bench.read_shas([model]).get("n64-systembench.z64") if model.exists() else None
+    if not shas:
+        return "the capture has no rom-sha256.txt for the n64-systembench.z64 it ran (hardware-run.md, n64-systembench)"
+    if not shas.get("n64-systembench.z64") == fork == SYSTEMBENCH_SHA256:
+        return (f"the console ran n64-systembench.z64 sha256={shas.get('n64-systembench.z64', 'none')}, the fork ran "
+                f"{fork or 'none'}, the pin is {SYSTEMBENCH_SHA256}; build with build-systembench-era.sh 2023 and run "
+                f"calibration/run.sh")
+    return None
+
+
+def snapper64_mismatch(paths, model_dir):
+    """Why a snapper64 capture is not snapper64 e1cd8a61fc43's dumps, or None. A dump names its test by a
+    hash of its group, test and assert (snapper64 src/framework/assert.cpp), so a dump of another version or
+    ROM has a name the published corpus lacks."""
+    from romgen.suites.snapper import compare as snap
+    corpus = Path(snap.default_corpus())
+    if not corpus.is_dir():
+        return f"no published snapper64 dumps in {corpus} to check the capture's names against (romgen/suites/snapper/fetch.sh)"
+    unknown = [Path(p).name for p in paths if Path(p).suffix != ".test" or not (corpus / Path(p).name).is_file()]
+    if unknown:
+        return (f"{len(unknown)} of {len(paths)} files are not published snapper64 e1cd8a61fc43 dumps; first "
+                f"{unknown[0]}")
+    return None
+
+
 #External ROMs whose output names no ROM identity: ingest refuses a capture these find run on other ROMs
 #than the fork's model side.
-EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch}
+EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch, "thar0": thar0_mismatch, "systembench": systembench_mismatch,
+                "snapper64": snapper64_mismatch}
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
 #that repeats a row's fit data from an independent one.
 EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "mm-bench": "mm"}
@@ -740,6 +796,42 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}, stored {stored or 'nothing'})")
     cases += stores
+    from romgen.suites.thar0.configs import SPECS
+    thar0_text = "".join(f"Running {d}...\n{d}\nBUF = [\n    1, \n]\nPIPE = [\n    1, \n]\n" for d in [s.desc for s in SPECS[:2]])
+    pinned = f"{SYSTEMBENCH_SHA256}  n64-systembench.z64\n"
+    exts = [("ingest stores a Thar0 capture of the port's configuration table", {"ext-thar0.usblog.txt": thar0_text}, 0),
+            ("ingest refuses a Thar0 capture whose configurations are not the port's",
+             {"ext-thar0.usblog.txt": thar0_text.replace(SPECS[1].desc, "No ZB, No VI, image_read off, 3-cycle")}, 1),
+            ("ingest stores a systembench capture of the pinned binary",
+             {"ext-systembench/run1.isviewer.log": "Benchmarks done\n", "ext-systembench/rom-sha256.txt": pinned}, 0),
+            ("ingest refuses a systembench capture of another build",
+             {"ext-systembench/run1.isviewer.log": "Benchmarks done\n",
+              "ext-systembench/rom-sha256.txt": f"{'b' * 64}  n64-systembench.z64\n"}, 1),
+            ("ingest refuses a systembench capture that names no binary",
+             {"ext-systembench.isviewer.log": "Benchmarks done\n"}, 1),
+            ("ingest stores snapper64 dumps the published corpus names", {"ext-snapper64/271F815C_1AD4E1E2_01.test": "\0"}, 0),
+            ("ingest refuses snapper64 dumps the published corpus does not name",
+             {"ext-snapper64/271F815C_1AD4E1E2_01.test": "\0", "ext-snapper64/0BADC0DE_0BADC0DE_01.test": "\0"}, 1)]
+    for name, files, want in exts:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model, capture, home = (Path(tmp) / d for d in ("root", "model", "capture", "home"))
+            (root / "tools").mkdir(parents=True)
+            (root / "tools" / "n64-timing").symlink_to(HERE.parent, target_is_directory=True)
+            for rel, body in files.items():
+                (capture / rel).parent.mkdir(parents=True, exist_ok=True)
+                (capture / rel).write_text(body)
+            model.mkdir()
+            (model / "rom-sha256.txt").write_text(f"{SYSTEMBENCH_SHA256}  /roms/systembench/n64-systembench.z64\n")
+            (home / "corpora" / "snapper64-decoded").mkdir(parents=True)
+            (home / "corpora" / "snapper64-decoded" / "271F815C_1AD4E1E2_01.test").write_bytes(b"\0")
+            proc = subprocess.run([sys.executable, "-c", run_store, str(HERE / "ingest.py"), str(root), str(capture),
+                                   "c", str(model)], capture_output=True, text=True, env=dict(os.environ, N64_TIMING_HOME=str(home)))
+            stored = sorted(p.name for p in (root / HARDWARE).rglob("*") if p.is_file()) if (root / HARDWARE).exists() else []
+        ok = proc.returncode == want and bool(stored) == (want == 0)
+        failed += not ok
+        why = proc.stderr.strip().split("\n")[-1] if proc.returncode else ""
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}, stored {stored or 'nothing'}) {why}")
+    cases += exts
     from romgen import hwout
     rom = hwout.stamp(b"\0" * 64 + f"#kit rom=kit-cpu sha=78b4427b8d86 rom_sha256={hwout.UNSTAMPED} fmt=1\0".encode() + b"code")
     stamped = Log(rom).header["rom_sha256"]
@@ -872,6 +964,32 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += irqclrs
+    latch_q, overrun_q = (next(q for q in questions() if q["id"] == i) for i in ("refresh-latch", "vi-fetch-overrun"))
+
+    def hsync(starved=0, fetch_n=1117, none_n=1160, slow=(608, 516, 430)):
+        pts = [(f"refresh-{f}", h, s) for (f, h), s in zip((("0.25", 9), ("0.5", 19), ("0.9", 35)), slow)]
+        body = "".join(f"#bench bus-hsync {pt} hsync={h} v_video=none window=29790 reps=1 starved={starved} n=600 "
+                       f"slow={0 if starved else s} lat_max=95\n" for pt, h, s in pts)
+        body += "".join(f"#bench bus-hsync {pt} hsync=399 v_video={v} window=29790 reps=1 starved=0 n={n} slow=78 lat_max={m}\n"
+                        for pt, v, n, m in (("fetch-overrun", "init", fetch_n, 67), ("fetch-overrun-none", "none", none_n, 47)))
+        return Log(sample_log(body, rom="kit-bus"))
+    fork = hsync()
+    shorts = [("refresh-latch: a console with one refresh latch (holdoffs every 6, 4 and 3 lines)", latch_q,
+               hsync(slow=(516, 387, 287)), "pass"),
+              ("refresh-latch: a console that queues every HSYNC's refresh starves the gate DMA", latch_q, hsync(starved=1),
+               "fail"),
+              ("vi-fetch-overrun: a console whose loads run 10% slower and whose VI holds the channel half as long",
+               overrun_q, hsync(fetch_n=1023, none_n=1044), "pass"),
+              ("vi-fetch-overrun: a VI that drops the unposted bursts at each HSYNC (one load apart)", overrun_q,
+               hsync(fetch_n=1159), "fail"),
+              ("vi-fetch-overrun: the derived threshold, 40.5 + 2 x 67 ticks: 8 loads (205 ticks) read as fetched",
+               overrun_q, hsync(fetch_n=1152), "pass")]
+    for name, q, hw, want in shorts:
+        got, detail = compare(q, [hw], [fork])
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += shorts
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
