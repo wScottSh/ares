@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runs the harness shell scripts against a stub runner in scratch homes and checks that a failure
 reaches their exit status: snapper run.sh without the snapper64 dumps, calibration/run.sh without the
-Majora's Mask BENCH ROMs, and standing.sh when a script it runs fails. Takes about 10 s.
+Majora's Mask BENCH ROMs, and standing.sh when a script it runs fails. Takes about 15 s.
 
 usage: scripts-selftest.py
 """
@@ -77,6 +77,26 @@ def main():
         want = subprocess.run(["sha256sum", str(runner)], capture_output=True, text=True).stdout.split()[0]
         results.append(("standing.sh records the sha256 of the runner it was given",
                         stamp.startswith(f"{want}  {runner}  given as N64_RUN"), status, stamp or "no n64-run.txt"))
+        named = failing.split("\n")[0].split(":", 1)[-1].split()
+        silent = ["ctest", "det-mm", "stepcap-mm", "det-nemu64-timing", "stepcap-nemu64-cop0hazard"]
+        results.append(("standing.sh counts ctest and determinism.sh when they write no verdict",
+                        all(n in named for n in silent), status, failing.split("\n")[0] or err))
+
+        verdicts = tmp / "verdicts"
+        verdicts.mkdir()
+        (verdicts / "python").write_text('#!/bin/sh\ncase "$1" in -c) echo 0; exit 0;; -) echo "$4: FAIL"; exit 1;; esac\nexit 1\n')
+        (verdicts / "python").chmod(0o755)
+        (verdicts / "ctest").write_text("#!/bin/sh\necho '50% tests passed, 1 tests failed out of 2'\nexit 8\n")
+        (verdicts / "ctest").chmod(0o755)
+        (tmp / "build").mkdir()
+        out = tmp / "standing-verdicts"
+        status, err = run([str(HERE / "standing.sh"), str(out), str(tmp / "mm.z64")],
+                          dict(env, MM_BENCH_ROMS=str(mm), PATH=f"{verdicts}:{bin_dir}:{os.environ['PATH']}"), timeout=300)
+        first = (out / "failing.txt").read_text().split("\n")[0] if (out / "failing.txt").exists() else ""
+        named = first.split(":", 1)[-1].split()
+        results.append(("standing.sh does not count a failing ctest or determinism verdict as a script failure",
+                        bool(first) and not any(n == "ctest" or n.startswith(("det-", "stepcap-")) for n in named),
+                        status, first or err))
 
     failed = 0
     for name, ok, status, detail in results:

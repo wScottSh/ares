@@ -5,7 +5,8 @@
 # usage: standing.sh OUT MM_ROM
 # Builds n64-run first (build.sh) unless N64_RUN names a runner, and records the runner's sha256 in
 # OUT/n64-run.txt either way. Exits 1 when any script it runs fails (the list is the first line of
-# OUT/failing.txt); a check's verdict is not a script failure.
+# OUT/failing.txt); a check's verdict is not a script failure, so ctest, determinism.sh and the pidma
+# replay count only when they write no verdict.
 # env: N64_TIMING_HOME (ROMs go to $N64_TIMING_HOME/roms, rebuilt from this tree), N64_BUILD_DIR, N64_RUN,
 #      MM_BENCH_ROMS (the Majora's Mask BENCH ROMs; default: build-mm-bench.sh builds them into
 #      $N64_TIMING_HOME/roms/mm-bench from MM_ROM and $MM_DECOMP),
@@ -90,6 +91,7 @@ for suite in nemu64 bench systembench systembench-845635c rdpstat snapper noise 
   cp -r "$results/$suite" "$out/$suite"
 done
 (cd "$n64_build" && ctest > "$out/ctest.txt" 2>&1)
+grep -qE '^[0-9]+% tests passed, [0-9]+ tests? failed out of [0-9]+$' "$out/ctest.txt" || exits="$exits ctest"
 (cd "$n64_repo" && "$PYTHON" tools/n64-timing/behaviors.py --check && "$PYTHON" tools/n64-timing/behaviors.py --self-test \
   && "$PYTHON" tools/n64-timing/lint-literals.py && "$PYTHON" tools/n64-timing/pidma-replay.py --self-test && "$PYTHON" tools/n64-timing/mmbench/filesel_check.py --self-test \
   && "$PYTHON" tools/n64-timing/systembench/report.py --self-test \
@@ -102,13 +104,16 @@ for set in timing cycle cop0hazard; do
 done
 DET_OUT="$out/det-mm" "$here/determinism.sh" "$mm" > "$out/det-mm.txt" 2>&1
 DET_OUT="$out/stepcap-mm" "$here/determinism.sh" --step-cap "$mm" > "$out/stepcap-mm.txt" 2>&1
+for f in "$out"/det-*.txt "$out"/stepcap-*.txt; do
+  grep -qE '^(determinism|stepcap): (PASS|FAIL)' "$f" || exits="$exits $(basename "$f" .txt)"
+done
 OUT="$out/state-roundtrip" "$here/state-roundtrip.sh" "$mm" > "$out/state-roundtrip.txt" 2>&1 || exits="$exits state-roundtrip"
 wait "$mm600_pid" || exits="$exits mm600"
 wait "$mmbench_pid" || exits="$exits mmbench"
 "$PYTHON" "$here/mmbench/filesel_check.py" "$out/mmbench" > "$out/filesel.txt" 2>&1
 uptime > "$out/load-end.txt"
 {
-  echo "standing: scripts that exited nonzero:${exits:- none}"
+  echo "standing: scripts that failed:${exits:- none}"
   "$PYTHON" "$here/behaviors.py" --failing "$out"
 } | tee "$out/failing.txt"
 echo "standing: $out"
