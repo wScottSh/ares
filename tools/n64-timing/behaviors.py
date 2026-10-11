@@ -710,6 +710,13 @@ TOOLS_BENCH = (
     "`func_80173B48` is the unpinned retail code. Per-behavior provenance is in `docs/spec/mm-bench.md`.")
 
 
+def current_walls(root):
+    """wall-budget.tsv keeps every timing, oldest first; a run's last row is its current one."""
+    rows = tsv_rows(Path(root) / WALL_BUDGET)
+    last = {r["run"]: i for i, r in enumerate(rows)}
+    return [r for i, r in enumerate(rows) if last[r["run"]] == i]
+
+
 def found_result(found, cid):
     return found.get(cid, ("missing", ""))
 
@@ -717,7 +724,7 @@ def found_result(found, cid):
 def destination(root, found):
     """The map #1 Destination items as (item, result, evidence)."""
     det, stepcap = found_result(found, "det"), found_result(found, "stepcap")
-    walls = tsv_rows(Path(root) / WALL_BUDGET)
+    walls = current_walls(root)
     slow = max(walls, key=lambda r: float(r["wall_s"]))
     filesel = [(c, found_result(found, c)) for c in ("mm:filesel-empty", "mm:filesel-named")]
     md5 = re.search(r'ROM_MD5 = "(\w+)"', (Path(root) / "tools/n64-timing/mmbench/mmbench.py").read_text(encoding="utf-8"))
@@ -779,7 +786,7 @@ def predicates(root, rows, checks, found):
     ]
 
     det, stepcap = found_result(found, "det")[0], found_result(found, "stepcap")[0]
-    walls = tsv_rows(Path(root) / WALL_BUDGET)
+    walls = current_walls(root)
     slow = max(walls, key=lambda r: float(r["wall_s"]))
     run_commits = COMMIT.findall(results_source(found))
     wall_commits = {c for r in walls for c in COMMIT.findall(r["source"])}
@@ -1780,6 +1787,8 @@ def self_test(root):
                  row_field("rdp.span-line-gap", "verify", "thar0:alpha-fail-1cycle thar0:alpha-fail-2cycle ~thar0:zcmp")(t)),
              "so a pass verifies the arithmetic, not the model"),
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
+            ("an older, slower timing kept as history", WALL_BUDGET,
+             lambda t: t.replace("\n", "\nfilesel-rotate\t999" + "\t-" * (t.split("\n")[0].count("\t") - 1) + "\n", 1), None),
             ("editing the closure draft", CLOSURE, lambda t: t + "manual edit\n", f"{CLOSURE} differs from the generated output"),
             ("a check with no result", RESULTS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("unit:timeline\t")),
              "check `unit:timeline` has no result"),
@@ -1820,7 +1829,7 @@ def self_test(root):
         failures, ran = 0, 0
         for name, rel, change, expected in cases:
             restore = edit(rel, change) if rel else None
-            errors = check(work) if rel is None or expected is not None else validate(work)[0]
+            errors = check(work) if rel in (None, WALL_BUDGET) or expected is not None else validate(work)[0]
             if expected is None:
                 ok = not errors
                 detail = errors[0] if errors else "no errors"
