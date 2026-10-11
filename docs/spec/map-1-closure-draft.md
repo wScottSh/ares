@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 153 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run fix-137/run on d1874254e). 1 consistent-only, 25 fail, 12 fit only, 4 model-choice, 69 pass, 1 pass-conditional:#77, 13 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
+The spec is `docs/spec/n64-timing.md`: 153 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run fix-137/run on d1874254e). 1 consistent-only, 26 fail, 12 fit only, 4 model-choice, 69 pass, 13 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
 
 ## Green predicates
 
@@ -58,7 +58,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 | Check | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|
 | `bench:mi-memset-cached` | vi-on pclk_per_line 72.674..72.728 median 72.684 mean 72.682 (expected 71.24, 71.17..71.31, mean) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
-| `bench:mi-memset-repeat` | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `sysad.register-write` | - |
+| `bench:mi-memset-repeat` | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `ri.write-hit` `ri.overhead-write` `sysad.register-write` | - |
 | `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
 | `mm:filesel-named` | filesel-named: median over 5 phases: mean 1.6789 (min 1.6695, max 1.6893), 67.9% (min 66.9%, max 68.9%) of game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
@@ -93,12 +93,13 @@ None.
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail |
+| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail; `bench:mi-memset-repeat`: vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |
 | `ri.bank-of` | wiki | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |
 | `ri.row-of` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |
 | `ri.arbitration` | model-choice | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19% |
 | `ri.rank.vi` | model-choice | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |
+| `ri.overhead-write` | derived | `bench:mi-memset-repeat`: vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail |
 | `ri.overhead-rdp` | derived | `thar0:separate-bank`: model 225260 vs console 225679 (225518..225802), -0.19%; `thar0:imrd-1cycle`: model 176749 vs console 163556 (163436..163654), +8.07% |
 | `cpu.dfill-total` | measured | `nemu64:timing/load-miss-vi-off`: 0 of 8 values pass; with '80000000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80100000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80200000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80300000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80400000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80500000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80600000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean; with '80700000': phase mean 41.0000 over 64 phases (band 42.000..43.000), mean 41.000, median 41 (band 40..42) fail on mean |
 | `cpu.wb-block-entries` | vendor | `bench:mi-memset-cached`: vi-on pclk_per_line 72.674..72.728 median 72.684 mean 72.682 (expected 71.24, 71.17..71.31, mean) fail |
@@ -217,7 +218,7 @@ These checks are gated too, but another check already decides their row.
 | `ri.rank.vi` | fail | `hw:vi-cpu-contention` pending (calibration-16); `hw:ri-priority` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `ri.rank.other` | pass | `hw:ri-priority` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `ri.overhead-vi` | pass | `hw:nemu64-console` pending (calibration-16) |
-| `ri.overhead-write` | pass-conditional:#77 | `bench:sp-dma-sweep` pending (report-only); `hw:memset-vi` pending (calibration-16) |
+| `ri.overhead-write` | fail | `bench:sp-dma-sweep` pending (report-only); `hw:memset-vi` pending (calibration-16) |
 | `ri.overhead-rdp` | fail | `hw:thar0-console` pending (calibration-16) |
 | `cpu.uncached-read-total` | consistent-only | `hw:cpu-reads` pending (calibration-16); `hw:nemu64-console` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `cpu.uncached-read-dword-total` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |

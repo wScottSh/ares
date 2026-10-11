@@ -38,6 +38,7 @@ struct SysAD : Timing::Actor, RI::Client {
   auto run(Clock limit) -> void override;
   auto buffer(const RiBus::Burst&) -> void* override;
   auto granted(const RiBus::Grant&) -> void override;
+  auto writesOwnBytes(const RiBus::Burst&) -> bool override;
   auto serialize(serializer&) -> void;
 
   //The RI decides on rclk edges and the CPU restarts on pclk edges. From a
@@ -73,6 +74,7 @@ struct SysAD : Timing::Actor, RI::Client {
     Phase phase;
     u8    size;      //Byte..Dual for a store, DCache or ICache for a line
     u8    slots;     //write-buffer entries it occupies (R4300i datasheet p.9)
+    bool  repeat;    //an MI repeat write to RDRAM data: one RI burst, the MI writes its pattern at the grant
     u32   address;
     Clock enqueued;
     Clock done;      //EOK: the entry's slot frees and the next transaction may start
@@ -91,7 +93,7 @@ private:
   auto enqueue(const Entry&) -> void;
   auto update() -> void;
   auto pending() -> Entry*;
-  auto apply(Entry&) -> void;
+  auto apply(Entry&, Clock at) -> void;
   template<u32 Size> auto readRdram(u32 address, void* data, Clock path) -> void;
 
   Entry entries[4];

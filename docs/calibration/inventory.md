@@ -240,7 +240,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `clock.vclk` | derived reference; pending:report-only | `hw:count-per-field` |
 | `scheduler.tie-rank` | model-choice | not-hardware-decidable: the order the emulator's scheduler breaks a same-unit tie in; a console has no scheduler and no observable that orders two events inside one 1.3 ns unit |
 | `ri.read-hit` | datasheet reference | `hw:nemu64-console` |
-| `ri.write-hit` | datasheet reference; check bench:mi-memset-uncached fail | `hw:memset-vi` |
+| `ri.write-hit` | datasheet reference; check bench:mi-memset-uncached, bench:mi-memset-repeat fail | `hw:memset-vi` |
 | `ri.octbyte` | datasheet reference | `hw:sp-dma-direction` |
 | `ri.retry-clean` | datasheet reference; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
 | `ri.retry-dirty` | datasheet reference | `hw:dirty-row` |
@@ -260,7 +260,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `ri.rank.other` | model-choice | `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.overhead-read` | fit; verify-is-fit; pending:report-only | `hw:sp-dma-direction` |
 | `ri.overhead-vi` | model-choice | `hw:nemu64-console` |
-| `ri.overhead-write` | derived reference; check bench:mi-memset-rspdma pass-conditional:#77 | `hw:memset-vi` |
+| `ri.overhead-write` | derived reference; check bench:mi-memset-rspdma, bench:mi-memset-repeat pass-conditional:#77 | `hw:memset-vi` |
 | `ri.overhead-rdp` | derived reference; check thar0:separate-bank, thar0:imrd-1cycle fail | `hw:thar0-console` |
 | `ri.request-latency` | model-choice | not-hardware-decidable: one 750 MHz unit (1.3 ns) between a request's post and the arbiter, chosen so a decision never races a post at the same time; no console measurement resolves 1.3 ns, and the fork's results do not move with it (det, stepcap) |
 | `cpu.uncached-read-total` | measured reference; check bench:uncached-sizes-u32-banked, systembench:u32r-banked consistent-only | `hw:cpu-reads`, `hw:nemu64-console`, `hw:systembench` |
@@ -308,7 +308,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `cpu.pi-io-read` | derived reference | `hw:cpu-reads`, `hw:systembench` |
 | `sysad.rdram-write-period` | fit; verify-is-fit; check bench:mi-memset-uncached fail | `hw:memset-vi` |
 | `sysad.rdram-block-write-period` | fit; verify-is-fit; check bench:mi-memset-cached fail | `hw:memset-vi` |
-| `sysad.register-write` | fit; check pidma:logs, bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target` |
+| `sysad.register-write` | fit; an inference in its reference or note; check pidma:logs, bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target` |
 | `cpu.random-rule` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.wired-write-latency` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console`, `hw:ctc1-fpe-ce` |

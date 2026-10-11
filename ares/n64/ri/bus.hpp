@@ -68,6 +68,10 @@ struct Client {
   //with buffer() unused.
   struct Native { u8* data; u8* hidden; u32 base; };
   virtual auto native(const Burst&, Native&) -> bool { return false; }
+  //A write burst whose bytes the client writes itself, in granted(): an MI
+  //repeat write, whose one pattern the MI replays into every octbyte
+  //(n64brew MIPS_Interface, Repeat Mode).
+  virtual auto writesOwnBytes(const Burst&) -> bool { return false; }
 };
 
 //Bytes in the first burst of a transfer of `bytes` at `address`: at most

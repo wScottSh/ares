@@ -84,6 +84,7 @@ auto RI::run(Clock limit) -> void {
     moveNative(g.burst, n);
     return client->granted(g);
   }
+  if(client->writesOwnBytes(g.burst)) return client->granted(g);
   void* data = client->buffer(g.burst);
   if(g.burst.requester != RiBus::Requester::CpuSysAD) {
     move(g.burst, (u8*)data);
