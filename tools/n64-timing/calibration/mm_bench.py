@@ -42,7 +42,11 @@ SCENES = {
 CONFIG_MAGIC = b"BNCH"
 #The CIC boot code checksums ROM 0x1000..0x101000, so a patch there would not boot on a console.
 CHECKSUMMED_END = 0x101000
-COMPARED = ("vi", "rdp_ticks")
+#Each judged column's tolerance, from the instrument alone; the derivation is the source cell of the
+#questions.tsv mm-bench and mm-filesel rows, whose rule cells must read range:abs:<this> (behaviors.py --check).
+#rdp_ticks is the difference of two osGetTime() reads, each a whole COUNT tick, so 1 tick; vi counts whole
+#retraces, so 0.
+TOLERANCE = {"vi": 0, "rdp_ticks": 1}
 #Reported beside the verdict, not judged: the RDP's own busy time from the DPC counters.
 REPORTED = ("rdp_ticks", "dpc_pipebusy")
 #Reported, not judged, when a capture holds both: the named-only work is the gap between the two
@@ -280,7 +284,7 @@ def deciles(values):
 def compare(paths, model_dir, scenes):
     """(result, detail). Per scene of `scenes` the capture holds: each complete console run's median `vi`
     and `rdp_ticks` must lie within the fork's per-frame min..max of the same column over its run of the
-    same ROM. The fork's run is one deterministic boot phase, so its 600-frame range is the spread it
+    same ROM, give or take the column's TOLERANCE. The fork's run is one deterministic boot phase, so its 600-frame range is the spread it
     has. Reported, not judged: the mean fields per game frame, the median, p10 and p90 of each REPORTED
     column on both sides, and with both GAP scenes their named-minus-empty median gap on both sides.
     A console value given as lo..hi spans its runs."""
@@ -302,12 +306,13 @@ def compare(paths, model_dir, scenes):
         mine = [r for r in runs if r.scene == scene]
         if any(r.config() != model.config() for r in mine):
             return "fail", f"mm-bench {scene}: console config {mine[0].config()}, fork {model.config()}"
-        for col in COMPARED:
+        for col, t in TOLERANCE.items():
             mv = model.values(col)
             lo, hi = min(mv), max(mv)
             meds = [statistics.median(r.values(col)) for r in mine]
-            if not all(lo <= m <= hi for m in meds):
-                off.append(f"{scene} {col} console median {num(min(meds))}..{num(max(meds))} outside fork {lo}..{hi}")
+            if not all(lo - t <= m <= hi + t for m in meds):
+                off.append(f"{scene} {col} console median {num(min(meds))}..{num(max(meds))} outside fork {lo}..{hi} "
+                           f"by more than {t}")
         fpf = [sum(r.values("vi")) / len(r.rows) for r in mine]
         cols = [col for col in REPORTED if col in model.columns]
         notes.append(f"{scene} fields/frame console {min(fpf):.3f}..{max(fpf):.3f} fork "
@@ -327,7 +332,7 @@ def compare(paths, model_dir, scenes):
     detail = f"{len(runs)} console runs of {len({r.scene for r in runs})} scenes; " + "; ".join(notes)
     if off:
         return "fail", f"{len(off)} medians outside the fork's range; first {off[0]}; {detail}"
-    return "pass", f"median vi and rdp_ticks within the fork's per-frame range; {detail}"
+    return "pass", f"median vi and rdp_ticks within the fork's per-frame range and tolerance; {detail}"
 
 
 def sample(scene="south_clock_town", vi=(3, 3, 4, 3), rdp=(1500000, 1600000, 1700000, 1650000), end=True, pipe=None):
@@ -348,8 +353,14 @@ def self_test():
     cases = [("a capture that agrees", sample(), pinned, "pass", "within the fork's per-frame range"),
              ("a capture whose median rdp_ticks is above the fork's range", sample(rdp=(1800000,) * 4), pinned, "fail",
               "rdp_ticks console median 1800000"),
-             ("a capture whose median vi is above the fork's range", sample(vi=(5, 5, 5, 3)), pinned, "fail",
-              "vi console median 5"),
+             ("a capture whose median vi is the fork's hi plus 1, past vi's 0 tolerance", sample(vi=(5, 5, 5, 3)), pinned,
+              "fail", "vi console median 5..5 outside fork 3..4 by more than 0"),
+             ("a capture whose median rdp_ticks is the fork's hi plus the 1-tick tolerance", sample(rdp=(1700001,) * 4),
+              pinned, "pass", "within the fork's per-frame range and tolerance"),
+             ("a capture whose median rdp_ticks is the fork's hi plus the tolerance plus 1", sample(rdp=(1700002,) * 4),
+              pinned, "fail", "rdp_ticks console median 1700002..1700002 outside fork 1500000..1700000 by more than 1"),
+             ("a capture whose median rdp_ticks is the fork's lo minus the tolerance minus 1", sample(rdp=(1499998,) * 4),
+              pinned, "fail", "rdp_ticks console median 1499998"),
              ("a cut capture (no BENCH END)", sample(end=False), pinned, "fail", "end early"),
              ("a capture of another ROM (rom-sha256.txt differs)", sample(), other, "fail", f"sha256={'b' * 64}"),
              ("a capture without rom-sha256.txt", sample(), None, "fail", "no rom-sha256.txt"),
