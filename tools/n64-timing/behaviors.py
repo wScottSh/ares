@@ -21,6 +21,11 @@ hw:<question> in its verify column; until a capture is ingested
 writes docs/calibration/inventory.md, the question table joined with every row and check the
 hardware could decide.
 
+PREHW_COMPLETE (docs/design/prehw-plan.md section 1): tools/n64-timing/calibration/blockers.tsv has
+one row per open item (a check that does not pass, a SOFTWARE_READY or MAP_GREEN clause that does
+not hold, a row that is not verified), with columns id, kind, class, decider, unit, separates,
+searched. blocker_audit() states the rules; a unit that opens or closes an item updates its row.
+
 behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note, code.
 Every row names a reference and at least one check, and says where the code builds it. A
 row with a number is built when code reads it as Timing::Behavior::<Name>, and a legacy row
@@ -2129,6 +2134,8 @@ def self_test(root):
              lambda t: row_field("clause:map_green:4", "class", "C")(row_field("clause:map_green:4", "decider", "#16")(t)), [True, False]),
             ("a results file whose reader lost every check", RESULTS, lambda t: t.split("\n")[0] + "\ncheck\tresult\tdetail\n",
              [False, False]),
+            ("a results file that lost one console question", RESULTS,
+             lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("hw:dcb\t")), [False, False]),
             ("the A and B rows relabeled C on the questions that close them", BLOCKERS,
              lambda t: re.sub(r"^([^\t]+\t[^\t]+\t)[AB]\t", r"\1C\t", t, flags=re.M), [False, True, False]),
         ]:
