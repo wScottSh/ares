@@ -239,7 +239,35 @@ def hsync_short(suite):
                   [("hsync", HSYNC_FETCH), ("v_video", which), ("window", HSYNC_WINDOW)], reps=1, extra=HSYNC_EXTRA)
 
 
-BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr, vi_y_late, hsync_short]
+# ri.post-write-gap's arbitration readings (PR #137, verify-137). An RDP fill writes bank 7 and a 16 KiB SP DMA
+# reads bank 6, both device 3 (bus.hpp deviceOf), so after each fill write the SP's next burst is in the
+# write's NEC p44 gap; the CPU's loads go to device 2 (bank 5) or device 3 (bank 6).
+WGAP_LOADS = {"bank5": LOAD_BANK5, "bank6": LOAD_BANK6}
+
+
+def wgap_args(writes, load, loads, done, done2, ack):
+    """k_bus_wgap's program: six (register, value) writes (register 0 = none), the load address and count,
+    the first client's (register, mask, value) done test and its acknowledge write, the second's done test."""
+    writes = list(writes) + [(0, 0)] * (6 - len(writes))
+    return [w for pair in writes for w in pair] + [load, loads, *done, *ack, *done2]
+
+
+def ri_write_gap(suite):
+    """LOADS uncached loads while an RDP fill and an SP DMA share device 3; v0 sums their latencies."""
+    rom = Rom(suite, "bus-wgap")
+    words = rcp.words(FILL_LIST)
+    build = Step("bench_list_step", [suite.blob(words), len(words), 0, 0, 0, 0, 0, KSEG1 | LIST_BUF], 0)
+    writes = [(DPC_REGS + 0xC, 0x3C1), (DPC_REGS + 0x0, LIST_BUF), (DPC_REGS + 0x4, LIST_BUF + 4 * len(words)),
+              (SP_REGS + 0x0, 0), (SP_REGS + 0x4, SP_DMA_BUF), (SP_REGS + 0x8, SP_LEN_16K)]
+    for where, addr in WGAP_LOADS.items():
+        rom.point(f"fill-sp-{where}", "k_bus_wgap",
+                  wgap_args(writes, KSEG1 | addr, LOADS, (MI_INTR, 0x20, 0x20), (SP_REGS + 0x18, 1, 0), (MI_REGS, 0x800)),
+                  [("clients", "rdp-fill+sp-rd-16k"), ("bank", addr >> 20), ("loads", LOADS)], reps=4, flags=VI_OFF,
+                  extra=CLIENT_EXTRA, pre=[build])
+
+
+BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr, vi_y_late, hsync_short,
+            ri_write_gap]
 
 VI_RESTORE = "\n".join(f"    .word 0x{reg:08X}, 0x{val:08X}" for reg, val in VI_INIT.items())
 
@@ -384,6 +412,88 @@ bus_cl_fin:
     lw $t1, 40($a0)
     sw $t1, 0($t0)
 bus_cl_ret:
+    jr $ra
+    nop
+
+# args = {{(register, value) x 6 (register 0 = none), load addr, loads, done reg, mask, value, ack reg (0 = none),
+# value, done2 reg, mask, value}}. The writes, COUNT, then `loads` timed uncached LWs (the first drains the writes).
+# RES[2] = the longest load, RES[3] = 1 if the first client was not done after the loads, RES[4] = ticks from
+# the writes to its done, RES[5] = 1 on a poll timeout. Then the acknowledge write and a wait for the second
+# client. v0 = the loads' summed ticks.
+k_bus_wgap:
+    move $t0, $a0
+    li $t3, 6
+    mfc0 $a2, $count
+bus_wg_w:
+    lw $t1, 0($t0)
+    beqz $t1, bus_wg_wn
+    lw $t2, 4($t0)
+    sw $t2, 0($t1)
+bus_wg_wn:
+    addiu $t3, $t3, -1
+    bnez $t3, bus_wg_w
+    addiu $t0, $t0, 8
+    lw $t2, 48($a0)
+    lw $t3, 52($a0)
+    move $v0, $zero
+    move $v1, $zero
+bus_wg_load:
+    beqz $t3, bus_wg_after
+    nop
+    mfc0 $t8, $count
+    lw $t7, 0($t2)
+    addu $t7, $t7, $zero
+    mfc0 $t9, $count
+    subu $t9, $t9, $t8
+    addu $v0, $v0, $t9
+    sltu $t8, $v1, $t9
+    beqz $t8, bus_wg_load
+    addiu $t3, $t3, -1
+    b bus_wg_load
+    move $v1, $t9
+bus_wg_after:
+    sw $v1, 0($a1)
+    lw $t4, 56($a0)
+    lw $t5, 60($a0)
+    lw $t6, 64($a0)
+    lw $t8, 0($t4)
+    and $t8, $t8, $t5
+    xor $t8, $t8, $t6
+    sltu $t8, $zero, $t8
+    sw $t8, 4($a1)
+    li $a3, {BUS_POLLS}
+bus_wg_done:
+    lw $t8, 0($t4)
+    and $t8, $t8, $t5
+    beq $t8, $t6, bus_wg_fin
+    nop
+    addiu $a3, $a3, -1
+    bnez $a3, bus_wg_done
+    nop
+bus_wg_fin:
+    mfc0 $t9, $count
+    subu $t9, $t9, $a2
+    sw $t9, 8($a1)
+    sltiu $t8, $a3, 1
+    sw $t8, 12($a1)
+    lw $t0, 68($a0)
+    beqz $t0, bus_wg_second
+    lw $t1, 72($a0)
+    sw $t1, 0($t0)
+bus_wg_second:
+    lw $t4, 76($a0)
+    lw $t5, 80($a0)
+    lw $t6, 84($a0)
+    li $a3, {BUS_POLLS}
+bus_wg_done2:
+    lw $t8, 0($t4)
+    and $t8, $t8, $t5
+    beq $t8, $t6, bus_wg_ret
+    nop
+    addiu $a3, $a3, -1
+    bnez $a3, bus_wg_done2
+    nop
+bus_wg_ret:
     jr $ra
     nop
 

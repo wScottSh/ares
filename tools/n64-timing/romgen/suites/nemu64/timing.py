@@ -329,6 +329,9 @@ def port_rsp_sll(suite):
     return [Value("", [Step("step_rsp_sll", [], 0)], [eq(0, 1, "Expected cycle count")])]
 
 
+#build()'s index of the first AVERAGED test: the phase ROMs' test t is the timing ROM's AVERAGED_AT + t
+#(calibration/kit.py reads the phase walk as hw:nemu64-console's model side).
+AVERAGED_AT = 18
 AVERAGED = [
     ("Timing: Load Miss (with VI enabled)", port_load_miss_vi_enabled),
     ("Timing: Load Miss (with VI disabled)", port_load_miss_vi_disabled),
@@ -382,6 +385,7 @@ def build(suite):
     suite.tests += [
         Test("Timing: Data cache Size", port_cache_size(suite)),
     ]
+    assert len(suite.tests) == AVERAGED_AT, f"AVERAGED_AT is {AVERAGED_AT}, the averaged tests start at {len(suite.tests)}"
     build_averaged(suite)
     suite.tests += [
         Test("RSP Timing: Clock CPU vs RDP", port_rsp_clock_vs_cpu(suite)),

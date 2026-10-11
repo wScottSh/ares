@@ -25,7 +25,8 @@ AD_MAPPINGS = {"angrylion": lambda a3, b3, c3: ((a3 >> 2) << 2 | (b3 >> 2) << 1 
 #G_CD_NOISE's packed 9-bit dither (red bits 0-2, green 3-5, blue 6-8: rdp_blend.c rdp_blend_output), whose
 #value >> 1 is the G_AC_DITHER threshold. No source maps a, b and c to them (U-NOISE-KIT's alt search), so
 #the fork's (rdp_core.c rdp_noise_dither_color) is read against the mutation prehw-plan.md U-NOISE-KIT2
-#fixed before any measurement: the same top three bits with the channels in c, b, a order.
+#fixed before any measurement: the same top three bits with the channels in c, b, a order. Both names are
+#top-bit channel orders; the question resolves that order, not bits 1-0 of each channel's value.
 CD_MAPPINGS = {"abc-top3": lambda a3, b3, c3: a3 << 6 | b3 << 3 | c3,
                "cba-top3": lambda a3, b3, c3: c3 << 6 | b3 << 3 | a3}
 #Each question's mappings and the one the fork implements.
