@@ -46,7 +46,7 @@ Allow about six hours and 35 minutes for the required runs and seven hours and 3
 
 2. Copy the console builds to the flashcart's SD card:
 
-   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`).
+   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`, `kit-noise2`).
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`, `kit-pif`. Run `kit-pif` only through the SC64 `upload` path (see [The PIF boot timeout](#the-pif-boot-timeout)).
    - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
