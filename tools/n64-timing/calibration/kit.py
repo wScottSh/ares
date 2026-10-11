@@ -26,6 +26,7 @@ sys.path.insert(0, str(HERE))
 from romgen.suites.bench import report as bench_report  # noqa: E402
 import derived  # noqa: E402
 import mm_bench  # noqa: E402
+import noise  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
@@ -46,6 +47,7 @@ KIT_ROMS = {
     "kit-span": ("calib", "kit-span", True),
     "kit-span2": ("calib", "kit-span2", True),
     "kit-noise": ("calib", "kit-noise", True),
+    "kit-noise2": ("calib", "kit-noise2", True),
     "rdpstat-1prim": ("rdpstat", "1prim", False),
     "rdpstat-dpc": ("rdpstat", "dpc", False),
     "rdpstat-systemtest": ("rdpstat", "systemtest", False),
@@ -108,6 +110,7 @@ class Log:
         self.header = dict(kv.split("=", 1) for kv in first.split()[1:] if "=" in kv)
         self.text = text
         rom = self.header.get("rom", "?")
+        snap = None
         for line in rest.split("\n"):
             parts = line.split()
             if len(parts) >= 3 and parts[0] == "#bench":
@@ -122,14 +125,16 @@ class Log:
                 regs = {k: int(v, 16) for k, _, v in (kv.partition("=") for kv in parts[1:])}
                 setattr(self, "pi" if parts[0] == "#kit-pi" else "timeouts", regs)
             elif len(parts) == 4 and parts[0] == "@snap":
-                self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3]}
+                snap = self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3], "data": bytearray()}
+            elif len(parts) >= 3 and parts[0] == "#hex" and snap is not None:
+                snap["data"] += b"".join(int(w, 16).to_bytes(4, "big") for w in parts[2:])
             elif len(parts) == 3 and parts[0] == "#hist":
                 fields = self.records.setdefault((rom, parts[1]), {})
                 fields["hist"] = ",".join(filter(None, [fields.get("hist"), parts[2]]))
             elif parts and re.match(r"^@\d+\.\d+$", parts[0]):
                 self.records.setdefault((rom, parts[0][1:]), {}).update(
                     {f"v{i}": int(p) if p.lstrip("-").isdigit() else p for i, p in enumerate(parts[1:])})
-        derive(self.records)
+        derive(self.records, rom)
 
     @property
     def rom(self):
@@ -141,7 +146,7 @@ class Log:
         return self.records.get(("joybus-setup", "pads"), {}).get("mask")
 
 
-def derive(records):
+def derive(records, rom=None):
     """Adds bench report.py's derived metrics to every bench ROM's points, and the kit's own."""
     by_rom = {}
     for (rom, point), fields in records.items():
@@ -165,6 +170,7 @@ def derive(records):
             records.update(fn(records))
         except (KeyError, ZeroDivisionError, TypeError):
             pass
+    records.update(noise.derive(records, rom))
     frozen = [p["seen"] for point, p in by_rom.get("cmd-fetch", {}).items() if point.startswith("frozen-") and "seen" in p]
     if frozen:
         #A frozen RDP's CURRENT stops only where a fetch ended; the highest offset is the full FIFO,
@@ -244,7 +250,44 @@ def model_layouts(run_dir, rom, pads=None):
     base = Path(run_dir) / PAD_SETUPS[pads]
     found = [0] + sorted(int(d.name[1:]) for d in base.glob("p*") if re.fullmatch(r"p\d+", d.name))
     out = {pad: [m for m in model_logs(run_dir, rom, pads, pad) if m.complete] for pad in found}
+    walk = phase_walk(run_dir, rom)
+    if walk:
+        for logs in filter(None, out.values()):
+            for log in logs:
+                for key, fields in log.records.items():
+                    if key in walk[0].records:
+                        fields.pop("v0", None)
+            logs += walk
     return {pad: logs for pad, logs in out.items() if logs}
+
+
+#nemu64-timing's averaged values depend on the VI phase a run starts at, and a console boots into any phase, so
+#their model side is the fork's verdict at every phase of the nemu64 phase walk (run-nemu64.sh timing-phase),
+#which a standing run keeps beside its calib/ directory, not the one phase of the kit ROM's own run.
+PHASE_WALKS = {"nemu64-timing": "nemu64/timing-phase"}
+WALK_RECORD = re.compile(r"^@(\d+)\.(\d+) (-?\d+)")
+
+
+def phase_walk_dir(run_dir, rom):
+    return Path(run_dir).parent / PHASE_WALKS[rom] if rom in PHASE_WALKS else None
+
+
+def phase_walk(run_dir, rom):
+    """The phase walk's verdicts as one log per phase, keyed as the kit ROM numbers its values; None when the
+    ROM's averaged values have no walk, [] when the walk is missing."""
+    walk = phase_walk_dir(run_dir, rom)
+    if walk is None:
+        return None
+    from romgen.suites.nemu64 import timing
+    logs = []
+    for path in sorted(walk.glob("phase-*/stdout.txt")):
+        log = Log(b"")
+        log.header, log.complete = {"rom": rom, "build": f"phase-walk {path.parent.name}"}, True
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if m := WALK_RECORD.match(line):
+                log.records[(rom, f"{int(m[1]) + timing.AVERAGED_AT}.{m[2]}")] = {"v0": int(m[3])}
+        logs.append(log)
+    return logs
 
 
 def spread(question, logs):
@@ -577,6 +620,9 @@ def result_from(root, model_dir, qid):
         group = [log for log in logs if log.pads == pads]
         if pads not in PAD_SETUPS:
             return "fail", f"{kit}: controller ports {pads:04b} answered; the fork runs 1 pad (0001) or 4 (1111)"
+        if phase_walk(model_dir, kit) == []:
+            return "missing", (f"no nemu64 phase walk in {phase_walk_dir(model_dir, kit)}, the model side of {kit}'s "
+                               f"averaged values; run tools/n64-timing/run-nemu64.sh timing-phase there")
         model = model_layouts(model_dir, kit, pads)
         if not model:
             return "missing", f"no fork run of {kit} in {model_dir}/{PAD_SETUPS[pads]}; run tools/n64-timing/calibration/run.sh there"
@@ -990,6 +1036,59 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += shorts
+    edge_q, phase_q, hold_q, wgap_q = (next(q for q in questions() if q["id"] == i)
+                                       for i in ("cpu-watch-edge", "count-write-phase", "count-write-hold", "ri-write-gap"))
+    edges = ("byte-same-dword", "kseg1", "sd", "watchhi", "lw-w-only", "sw-r-only", "next-dword", "cache", "exl")
+
+    def watch(fired):
+        return Log(sample_log("".join(f"#bench cpu2-watch {pt} reps=2 min=6 max=6 lo=3 hi=3 fired={f}\n"
+                                      for pt, f in zip(edges, fired)), rom="kit-cpu2"))
+
+    def countw(mins, dmaxes):
+        return Log(sample_log("".join(f"#bench cpu2-countw slot-{k} slot={k} reps=2 min={m} max={m} dmax={d}\n"
+                                      for k, (m, d) in enumerate(zip(mins, dmaxes), 1)), rom="kit-cpu2"))
+
+    def wgap(bank5, bank6=1292):
+        return Log(sample_log(f"#bench bus-wgap fill-sp-bank5 bank=5 loads=32 reps=4 min={bank5} max=1572\n"
+                              f"#bench bus-wgap fill-sp-bank6 bank=6 loads=32 reps=4 min={bank6} max=1317\n", rom="kit-bus"))
+    fork_hold = (0, 0, 0, 1, 1, 2)
+    lasts = [("cpu-watch-edge: the console matches as the fork does", edge_q, watch((4, 4, 4, 4, 0, 0, 0, 0, 0)), "pass"),
+             ("cpu-watch-edge: word-granular WatchLo misses the byte at +7", edge_q, watch((0, 4, 4, 4, 0, 0, 0, 0, 0)), "fail"),
+             ("cpu-watch-edge: Watch raised under EXL", edge_q, watch((4, 4, 4, 4, 0, 0, 0, 0, 4)), "fail"),
+             ("count-write-phase: a divider that keeps its phase (spread 1 at slots 3 and 5)", phase_q,
+              countw(fork_hold, (0, 0, 1, 1, 2, 2)), "fail"),
+             ("count-write-hold: the same console's min matches, so the hold question passes", hold_q,
+              countw(fork_hold, (0, 0, 1, 1, 2, 2)), "pass"),
+             ("count-write-phase: a 3 pclk hold restarts the divider (spread 0)", phase_q,
+              countw((0, 0, 0, 0, 1, 1), (0, 0, 0, 0, 1, 1)), "pass"),
+             ("ri-write-gap: the console reads as the fork, 31 ticks of quantization off", wgap_q, wgap(1486 - 31), "pass"),
+             ("ri-write-gap: reading C skips the gapped SP burst (scratch build, 1040)", wgap_q, wgap(1040), "fail")]
+    fork_watch, fork_countw = watch((4, 4, 4, 4, 0, 0, 0, 0, 0)), countw(fork_hold, fork_hold)
+    for name, q, hw, want in lasts:
+        model = {"kit-cpu2": fork_countw if "count" in q["id"] else fork_watch, "kit-bus": wgap(1486)}[q["kit"]]
+        got, detail = compare(q, [hw], [model])
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += lasts
+    with tempfile.TemporaryDirectory() as tmp:
+        calib = Path(tmp) / "calib"
+        (calib / "single").mkdir(parents=True)
+        (calib / "single" / "nemu64-timing.txt").write_bytes(sample_log("@0.0 0\n@18.0 1\n", rom="nemu64-timing"))
+        for k, v0 in ((1, 1), (63, 0)):
+            (Path(tmp) / "nemu64" / "timing-phase" / f"phase-{k}").mkdir(parents=True)
+            (Path(tmp) / "nemu64" / "timing-phase" / f"phase-{k}" / "stdout.txt").write_text(f"avg 1 2 3 4\n@0.0 {v0}\n")
+        nemu_q = next(q for q in questions() if q["id"] == "nemu64-console")
+        model = model_layouts(calib, "nemu64-timing")[0]
+        walks = [("nemu64-console: an averaged value the walk passes at one phase passes at the console's", "@0.0 0\n@18.0 0\n",
+                  "pass"),
+                 ("nemu64-console: a single-phase value still compares", "@0.0 1\n@18.0 0\n", "fail")]
+        for name, body, want in walks:
+            got, detail = compare(nemu_q, [Log(sample_log(body, rom="nemu64-timing"))], model)
+            ok = got == want and len(model) == 3
+            failed += not ok
+            print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+        cases += walks
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
@@ -1127,13 +1226,14 @@ def glyph_self_test():
     return out
 
 
-#The values one noise state gives each noise use, per source that reads the a, b and c LFSRs
-#(docs/research/rdp-noise.md:39-41). ad is G_AD_NOISE: Angrylion (noise >> 6) & 7, MiSTer random2 & '1'.
-#cd is G_CD_NOISE and ac the G_AC_DITHER threshold: Angrylion's irand and MiSTer's own LFSR read none of
-#a, b and c, so no cited mapping exists for a reader to test.
-NOISE_MAPPINGS = {"ad": {"angrylion": tuple(range(8)), "mister-odd": (1, 3, 5, 7)}, "cd": {}, "ac": {}}
-#Every value a use can take from any source: 3 bits of alpha, 3 bits per color channel, an 8-bit threshold.
-NOISE_RANGE = {"ad": range(8), "cd": range(8), "ac": range(256)}
+#The mappings of the a, b and c LFSRs a reader tests for each noise use (noise.py). ad is G_AD_NOISE, two
+#cited sources (docs/research/rdp-noise.md:39). cd is G_CD_NOISE and ac the G_AC_DITHER threshold, one value
+#in the fork: Angrylion's irand and MiSTer's own LFSR read none of a, b and c, so the reader tests the fork's
+#against a mutation prehw-plan.md U-NOISE-KIT2 fixed.
+NOISE_MAPPINGS = {"ad": noise.AD_MAPPINGS, "cd": noise.CD_MAPPINGS, "ac": noise.CD_MAPPINGS}
+#Every value a use can take from any source: 3 bits of alpha, an 8-bit threshold, and 3 bits per color
+#channel. A splat over the channels changes a pixel iff some value of some channel does.
+NOISE_RANGE = {"ad": range(8), "cd": [v * 0o111 for v in range(8)], "ac": range(256)}
 #prehw-plan.md U-NOISE-READER: (2K+1) x mappings x 2^-b must be below this.
 NOISE_RATE_MAX = 1e-6
 
@@ -1150,11 +1250,11 @@ def noise_draw(name, width, bpp, commands):
             "prim": (op[0xFA] & 0xFFFFFFFF).to_bytes(4, "big"), "blend_a": op.get(0xF9, 0) & 0xFF}
 
 
-def noise_draws():
-    """Every kit-noise draw that feeds noise to G_AD_NOISE, G_CD_NOISE or G_AC_DITHER (sets.NOISE_CASES)."""
+def noise_draws(kit="kit-noise"):
+    """Every draw of a noise kit ROM that feeds noise to G_AD_NOISE, G_CD_NOISE or G_AC_DITHER (sets.NOISE_KITS)."""
     from romgen.suites.calib import sets
     out = {}
-    for name, width, bpp, draws in sets.NOISE_CASES:
+    for name, width, bpp, draws in sets.NOISE_KITS[kit]:
         try:
             out[name] = noise_draw(name, width, bpp, draws[0][1])
         except ValueError:
@@ -1163,12 +1263,13 @@ def noise_draws():
 
 
 def noise_pixel(draw, ad=0, cd=0, ac=0):
-    """What one pixel of the draw stores for the given noise values: None when alpha compare rejects it."""
+    """What one pixel of the draw stores for the given noise values, cd the packed 9-bit RGB dither: None when
+    alpha compare rejects it."""
     *rgb, a = draw["prim"]
     if "cd" in draw["uses"]:
         #ParaLLEl rgb_dither (the fork's rdp_blend.c rdp_blender_dither_color): up to the next multiple of
-        #8 iff the low 3 bits exceed the dither value.
-        rgb = [min(c - (c & 7) + 8, 255) if (c & 7) > cd else c for c in rgb]
+        #8 iff the low 3 bits exceed the channel's dither value.
+        rgb = [min(c - (c & 7) + 8, 255) if (c & 7) > (cd >> 3 * i & 7) else c for i, c in enumerate(rgb)]
     if draw["bits16"]:
         rgb = [c >> 3 for c in rgb]
     if "ad" in draw["uses"]:
@@ -1198,68 +1299,165 @@ def noise_rate(snaps, draws):
                for s in untestable]
     if not testable:
         return "report-only", "; ".join(reasons + ["no snap left to test"])
-    mappings = math.prod(len(NOISE_MAPPINGS[u]) for u in sorted({u for s in testable for u in draws[s]["uses"]}))
+    tables = {id(NOISE_MAPPINGS[u]): NOISE_MAPPINGS[u] for s in testable for u in draws[s]["uses"]}
+    mappings = math.prod(len(t) for t in tables.values())
     bits = sum(noise_bits(draws[s]) for s in testable)
     floor = mappings * 2.0 ** -bits
     if floor >= NOISE_RATE_MAX:
         reasons.append(f"{' '.join(testable)}: false-match rate >= {floor:.3g} at K = 0 ({mappings} mappings, b <= {bits})")
         return "report-only", "; ".join(reasons)
-    return "not ruled out", "; ".join(reasons + [f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, "
-                                                 f"b <= {bits}); the offset reader is not built"])
+    unread = [s for s in testable if s not in {snap for _, snap in noise.READS}]
+    return ("not ruled out" if unread else "read"), "; ".join(reasons + [
+        f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, b <= {bits}); "
+        + (f"no offset reader for {' '.join(unread)}" if unread else "the offset reader gives the mapping per log")])
 
 
 def noise_table(run_dir=None, root=ROOT):
     """The reader's report for every question over a noise-mapping snap. With a calibration/run.sh output,
     also the fork's distinct dumps of each snap over every layout pad and boot delay: a snap whose bound
     is b = 0 must store one dump however far apart the logs' noise offsets are (rect-1016 shows how far)."""
-    draws = noise_draws()
-    logs = [log for pad_logs in model_layouts(run_dir, "kit-noise").values() for log in pad_logs] if run_dir else []
-    dumps = lambda snap: len({log.records.get(("snap", snap), {}).get("hash") for log in logs})  # noqa: E731
+    from romgen.suites.calib import sets
     out = ["| Question | Snap | Noise uses | Bits that can differ (bound) | Fork dumps over logs |", "|---|---|---|---|---|"]
-    verdicts, contradicted = [], []
-    for q in questions(root):
-        snaps = [p.removeprefix("snap/") for p in q["points"].split() if p.removeprefix("snap/") in draws]
-        if q["kit"] != "kit-noise" or not snaps:
-            continue
-        for s in snaps:
-            seen = f"{dumps(s)} of {len(logs)} (rect-1016: {dumps('rect-1016')})" if logs else "-"
-            if logs and not noise_bits(draws[s]) and dumps(s) > 1:
-                contradicted.append(s)
-            out.append(f"| `{q['id']}` | `{s}` | {' '.join(draws[s]['uses'])} | {noise_bits(draws[s])} | {seen} |")
-        verdicts.append(f"{q['id']}: " + ": ".join(noise_rate(snaps, draws)))
+    verdicts, contradicted, unresolved, read_out = [], [], [], []
+    for kit in sets.NOISE_KITS:
+        draws = noise_draws(kit)
+        logs = [log for pad_logs in model_layouts(run_dir, kit).values() for log in pad_logs] if run_dir else []
+        dumps = lambda snap: len({log.records.get(("snap", snap), {}).get("hash") for log in logs})  # noqa: E731
+        for q in questions(root):
+            snaps = [p.removeprefix("snap/") for p in q["points"].split() if p.removeprefix("snap/") in draws]
+            if q["kit"] != kit or not snaps:
+                continue
+            for s in snaps:
+                seen = f"{dumps(s)} of {len(logs)} (rect-1016: {dumps('rect-1016')})" if logs else "-"
+                if logs and not noise_bits(draws[s]) and dumps(s) > 1:
+                    contradicted.append(f"{kit} {s}")
+                out.append(f"| `{q['id']}` | `{s}` | {' '.join(draws[s]['uses'])} | {noise_bits(draws[s])} | {seen} |")
+            verdicts.append(f"{q['id']}: " + ": ".join(noise_rate(snaps, draws)))
+        for (reads_kit, snap), question in noise.READS.items():
+            if reads_kit != kit:
+                continue
+            fixed = noise.offset_set(question, snap, Path(root) / QUESTIONS)
+            read_out.append(f"{snap}: offset set " + (f"D = {fixed[0]} +- {fixed[1]} ({question} source)" if fixed else
+                                                      f"not fixed in {question}'s source; run kit.py --layout"))
+            got = [log.records.get(("snap", snap), {}) for log in logs]
+            results = collections.Counter(r.get("mapping", "unread") for r in got)
+            rates = [float(r["rate"]) for r in got if r.get("rate", "-") != "-"]
+            if logs:
+                read_out.append(f"{snap}: fork logs {dict(results)}, false-match rate " +
+                                (f"{min(rates):.3g}..{max(rates):.3g}, b {min(r['b'] for r in got if r.get('b') is not None)}.."
+                                 f"{max(r['b'] for r in got if r.get('b') is not None)}" if rates else "-"))
+                unresolved += [f"{snap} ({noise.FORK[question]})"] if set(results) != {noise.FORK[question]} else []
     out += [""] + verdicts
     out += [f"fork contradicts b = 0 for {', '.join(contradicted)}"] if contradicted else []
-    return "\n".join(out), not contradicted
+    out += read_out
+    out += [f"fork logs do not resolve to the fork's mapping (rdp_core.c rdp_noise_dither_alpha, rdp_noise_dither_color) "
+            f"for {', '.join(unresolved)}"] if unresolved else []
+    return "\n".join(out), not contradicted and not unresolved
 
 
 def noise_self_test():
-    """The reader's bound on the kit's own draws, and on mutated draws that do carry noise."""
-    draws = noise_draws()
+    """The reader's bound on the kits' own draws, and on mutated draws."""
+    draws, draws2 = noise_draws(), noise_draws("kit-noise2")
     from romgen import rcp
     from romgen.suites.calib import sets
 
-    def mutated(name, prim):
-        width, bpp, lists = next((w, b, d) for n, w, b, d in sets.NOISE_CASES if n == name)
+    def mutated(name, prim, kit="kit-noise"):
+        width, bpp, lists = next((w, b, d) for n, w, b, d in sets.NOISE_KITS[kit] if n == name)
         commands = [rcp.set_prim_color(prim, level_frac=0xFF) if c >> 56 == 0xFA else c for c in lists[0][1]]
-        return {**draws, name: noise_draw(name, width, bpp, commands)}
+        return {**noise_draws(kit), name: noise_draw(name, width, bpp, commands)}
 
     out = []
     for name, snaps, among, want in [
             ("ad-noise-threshold: alpha 0x78 + 7 < 0x80 stores nothing for any value", ["ad-noise-threshold"], draws, "report-only"),
             ("cd-noise-16: gray 0x80 has low bits 0, so no dither rounds it", ["cd-noise-16"], draws, "report-only"),
-            ("ac-dither: no source maps the threshold", ["ac-dither"], draws, "report-only"),
+            ("kit-noise2's cd-noise-84 and ac-dither: the offset reader tests the fork's mapping against the mutation",
+             ["cd-noise-84", "ac-dither"], draws2, "read"),
             ("mutation: alpha 0x7F, written iff the value is not 0, is not ruled out",
              ["ad-noise-threshold"], mutated("ad-noise-threshold", 0xFFFFFF7F), "not ruled out"),
-            ("mutation: gray 0x84 carries noise but still has no cited mapping",
-             ["cd-noise-16"], mutated("cd-noise-16", 0x848484FF), "report-only")]:
+            ("mutation: cd-noise-84 at gray 0x80 carries no noise",
+             ["cd-noise-84"], mutated("cd-noise-84", 0x808080FF, "kit-noise2"), "report-only")]:
         got, detail = noise_rate(snaps, among)
         out.append(got == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail})")
+    out += noise_reader_self_test(draws, draws2, mutated("cd-noise-84", 0x808080FF, "kit-noise2")["cd-noise-84"])
     for name, draw, want in [("gray 0x80 bounds b at 0", draws["cd-noise-16"], 0),
-                             ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256)]:
+                             ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256),
+                             ("cd-noise-84 bounds b at 512", draws2["cd-noise-84"], 512)]:
         bits = noise_bits(draw)
         out.append(bits == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if bits == want else 'FAILED'} ({bits})")
+    return out
+
+
+def noise_reader_self_test(draws, draws2, gray80):
+    """The offset reader on synthetic logs: the LFSRs at a known clock, drawn as the kit draws them."""
+    def rect(t, flip=None):
+        px = []
+        for i, (a, b, c) in enumerate(noise.bits(t, 1016)):
+            a ^= i == flip
+            px += [0xFF if a and not b else 0 if a else b << 7 | c << 6 | 0x20] * 3 + [0xE0]
+        return bytes(px)
+
+    def snap(t, mapping, draw, ad_mapping="angrylion"):
+        out = b""
+        for s in noise.states(t, draw["width"]):
+            cd = noise.CD_MAPPINGS[mapping](*s) if mapping in noise.CD_MAPPINGS else 0
+            px = noise_pixel(draw, noise.AD_MAPPINGS[mapping if cd == 0 and mapping in noise.AD_MAPPINGS else ad_mapping](*s)[0],
+                             cd, cd >> 1)
+            if draw["bits16"]:
+                out += (px[0] << 11 | px[1] << 6 | px[2] << 1 | 1 if px else 0).to_bytes(2, "big")
+            else:
+                out += bytes(px) + b"\xff" if px else bytes(4)
+        return out
+
+    import re as _re
+    hpp = (ROOT / "tools/n64-timing/tests/noise-datasets.hpp").read_text()
+    data = {n: "".join(_re.findall(r'"([01x]*)"', body)) for n, body in _re.findall(r"char (Noise\w+)\[\] =([^;]*);", hpp)}
+    #noise-lfsr.cpp AbFirstPixel and CFirstPixel[0]: the console clocks of Thar0's datasets A, B and C0 from all ones.
+    console = [(data["NoiseA"], 256_586_636, 0), (data["NoiseB"], 256_586_636, 1), (data["NoiseC0"], 161_308_259, 2)]
+
+    t0, d, k = 5_000_000, 1000, 20
+    over = noise.LFSR["a"].period + 12345
+    ad, threshold = draws["ad-noise-7f"], {**draws["ad-noise-threshold"], "bits16": True, "width": 512}
+    cd, ac = draws2["cd-noise-84"], draws2["ac-dither"]
+    alpha = lambda pixels, draw=ad, at=d: noise.read(rect(t0), pixels, draw, "noise-alpha-dither", at, k)  # noqa: E731
+    dith = lambda pixels, draw=cd, at=d: noise.read(rect(t0), pixels, draw, "noise-dither-bits", at, k)  # noqa: E731
+    out = []
+    for name, got, want in [
+            ("Angrylion pixels at offset +7 read angrylion", alpha(snap(t0 + d + 7, "angrylion", ad))["result"], "angrylion"),
+            ("MiSTer pixels read mister-odd", alpha(snap(t0 + d, "mister-odd", ad))["result"], "mister-odd"),
+            ("mutation: Angrylion pixels 5000 clocks past the set read offset-outside-bound",
+             alpha(snap(t0 + d + 5000, "angrylion", ad))["result"], "offset-outside-bound"),
+            ("mutation: the set one clock short of the true offset reads offset-outside-bound",
+             alpha(snap(t0 + d + k + 1, "angrylion", ad))["result"], "offset-outside-bound"),
+            ("a draw that stores nothing for any value (b = 0) reads ambiguous",
+             alpha(snap(t0 + d, "angrylion", threshold), threshold)["result"], "ambiguous"),
+            ("an anchor with one a bit flipped reads no-anchor",
+             noise.read(rect(t0, flip=500), snap(t0 + d, "angrylion", ad), ad, "noise-alpha-dither", d, k)["result"], "no-anchor"),
+            ("an anchor past one period of a is found", noise.anchor(rect(over)), over),
+            *[(f"the LFSRs give Thar0's console dataset {'abc'[i].upper()} at its clock", all(
+                x == "x" or int(x) == abc[i] for x, abc in zip(bits, noise.bits(t, len(bits)))), True) for bits, t, i in console],
+            ("the rate is (2K+1) x 2 mappings x 2^-b", (lambda r: r["rate"] == (2 * k + 1) * 2 * 2.0 ** -r["b"])(
+                alpha(snap(t0 + d, "angrylion", ad))), True),
+            ("Angrylion at offset 0 prints a rate below 1e-6", alpha(snap(t0 + d, "angrylion", ad))["rate"] < noise.RATE_MAX, True),
+            ("a state's top bits are the outputs at its clock and the next two",
+             [s[0] >> 2 for s in noise.states(t0, 3)] + [noise.states(t0, 1)[0][j] & 1 for j in range(3)],
+             [p[0] for p in noise.bits(t0, 3)] + list(noise.bits(t0 + 2, 1)[0])),
+            ("the fork's cd-noise-84 pixels at offset -9 read abc-top3", dith(snap(t0 + d - 9, "abc-top3", cd))["result"], "abc-top3"),
+            ("the mutation's cd-noise-84 pixels read cba-top3", dith(snap(t0 + d + 3, "cba-top3", cd))["result"], "cba-top3"),
+            ("the fork's ac-dither pixels read abc-top3", dith(snap(t0 + d, "abc-top3", ac), ac)["result"], "abc-top3"),
+            ("ac-dither with MiSTer's odd AD values still reads abc-top3",
+             dith(snap(t0 + d, "abc-top3", ac, "mister-odd"), ac)["result"], "abc-top3"),
+            ("the mutation's ac-dither pixels read cba-top3", dith(snap(t0 + d, "cba-top3", ac), ac)["result"], "cba-top3"),
+            ("mutation: cd-noise-84 pixels 5000 clocks past the set read offset-outside-bound",
+             dith(snap(t0 + d + 5000, "abc-top3", cd))["result"], "offset-outside-bound"),
+            ("mutation: cd-noise-84 at gray 0x80 (b = 0) reads ambiguous",
+             dith(snap(t0 + d, "abc-top3", gray80), gray80)["result"], "ambiguous"),
+            ("cd-noise-84's rate is (2K+1) x 2 mappings x 2^-b, below 1e-6", (lambda r: r["rate"] == (2 * k + 1) * 2 * 2.0 ** -r["b"]
+                                                                              and r["rate"] < noise.RATE_MAX)(
+                dith(snap(t0 + d, "abc-top3", cd))), True)]:
+        out.append(got == want)
+        print(f"kit: self-test: noise offset reader: {name}: {'ok' if got == want else 'FAILED'} ({got})")
     return out
 
 
@@ -1331,6 +1529,7 @@ if __name__ == "__main__":
         sys.exit(0)
     if sys.argv[1:2] == ["--layout"]:
         print(layout_table(sys.argv[2]))
+        print(noise.offset_table(sys.argv[2]))
         sys.exit(0)
     if sys.argv[1:2] == ["--noise-rate"]:
         table, consistent = noise_table(sys.argv[2] if sys.argv[2:] else None)
