@@ -709,7 +709,7 @@ auto nall::main(Arguments arguments) -> void {
     (unsigned long long)(viBus.busy.units / N64::Timing::UnitsPerRclk), (unsigned long long)(viBus.wait.units / N64::Timing::UnitsPerRclk),
     elapsed ? viBus.busy.units / elapsed : 0.0, elapsed ? refresh.busy.units / elapsed : 0.0,
     lines ? viBus.busy.units / N64::Timing::UnitsPerRclk / lines : 0.0, lines ? refresh.busy.units / N64::Timing::UnitsPerRclk / lines : 0.0);
-  //every stream, not only stderr: _Exit drops unflushed buffers, and ARES_PILOG's tail would end mid-line
+  //_Exit skips stdio teardown, so the core's ARES_PILOG and ARES_DPLOG buffers would lose their tail (#138)
   std::fflush(nullptr);
   //Skip core teardown: the result is already written, and unloading joins host threads for no benefit.
   std::_Exit(info.exitCode);

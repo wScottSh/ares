@@ -48,15 +48,26 @@ def golden(logdir):
     return table
 
 
+class MalformedLog(Exception):
+    pass
+
+
 def measurements(lines):
     """(off, size) -> [ticks per run] for the ROM's timed DMAs, in run order."""
     counts, starts = [], []
-    for line in lines:
+    for number, line in enumerate(lines, 1):
         p = line.split()
-        if p[0] == "C":
-            counts.append((int(p[2]), int(p[1])))
-        elif p[0] == "L" and p[1] == "W":
-            starts.append((int(p[5]), int(p[2]), int(p[3], 16), int(p[4], 16)))
+        try:
+            if not line.endswith("\n"):
+                raise ValueError
+            if p[0] == "C":
+                _, count, at = p
+                counts.append((int(at), int(count)))
+            elif p[0] == "L" and p[1] == "W":
+                _, _, size, dram, pbus, at = p
+                starts.append((int(at), int(size), int(dram, 16), int(pbus, 16)))
+        except (IndexError, ValueError):
+            raise MalformedLog(f"PI log line {number} is malformed: {line.rstrip()!r}") from None
     #the SysAD drain that starts a DMA and the CPU's COUNT reads log from different threads
     counts.sort()
     starts.sort()
@@ -143,16 +154,22 @@ def self_test():
         """A log with each (off, size, ticks) DMA started 52 units after its t0 and written before it."""
         lines, at = [], 1000
         for off, size, ticks in points:
-            lines.append(f"L W {size} {RAM_BUFFER + off:06x} 10000000 {at + 52}")
-            lines.append(f"C {count & 0xffffffff} {at}")
-            lines.append(f"S 0 {at + 16 * ticks - 8}")
-            lines.append(f"C {(count + ticks) & 0xffffffff} {at + 16 * ticks}")
+            lines.append(f"L W {size} {RAM_BUFFER + off:06x} 10000000 {at + 52}\n")
+            lines.append(f"C {count & 0xffffffff} {at}\n")
+            lines.append(f"S 0 {at + 16 * ticks - 8}\n")
+            lines.append(f"C {(count + ticks) & 0xffffffff} {at + 16 * ticks}\n")
             at += 16 * ticks + 400
             count += ticks + 25
         return lines
 
     def run(points, printed, failures):
         return verdict(gold, measurements(log(points)), printed, failures)[0]
+
+    def malformed(lines):
+        try:
+            measurements(lines)
+        except MalformedLog as e:
+            return str(e)
 
     first = (0, 1, 120)
     gold = {(0, 1): (100, 130), (0, 8): (160, 160), (0, 320): (3000, 3000)}
@@ -161,6 +178,11 @@ def self_test():
         ("ticks are the ROM's two COUNT reads around a DMA start logged before them",
          measurements(log([first, (0, 8, 163)])), {(0, 1): [120], (0, 8): [163]}),
         ("a COUNT wrap between t0 and t1", measurements(log([first, (0, 8, 163)], 2**32 - 195))[0, 8], [163]),
+        ("a last line cut inside its time names its line", malformed(log([first])[:-1] + ["C 2325743572 373002"]),
+         "PI log line 4 is malformed: 'C 2325743572 373002'"),
+        ("a last line cut before its time names its line", malformed(log([first])[:-1] + ["C 23468\n"]),
+         "PI log line 4 is malformed: 'C 23468'"),
+        ("a short DMA start names its line", malformed(["L W 8 300780\n"]), "PI log line 1 is malformed: 'L W 8 300780'"),
         ("the ROM's uint16_t mean of 4 runs", rom_mean([160, 161, 161, 161]), 160),
         ("a model at the hardware value passes", run(at_hw, {}, 0), True),
         ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), False),
@@ -192,8 +214,12 @@ def main():
     a = ap.parse_args()
 
     gold = golden(a.logdir)
-    with open(a.pilog) as f:
-        meas = measurements(f)
+    try:
+        with open(a.pilog) as f:
+            meas = measurements(f)
+    except MalformedLog as e:
+        print(f"pidma-replay: {e}")
+        return 2
     text = Path(a.stdout).read_text(errors="replace")
     printed = found(text)
     print(f"{len(meas)} (offset, size) points timed; printed values: {printed}")

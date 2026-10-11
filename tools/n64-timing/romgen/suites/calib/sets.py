@@ -150,7 +150,7 @@ PI_ROW_ENDS = [0x7F8, 0x7FC, 0x7C0]
 def pi_dma_rowend(suite):
     """pi-dma-sizes' DMAs into RDRAM 8 B, 4 B and 64 B before a 2 KiB row end, so the first block ends at
     the row (followups: PI first block ending at a row end). At 4 B the first block holds no more bytes
-    than its misalignment and writes none (pi.first-block-empty-write)."""
+    than its misalignment, so the rule posts an empty-mask write (pi.first-block-empty-write)."""
     rom = Rom(suite, "pi-dma-rowend")
     pi = benches.PI_BASE
     for off in PI_ROW_ENDS:
