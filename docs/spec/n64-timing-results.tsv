@@ -212,7 +212,6 @@ thar0:ac-zbsame-vioff-imrd-1cyc	fail	model 108697 vs console 105999 (105940..106
 thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	fail	model 170392 vs console 166352 (166182..166520), +2.43%
 thar0:alpha-fail-1cycle	pass	model 77772 vs console 77772 (77772..77772), +0.00%
 thar0:alpha-fail-2cycle	pass	model 155052 vs console 155052 (155052..155052), +0.00%
-thar0:fill-mode	pending:report-only	
 thar0:imrd-1cycle	fail	model 176749 vs console 163556 (163436..163654), +8.07%
 thar0:nozb-visame-noimrd-1cyc	fail	model 77772 vs console 81791.4 (81654..81868), -4.91%
 thar0:nozb-visep-imrd-1cyc	fail	model 181037 vs console 174059 (173832..174382), +4.01%
