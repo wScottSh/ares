@@ -55,6 +55,7 @@ KIT_ROMS = {
     "nemu64-cop0hazard": ("nemu64", "cop0hazard", False),
     "kit-tex": ("calib", "kit-tex", True),
     "kit-zmem": ("calib", "kit-zmem", True),
+    "kit-zread": ("calib", "kit-zread", True),
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
     "cpu-llsc": ("cpu", "llsc", False),

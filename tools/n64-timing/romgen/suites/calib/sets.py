@@ -263,11 +263,12 @@ KITS = {
     "kit-span2": [span_write, span_imrd],
     "kit-tex": tex.BUILDERS,
     "kit-zmem": zmem.BUILDERS,
+    "kit-zread": [zmem.reads_1cycle],
     "kit-cpu2": cpu2.BUILDERS,
     "kit-bus": bus.BUILDERS,
 }
-KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM],
-           "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
+KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-zread": [zmem.ASM], "kit-cpu2": [cpu2.ASM],
+           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
