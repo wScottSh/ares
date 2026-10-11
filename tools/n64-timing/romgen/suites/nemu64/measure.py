@@ -3,6 +3,10 @@
 emit_measurement_loop is a line-for-line port. step_measure (below) copies one of the
 two loop templates into the program buffer, appends the body and the preconditions exactly as
 MeasurementProgram::new lays them out, then runs it the way run_measurement does.
+
+LAYOUT_2022 is the averaged harness as nemu64-test had it before 0603245f76 (cache.rs at
+de30f2df): get_cycles' loop is fixed code in the ROM image, and the preconditions and body
+live in their own 64-word buffer that the loop calls through $16 and $25.
 """
 from ...nemu import Assembler, GPR, RegisterIndex, ExceptionTimingMode, FCSR, Status
 from ... import runtime
@@ -351,6 +355,12 @@ measure_slot_constants:
 """
 
 
+BUILD_START = "    li $a0, EXEC_BASE\n    jal invalidate_range\n    lw $a1, 44($s0)\n"
+BUILD_END = "    sd $s4, 72($t0)\n"
+RUN_START = "# Runs the built program once."
+RUN_END = ".align 8\nmeasure_slot_constants:"
+
+
 #Phase ROMs only (phases.py). The loop runs after the VI setup and its VSYNC wait, so it moves
 #the measurement's start within the VI line; li is always two words, so every delay keeps one
 #layout. The record line carries no averaged result, so each averaged run prints its own.
@@ -386,11 +396,143 @@ PHASE_PRINT = "\n".join([
 ])
 
 
-def asm(phase=False):
+LAYOUT_2026, LAYOUT_2022 = "2026", "2022"
+
+#cache.rs@de30f2df get_averaged_cycles_with_codegen: UncachedHeapMemory::<u32>::new_with_align(64, 64)
+#holds [preconditions][JR RA][NOP][body][JR RA][NOP], written uncached and called through its
+#cached address. The 16 KiB data memory is not read by these bodies, so MEM_BASE stands in for it.
+BUILD_2022 = """    li $a0, EXEC_BASE
+    jal invalidate_range
+    addiu $a1, $zero, 256
+    li $s2, EXEC_BASE | 0x20000000
+    lw $t0, 8($s0)
+    lw $t2, 12($s0)
+sm22_copy_pre:
+    beqz $t2, sm22_pre_done
+    nop
+    lw $t3, 0($t0)
+    sw $t3, 0($s2)
+    addiu $t0, $t0, 4
+    addiu $t2, $t2, -1
+    b sm22_copy_pre
+    addiu $s2, $s2, 4
+sm22_pre_done:
+    li $t3, 0x03E00008
+    sw $t3, 0($s2)
+    sw $zero, 4($s2)
+    addiu $s2, $s2, 8
+    li $t4, 0x20000000
+    subu $s3, $s2, $t4
+    lw $t0, 0($s0)
+    lw $t2, 4($s0)
+sm22_copy_body:
+    beqz $t2, sm22_body_done
+    nop
+    lw $t3, 0($t0)
+    sw $t3, 0($s2)
+    addiu $t0, $t0, 4
+    addiu $t2, $t2, -1
+    b sm22_copy_body
+    addiu $s2, $s2, 4
+sm22_body_done:
+    li $t3, 0x03E00008
+    sw $t3, 0($s2)
+    sw $zero, 4($s2)
+"""
+
+#cache.rs@de30f2df get_cycles: the inline asm, instruction for instruction. Its caller passes no
+#value2/value4 and leaves Status alone. In: s0 = params, s3 = body address. Out: v0 = ticks1,
+#v1 = ticks2.
+RUN_2022 = """run_measurement:
+    la $t0, DATA_BASE + D_SAVE
+    sd $ra, 112($t0)
+    sd $s0, 120($t0)
+    sd $s1, 128($t0)
+    sd $s3, 136($t0)
+    sd $s4, 144($t0)
+    sd $s6, 152($t0)
+    sd $sp, 160($t0)
+    li $3, MEM_BASE
+    li $5, MEM_BASE | 0x20000000
+    li $16, EXEC_BASE
+    lw $18, 36($s0)
+    li $22, 3
+    jal get_cycles_2022
+    move $25, $s3
+    move $v0, $24
+    move $v1, $23
+    la $t0, DATA_BASE + D_SAVE
+    ld $ra, 112($t0)
+    ld $s0, 120($t0)
+    ld $s1, 128($t0)
+    ld $s3, 136($t0)
+    ld $s4, 144($t0)
+    ld $s6, 152($t0)
+    ld $sp, 160($t0)
+    jr $ra
+    nop
+
+get_cycles_2022:
+    ori $20, $31, 0
+    nop
+    nop
+.align 32
+get_cycles_2022_loop:
+    ori $26, $18, 0
+    or $6, $2, $0
+    or $7, $3, $0
+    or $8, $4, $0
+    or $9, $5, $0
+    jalr $16
+    nop
+    mfc0 $19, $count
+    nop
+    nop
+    mtc0 $19, $count
+    nop
+    ori $19, $0, 2
+    beq $22, $19, gc22_skip
+    nop
+    nop
+gc22_skip:
+    mfc0 $19, $count
+    jalr $25
+    nop
+    mfc0 $21, $count
+    ori $17, $0, 1
+    bne $17, $18, gc22_ticks
+    nop
+    ori $21, $27, 0
+gc22_ticks:
+    ori $23, $24, 0
+    sub $24, $21, $19
+    addiu $22, $22, -1
+    ori $19, $0, 70
+gc22_drain:
+    bne $19, $0, gc22_drain
+    addiu $19, $19, -1
+    bne $22, $0, get_cycles_2022_loop
+    nop
+get_cycles_2022_end:
+    ori $31, $20, 0
+    ori $26, $0, 0
+    jr $ra
+    nop
+
+"""
+
+
+def asm(phase=False, layout=LAYOUT_2026):
     """step_measure, run_measurement and the two loop templates; nemu64 sets link this in.
     phase: the phase-walk variant, which waits PHASE_DELAY loop iterations before measuring and
-    prints "avg <min> <max> <median> <sum>" after each averaged run."""
+    prints "avg <min> <max> <median> <sum>" after each averaged run.
+    layout: LAYOUT_2022 swaps in the de30f2df program buffer and get_cycles loop."""
     text = STEP_MEASURE_ASM
+    if layout == LAYOUT_2022:
+        b0, b1 = text.index(BUILD_START), text.index(BUILD_END) + len(BUILD_END)
+        text = text[:b0] + BUILD_2022 + text[b1:]
+        r0, r1 = text.index(RUN_START), text.index(RUN_END)
+        text = text[:r0] + RUN_2022 + text[r1:]
     if phase:
         for label, insert in (("sm_no_vsync:\n", PHASE_DELAY_LOOP), ("sm_finish:\n", PHASE_PRINT)):
             assert text.count(label) == 1
