@@ -1433,53 +1433,42 @@ def noise_order_self_test():
 
 
 def noise_sweep_self_test():
-    """noise.sweep_table on synthetic ARES_DPLOG sweeps: every draw takes 7000 clocks plus the boot delay mod 37,
-    and at pad 3 only the anchor takes 300 more for 9 delays of each period, so the set must span that pad."""
+    """noise.sweep_table on synthetic ARES_DPLOG sweeps: every draw takes 7000 clocks plus the boot delay mod the
+    period, and at pad 3 only the anchor takes 300 more for 9 delays of each period, so the set must span that pad."""
     import itertools
     import tempfile
     from romgen.suites.calib import sets
-    period = 37
 
-    def dist(n, pad, k, late=0):
+    def dist(n, pad, k, period, late):
         return n * (7000 + k % period) + 300 * (n > 0 and pad == 3 and k % period < 9) + late * (n > 0 and k == 70)
 
-    def write(root, pads, last, late=0):
-        for pad in pads:
-            for k in range(1, last + 1):
-                for kit, cases in sets.NOISE_KITS.items():
-                    n = sum(len(draws) for *_, draws in cases)
-                    path = Path(root) / (f"p{pad}/" if pad else "") / f"boot-{k}" / f"{kit}.dplog"
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text("".join(f"S {i} noise={1000 + dist(i, pad, k, late)} y=0\n" for i in range(n)))
+    def sweep(root, pads, delays, period, late):
+        for pad, k in itertools.product(pads, delays):
+            for kit, cases in sets.NOISE_KITS.items():
+                n = sum(len(draws) for *_, draws in cases)
+                path = Path(root) / (f"p{pad}/" if pad else "") / f"boot-{k}" / f"{kit}.dplog"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("".join(f"S {i} noise={1000 + dist(i, pad, k, period, late)} y=0\n" for i in range(n)))
+        return noise.sweep_table(root)
 
-    def want_set(snap, kit, pads, last):
+    def want_set(snap, kit, pads, delays, period):
         n = sum(len(draws) for *_, draws in itertools.takewhile(lambda c: c[0] != snap, sets.NOISE_KITS[kit]))
-        return f"offset set {snap} D = %d +- %d" % noise.offset_set_of([dist(n, p, k) for p in pads for k in range(1, last + 1)])
+        return "offset set %s D = %d +- %d" % (snap, *noise.offset_set_of(
+            [dist(n, p, k, period, 0) for p in pads for k in delays]))
 
     out = []
-    for name, pads, last, want in [("two periods at pads 0 and 3 span pad 3's excursion", (0, 3), 80, True),
-                                   ("one period cannot show its phases repeat", (0, 3), 60, False)]:
+    for name, pads, delays, period, late, want in [
+            ("two periods at pads 0 and 3 span pad 3's excursion", (0, 3), range(1, 81), 37, 0, True),
+            ("one period cannot show its phases repeat", (0, 3), range(1, 61), 37, 0, False),
+            ("a second period past the first's extent", (0, 3), range(1, 81), 37, 500, False),
+            ("a sweep at step 2 is not a step-1 sweep", (0,), range(1, 201, 2), 38, 0, False)]:
         with tempfile.TemporaryDirectory() as root:
-            write(root, pads, last)
-            table, ok = noise.sweep_table(root)
-        sets_ok = all(f"period {period} boot delays" in line and want_set(snap, kit, pads, last) in line
-                      for line, (kit, snap) in zip(table.split("\n"), noise.READS)) if want else True
-        good = ok == want and sets_ok
+            table, ok = sweep(root, pads, delays, period, late)
+        good = ok == want and (not want or all(
+            f"period {period} boot delays" in line and want_set(snap, kit, pads, delays, period) in line
+            for line, (kit, snap) in zip(table.split("\n"), noise.READS)))
         out.append(good)
         print(f"kit: self-test: noise sweep: {name}: {'ok' if good else 'FAILED'} ({table.split(chr(10))[0]})")
-    with tempfile.TemporaryDirectory() as root:
-        write(root, (0, 3), 80, late=500)
-        _, ok = noise.sweep_table(root)
-    out.append(not ok)
-    print(f"kit: self-test: noise sweep: a second period past the first's extent: {'ok' if not ok else 'FAILED'}")
-    with tempfile.TemporaryDirectory() as root:
-        write(root, (0,), 200)
-        for k in range(2, 201, 2):
-            for kit in sets.NOISE_KITS:
-                (Path(root) / f"boot-{k}" / f"{kit}.dplog").unlink()
-        _, ok = noise.sweep_table(root)
-    out.append(not ok)
-    print(f"kit: self-test: noise sweep: a sweep at step 2 is not a step-1 sweep: {'ok' if not ok else 'FAILED'}")
     return out
 
 
