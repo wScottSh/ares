@@ -95,8 +95,11 @@ auto PI::dmaStep() -> void {
   Clock now = timeline.now(Clock{});
   if(dma.phase == DMA::Phase::Filling) {
     dma.phase = DMA::Phase::Posted;
-    if(dma.bytes) return ri.post({dma.address, (u8)dma.bytes, RiBus::Direction::Write, RiBus::Requester::PiDma, 0}, now);
-    return dmaLanded(now);
+    //A first block no longer than its misalignment writes no byte, yet the PI
+    //still writes it back: n64brew PI counts a first block's write from buffer
+    //index 0 and masks the bytes below the misalignment, so the burst is one
+    //octbyte with an empty mask (the RI counts octbytes from Adr[2:0]).
+    return ri.post({dma.address, (u8)dma.bytes, RiBus::Direction::Write, RiBus::Requester::PiDma, 0}, now);
   }
   if(dma.phase != DMA::Phase::Settling) return;
   if(dma.length > 0) return dma.toRdram ? dmaFill(now) : dmaPostRead(now);
