@@ -1083,6 +1083,8 @@ def noise_reader_self_test(draws):
             ("an anchor past one period of a is found", noise.anchor(rect(over)), over),
             *[(f"the LFSRs give Thar0's console dataset {'abc'[i].upper()} at its clock", all(
                 x == "x" or int(x) == abc[i] for x, abc in zip(bits, noise.bits(t, len(bits)))), True) for bits, t, i in console],
+            ("the rate is (2K+1) x 2 mappings x 2^-b", (lambda r: r["rate"] == (2 * k + 1) * 2 * 2.0 ** -r["b"])(
+                noise.read(rect(t0), snap(t0 + d, "angrylion", ad), ad, d, k)), True),
             ("Angrylion at offset 0 prints a rate below 1e-6", noise.read(rect(t0), snap(t0 + d, "angrylion", ad), ad, d, k)["rate"] < noise.RATE_MAX, True)]:
         out.append(got == want)
         print(f"kit: self-test: noise offset reader: {name}: {'ok' if got == want else 'FAILED'} ({got})")
