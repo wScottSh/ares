@@ -93,8 +93,8 @@ rdp.color-half-pixels-16bpp	row	C	color-half-16bpp	-	-	-
 rdp.fill-copy-rate	row	C	thar0-console fill-copy-rate copy-passfail	-	-	-
 rdp.mem-overhead-read	row	C	span-width zread-1cyc	-	-	-
 rdp.mem-overhead-write	row	B	-	U-WRITE-HOLD-Q	-	-
-rdp.noise-alpha-dither	row	B	noise-alpha-dither	U-NOISE-READER	-	-
-rdp.noise-dither-bits	row	B	noise-dither-bits	U-NOISE-READER	-	-
+rdp.noise-alpha-dither	row	B	noise-alpha-dither	U-NOISE-READER	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:39-41 cite a/b/c mappings for G_AD_NOISE only (Angrylion 0-7, MiSTer odd 1-7), none for the G_AC_DITHER threshold, so ac-dither has no mapping to test; ad-noise-threshold stores nothing for any value (alpha 0x78 + 7 < blend 0x80), b = 0, false-match rate >= 2 at K = 0; report-only until a kit-noise ROM change
+rdp.noise-dither-bits	row	B	noise-dither-bits	U-NOISE-READER	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:40 names Angrylion irand and MiSTer lfsr(8:0), neither a mapping of a, b, c; cd-noise-16's gray 0x80 has low bits 0, so no dither value rounds it (b = 0, fork 1 dump over 64 logs); report-only until a kit-noise ROM change
 rdp.port-lookahead	row	C	imrd-zcmp-slots-2cyc	-	-	-
 rdp.primitive-base	row	C	rdp-rect-base	-	-	-
 rdp.read-gate	row	C	thar0-console	-	-	-

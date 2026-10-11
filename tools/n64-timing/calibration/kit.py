@@ -769,6 +769,9 @@ def self_test():
     zread1_cases = zread1_self_test()
     failed += zread1_cases.count(False)
     cases += zread1_cases
+    noise_cases = noise_self_test()
+    failed += noise_cases.count(False)
+    cases += noise_cases
     latch_q = next(q for q in questions() if q["id"] == "vi-frame-latch")
 
     def vi_latch(late, bank2, bank3):
@@ -900,6 +903,142 @@ def zread1_self_test():
     return out
 
 
+#The values one noise state gives each noise use, per source that reads the a, b and c LFSRs
+#(docs/research/rdp-noise.md:39-41). ad is G_AD_NOISE: Angrylion (noise >> 6) & 7, MiSTer random2 & '1'.
+#cd is G_CD_NOISE and ac the G_AC_DITHER threshold: Angrylion's irand and MiSTer's own LFSR read none of
+#a, b and c, so no cited mapping exists for a reader to test.
+NOISE_MAPPINGS = {"ad": {"angrylion": tuple(range(8)), "mister-odd": (1, 3, 5, 7)}, "cd": {}, "ac": {}}
+#Every value a use can take from any source: 3 bits of alpha, 3 bits per color channel, an 8-bit threshold.
+NOISE_RANGE = {"ad": range(8), "cd": range(8), "ac": range(256)}
+#prehw-plan.md U-NOISE-READER: (2K+1) x mappings x 2^-b must be below this.
+NOISE_RATE_MAX = 1e-6
+
+
+def noise_draw(name, width, bpp, commands):
+    """A kit-noise draw's noise uses and constants, decoded from the command list the ROM runs."""
+    from romgen.suites.calib import sets
+    op = {c >> 56: c for c in commands}
+    if op.get(0xFC) != sets.prim_combiner():
+        raise ValueError(f"{name}: not drawn with the PRIMITIVE combiner")
+    mode0, mode1 = op[0xEF] >> 32 & 0xFFFFFF, op[0xEF] & 0xFFFFFFFF
+    uses = [u for u, on in (("cd", mode0 >> 6 & 3 == 2), ("ad", mode0 >> 4 & 3 == 2), ("ac", mode1 & 3 == 3)) if on]
+    return {"width": width, "bits16": bpp == 2, "uses": uses, "compare": mode1 & 1 == 1,
+            "prim": (op[0xFA] & 0xFFFFFFFF).to_bytes(4, "big"), "blend_a": op.get(0xF9, 0) & 0xFF}
+
+
+def noise_draws():
+    """Every kit-noise draw that feeds noise to G_AD_NOISE, G_CD_NOISE or G_AC_DITHER (sets.NOISE_CASES)."""
+    from romgen.suites.calib import sets
+    out = {}
+    for name, width, bpp, draws in sets.NOISE_CASES:
+        try:
+            out[name] = noise_draw(name, width, bpp, draws[0][1])
+        except ValueError:
+            continue
+    return out
+
+
+def noise_pixel(draw, ad=0, cd=0, ac=0):
+    """What one pixel of the draw stores for the given noise values: None when alpha compare rejects it."""
+    *rgb, a = draw["prim"]
+    if "cd" in draw["uses"]:
+        #ParaLLEl rgb_dither (the fork's rdp_blend.c rdp_blender_dither_color): up to the next multiple of
+        #8 iff the low 3 bits exceed the dither value.
+        rgb = [min(c - (c & 7) + 8, 255) if (c & 7) > cd else c for c in rgb]
+    if draw["bits16"]:
+        rgb = [c >> 3 for c in rgb]
+    if "ad" in draw["uses"]:
+        a = min(a + ad, 255)
+    if draw["compare"] and a < (ac if "ac" in draw["uses"] else draw["blend_a"]):
+        return None
+    return tuple(rgb)
+
+
+def noise_bits(draw):
+    """An upper bound on b, the logged pixel bits two mappings can disagree on: 0 when every noise value
+    any source could give stores the same pixel, else every pixel of the draw."""
+    import itertools
+    ranges = [NOISE_RANGE[u] if u in draw["uses"] else (0,) for u in ("ad", "cd", "ac")]
+    stored = {noise_pixel(draw, *v) for v in itertools.product(*ranges)}
+    return draw["width"] if len(stored) > 1 else 0
+
+
+def noise_rate(snaps, draws):
+    """(verdict, detail) for one question over its kit-noise snaps. Only a snap whose every noise use has
+    a cited mapping can be tested. The false-match rate at K = 0, mappings x 2^-b with b bounded above by
+    noise_bits, is a floor: any K multiplies it by 2K+1. No testable snap, or a floor at or above
+    NOISE_RATE_MAX, leaves the question report-only."""
+    untestable = [s for s in snaps if not all(NOISE_MAPPINGS[u] for u in draws[s]["uses"])]
+    testable = [s for s in snaps if s not in untestable]
+    reasons = [f"{s}: no cited a/b/c mapping for {' '.join(u for u in draws[s]['uses'] if not NOISE_MAPPINGS[u])}"
+               for s in untestable]
+    if not testable:
+        return "report-only", "; ".join(reasons + ["no snap left to test"])
+    mappings = math.prod(len(NOISE_MAPPINGS[u]) for u in sorted({u for s in testable for u in draws[s]["uses"]}))
+    bits = sum(noise_bits(draws[s]) for s in testable)
+    floor = mappings * 2.0 ** -bits
+    if floor >= NOISE_RATE_MAX:
+        reasons.append(f"{' '.join(testable)}: false-match rate >= {floor:.3g} at K = 0 ({mappings} mappings, b <= {bits})")
+        return "report-only", "; ".join(reasons)
+    return "not ruled out", "; ".join(reasons + [f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, "
+                                                 f"b <= {bits}); the offset reader is not built"])
+
+
+def noise_table(run_dir=None, root=ROOT):
+    """The reader's report for every question over a noise-mapping snap. With a calibration/run.sh output,
+    also the fork's distinct dumps of each snap over every layout pad and boot delay: a snap whose bound
+    is b = 0 must store one dump however far apart the logs' noise offsets are (rect-1016 shows how far)."""
+    draws = noise_draws()
+    logs = [log for pad_logs in model_layouts(run_dir, "kit-noise").values() for log in pad_logs] if run_dir else []
+    dumps = lambda snap: len({log.records.get(("snap", snap), {}).get("hash") for log in logs})  # noqa: E731
+    out = ["| Question | Snap | Noise uses | Bits that can differ (bound) | Fork dumps over logs |", "|---|---|---|---|---|"]
+    verdicts, contradicted = [], []
+    for q in questions(root):
+        snaps = [p.removeprefix("snap/") for p in q["points"].split() if p.removeprefix("snap/") in draws]
+        if q["kit"] != "kit-noise" or not snaps:
+            continue
+        for s in snaps:
+            seen = f"{dumps(s)} of {len(logs)} (rect-1016: {dumps('rect-1016')})" if logs else "-"
+            if logs and not noise_bits(draws[s]) and dumps(s) > 1:
+                contradicted.append(s)
+            out.append(f"| `{q['id']}` | `{s}` | {' '.join(draws[s]['uses'])} | {noise_bits(draws[s])} | {seen} |")
+        verdicts.append(f"{q['id']}: " + ": ".join(noise_rate(snaps, draws)))
+    out += [""] + verdicts
+    out += [f"fork contradicts b = 0 for {', '.join(contradicted)}"] if contradicted else []
+    return "\n".join(out), not contradicted
+
+
+def noise_self_test():
+    """The reader's bound on the kit's own draws, and on mutated draws that do carry noise."""
+    draws = noise_draws()
+    from romgen import rcp
+    from romgen.suites.calib import sets
+
+    def mutated(name, prim):
+        width, bpp, lists = next((w, b, d) for n, w, b, d in sets.NOISE_CASES if n == name)
+        commands = [rcp.set_prim_color(prim, level_frac=0xFF) if c >> 56 == 0xFA else c for c in lists[0][1]]
+        return {**draws, name: noise_draw(name, width, bpp, commands)}
+
+    out = []
+    for name, snaps, among, want in [
+            ("ad-noise-threshold: alpha 0x78 + 7 < 0x80 stores nothing for any value", ["ad-noise-threshold"], draws, "report-only"),
+            ("cd-noise-16: gray 0x80 has low bits 0, so no dither rounds it", ["cd-noise-16"], draws, "report-only"),
+            ("ac-dither: no source maps the threshold", ["ac-dither"], draws, "report-only"),
+            ("mutation: alpha 0x7F, written iff the value is not 0, is not ruled out",
+             ["ad-noise-threshold"], mutated("ad-noise-threshold", 0xFFFFFF7F), "not ruled out"),
+            ("mutation: gray 0x84 carries noise but still has no cited mapping",
+             ["cd-noise-16"], mutated("cd-noise-16", 0x848484FF), "report-only")]:
+        got, detail = noise_rate(snaps, among)
+        out.append(got == want)
+        print(f"kit: self-test: noise reader: {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail})")
+    for name, draw, want in [("gray 0x80 bounds b at 0", draws["cd-noise-16"], 0),
+                             ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256)]:
+        bits = noise_bits(draw)
+        out.append(bits == want)
+        print(f"kit: self-test: noise reader: {name}: {'ok' if bits == want else 'FAILED'} ({bits})")
+    return out
+
+
 def layout_rows(run_dir, root=ROOT):
     """(question, controller setup, values that differ by pad, all compared values, pads whose fork logs
     read as a capture fail against pad 0's, {pad: spread}) for every kit-ROM question in a
@@ -967,6 +1106,10 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--layout"]:
         print(layout_table(sys.argv[2]))
         sys.exit(0)
+    if sys.argv[1:2] == ["--noise-rate"]:
+        table, consistent = noise_table(sys.argv[2] if sys.argv[2:] else None)
+        print(table)
+        sys.exit(0 if consistent else 1)
     if sys.argv[1:2] == ["--hist"] and sys.argv[2:]:
         for path, log in sorted((p, l) for logs in read_logs(sys.argv[2:]).values() for p, l in logs):
             for key, metric, hist in histograms(log):
@@ -981,4 +1124,4 @@ if __name__ == "__main__":
         print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
               file=sys.stderr)
         sys.exit(1 if errs else 0)
-    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --layout RUN_DIR | --hist LOG... | --self-test")
+    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --layout RUN_DIR | --noise-rate [RUN_DIR] | --hist LOG... | --self-test")
