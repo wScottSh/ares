@@ -105,21 +105,22 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | 0-7 | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
 | 6 | `kit-span` | 0.2 s | 9.2 KB | no | 0-7 | `color-half-16bpp`, `span-width` |
 | 7 | `kit-span2` | 0.5 s | 25.0 KB | no | 0 | `span-write-release`, `mem-overhead-pipelined` |
-| 8 | `kit-noise` | 0.2 s | 32.4 KB | no | 0-7 | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
-| 9 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | 0 | `stale-read` |
-| 10 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
-| 11 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
-| 12 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
-| 13 | `nemu64-timing` | 0.8 s | 26.8 KB | no | 0 | `nemu64-console` |
-| 14 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
-| 15 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
-| 16 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
-| 17 | `kit-zmem` | 1.9 s | 30.1 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `filesel-glyph`, `pipebusy-stall` |
-| 18 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
-| 19 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 20 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun` |
-| 21 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
-| 22 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
+| 8 | `kit-noise` | 0.2 s | 32.4 KB | no | 0-7 | `noise-alpha-dither`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
+| 9 | `kit-noise2` | 0.2 s | 17.1 KB | no | 0 | `noise-dither-bits` |
+| 10 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | 0 | `stale-read` |
+| 11 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
+| 12 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
+| 13 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
+| 14 | `nemu64-timing` | 0.8 s | 26.8 KB | no | 0 | `nemu64-console` |
+| 15 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
+| 16 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
+| 17 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
+| 18 | `kit-zmem` | 1.9 s | 30.1 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `filesel-glyph`, `pipebusy-stall` |
+| 19 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
+| 20 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 21 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun` |
+| 22 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 23 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
 
 For each ROM:
 
