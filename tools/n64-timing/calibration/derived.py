@@ -368,4 +368,17 @@ def op_slope(recs):
     return out
 
 
-DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, span_cost, hsync, repeat, op_slope]
+def block_write_slope(recs):
+    """kit-dma's back-to-back dirty line writebacks: rclk per line from the N = 64 less N = 16 COUNT, as repeat."""
+    out = {}
+    for (rom, point), f in recs.items():
+        if rom == "block-write-slope" and f.get("n") == 16:
+            hi = recs.get((rom, point.replace("-n16", "-n64")))
+            if hi:
+                out[(rom, f"{f['op']}-fit")] = {"rclk_per_block": round((hi["min"] - f["min"]) / 36, 4)}
+    if not out:
+        raise KeyError("block-write-slope")
+    return out
+
+
+DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, span_cost, hsync, repeat, op_slope, block_write_slope]

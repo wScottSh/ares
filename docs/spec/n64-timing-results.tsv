@@ -49,6 +49,7 @@ hw:ai-rate	pending:calibration-16	no complete power-on console capture of kit-bu
 hw:atomic-contention	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:attribute-stage	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:attribute-sync-cost	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
+hw:block-write-slope	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:cache-ops	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cache-ops-sum	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:clobber	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
