@@ -246,7 +246,7 @@ def model_layouts(run_dir, rom, pads=None):
     out = {pad: [m for m in model_logs(run_dir, rom, pads, pad) if m.complete] for pad in found}
     walk = phase_walk(run_dir, rom)
     if walk:
-        for logs in out.values():
+        for logs in filter(None, out.values()):
             for log in logs:
                 for key, fields in log.records.items():
                     if key in walk[0].records:
@@ -935,6 +935,59 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += shorts
+    edge_q, phase_q, hold_q, wgap_q = (next(q for q in questions() if q["id"] == i)
+                                       for i in ("cpu-watch-edge", "count-write-phase", "count-write-hold", "ri-write-gap"))
+    edges = ("byte-same-dword", "kseg1", "sd", "watchhi", "lw-w-only", "sw-r-only", "next-dword", "cache", "exl")
+
+    def watch(fired):
+        return Log(sample_log("".join(f"#bench cpu2-watch {pt} reps=2 min=6 max=6 lo=3 hi=3 fired={f}\n"
+                                      for pt, f in zip(edges, fired)), rom="kit-cpu2"))
+
+    def countw(mins, dmaxes):
+        return Log(sample_log("".join(f"#bench cpu2-countw slot-{k} slot={k} reps=2 min={m} max={m} dmax={d}\n"
+                                      for k, (m, d) in enumerate(zip(mins, dmaxes), 1)), rom="kit-cpu2"))
+
+    def wgap(bank5, bank6=1292):
+        return Log(sample_log(f"#bench bus-wgap fill-sp-bank5 bank=5 loads=32 reps=4 min={bank5} max=1572\n"
+                              f"#bench bus-wgap fill-sp-bank6 bank=6 loads=32 reps=4 min={bank6} max=1317\n", rom="kit-bus"))
+    fork_hold = (0, 0, 0, 1, 1, 2)
+    lasts = [("cpu-watch-edge: the console matches as the fork does", edge_q, watch((4, 4, 4, 4, 0, 0, 0, 0, 0)), "pass"),
+             ("cpu-watch-edge: word-granular WatchLo misses the byte at +7", edge_q, watch((0, 4, 4, 4, 0, 0, 0, 0, 0)), "fail"),
+             ("cpu-watch-edge: Watch raised under EXL", edge_q, watch((4, 4, 4, 4, 0, 0, 0, 0, 4)), "fail"),
+             ("count-write-phase: a divider that keeps its phase (spread 1 at slots 3 and 5)", phase_q,
+              countw(fork_hold, (0, 0, 1, 1, 2, 2)), "fail"),
+             ("count-write-hold: the same console's min matches, so the hold question passes", hold_q,
+              countw(fork_hold, (0, 0, 1, 1, 2, 2)), "pass"),
+             ("count-write-phase: a 3 pclk hold restarts the divider (spread 0)", phase_q,
+              countw((0, 0, 0, 0, 1, 1), (0, 0, 0, 0, 1, 1)), "pass"),
+             ("ri-write-gap: the console reads as the fork, 31 ticks of quantization off", wgap_q, wgap(1486 - 31), "pass"),
+             ("ri-write-gap: reading C skips the gapped SP burst (scratch build, 1040)", wgap_q, wgap(1040), "fail")]
+    fork_watch, fork_countw = watch((4, 4, 4, 4, 0, 0, 0, 0, 0)), countw(fork_hold, fork_hold)
+    for name, q, hw, want in lasts:
+        model = {"kit-cpu2": fork_countw if "count" in q["id"] else fork_watch, "kit-bus": wgap(1486)}[q["kit"]]
+        got, detail = compare(q, [hw], [model])
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += lasts
+    with tempfile.TemporaryDirectory() as tmp:
+        calib = Path(tmp) / "calib"
+        (calib / "single").mkdir(parents=True)
+        (calib / "single" / "nemu64-timing.txt").write_bytes(sample_log("@0.0 0\n@18.0 1\n", rom="nemu64-timing"))
+        for k, v0 in ((1, 1), (63, 0)):
+            (Path(tmp) / "nemu64" / "timing-phase" / f"phase-{k}").mkdir(parents=True)
+            (Path(tmp) / "nemu64" / "timing-phase" / f"phase-{k}" / "stdout.txt").write_text(f"avg 1 2 3 4\n@0.0 {v0}\n")
+        nemu_q = next(q for q in questions() if q["id"] == "nemu64-console")
+        model = model_layouts(calib, "nemu64-timing")[0]
+        walks = [("nemu64-console: an averaged value the walk passes at one phase passes at the console's", "@0.0 0\n@18.0 0\n",
+                  "pass"),
+                 ("nemu64-console: a single-phase value still compares", "@0.0 1\n@18.0 0\n", "fail")]
+        for name, body, want in walks:
+            got, detail = compare(nemu_q, [Log(sample_log(body, rom="nemu64-timing"))], model)
+            ok = got == want and len(model) == 3
+            failed += not ok
+            print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+        cases += walks
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
