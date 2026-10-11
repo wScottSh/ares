@@ -46,7 +46,7 @@ Allow about six hours and 35 minutes for the required runs and seven hours and 3
 
 2. Copy the console builds to the flashcart's SD card:
 
-   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`).
+   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`, `kit-noise2`).
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`, `kit-pif`. Run `kit-pif` only through the SC64 `upload` path (see [The PIF boot timeout](#the-pif-boot-timeout)).
    - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
@@ -105,21 +105,22 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | 0-7 | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
 | 6 | `kit-span` | 0.2 s | 9.2 KB | no | 0-7 | `color-half-16bpp`, `span-width` |
 | 7 | `kit-span2` | 0.5 s | 25.0 KB | no | 0 | `span-write-release`, `mem-overhead-pipelined` |
-| 8 | `kit-noise` | 0.2 s | 32.4 KB | no | 0-7 | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
-| 9 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | 0 | `stale-read` |
-| 10 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
-| 11 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
-| 12 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
-| 13 | `nemu64-timing` | 0.8 s | 26.8 KB | no | 0 | `nemu64-console` |
-| 14 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
-| 15 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
-| 16 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
-| 17 | `kit-zmem` | 1.9 s | 30.1 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `filesel-glyph`, `pipebusy-stall` |
-| 18 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
-| 19 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 20 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun` |
-| 21 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
-| 22 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
+| 8 | `kit-noise` | 0.2 s | 32.4 KB | no | 0-7 | `noise-alpha-dither`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
+| 9 | `kit-noise2` | 0.2 s | 17.1 KB | no | 0 | `noise-dither-bits` |
+| 10 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | 0 | `stale-read` |
+| 11 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
+| 12 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
+| 13 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
+| 14 | `nemu64-timing` | 0.8 s | 26.8 KB | no | 0 | `nemu64-console` |
+| 15 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
+| 16 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
+| 17 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
+| 18 | `kit-zmem` | 1.9 s | 30.1 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `filesel-glyph`, `pipebusy-stall` |
+| 19 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
+| 20 | `kit-cpu2` | 0.2 s | 19.7 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cpu-watch-edge`, `irq-clear`, `cache-ops`, `count-write-hold`, `count-write-phase`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 21 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun`, `ri-write-gap` |
+| 22 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 23 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
 
 For each ROM:
 
@@ -237,6 +238,7 @@ The command does these things:
 Two logs record distributions as well as the values the questions compare. No question compares a histogram; they are the console's data behind the means, for the bus investigation (docs/design/green-plan/bus.md, Q2 and section 3):
 
 - `nemu64-timing` prints a `#hist <test>.<value> <cycles>:<count>,...` line before the result of each of its 21 averaged values (Load Miss and uncached loads, VI on and off, 1000 runs each). These are the counts behind `nemu64-console`'s min, max, median and mean. A refresh tail shows as a flat spread over 41..80 at about 1-2 %; a second latency state shows as a second peak at 42-44.
+- `nemu64-console` compares those 21 averaged values against the fork's verdict at every VI phase of the nemu64 phase walk (`run-nemu64.sh timing-phase`), not against the fork's one run of the kit ROM, because the console boots into any phase. kit.py reads the walk from `nemu64/timing-phase` beside the model's `calib/` directory, as a standing run lays them out, and reports `missing` without it.
 - `kit-hpos` already logs every load. kit.py derives `hist_pclk`, each latency in pclk with its count, for each `vi-cpu-contention` point.
 
 To print them from stored logs or from the fork's run:

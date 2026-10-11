@@ -317,6 +317,17 @@ NOISE_CASES = [
     ("ad-noise-7f", 512, 2, [(0, noise_list(512, B16, 0, 512, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
                                             rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF7F, blend=0x00000080))]),
 ]
+#kit-noise2 (prehw-plan.md U-NOISE-KIT2), for the G_CD_NOISE and G_AC_DITHER bits. kit-noise keeps its own draws,
+#since one moved or removed draw would move the offset set fixed for ad-noise-7f. Gray 0x84 has low bits 4,
+#so a channel rounds up iff its dither value is below 4: one bit per channel per pixel. The anchor and
+#ac-dither are kit-noise's draws, copied.
+NOISE2_CASES = [
+    NOISE_CASES[0],
+    ("cd-noise-84", 512, 2, [(0, noise_list(512, B16, 0, 512, rcp.CYC_1CYCLE | CD_NOISE | rcp.AD_DISABLE, 0,
+                                            prim_combiner(), prim=0x848484FF))]),
+    next(case for case in NOISE_CASES if case[0] == "ac-dither"),
+]
+NOISE_KITS = {"kit-noise": NOISE_CASES, "kit-noise2": NOISE2_CASES}
 SPIN_ASM = """
 # a0 = {iterations}: an idle CPU spin between two RDP lists.
 cal_spin:
@@ -341,7 +352,7 @@ class NoiseKit:
     def _lists(self):
         lists = Lists("calnoise")
         cases = [(name, width, bpp, [(spin, lists.get(dl)) for spin, dl in draws])
-                 for name, width, bpp, draws in NOISE_CASES]
+                 for name, width, bpp, draws in NOISE_KITS[self.set_name]]
         return lists, cases
 
     @property
@@ -383,7 +394,8 @@ def kit_sets(delays):
                 continue
             sets.append(BenchKit(name, f"boot-{k}/{name}", builders, KIT_ASM.get(name, []),
                                  consts={"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k}))
-        sets.append(NoiseKit(rom_name=f"boot-{k}/kit-noise", consts={"DUMP": 0, "BOOT_DELAY": k}))
+        sets += [NoiseKit(set_name=kit, rom_name=f"boot-{k}/{kit}", banner_flags=f"(calib={kit})",
+                          consts={"DUMP": 0, "BOOT_DELAY": k}) for kit in NOISE_KITS]
     return sets
 
 

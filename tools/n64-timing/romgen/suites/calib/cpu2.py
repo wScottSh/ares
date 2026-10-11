@@ -388,9 +388,10 @@ FPU_RESTORE = "    li $t1, FCSR_DEFAULT\n    ctc1 $t1, 31"
 FS_CLEAR = f"    li $t1, {FS:#x}\n    ctc1 $t1, 31"
 
 
-def watch_setup(bits):
-    return (f"    li $t0, {KSEG0 | WATCH_PHYS:#x}\n    lw $t1, 0($t0)\n    li $t2, {WATCH_PHYS | bits:#x}\n"
-            "    mtc0 $t2, $watchlo\n    mtc0 $zero, $watchhi\n    nop\n    nop")
+def watch_setup(bits, base=KSEG0, hi=0):
+    return (f"    li $t0, {base | WATCH_PHYS:#x}\n    lw $t1, 0($t0)\n    li $t2, {WATCH_PHYS | bits:#x}\n"
+            "    mtc0 $t2, $watchlo\n" + (f"    li $t2, {hi}\n    mtc0 $t2, $watchhi" if hi else "    mtc0 $zero, $watchhi")
+            + "\n    nop\n    nop")
 
 
 def exception_points():
@@ -472,6 +473,30 @@ def irqclr_points():
             VEC_ON + f"\n    li $t0, {MI_MASK:#x}\n    li $t1, 0x2\n    sw $t1, 0($t0)",
             f"    li $t0, {MI_MASK:#x}\n    li $t1, 0x1\n    sw $t1, 0($t0)\n" + VEC_OFF))
     return out
+
+
+WATCH_OFF = "    mtc0 $zero, $watchlo\n    mtc0 $zero, $watchhi"
+# point, body, setup, cleanup, whether the fork raises Watch (VR4300 UM U10504EJ7V0UM00 6.3.8 p.175, 6.4.17 p.198)
+WATCH_EDGES = [
+    ("byte-same-dword", "    lb $t1, 7($t0)", watch_setup(2), WATCH_OFF, 1),
+    ("kseg1", "    lw $t1, 0($t0)", watch_setup(2, KSEG1), WATCH_OFF, 1),
+    ("sd", "    sd $t1, 0($t0)", watch_setup(1), WATCH_OFF, 1),
+    ("watchhi", "    lw $t1, 0($t0)", watch_setup(2, hi=0xF), WATCH_OFF, 1),
+    ("lw-w-only", "    lw $t1, 0($t0)", watch_setup(1), WATCH_OFF, 0),
+    ("sw-r-only", "    sw $t1, 0($t0)", watch_setup(2), WATCH_OFF, 0),
+    ("next-dword", "    lw $t1, 8($t0)", watch_setup(2), WATCH_OFF, 0),
+    ("cache", "    cache 0x19, 0($t0)", watch_setup(3), WATCH_OFF, 0),
+    ("exl", "    lw $t1, 0($t0)", watch_setup(2) + "\n" + STATUS_SET.format(bits=2),
+     STATUS_CLEAR.format(mask=0xFFFFFFFD) + "\n" + WATCH_OFF, 0),
+]
+
+
+def watch_points():
+    """The Watch match's edges (cpu-watch-edge): what WatchLo matches (a doubleword of physical address, any
+    segment, any access size), what it ignores (WatchHi), and when it does not fire (the other access kind, the
+    next doubleword, CACHE, EXL set). fired counts the shots of 4 that entered the handler."""
+    return [exact_point("watch", point, body, [("fires", fires)], setup, cleanup, VEC_ON, VEC_OFF)
+            for point, body, setup, cleanup, fires in WATCH_EDGES]
 
 
 LDI_SETUP = ("    la $t0, cpu2_ldi_data\n    lw $t1, 0($t0)\n    lwc1 $f6, 0($t0)\n    ldc1 $f8, 8($t0)\n"
@@ -828,7 +853,7 @@ cpu2_fit3_vec:
 """
 
 POINTS = (base_points() + exception_points() + ldi_points() + fpu_points() + cache_points() + wb_points()
-          + countw_points() + smc_points() + ctc1ce_points() + irqclr_points())
+          + countw_points() + smc_points() + ctc1ce_points() + irqclr_points() + watch_points())
 
 
 def builder(rom_name):
