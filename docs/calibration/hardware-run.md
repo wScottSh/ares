@@ -158,6 +158,14 @@ A ROM can still stop for good, for example in a CPU exception the kit does not e
 
 If a ROM hangs or logs a nonzero `#kit-timeout`, turn the console off and run it once more from a power cycle. Keep both captures, even the empty or truncated one: ingestion stores a log without a valid footer as INCOMPLETE and does not compare it. Then go on with the next ROM. In [What to send back](#what-to-send-back), name the ROM and the last record its log holds. A hang loses only that ROM's questions; nothing on the console or the flashcart needs a repair.
 
+### VI register writes in kit-bus
+
+n64brew [Video_Interface](https://n64brew.dev/wiki/Video_Interface) warns that "Setting VI_H_VIDEO while display is in progress can sometimes cause the VI to hang". It allows mid-frame changes of VI_H_VIDEO, VI_ORIGIN, VI_WIDTH, VI_X_SCALE and VI_Y_SCALE only in the horizontal blank, and says V_CURRENT "changes right at the beginning of the hsync period". So each `kit-bus` point that times loads against V_CURRENT (`k_bus_vline` in `romgen/suites/calib/bus.py`) writes its VI registers a few instructions after it sees V_CURRENT change. It writes back the registers it changed the same way. These things are not known, and a hang or a `timeout=1` on these points can come from them:
+
+- n64brew gives no timing rule for VI_CTRL. The points also write VI_CTRL just after a V_CURRENT change, including `hvideo8-late`'s blank at the start of the window's third-last line.
+- VI_CTRL TYPE 0 "will totally stop VI activity", and on the fork V_CURRENT stops with it. After a blank point, the ROM turns the VI back on, then waits for V_CURRENT to change before it writes the other registers. If V_CURRENT does not change within 2^20 polls, it writes them anyway. With the VI stopped there is no display to hang (inferred).
+- `k_bus_hsync` (`refresh-latch`, `vi-fetch-overrun`) writes H_SYNC, H_SYNC_LEAP and V_VIDEO without this wait. n64brew gives no mid-frame rule for those registers.
+
 ### The PIF boot timeout
 
 `kit-pif` (`roms/single/kit-pif.z64`) is the one ROM that never finishes. Every other kit ROM sends the PIF terminate-boot command itself (`romgen/runtime.py` `pif_terminate_boot`). `kit-pif` does not, so the PIF halts the CPU through NMI after its boot timeout. n64brew [PIF-NUS](https://n64brew.dev/wiki/PIF-NUS) says the PIF expects the command "before 5 seconds from boot" and halts the CPU if it does not come "within about 5 seconds from boot". The fork's PIF (`ares/n64/pif/hle.cpp`) waits 6 s. The ROM prints `#bench kit-pif count n=<sample> count=<COUNT>` every 10 ms of COUNT, so its last line is the last COUNT before the halt.
