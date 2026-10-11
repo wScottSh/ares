@@ -869,6 +869,32 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += irqclrs
+    latch_q, overrun_q = (next(q for q in questions() if q["id"] == i) for i in ("refresh-latch", "vi-fetch-overrun"))
+
+    def hsync(starved=0, fetch_n=1117, none_n=1160, slow=(608, 516, 430)):
+        pts = [(f"refresh-{f}", h, s) for (f, h), s in zip((("0.25", 9), ("0.5", 19), ("0.9", 35)), slow)]
+        body = "".join(f"#bench bus-hsync {pt} hsync={h} v_video=none window=29790 reps=1 starved={starved} n=600 "
+                       f"slow={0 if starved else s} lat_max=95\n" for pt, h, s in pts)
+        body += "".join(f"#bench bus-hsync {pt} hsync=399 v_video={v} window=29790 reps=1 starved=0 n={n} slow=78 lat_max={m}\n"
+                        for pt, v, n, m in (("fetch-overrun", "init", fetch_n, 67), ("fetch-overrun-none", "none", none_n, 47)))
+        return Log(sample_log(body, rom="kit-bus"))
+    fork = hsync()
+    shorts = [("refresh-latch: a console with one refresh latch (holdoffs every 6, 4 and 3 lines)", latch_q,
+               hsync(slow=(516, 387, 287)), "pass"),
+              ("refresh-latch: a console that queues every HSYNC's refresh starves the gate DMA", latch_q, hsync(starved=1),
+               "fail"),
+              ("vi-fetch-overrun: a console whose loads run 10% slower and whose VI holds the channel half as long",
+               overrun_q, hsync(fetch_n=1023, none_n=1044), "pass"),
+              ("vi-fetch-overrun: a VI that drops the unposted bursts at each HSYNC (one load apart)", overrun_q,
+               hsync(fetch_n=1159), "fail"),
+              ("vi-fetch-overrun: the derived threshold, 40.5 + 2 x 67 ticks: 8 loads (205 ticks) read as fetched",
+               overrun_q, hsync(fetch_n=1152), "pass")]
+    for name, q, hw, want in shorts:
+        got, detail = compare(q, [hw], [fork])
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += shorts
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed

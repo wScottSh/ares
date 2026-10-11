@@ -110,7 +110,7 @@ ri.overhead-write	row	C	C	memset-vi	-	at=memset-vi mi-memset-rspdma/vi-off min;f
 ri.post-read-gap	row	B	C	sp-dma-direction	U-SEPARATES	-	-	hcs64 (13-18 tolerances, derived); PR #2 SPDMAR main.c:1604,1606 (far, not printed in COUNT); n64brew 2.58 ms on a write key (weakly coupled to the row)
 ri.post-write-gap	row	B	C	sp-dma-direction	U-SEPARATES	-	-	n64brew 2.58 ms memset rate applied to the sp-dma chain (asserts chain = memset rate, unpublished); hcs64 (13-18 tolerances); PR #2 SPDMAW main.c:1613,1615 (4.2 tolerances, past the bound)
 ri.rank.vi	row	B	C	vi-cpu-contention nemu64-console ri-priority	U-SEPARATES	-	-	rdram-bus-arbitration.md B4 (MiSTer rank, no metric); vi-cpu-contention (nemu64 means within abs:2); nemu64 cache.rs:304 (hardware reading, not an alternative rank)
-ri.refresh-latch	row	B	B	-	U-VI-SHORT-LINE	-	-	-
+ri.refresh-latch	row	C	B	refresh-latch	U-VI-SHORT-LINE	at=refresh-latch bus-hsync/refresh-0.25 starved;fork=0;mut=1;cite=U-VI-SHORT-LINE	-	n64brew RDRAM_Interface (HSYNC-triggered refresh, 52/54; nothing on a request arriving while one pends or runs); Video_Interface (no minimum H_SYNC, VI_H_TOTAL; nothing on lines shorter than a refresh); Clock_Timing (VCLK 48.68181818, MClock 62.5, PClock 93.75; no COUNT); in-repo rdram-bus-arbitration.md B11/B12 with its cen64 ri/controller.c and MiSTer RI.vhd refs (read by earlier research, not re-read), followups verify-57, prehw-plan 2.6; no hardware recording (WebFetch of the three n64brew pages, 2026-10-11)
 ri.request-latency	row	D	D	ri.request-latency	-	-	-	-
 ri.retry-clean	row	B	C	nemu64-console	U-SEPARATES	-	-	NEC tRetrySensedClean (the fork's basis); nemu64 cache.rs:304 (hardware reading, not an alternative)
 ri.row-of	row	B	C	nemu64-console	U-SEPARATES	-	-	NEC 2 KiB row (the fork); nemu64 cache.rs:304 (hardware reading, not an alternative)
@@ -125,7 +125,7 @@ sysad.rdram-write-period	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 25.7 m
 sysad.register-write	row	B	C	register-write wb-drain-target	U-SEPARATES	-	-	MiSTer memorymux.vhd:362-367 @5725381 (write 3 SClock; a kit-point value needs the fork's per-store slope, so not a cited alt); n64brew Memory map 5-6 PClock (read/write unspecified); systembench RCP I/O W (commented out)
 vi.aa-mode-lines	row	B	C	vi-cpu-contention nemu64-console vi-fetch-modes	U-SEPARATES	-	-	Angrylion 9c8b9ed fetch.c:10-27 (2 rows in mode 2; a software renderer's reads, scaled by the fork's per-line loads, not a cited bus value); SDK pro-man 24.4 and US 6,166,748 (3 lines, the fork); MiSTer VI_linefetch.vhd (1 line, far)
 vi.display-window	row	B	B	vi-fetch-modes vi-fetch-position	U-SEPARATES	-	-	-
-vi.fetch-overrun	row	B	B	-	U-VI-SHORT-LINE	-	-	-
+vi.fetch-overrun	row	C	B	vi-fetch-overrun	U-VI-SHORT-LINE	at=vi-fetch-overrun bus-derived/hsync fetch-overrun-fetched;fork=1;mut=0;cite=U-VI-SHORT-LINE	-	n64brew Video_Interface (nothing on a line ending before its fetch finishes; line-buffer text covers test registers only), RDRAM_Interface (refresh only), docs/research/vi-fetch.md, US 6,166,748 burst order only, MiSTer VI_linefetch.vhd 3-line buffer (implementation), prehw-plan 2.6 grep; no hardware recording (WebFetch of the n64brew pages, 2026-10-11)
 vi.lines-per-output-line	row	B	C	nemu64-console vi-fetch-modes	U-SEPARATES	-	-	SDK pro-man 24.4 and US 6,166,748 (3, the fork); Angrylion and paraLLEl 4 rows and MiSTer 1 line (past 4 tolerances, not printed per point)
 vi.register-sample	row	B	B	vi-fetch-modes vi-frame-latch	U-SEPARATES	-	-	-
 vi.unfetched-sample	row	A	A	-	U-LABELS-2	-	-	-
