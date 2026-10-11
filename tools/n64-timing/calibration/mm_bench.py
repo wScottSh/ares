@@ -285,8 +285,8 @@ def deciles(values):
 def compare(paths, model_dir, scenes):
     """(result, detail). Per scene of `scenes` the capture holds: each complete console run's median `vi`
     and `rdp_ticks` must lie within the fork's per-frame min..max of the same column over its run of the
-    same ROM, give or take the column's TOLERANCE. The fork's run is one deterministic boot phase, so its 600-frame range is the spread it
-    has. Reported, not judged: the mean fields per game frame, the median, p10 and p90 of each REPORTED
+    same ROM, give or take the column's TOLERANCE. The fork's run is one deterministic boot phase, so its
+    600-frame range is the spread it has. Reported, not judged: the mean fields per game frame, the median, p10 and p90 of each REPORTED
     column on both sides, and with both GAP scenes their named-minus-empty median gap on both sides.
     A console value given as lo..hi spans its runs."""
     mismatch = rom_mismatch(paths, model_dir)
