@@ -47,7 +47,7 @@ Allow about six and a half hours for the required runs and seven and a half for 
 2. Copy the console builds to the flashcart's SD card:
 
    - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-noise`).
-   - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`.
+   - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`, `kit-pif`. Run `kit-pif` only through the SC64 `upload` path (see [The PIF boot timeout](#the-pif-boot-timeout)).
    - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
 
@@ -72,7 +72,7 @@ Allow about six and a half hours for the required runs and seven and a half for 
    sc64deployer download save capture/kit-cpu.srm
    ```
 
-   If you use the SC64 menu (N64FlashcartMenu) from the SD card instead of `upload`, set the save type to SRAM 32 KiB in the ROM's settings. The menu path does not enable the IS-Viewer, so only the SRAM copy and the screen are captured.
+   If you use the SC64 menu (N64FlashcartMenu) from the SD card instead of `upload`, set the save type to SRAM 32 KiB in the ROM's settings. The menu path does not enable the IS-Viewer, so only the SRAM copy and the screen are captured. `kit-pif` needs `upload`: it measures the PIF's boot timeout, which a menu launch has already ended.
 
 ### EverDrive-64 X7
 
@@ -151,6 +151,21 @@ A ROM can still stop for good, for example in a CPU exception the kit does not e
 - On the SC64, the listener output stops and the screen never shows text.
 
 If a ROM hangs or logs a nonzero `#kit-timeout`, turn the console off and run it once more from a power cycle. Keep both captures, even the empty or truncated one: ingestion stores a log without a valid footer as INCOMPLETE and does not compare it. Then go on with the next ROM. In [What to send back](#what-to-send-back), name the ROM and the last record its log holds. A hang loses only that ROM's questions; nothing on the console or the flashcart needs a repair.
+
+### The PIF boot timeout
+
+`kit-pif` (`roms/single/kit-pif.z64`) is the one ROM that never finishes. Every other kit ROM sends the PIF terminate-boot command itself (`romgen/runtime.py` `pif_terminate_boot`). `kit-pif` does not, so the PIF halts the CPU through NMI after its boot timeout. n64brew [PIF-NUS](https://n64brew.dev/wiki/PIF-NUS) says the PIF expects the command "before 5 seconds from boot" and halts the CPU if it does not come "within about 5 seconds from boot". The fork's PIF (`ares/n64/pif/hle.cpp`) waits 6 s. The ROM prints `#bench kit-pif count n=<sample> count=<COUNT>` every 10 ms of COUNT, so its last line is the last COUNT before the halt.
+
+Run it only from a cold boot through `sc64deployer upload`:
+
+```sh
+sc64deployer upload --save-type sram roms/single/kit-pif.z64
+sc64deployer debug --isv 0x03FF0000 | tee capture/kit-pif.isviewer.log
+```
+
+Then turn the console on, wait 15 seconds, and turn it off. The screen stays black, and the log has no `#kit-end` line. A flashcart menu (the ED64 menu or the SC64 menu from the SD card) has already sent terminate-boot before it starts a ROM, so the PIF never halts the ROM, and the menu path has no ISViewer. A log that ends with `#kit-end` after about 12 s of samples shows that boot was already terminated: run it again through `upload`.
+
+ingest.py stores the log (it reports it INCOMPLETE, as expected) and prints the last COUNT next to the fork's. This is a report, not a check. COUNT counts from the IPL3's write of 0, and no source bounds the offset between that and the start of the PIF's timer, so the last COUNT cannot decide between 5 s and 6 s (`tools/n64-timing/calibration/undecidable.tsv`, `legacy.pif.boot-timeout`). On the fork the last COUNT is 280890806 ticks, 5.992 s.
 
 ### Repeat runs
 

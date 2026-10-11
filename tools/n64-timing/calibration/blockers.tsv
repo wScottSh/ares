@@ -77,7 +77,7 @@ legacy.cpu.interrupt-entry	row	C	cpu-exceptions nemu64-cop0hazard-console	-	-	-
 legacy.cpu.nmi-entry	row	D	legacy.cpu.nmi-entry	-	-	-
 legacy.cpu.sysad-frozen-step	row	D	legacy.cpu.sysad-frozen-step	-	-	-
 legacy.pi.cart-read	row	C	dom2-read	-	-	-
-legacy.pif.boot-timeout	row	A	-	U-PIF-TIMEOUT	-	-
+legacy.pif.boot-timeout	row	C	legacy.pif.boot-timeout	-	-	-
 legacy.pif.step-quantum	row	D	legacy.pif.step-quantum	-	-	-
 pi.block-bytes	row	C	pi-dma-small	-	-	-
 pi.block-writeback	row	C	pi-dma-small	-	-	-
