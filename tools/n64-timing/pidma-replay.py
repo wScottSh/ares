@@ -52,22 +52,35 @@ class MalformedLog(Exception):
     pass
 
 
+def hex_field(v):
+    return int(v, 16)
+
+
+#Every record ARES_PILOG writes and the type of each field after its name: a COUNT read (count, time;
+#cpu/interpreter-scc.cpp), a PI_STATUS read (status, time) and a DMA start each way (size, dram, cart,
+#time; pi/io.cpp).
+RECORDS = {"C": (int, int), "S": (int, int), "L R": (int, hex_field, hex_field, int), "L W": (int, hex_field, hex_field, int)}
+
+
 def measurements(lines):
     """(off, size) -> [ticks per run] for the ROM's timed DMAs, in run order."""
     counts, starts = [], []
     for number, line in enumerate(lines, 1):
         p = line.split()
+        kind = " ".join(p[:2]) if p[:1] == ["L"] else p[0] if p else ""
+        if kind not in RECORDS:
+            raise MalformedLog(f"PI log line {number} has the unknown record {kind!r}: {line.rstrip()!r}")
+        fields = p[len(kind.split()):]
         try:
-            if not line.endswith("\n"):
+            if not line.endswith("\n") or len(fields) != len(RECORDS[kind]):
                 raise ValueError
-            if p[0] == "C":
-                _, count, at = p
-                counts.append((int(at), int(count)))
-            elif p[0] == "L" and p[1] == "W":
-                _, _, size, dram, pbus, at = p
-                starts.append((int(at), int(size), int(dram, 16), int(pbus, 16)))
-        except (IndexError, ValueError):
+            values = [parse(v) for parse, v in zip(RECORDS[kind], fields)]
+        except ValueError:
             raise MalformedLog(f"PI log line {number} is malformed: {line.rstrip()!r}") from None
+        if kind == "C":
+            counts.append((values[1], values[0]))
+        elif kind == "L W":
+            starts.append((values[3], values[0], values[1], values[2]))
     #the SysAD drain that starts a DMA and the CPU's COUNT reads log from different threads
     counts.sort()
     starts.sort()
@@ -125,7 +138,8 @@ def bands(worst, sizes):
 
 
 def verdict(gold, meas, printed, failures):
-    """(ok, summary line) under the pidma:logs pass rule."""
+    """(PASS, FAIL or UNCHECKED, summary line) under the pidma:logs pass rule. UNCHECKED: the ROM's own
+    check passed and printed no value, so nothing in the run validates the replay the rule rests on."""
     means = {k: rom_mean(v) for k, v in meas.items()}
     wrong = {k: (v, means.get(k)) for k, v in printed.items() if means.get(k) != v}
     in_all = [k for k in gold if SIZES[0] <= k[1] <= SIZES[1]]
@@ -136,16 +150,23 @@ def verdict(gold, meas, printed, failures):
     for k in in_all:
         if k in means:
             worst[k[1]] = max(worst.get(k[1], 0.0), deviation(means[k], *gold[k]), key=abs)
-    ok = not wrong and ok_rule == len(in_rule) and failures == 0
-    replay = (f"replay reproduces {len(printed)}/{len(printed)} printed values" if not wrong else
+    if wrong or failures != 0:
+        word = "FAIL"
+    elif not printed:
+        word = "UNCHECKED"
+    else:
+        word = "PASS" if ok_rule == len(in_rule) else "FAIL"
+    replay = (("replay unchecked: the ROM printed no measured value (it prints one only for a point outside its "
+               "own 10% band), so this run cannot show the replay reproduces it") if not printed else
+              f"replay reproduces {len(printed)}/{len(printed)} printed values" if not wrong else
               "replay INVALID, printed values not reproduced (point: printed, replayed) "
               + ", ".join(f"(0x{o + 0x780:x},{s}): {p}, {r}" for (o, s), (p, r) in sorted(wrong.items())))
-    return ok, (f"pidma: {'PASS' if ok else 'FAIL'}: exact COUNT replay, {replay}; "
-                f"sizes {SIZES[0]}-{SIZES[1]} except {EXCLUDED[0]}-{EXCLUDED[1]} {ok_rule}/{len(in_rule)} within "
-                f"+-{TOLERANCE:.0%} of hardware min..max (all sizes {SIZES[0]}-{SIZES[1]}: {ok_all}/{len(in_all)}); "
-                f"ROM self-check {'no verdict' if failures is None else f'{failures} failures'}; "
-                f"worst by size band {bands(worst, (SIZES[0], EXCLUDED[0] - 1))} {bands(worst, (EXCLUDED[1] + 1, SIZES[1]))}; "
-                f"excluded {EXCLUDED[0]}-{EXCLUDED[1]}, report only because {EXCLUDED_REASON}: worst {bands(worst, EXCLUDED)}")
+    return word, (f"pidma: {word}: exact COUNT replay, {replay}; "
+                  f"sizes {SIZES[0]}-{SIZES[1]} except {EXCLUDED[0]}-{EXCLUDED[1]} {ok_rule}/{len(in_rule)} within "
+                  f"+-{TOLERANCE:.0%} of hardware min..max (all sizes {SIZES[0]}-{SIZES[1]}: {ok_all}/{len(in_all)}); "
+                  f"ROM self-check {'no verdict' if failures is None else f'{failures} failures'}; "
+                  f"worst by size band {bands(worst, (SIZES[0], EXCLUDED[0] - 1))} {bands(worst, (EXCLUDED[1] + 1, SIZES[1]))}; "
+                  f"excluded {EXCLUDED[0]}-{EXCLUDED[1]}, report only because {EXCLUDED_REASON}: worst {bands(worst, EXCLUDED)}")
 
 
 def self_test():
@@ -174,6 +195,8 @@ def self_test():
     first = (0, 1, 120)
     gold = {(0, 1): (100, 130), (0, 8): (160, 160), (0, 320): (3000, 3000)}
     at_hw = [first] + [(0, 8, 160)] * 4 + [(0, 320, 3000)] * 4
+    #the rule's cases: a reproduced printed value outside the rule's sizes, so the replay is checked
+    shown = {(0, 1): 120}
     cases = [
         ("ticks are the ROM's two COUNT reads around a DMA start logged before them",
          measurements(log([first, (0, 8, 163)])), {(0, 1): [120], (0, 8): [163]}),
@@ -183,16 +206,26 @@ def self_test():
         ("a last line cut before its time names its line", malformed(log([first])[:-1] + ["C 23468\n"]),
          "PI log line 4 is malformed: 'C 23468'"),
         ("a short DMA start names its line", malformed(["L W 8 300780\n"]), "PI log line 1 is malformed: 'L W 8 300780'"),
+        ("a record the PI log does not write names its line", malformed(log([first]) + ["X 1 2\n"]),
+         "PI log line 5 has the unknown record 'X': 'X 1 2'"),
+        ("a DMA start of an unknown direction names its line", malformed(["L Q 8 300780 10000000 5\n"]),
+         "PI log line 1 has the unknown record 'L Q': 'L Q 8 300780 10000000 5'"),
+        ("a PI_STATUS read without its time names its line", malformed(["S 0\n"]), "PI log line 1 is malformed: 'S 0'"),
+        ("a cart-ward DMA start is read and not timed", measurements(log([first]) + ["L R 8 300780 10000000 9999\n"]),
+         {(0, 1): [120]}),
         ("the ROM's uint16_t mean of 4 runs", rom_mean([160, 161, 161, 161]), 160),
-        ("a model at the hardware value passes", run(at_hw, {}, 0), True),
-        ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), False),
-        ("a point 3% over hardware passes", run([first] + [(0, 8, 164)] * 4 + [(0, 320, 3000)] * 4, {}, 0), True),
-        ("an excluded size out of band does not fail", run([first] + [(0, 8, 160)] * 4 + [(0, 320, 3300)] * 4, {}, 0), True),
-        ("a missing point fails", run([first] + [(0, 320, 3000)] * 4, {}, 0), False),
-        ("a ROM self-check failure fails", run(at_hw, {}, 1), False),
-        ("no ROM verdict fails", run(at_hw, {}, None), False),
-        ("a reproduced printed value passes", run(at_hw, {(0, 8): 160}, 0), True),
-        ("a printed value the replay does not reproduce fails", run(at_hw, {(0, 8): 161}, 0), False),
+        ("a model at the hardware value passes", run(at_hw, shown, 0), "PASS"),
+        ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, shown, 0), "FAIL"),
+        ("a point 3% over hardware passes", run([first] + [(0, 8, 164)] * 4 + [(0, 320, 3000)] * 4, shown, 0), "PASS"),
+        ("an excluded size out of band does not fail",
+         run([first] + [(0, 8, 160)] * 4 + [(0, 320, 3300)] * 4, shown, 0), "PASS"),
+        ("a missing point fails", run([first] + [(0, 320, 3000)] * 4, shown, 0), "FAIL"),
+        ("a ROM self-check failure fails", run(at_hw, {}, 1), "FAIL"),
+        ("no ROM verdict fails", run(at_hw, {}, None), "FAIL"),
+        ("a printed value the replay does not reproduce fails", run(at_hw, {(0, 8): 161}, 0), "FAIL"),
+        ("a run whose ROM printed no value is unchecked, not a pass", run(at_hw, {}, 0), "UNCHECKED"),
+        ("a run whose ROM printed no value is unchecked, not a fail",
+         run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), "UNCHECKED"),
     ]
     failed = 0
     for name, got, want in cases:
@@ -230,9 +263,9 @@ def main():
                 if (off, size) in meas:
                     m = rom_mean(meas[off, size])
                     f.write(f"0x{off + 0x780:x}\t{size}\t{len(meas[off, size])}\t{m}\t{lo}\t{hi}\t{deviation(m, lo, hi) * 100:+.2f}\n")
-    ok, line = verdict(gold, meas, printed, rom_failures(text))
+    word, line = verdict(gold, meas, printed, rom_failures(text))
     print(line)
-    return 0 if ok else 1
+    return 0 if word == "PASS" else 1
 
 
 if __name__ == "__main__":

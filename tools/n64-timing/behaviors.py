@@ -194,8 +194,9 @@ def load_checks(root, errors):
         if not EXPECT.match(row["expect"]):
             errors.append(f"{where}: expect `{row['expect']}` is not self, suite, report, equal, pass, gate, file:PATH or a number")
         if cid.endswith(":*"):
-            if not row["expect"].startswith("file:"):
-                errors.append(f"{where}: suite row `{cid}` needs expect file:<expected.tsv path>")
+            if not row["expect"].startswith("file:") and row["expect"] != "self":
+                errors.append(f"{where}: suite row `{cid}` needs expect file:<expected.tsv path>, or `self` when its "
+                              f"runner judges each check itself")
             suites[cid[:-2]] = row
         else:
             explicit[cid] = row
@@ -203,8 +204,13 @@ def load_checks(root, errors):
             errors.append(f"{where}: a pending check is a gate; its expect is `gate`")
     suite_files = {}
     for prefix, row in suites.items():
+        if not row["expect"].startswith("file:"):
+            continue
         path = Path(root) / row["expect"][5:]
         if not path.exists():
+            errors.append(f"{CHECKS}:{row['line']}: suite row `{prefix}:*` expects {row['expect'][5:]}, which does not "
+                          f"exist. Point it at the suite's expected file, or write `self` when its runner judges each "
+                          f"check itself")
             continue
         lines = [l.split("\t") for l in path.read_text(encoding="utf-8").split("\n") if l]
         header, body = lines[0], [dict(zip(lines[0], l)) for l in lines[1:]]
@@ -690,7 +696,7 @@ def render_spec(rows, checks, found, reports):
         if cid != "#source":
             out.append(f"| `{cid}` | {result} | {cell(detail)} |")
     out += ["", "## Checks", "",
-            "From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file defines every check under its prefix.", "",
+            "From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file defines every check under its prefix, or `self` when the suite's runner judges each check itself.", "",
             "| Check | Runner | Target | Selector | Expectation | Source |", "|---|---|---|---|---|---|"]
     for c in checks:
         out.append(f"| `{c['id']}` | {c['runner']} | {cell(c['target'])} | {cell(c['selector'])} | {cell(c['expect'])} | {cell(c['source'])} |")
@@ -1515,8 +1521,10 @@ def mm_result(run, row):
 
 
 def pidma_result(run, row):
-    m = re.search(r"^pidma: (PASS|FAIL): (.*)$", text(run / "pidma" / "summary.txt") or "", re.M)
-    return (m.group(1).lower(), m.group(2)) if m else None
+    m = re.search(r"^pidma: (PASS|FAIL|UNCHECKED): (.*)$", text(run / "pidma" / "summary.txt") or "", re.M)
+    if not m:
+        return None
+    return {"PASS": "pass", "FAIL": "fail", "UNCHECKED": "pending:replay-unchecked"}[m.group(1)], m.group(2)
 
 
 READERS = {"nemu64": nemu64_result, "cpu": cpu_result, "det": lambda run, row: suite_runs(run, "det-*.txt", "determinism"),
@@ -1841,6 +1849,9 @@ def self_test(root):
              "names no ares/n64/<path>:<symbol>. Name the code that does instead"),
             ("a code column on a legacy row", TABLE, row_field("legacy.pi.cart-read", "code", "ares/n64/pi/bus.hpp:PI::writeWord"),
              "is built at its literal-allowlist code site; clear its code column"),
+            ("a suite row whose expected file does not exist", CHECKS,
+             lambda t: t.replace("file:tools/n64-timing/romgen/suites/thar0/expected.tsv", "file:tools/n64-timing/no-such.tsv", 1),
+             "expects tools/n64-timing/no-such.tsv, which does not exist"),
             ("a bench check without a phase rule", suite_file, lambda t: t.replace("\tcheck\tmean\t", "\tcheck\t-\t", 1),
              "has rule `-`; use consistent, mean, every"),
             ("a bench condition that names no issue", suite_file, lambda t: t.replace("\tcheck\tmean\t#77\t", "\tcheck\tmean\tidle-vi\t", 1),
@@ -1936,6 +1947,14 @@ def self_test(root):
         print(f"self-test: a systembench row that fails at every run: {'ok' if ok else 'FAILED'}: {got} (expected fail, 130, -4)")
         failures += not ok
         ran += 1
+        (run / "pidma").mkdir()
+        for word, want in (("PASS", "pass"), ("FAIL", "fail"), ("UNCHECKED", "pending:replay-unchecked")):
+            (run / "pidma" / "summary.txt").write_text(f"24512 points timed\npidma: {word}: exact COUNT replay\n", encoding="utf-8")
+            got = pidma_result(run, {})
+            ok = got is not None and got[0] == want
+            print(f"self-test: a pidma replay that reads {word}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
+            failures += not ok
+            ran += 1
         git = ["git", "-C", str(work), "-c", "user.name=self-test", "-c", "user.email=self-test@invalid"]
         subprocess.run(git[:3] + ["init", "-q"], check=True)
         subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "scoring tree"], check=True)

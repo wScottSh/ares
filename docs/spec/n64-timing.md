@@ -502,18 +502,19 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 
 ## Checks
 
-From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file defines every check under its prefix.
+From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file defines every check under its prefix, or `self` when the suite's runner judges each check itself.
 
 | Check | Runner | Target | Selector | Expectation | Source |
 |---|---|---|---|---|---|
 | `bench:*` | bench | tools/n64-timing/romgen/suites/bench | rom | file:tools/n64-timing/romgen/suites/bench/expected.tsv | plan R1; each expected row cites its own source |
 | `systembench:*` | systembench | tools/n64-timing/systembench | row | file:tools/n64-timing/systembench/rows.tsv | the original rasky/n64-systembench @50f5066, the hardware-era commit, built with its vendored libdragon and GCC 12.2 by build-systembench-era.sh (timeit_average tie fix) and run on the fork; the 845635c build (build-systembench.sh) runs beside it as a report only; each row is checked against the hardware value compiled into main.c, under main.c's own rule (within the sampling error, or under 0.2 %; main.c:664-669) at the unpadded ROM and every boot delay |
 | `thar0:*` | thar0 | tools/n64-timing/romgen/suites/thar0 | id | file:tools/n64-timing/romgen/suites/thar0/expected.tsv | plan R2; Thar0/RDP-Timing-Tests sample_results.txt hw_data (MIT, a81ced93b28d) |
-| `rdpstat:*` | rdpstat | tools/n64-timing/romgen/suites/rdpstat | test | file:tools/n64-timing/romgen/suites/rdpstat/expected.tsv | plan R4; n64-systemtest tests/rdp and repeater64 references (MIT) |
-| `snapper:*` | snapper | tools/n64-timing/romgen/suites/snapper | test | file:tools/n64-timing/romgen/suites/snapper/expected.tsv | plan R3; snapper64 console dumps (MIT, e1cd8a61fc43) |
+| `rdpstat:*` | rdpstat | tools/n64-timing/romgen/suites/rdpstat | test | self | plan R4; n64-systemtest tests/rdp and repeater64 references (MIT) |
+| `snapper:*` | snapper | tools/n64-timing/romgen/suites/snapper | test | self | plan R3; snapper64 console dumps (MIT, e1cd8a61fc43) |
 | `pending:no-corpus` | pending | - | - | gate | no corpus in the program measures this behavior; it stays pending until one does |
 | `pending:no-rom` | pending | - | - | gate | a hardware value is cited, but the program has no ROM that measures it; writing the ROM closes it |
 | `pending:calibration-16` | pending | - | - | gate | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it |
+| `pending:replay-unchecked` | pending | - | - | gate | the check's measurement replays a ROM's own timing, and the run printed nothing that validates the replay: pidma's ROM prints a measured value only for a point outside its own 10% band, which also fails its self-check. A run in which the replay is shown to reproduce the ROM's measurement closes it |
 | `pending:report-only` | pending | - | - | gate | the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `det` | det | tools/n64-timing/determinism.sh | every mm scene | equal | two runs byte-identical, stats and trace_hash (plan T2) |
 | `stepcap` | stepcap | tools/n64-timing/determinism.sh --step-cap | every mm scene and nemu64 ROM | equal | step-capped run equals the normal run byte for byte (plan T5) |
