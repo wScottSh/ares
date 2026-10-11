@@ -32,7 +32,7 @@ sha256sum "$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z6
 
 That path is the default `romgen/build.py --ipl3` reads. The file is not committed to this repository.
 
-Allow about six hours and 35 minutes for the required runs and seven hours and 35 minutes for the recommended ones (inferred from the per-run times below, at about three minutes for each power cycle, load and copy; `kit-zread` adds one run to the six and a half hours estimated before it; no console session has been timed). About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
+Allow about six hours and 41 minutes for the required runs and seven hours and 41 minutes for the recommended ones (inferred from the per-run times below, at about three minutes for each power cycle, load and copy; `kit-zread` added one run to the six and a half hours estimated before it, and `kit-vilb` adds two, its pad 0 build run twice; no console session has been timed). About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
 
 ## Build the kit
 
@@ -46,7 +46,7 @@ Allow about six hours and 35 minutes for the required runs and seven hours and 3
 
 2. Copy the console builds to the flashcart's SD card:
 
-   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`, `kit-noise2`).
+   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`, `kit-noise2`, `kit-vilb`).
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`, `kit-pif`. Run `kit-pif` only through the SC64 `upload` path (see [The PIF boot timeout](#the-pif-boot-timeout)).
    - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
@@ -117,10 +117,11 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 17 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
 | 18 | `kit-zmem` | 1.9 s | 30.1 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `filesel-glyph`, `pipebusy-stall` |
 | 19 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
-| 20 | `kit-cpu2` | 0.2 s | 19.7 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cpu-watch-edge`, `irq-clear`, `cache-ops`, `count-write-hold`, `count-write-phase`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 20 | `kit-cpu2` | 0.2 s | 20.1 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cpu-watch-edge`, `irq-clear`, `cache-ops`, `count-write-hold`, `count-write-phase`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target`, `eret-chain`, `fpu-trivial-chain` |
 | 21 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun`, `ri-write-gap` |
-| 22 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
-| 23 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
+| 22 | `kit-vilb` | 0.2 s | 2.4 KB | no | 0 | a report, no question |
+| 23 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 24 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
 
 For each ROM:
 
@@ -171,6 +172,18 @@ sc64deployer debug --isv 0x03FF0000 | tee capture/kit-pif.isviewer.log
 Then turn the console on, wait 15 seconds, and turn it off. The screen stays black, and the log has no `#kit-end` line. A flashcart menu (the ED64 menu or the SC64 menu from the SD card) has already sent terminate-boot before it starts a ROM, so the PIF never halts the ROM, and the menu path has no ISViewer. A log that ends with `#kit-end` after about 12 s of samples shows that boot was already terminated: run it again through `upload`.
 
 ingest.py stores the log (it reports it INCOMPLETE, as expected) and prints the last COUNT next to the fork's. This is a report, not a check. COUNT counts from the IPL3's write of 0, and no source bounds the offset between that and the start of the PIF's timer, so the last COUNT cannot decide between 5 s and 6 s (`tools/n64-timing/calibration/undecidable.tsv`, `legacy.pif.boot-timeout`). On the fork the last COUNT is 280890637 to 280890686 ticks over the 8 layout pads, 5.992 s, in sample 593. The fork's PIF halts the CPU 6.000 s after it starts its timer, and the pinned IPL3 writes COUNT 0 1.8 ms before that (measured with a scratch probe in `pif/hle.cpp`), so the next sample, 10 ms later, never runs.
+
+### The VI line buffer
+
+`kit-vilb` records how the VI fills its line buffer, for `vi.unfetched-sample`. It is a report with no question, like `kit-pif`. No source gives the order the VI fills the buffer, so the fork has no model of the buffer to compare against (`tools/n64-timing/calibration/undecidable.tsv`, `vi.unfetched-sample`). Run it like the other walked kit ROMs, twice from a power cycle.
+
+n64brew [Video_Interface](https://n64brew.dev/wiki/Video_Interface) (rev 5791) documents a CPU path into the buffer: VI_CTRL bit 7 TEST_MODE enables the test registers, bit 11 KILL_WE "possibly kills VI DMA writes to line buffers", and VI_STAGED_DATA (0x0440 003C) returns the buffer word at the 7-bit address in VI_TEST_ADDR (0x0440 0038). Each of the ROM's two points does these things:
+
+1. It fills a 16 bpp framebuffer in which word `i` of line `y` reads `(0x8000 | y) << 16 | 0x8000 | i`, so each word names its line and its place in the line.
+2. It shows the framebuffer with AA_MODE replicate and Y_SCALE 0x800 (two framebuffer lines for each output line, progressive). X_SCALE is 0x201 at the first point and 0xE01 at the second. 0x201 is n64brew's workaround for the X_SCALE 0x200 erratum in replicate mode at H_START under 128 (the kit's H_START is 108). 0xE01 is past the 0xE00 above which 16 bpp "renders incorrect pixels".
+3. After a vsync, when V_CURRENT reads 0x64 in the VI's field, it sets TEST_MODE and KILL_WE and reads all 128 words. It then writes the kit's VI values back.
+
+The log has one `#bench vi-linebuf x201 ...` and one `#bench vi-linebuf xe01 ...` line with `w0` to `w127` (the words, in decimal), `v_before` and `v_after` (V_CURRENT around the reads) and `timeout` (1 if a wait gave up and nothing was read). On the fork, 128 words take about 3,000 COUNT ticks, about one line. ingest.py prints each point's words as runs in address order: `L<y>[<first>..<last>]` for framebuffer words of line `y`, `zero`, or `other` for a word that is not in the pattern. It also counts the words in each class. A line's words are counted as `fetched` when it is the newest line in the buffer and `stale` when it is older. That split is an inference, because no source gives the fill order. The fork decodes VI words 0 to 13 only (`ares/n64/vi/io.cpp`). It keeps the TEST_MODE and KILL_WE bits as unused VI_CTRL bits and reads 0 from VI_STAGED_DATA, so its report is `128 zero; 0-127=zero` at every point, boot delay and layout pad. A console report is the fill order a model of the line buffer would cite.
 
 ### Repeat runs
 

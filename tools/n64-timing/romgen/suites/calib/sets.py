@@ -19,7 +19,7 @@ from ..rdpstat import routines
 from ..rdpstat.routines import fill32
 from ..snapper import asm as snapper_asm
 from ..snapper.cases import UNCACHED, Lists, emit, run_sync
-from . import asm, blockslope, bus, cpu2, repeat, rspdma, tex, zmem
+from . import asm, blockslope, bus, cpu2, repeat, rspdma, tex, vilb, zmem
 
 DELAYS = [int(k) for k in os.environ.get("N64_CALIB_DELAYS", "1,165,329,493,657,821,985,1149").split(",")]
 #One 32 B I-cache line of pads, as the bench walks (suites/bench/phases.py PADS).
@@ -269,9 +269,11 @@ KITS = {
     "kit-zread": [zmem.reads_1cycle],
     "kit-cpu2": cpu2.BUILDERS,
     "kit-bus": bus.BUILDERS,
+    "kit-vilb": vilb.BUILDERS,
 }
 KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-zread": [zmem.ASM], "kit-cpu2": [cpu2.ASM],
-           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM, repeat.ASM, blockslope.ASM]}
+           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM, repeat.ASM, blockslope.ASM],
+           "kit-vilb": [vilb.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
