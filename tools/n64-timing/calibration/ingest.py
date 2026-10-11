@@ -110,6 +110,10 @@ def store(root, capture, name, model):
                 fork = [kit.pif_line(m) for m in kit.model_logs(model, rom, None, kit.layout(log))]
                 print(f"ingest: {path.name}: report only, not compared (legacy.pif.boot-timeout): {kit.pif_line(log)}; "
                       f"the fork's: {'; '.join(fork) or 'no run'}")
+            if rom == kit.VILB_ROM:
+                fork = sorted({kit.vilb_line(m) for m in kit.model_logs(model, rom, None, kit.layout(log))})
+                print(f"ingest: {path.name}: report only, not compared (vi.unfetched-sample): {kit.vilb_line(log)}; "
+                      f"the fork's, over {len(fork)} distinct boot-delay logs: {' | '.join(fork) or 'no run'}")
     (out / "manifest.tsv").write_text("\n".join(manifest) + "\n", encoding="utf-8", newline="\n")
     return out
 
