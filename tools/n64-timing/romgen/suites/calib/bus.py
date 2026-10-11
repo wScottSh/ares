@@ -25,7 +25,7 @@ MI_INTR = MI_REGS + 0x8
 VI_CTRL, VI_H_VIDEO, VI_V_VIDEO, VI_X_SCALE, VI_Y_SCALE = (VI_REGS + o for o in (0x00, 0x24, 0x28, 0x30, 0x34))
 VI_ORIGIN = VI_REGS + 0x04
 
-# runtime.py vi_init's values of the registers these points change; k_bus_vline writes them back.
+# runtime.py vi_init's values of the registers these points change; k_bus_vline writes back the ones a point wrote.
 VI_INIT = {VI_CTRL: 0x324E, VI_H_VIDEO: 0x006C02EC, VI_V_VIDEO: 0x002501FF, VI_X_SCALE: 0x200, VI_Y_SCALE: 0x400}
 VI_INIT_V_INTR = 2
 AA_SHIFT = 8
@@ -151,16 +151,20 @@ VI_CASES = [
 # V_VIDEO opened from V 8: the window (V 12 to 32, half-lines) lies inside it but above ares's display
 # window, which starts at half-line 34 on NTSC (vi.cpp window(), vi.display-window).
 VVIDEO_EARLY = ("vvideo-early", [(VI_V_VIDEO, 0x000801FF)], 0, 0x0A)
-# vi.register-sample with a short fetch (U-VI-LATE-BLANK): H_VIDEO 80 of 640 px, and a blank written in the
-# window's third-last line, half a line from either HSYNC, so a per-line VI stops fetching for the last two
-# lines and a VI that latches its registers once per field fetches all ten.
-HVIDEO8_LATE = ("hvideo8-late", [(VI_H_VIDEO, 0x006C00BC)], (VI_CTRL, ctrl(kind=0)),
-                (V_LINES - 2) * LINE_TICKS - LINE_TICKS // 2)
+# vi.register-sample with a short fetch (U-VI-LATE-BLANK): H_VIDEO 80 of 640 px, and a blank written just after
+# the HSYNC that starts the window's third-last line, so a per-line VI stops fetching for the last two lines and a
+# VI that latches its registers once per field fetches all ten. The write follows the load that crosses the tick
+# (at least 16 ticks, a 32 pclk load), longer than the lines' drift from LINE_TICKS over 7 lines (a line is
+# 2979.17 ticks, so about 1.2), so it lands in that line's blank, before H_START.
+HVIDEO8_LATE = ("hvideo8-late", [(VI_H_VIDEO, 0x006C00BC)], (VI_CTRL, ctrl(kind=0)), (V_LINES - 3) * LINE_TICKS)
 
 
-def vline_point(rom, point, addr, writes, late, consts, target=V_TARGET, mid=()):
+def vline_point(rom, point, addr, writes, late, consts, target=V_TARGET, mid=(0, 0)):
     regs = [w for pair in writes for w in pair]
-    rom.point(point, "k_bus_vline", [KSEG1 | addr, target, V_LINES, SLOW_TICKS, late, len(writes), *regs, *mid],
+    written = {reg for reg, _ in writes} | {mid[0]}
+    restore = [w for reg in VI_INIT if reg in written for w in (reg, VI_INIT[reg])]
+    rom.point(point, "k_bus_vline", [KSEG1 | addr, target, V_LINES, SLOW_TICKS, late, len(writes), *regs, *mid,
+                                     len(restore) // 2, *restore],
               list(consts) + [("bank", addr >> 20), ("v", target), ("lines", V_LINES), ("late", late)], reps=1,
               extra=VLINE_EXTRA)
 
@@ -197,7 +201,7 @@ LOAD_BANK3 = 0x003F0000           # FB1's bank, which nothing else reads here
 
 
 def vi_y_late(suite):
-    """Runs last in the ROM: ORIGIN stays at Y_LATE_ORIGIN (k_bus_vline restores only VI_INIT)."""
+    """Runs last in the ROM: ORIGIN stays at Y_LATE_ORIGIN (k_bus_vline restores only VI_INIT's registers)."""
     rom = Rom(suite, "bus-vi-latch")
     for bank, addr in ((2, VI_BANK_LOAD), (3, LOAD_BANK3)):
         vline_point(rom, f"y-late-bank{bank}", addr, Y_LATE, 1, [("case", "y-late")])
@@ -275,8 +279,6 @@ def ri_write_gap(suite):
 
 BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr, vi_y_late, hsync_short,
             ri_write_gap]
-
-VI_RESTORE = "\n".join(f"    .word 0x{reg:08X}, 0x{val:08X}" for reg, val in VI_INIT.items())
 
 ASM = f"""
 # args = {{}}. RES[2] = COUNT at the first V_CURRENT change, RES[3] / RES[4] = V_CURRENT before / after.
@@ -607,15 +609,19 @@ bus_ai_end:
     jr $ra
     sw $zero, 0xC($t0)
 
-# args = {{load addr, target V_CURRENT, lines, slow ticks, late, n, (VI register, value) x n[, (VI register,
-# value)]}}. Applies the writes (late 1: once V_CURRENT reads the target; late 2 or more: before the wait, and
-# the extra pair once the window has run `late` ticks), then from the line start after the target takes
+# args = {{load addr, target V_CURRENT, lines, slow ticks, late, n, (VI register, value) x n, (VI register, value)
+# (register 0 = none), r, (VI register, value) x r}}. Applies the n writes (late 1: once V_CURRENT reads the
+# target; else before the wait, and with late 2 or more the extra pair once the window has run `late` ticks),
+# each batch just after V_CURRENT changes, which it does at the start of HSYNC, so that H_VIDEO, X_SCALE and
+# Y_SCALE change in the horizontal blank (n64brew Video_Interface: H_VIDEO written during display can hang the
+# VI). Then from the line start after the target takes
 # back-to-back timed uncached LWs for `lines` x LINE_TICKS (bench_hpos's loop), then takes the line as
 # the mean of the next 4 V_CURRENT change intervals. Reduces the loads to RES[2] = loads, RES[3] =
 # summed ticks, RES[4] = loads of at least `slow` ticks, RES[5] / RES[6] = shortest / longest, RES[7] =
 # line ticks (0 if V_CURRENT stopped after the window; the eighths then use LINE_TICKS), RES[8..15] =
-# summed ticks by eighth of the line, RES[16..23] = loads by eighth, RES[24] = 1 on a timeout. Then
-# writes vi_init's values back. v0 = RES[3].
+# summed ticks by eighth of the line, RES[16..23] = loads by eighth, RES[24] = 1 on a timeout. Then writes
+# the r restore pairs just after a V_CURRENT change, VI_CTRL first when the VI is blank (TYPE 0 stops it, and
+# V_CURRENT with it). v0 = RES[3].
 k_bus_vline:
     addiu $sp, $sp, -56
     sd $ra, 0($sp)
@@ -638,6 +644,9 @@ bus_vl_zero:
     addiu $t1, $zero, 1
     beq $t0, $t1, bus_vl_touch
     nop
+    li $t0, 0xA4400010
+    jal bus_vchg
+    lw $a0, 0($t0)
     jal bus_vi_writes
     move $a0, $s0
 bus_vl_touch:
@@ -648,6 +657,10 @@ bus_vl_touch_loop:
     addiu $t5, $t5, -16
     bgtz $t5, bus_vl_touch_loop
     addiu $t4, $t4, 16
+    # from a V_CURRENT change, so that the target is seen as it starts and late 1 writes in its blank
+    li $t0, 0xA4400010
+    jal bus_vchg
+    lw $a0, 0($t0)
     # V_CURRENT bit 0 is the field, which vi_init's odd V_SYNC (0x20D) leaves where boot put it: wait
     # for the target line in the field the VI is in (field 1 timed out every point, u-107-fix)
     li $t0, 0xA4400010
@@ -794,15 +807,21 @@ bus_vl_timeout:
     addiu $t0, $zero, 1
     sw $t0, 88($s1)
 bus_vl_restore:
-    la $t0, bus_vi_init
-    addiu $t1, $zero, {len(VI_INIT)}
-bus_vl_rloop:
-    lw $t2, 0($t0)
-    lw $t3, 4($t0)
-    sw $t3, 0($t2)
-    addiu $t1, $t1, -1
-    bnez $t1, bus_vl_rloop
-    addiu $t0, $t0, 8
+    li $t0, {VI_CTRL:#x}
+    lw $t1, 0($t0)
+    andi $t1, $t1, 3
+    bnez $t1, bus_vl_rwait
+    ori $t2, $zero, {VI_INIT[VI_CTRL]:#x}
+    sw $t2, 0($t0)
+bus_vl_rwait:
+    li $t0, 0xA4400010
+    jal bus_vchg
+    lw $a0, 0($t0)
+    lw $t0, 20($s0)
+    sll $t0, $t0, 3
+    addu $a0, $s0, $t0
+    jal bus_vi_writes
+    addiu $a0, $a0, 12
     lw $v0, 4($s1)
     ld $ra, 0($sp)
     ld $s0, 8($sp)
@@ -899,10 +918,6 @@ bus_vi_end:
     sw $zero, 4($t0)
     jr $t9
     nop
-
-.align 8
-bus_vi_init:
-{VI_RESTORE}
 
 # args = {{load addr, H_SYNC, V_VIDEO, window ticks, slow ticks, gate polls}}. Two passes of: write
 # V_VIDEO, H_SYNC_LEAP and H_SYNC, wait for the next field, start an 8 B SP DMA and poll SP_DMA_BUSY,
