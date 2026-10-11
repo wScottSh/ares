@@ -9,8 +9,11 @@ band, and prints a measured value only for a point that fails that band.
 
 The run's PI log carries every COUNT read ("C value at"), so this script recovers the ROM's
 own measurement exactly: for each timed DMA start ("L W size dram cart at"), t0 is the last
-COUNT read before the start and t1 the first one after it. The replay is valid only when it
-reproduces every "Found:" value the ROM printed in the same run.
+COUNT read before the start and t1 the first one after it. The replay must agree with what the
+ROM said in the same run: it reproduces every "Found:" value the ROM printed, and when the ROM
+reports 0 failures, every replayed mean at sizes 1-383 lies inside the ROM's own band, since the
+ROM printed nothing (pi_dma_test.c:211). A run that would pass the rule but whose replay
+contradicts the ROM's silence reads UNCHECKED; a failing comparison reads FAIL either way.
 
 Pass rule (green-plan.md section 3, pidma:logs): every point at sizes 8-382, except 305-352,
 lies within the golden min..max +-3%, and the ROM's own self-check reports 0 failures.
@@ -38,6 +41,15 @@ EXCLUDED_REASON = ("the golden logs come from the ROM's MODE_GENERATE build, who
                    "305 B on, while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred)")
 
 
+def f32(x):
+    """x rounded to an IEEE single, as the ROM's float arithmetic rounds each step."""
+    return struct.unpack("f", struct.pack("f", x))[0]
+
+
+#TIMING_TEST_TOLERANCE 0.1f (pi_dma_test.c:14); the constants fold in float.
+ROM_LOW, ROM_HIGH = f32(1 - f32(0.1)), f32(1 + f32(0.1))
+
+
 def golden(logdir):
     table = {}
     for off in range(0, 0x80, 2):
@@ -52,22 +64,35 @@ class MalformedLog(Exception):
     pass
 
 
+def hex_field(v):
+    return int(v, 16)
+
+
+#Every record ARES_PILOG writes (cpu/interpreter-scc.cpp, pi/io.cpp) and its fields' types.
+RECORDS = {"C": (int, int), "S": (int, int), "L R": (int, hex_field, hex_field, int), "L W": (int, hex_field, hex_field, int)}
+
+
 def measurements(lines):
     """(off, size) -> [ticks per run] for the ROM's timed DMAs, in run order."""
     counts, starts = [], []
     for number, line in enumerate(lines, 1):
         p = line.split()
+        kind = " ".join(p[:2]) if p[:1] == ["L"] else p[0] if p else ""
+        if kind not in RECORDS:
+            raise MalformedLog(f"PI log line {number} has the unknown record {kind!r}: {line.rstrip()!r}")
+        fields = p[len(kind.split()):]
         try:
-            if not line.endswith("\n"):
+            if not line.endswith("\n") or len(fields) != len(RECORDS[kind]):
                 raise ValueError
-            if p[0] == "C":
-                _, count, at = p
-                counts.append((int(at), int(count)))
-            elif p[0] == "L" and p[1] == "W":
-                _, _, size, dram, pbus, at = p
-                starts.append((int(at), int(size), int(dram, 16), int(pbus, 16)))
-        except (IndexError, ValueError):
+            values = [parse(v) for parse, v in zip(RECORDS[kind], fields)]
+        except ValueError:
             raise MalformedLog(f"PI log line {number} is malformed: {line.rstrip()!r}") from None
+        if kind == "C":
+            count, at = values
+            counts.append((at, count))
+        elif kind == "L W":
+            size, dram, pbus, at = values
+            starts.append((at, size, dram, pbus))
     #the SysAD drain that starts a DMA and the CPU's COUNT reads log from different threads
     counts.sort()
     starts.sort()
@@ -110,6 +135,17 @@ def rom_failures(text):
     return int(m.group(1) or 0) if m else None
 
 
+def rom_band(lo, hi):
+    """The ROM's band for a point: exp_minticks*(1.0f-TOLERANCE) .. exp_maxticks*(1.0f+TOLERANCE), in float."""
+    return f32(lo * ROM_LOW), f32(hi * ROM_HIGH)
+
+
+def rom_silent(mean, lo, hi):
+    """pi_dma_test.c:211 does not fire: avgticks, converted to float, is not outside the ROM's band."""
+    low, high = rom_band(lo, hi)
+    return mean is not None and not (mean < low or mean > high)
+
+
 def deviation(mean, lo, hi):
     return (mean - lo) / lo if mean < lo else (mean - hi) / hi if mean > hi else 0.0
 
@@ -125,7 +161,6 @@ def bands(worst, sizes):
 
 
 def verdict(gold, meas, printed, failures):
-    """(ok, summary line) under the pidma:logs pass rule."""
     means = {k: rom_mean(v) for k, v in meas.items()}
     wrong = {k: (v, means.get(k)) for k, v in printed.items() if means.get(k) != v}
     in_all = [k for k in gold if SIZES[0] <= k[1] <= SIZES[1]]
@@ -136,16 +171,33 @@ def verdict(gold, meas, printed, failures):
     for k in in_all:
         if k in means:
             worst[k[1]] = max(worst.get(k[1], 0.0), deviation(means[k], *gold[k]), key=abs)
-    ok = not wrong and ok_rule == len(in_rule) and failures == 0
-    replay = (f"replay reproduces {len(printed)}/{len(printed)} printed values" if not wrong else
-              "replay INVALID, printed values not reproduced (point: printed, replayed) "
-              + ", ".join(f"(0x{o + 0x780:x},{s}): {p}, {r}" for (o, s), (p, r) in sorted(wrong.items())))
-    return ok, (f"pidma: {'PASS' if ok else 'FAIL'}: exact COUNT replay, {replay}; "
-                f"sizes {SIZES[0]}-{SIZES[1]} except {EXCLUDED[0]}-{EXCLUDED[1]} {ok_rule}/{len(in_rule)} within "
-                f"+-{TOLERANCE:.0%} of hardware min..max (all sizes {SIZES[0]}-{SIZES[1]}: {ok_all}/{len(in_all)}); "
-                f"ROM self-check {'no verdict' if failures is None else f'{failures} failures'}; "
-                f"worst by size band {bands(worst, (SIZES[0], EXCLUDED[0] - 1))} {bands(worst, (EXCLUDED[1] + 1, SIZES[1]))}; "
-                f"excluded {EXCLUDED[0]}-{EXCLUDED[1]}, report only because {EXCLUDED_REASON}: worst {bands(worst, EXCLUDED)}")
+    loud = sorted(k for k in gold if not rom_silent(means.get(k), *gold[k])) if failures == 0 else []
+    if wrong or failures != 0 or ok_rule != len(in_rule):
+        word = "FAIL"
+    else:
+        word = "UNCHECKED" if loud else "PASS"
+    if wrong:
+        replay = ("replay INVALID, printed values not reproduced (point: printed, replayed) "
+                  + ", ".join(f"(0x{o + 0x780:x},{s}): {p}, {r}" for (o, s), (p, r) in sorted(wrong.items())))
+    elif printed:
+        replay = f"replay reproduces {len(printed)}/{len(printed)} printed values"
+    elif failures != 0:
+        replay = "the ROM printed no measured value"
+    elif loud:
+        replay = (f"replay contradicts the ROM's silence at {len(loud)}/{len(gold)} points, outside the ROM's own "
+                  f"float band min*0.9..max*1.1 (pi_dma_test.c:211) though it printed none (point: replayed, band) "
+                  + ", ".join(f"(0x{o + 0x780:x},{s}): {means.get((o, s), 'missing')}, "
+                              f"{rom_band(*gold[o, s])[0]:g}..{rom_band(*gold[o, s])[1]:g}" for o, s in loud[:8])
+                  + (", ..." if len(loud) > 8 else ""))
+    else:
+        replay = (f"replay agrees with the ROM's silence: {len(gold)}/{len(gold)} points inside the ROM's own float "
+                  f"band min*0.9..max*1.1 (pi_dma_test.c:211)")
+    return word, (f"pidma: {word}: exact COUNT replay, {replay}; "
+                  f"sizes {SIZES[0]}-{SIZES[1]} except {EXCLUDED[0]}-{EXCLUDED[1]} {ok_rule}/{len(in_rule)} within "
+                  f"+-{TOLERANCE:.0%} of hardware min..max (all sizes {SIZES[0]}-{SIZES[1]}: {ok_all}/{len(in_all)}); "
+                  f"ROM self-check {'no verdict' if failures is None else f'{failures} failures'}; "
+                  f"worst by size band {bands(worst, (SIZES[0], EXCLUDED[0] - 1))} {bands(worst, (EXCLUDED[1] + 1, SIZES[1]))}; "
+                  f"excluded {EXCLUDED[0]}-{EXCLUDED[1]}, report only because {EXCLUDED_REASON}: worst {bands(worst, EXCLUDED)}")
 
 
 def self_test():
@@ -174,6 +226,7 @@ def self_test():
     first = (0, 1, 120)
     gold = {(0, 1): (100, 130), (0, 8): (160, 160), (0, 320): (3000, 3000)}
     at_hw = [first] + [(0, 8, 160)] * 4 + [(0, 320, 3000)] * 4
+    reproduced_outside_rule = {(0, 1): 120}
     cases = [
         ("ticks are the ROM's two COUNT reads around a DMA start logged before them",
          measurements(log([first, (0, 8, 163)])), {(0, 1): [120], (0, 8): [163]}),
@@ -183,16 +236,33 @@ def self_test():
         ("a last line cut before its time names its line", malformed(log([first])[:-1] + ["C 23468\n"]),
          "PI log line 4 is malformed: 'C 23468'"),
         ("a short DMA start names its line", malformed(["L W 8 300780\n"]), "PI log line 1 is malformed: 'L W 8 300780'"),
+        ("a record the PI log does not write names its line", malformed(log([first]) + ["X 1 2\n"]),
+         "PI log line 5 has the unknown record 'X': 'X 1 2'"),
+        ("a DMA start of an unknown direction names its line", malformed(["L Q 8 300780 10000000 5\n"]),
+         "PI log line 1 has the unknown record 'L Q': 'L Q 8 300780 10000000 5'"),
+        ("a PI_STATUS read without its time names its line", malformed(["S 0\n"]), "PI log line 1 is malformed: 'S 0'"),
+        ("a cart-ward DMA start is read and not timed", measurements(log([first]) + ["L R 8 300780 10000000 9999\n"]),
+         {(0, 1): [120]}),
         ("the ROM's uint16_t mean of 4 runs", rom_mean([160, 161, 161, 161]), 160),
-        ("a model at the hardware value passes", run(at_hw, {}, 0), True),
-        ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), False),
-        ("a point 3% over hardware passes", run([first] + [(0, 8, 164)] * 4 + [(0, 320, 3000)] * 4, {}, 0), True),
-        ("an excluded size out of band does not fail", run([first] + [(0, 8, 160)] * 4 + [(0, 320, 3300)] * 4, {}, 0), True),
-        ("a missing point fails", run([first] + [(0, 320, 3000)] * 4, {}, 0), False),
-        ("a ROM self-check failure fails", run(at_hw, {}, 1), False),
-        ("no ROM verdict fails", run(at_hw, {}, None), False),
-        ("a reproduced printed value passes", run(at_hw, {(0, 8): 160}, 0), True),
-        ("a printed value the replay does not reproduce fails", run(at_hw, {(0, 8): 161}, 0), False),
+        ("a model at the hardware value passes", run(at_hw, reproduced_outside_rule, 0), "PASS"),
+        ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, reproduced_outside_rule, 0), "FAIL"),
+        ("a point 3% over hardware passes", run([first] + [(0, 8, 164)] * 4 + [(0, 320, 3000)] * 4, reproduced_outside_rule, 0), "PASS"),
+        ("an excluded size out of band does not fail",
+         run([first] + [(0, 8, 160)] * 4 + [(0, 320, 3300)] * 4, reproduced_outside_rule, 0), "PASS"),
+        ("a missing point fails", run([first] + [(0, 320, 3000)] * 4, reproduced_outside_rule, 0), "FAIL"),
+        ("a ROM self-check failure fails", run(at_hw, {}, 1), "FAIL"),
+        ("no ROM verdict fails", run(at_hw, {}, None), "FAIL"),
+        ("a printed value the replay does not reproduce fails", run(at_hw, {(0, 8): 161}, 0), "FAIL"),
+        ("a silent ROM whose band holds every replayed mean passes", run(at_hw, {}, 0), "PASS"),
+        ("a point 4% over hardware fails though the ROM was silent",
+         run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), "FAIL"),
+        ("a passing run whose replay lies outside the silent ROM's band is unchecked",
+         run([(0, 1, 144)] + at_hw[1:], {}, 0), "UNCHECKED"),
+        ("a failing run whose replay lies outside the silent ROM's band still fails",
+         run([(0, 1, 144)] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), "FAIL"),
+        ("a replayed mean at the ROM's float bound max*1.1 is inside", run([(0, 1, 143)] + at_hw[1:], {}, 0), "PASS"),
+        ("an excluded point missing from the replay contradicts the silent ROM",
+         run([first] + [(0, 8, 160)] * 4, {}, 0), "UNCHECKED"),
     ]
     failed = 0
     for name, got, want in cases:
@@ -230,9 +300,9 @@ def main():
                 if (off, size) in meas:
                     m = rom_mean(meas[off, size])
                     f.write(f"0x{off + 0x780:x}\t{size}\t{len(meas[off, size])}\t{m}\t{lo}\t{hi}\t{deviation(m, lo, hi) * 100:+.2f}\n")
-    ok, line = verdict(gold, meas, printed, rom_failures(text))
+    word, line = verdict(gold, meas, printed, rom_failures(text))
     print(line)
-    return 0 if ok else 1
+    return 0 if word == "PASS" else 1
 
 
 if __name__ == "__main__":
