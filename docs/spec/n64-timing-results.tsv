@@ -106,6 +106,7 @@ hw:register-write	pending:calibration-16	no complete power-on console capture of
 hw:ri-priority	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:ri-priority-overlap	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:ri-reorder	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
+hw:si-write64-poll	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:snapper64	pending:calibration-16	no console capture of snapper64 (capture name ext-snapper64*) in docs/calibration/hardware
 hw:sp-dma-direction	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:sp-dma-rsp	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
