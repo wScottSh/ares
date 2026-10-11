@@ -307,22 +307,23 @@ PLAIN = rcp.CD_DISABLE | rcp.AD_DISABLE
 NOISE_CASES = [
     # name, surface width, bytes per pixel, lists (each drawn after an idle spin of the given iterations)
     ("rect-1016", 1016, 4, [(0, noise_list(1016, B32, 0, 1016, rcp.CYC_1CYCLE | PLAIN, 0, noise_combiner()))]),
-    # alpha 0x7F + AD >= blend 0x80 iff AD != 0: Angrylion's 0-7 drops a pixel, MiSTer's odd 1-7 never does
-    # (rdp-noise.md:39). 512 px at 16 bpp is the most pixels whose dump keeps the log inside the 32 KiB SRAM. It
-    # draws before ac-dither, whose stored pixels, and so its draw time, depend on the noise bits.
-    ("ad-noise-7f", 512, 2, [(0, noise_list(512, B16, 0, 512, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
-                                            rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF7F, blend=0x00000080))]),
     ("idle-gap", 512, 4, [(0, noise_list(512, B32, 0, 256, rcp.CYC_1CYCLE | PLAIN, 0, noise_combiner())),
                           (100000, noise_list(512, B32, 256, 512, rcp.CYC_1CYCLE | PLAIN, 0, noise_combiner()))]),
     ("two-cycle", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_2CYCLE | PLAIN, 0, noise_combiner()))]),
     ("cd-noise-16", 256, 2, [(0, noise_list(256, B16, 0, 256, rcp.CYC_1CYCLE | CD_NOISE | rcp.AD_DISABLE, 0,
                                             prim_combiner(), prim=0x808080FF))]),
-    ("ac-dither", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE, AC_DITHER,
-                                          prim_combiner(), prim=0xFFFFFF80))]),
     ("im-rd-stall", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | PLAIN, rcp.IM_RD, noise_combiner()))]),
     ("ad-noise-threshold", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
                                                    rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF78,
                                                    blend=0x00000080))]),
+    # alpha 0x7F + AD >= blend 0x80 iff AD != 0: Angrylion's 0-7 drops a pixel, MiSTer's odd 1-7 never does
+    # (rdp-noise.md:39). 512 px at 16 bpp is the most pixels whose dump keeps the log inside the 32 KiB SRAM.
+    ("ad-noise-7f", 512, 2, [(0, noise_list(512, B16, 0, 512, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
+                                            rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF7F, blend=0x00000080))]),
+    # Last: its stored pixels, and so its draw time, depend on the noise bits, and no question names it but
+    # noise-reset's snap/*. Every snap a question names follows only draws that store a fixed pixel set.
+    ("ac-dither", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE, AC_DITHER,
+                                          prim_combiner(), prim=0xFFFFFF80))]),
 ]
 #kit-noise2 (prehw-plan.md U-NOISE-KIT2), for the G_CD_NOISE and G_AC_DITHER bits, since kit-noise's log has no
 #SRAM left for them. Gray 0x84 has low bits 4, so a channel rounds up iff its dither value is below 4: one bit per

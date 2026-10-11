@@ -1391,10 +1391,10 @@ def noise_self_test():
 
 
 def noise_order_self_test():
-    """Each noise kit ROM starts every draw before its first dump, each into its own surface, and draws each
-    mapping snap after only draws whose stored pixels do not depend on noise. So a mapping draw's noise clock
-    depends neither on the time a dump took over earlier pixels nor on how many pixels an earlier draw stored
-    (verify-173 item 4; U-NOISE-ORDER)."""
+    """Each noise kit ROM starts every draw before its first dump, each into its own surface, and draws each snap
+    a question names after only draws whose stored pixels do not depend on noise. So the noise clock of a snap a
+    question reads depends neither on the time a dump took over earlier pixels nor on how many pixels an earlier
+    draw stored (verify-173 item 4; U-NOISE-ORDER)."""
     import itertools
     from types import SimpleNamespace
     from romgen import rcp
@@ -1411,9 +1411,8 @@ def noise_order_self_test():
     out = []
     for kit, cases in sets.NOISE_KITS.items():
         names = [c[0] for c in cases]
-        for (reads_kit, snap) in noise.READS:
-            if reads_kit != kit:
-                continue
+        named = {p.removeprefix("snap/") for q in questions() if q["kit"] == kit for p in q["points"].split()}
+        for snap in [n for n in names if n in named]:
             varying = [c[0] for c in cases[:names.index(snap)] if not fixed_stores(*c)]
             out.append(not varying)
             print(f"kit: self-test: noise order: {kit} {snap} follows only draws whose stored pixels do not depend on "
