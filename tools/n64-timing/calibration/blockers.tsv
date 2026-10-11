@@ -39,7 +39,6 @@ systembench:pi-dma-8	check	C	systembench	-	-	prehw-plan 2.1: rasky/n64-systemben
 systembench:u32r-banked	check	A	systembench	U-SB-PR2	-	-
 thar0:ac-zbsame-vioff-imrd-1cyc	check	B	thar0-console	U-ZREAD-1CYC	-	-
 thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	check	B	thar0-console	U-ZREAD-1CYC	-	-
-thar0:fill-mode	check	A	fill-copy-rate	U-LABELS-2	-	-
 thar0:imrd-1cycle	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
 thar0:nozb-visame-noimrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: n64brew Set Color Image is the only F1 reference; verify-139 (#139 moves it to -1.14%, held under D5)
 thar0:nozb-visep-imrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
@@ -60,7 +59,7 @@ cpu.exc-fpu-detect	row	C	fpu-classes	-	-	-
 cpu.fetch-ahead-slots	row	C	fetch-ahead	-	-	-
 cpu.fpu-trivial	row	C	fpu-classes	-	-	-
 cpu.ifill-stall	row	C	ifill	-	-	-
-cpu.irq-sample	row	B	cpu-exceptions	U-IRQ-CLEAR	-	-
+cpu.irq-sample	row	C	irq-clear	U-IRQ-CLEAR	fired at cpu2-irqclr timer-d0..d2 and mi-d0..d2: the fork 0, 4, 4 on both lines against 4, 4, 4 from a scratch build with the delayed CP0 write rule (u-irq-clear; the plan-fixed mutation, the alternative the row's note names); the rule exact rejects it at timer-d0 and mi-d0 at every pad and boot delay	no alt search made for a published value (fit row; U-PREHW-PRED-2 rule); cpu-exceptions irq-sw cannot separate: it reads the same under the mutation (u-irq-clear, measured)
 cpu.uncached-read-total	row	C	cpu-reads nemu64-console systembench	-	-	-
 cpu.wb-block-entries	row	C	wb-release wb-drain-target	-	-	-
 cpu.wb-release	row	C	wb-release wb-drain-target	-	-	-

@@ -2,11 +2,12 @@
 # Runs the nemu64-test ROMs through n64-run and writes per-set results.
 #
 # usage: run-nemu64.sh [SET...]
-# SET defaults to "timing cycle cop0hazard timing-phase". ROMs come from romgen/build.py (or build-nemu64.sh).
-# timing-phase runs the averaged tests at every VI phase of romgen/suites/nemu64/phases.py.
+# SET defaults to "timing cycle cop0hazard timing-phase timing-phase-2022". ROMs come from romgen/build.py (or build-nemu64.sh).
+# timing-phase runs the averaged tests at every VI phase of romgen/suites/nemu64/phases.py;
+# timing-phase-2022 runs them again under nemu64-test's 2022 harness (romgen/suites/nemu64/measure.py).
 # Output: $N64_TIMING_HOME/results/nemu64/<set>/{stdout.txt,stderr.txt,frames.tsv,tests.tsv,failures.txt,summary.txt}
 #         plus values.tsv (and categories.tsv for timing) for romgen-built ROMs
-#         $N64_TIMING_HOME/results/nemu64/timing-phase/{phase-<K>/{stdout.txt,stderr.txt,values.tsv},runs.txt,measurements.tsv,phase.tsv,summary.txt}
+#         $N64_TIMING_HOME/results/nemu64/timing-phase{,-2022}/{phase-<K>/{stdout.txt,stderr.txt,values.tsv},runs.txt,measurements.tsv,phase.tsv,summary.txt}
 #         $N64_TIMING_HOME/results/nemu64/summary.txt
 set -euo pipefail
 
@@ -14,18 +15,19 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/host.sh"
 runner="${N64_RUN:-$(n64_target n64-run)}"
 
-sets="${*:-timing cycle cop0hazard timing-phase}"
+sets="${*:-timing cycle cop0hazard timing-phase timing-phase-2022}"
 
 results="$N64_TIMING_HOME/results/nemu64"
 mkdir -p "$results"
 : > "$results/summary.txt"
 
+# phase_walk SET ROM LAYOUT
 phase_walk() {
-  local out="$results/timing-phase" k rom status
+  local out="$results/$1" k rom status
   rm -rf "$out"
   mkdir -p "$out"
   for k in $(cd "$here" && "$PYTHON" -m romgen.suites.nemu64.phases); do
-    rom="$N64_TIMING_HOME/roms/phase-$k/nemu64-timing.z64"
+    rom="$N64_TIMING_HOME/roms/phase-$k/$2.z64"
     [ -f "$rom" ] || { echo "missing $rom; run romgen/build.py first" >&2; exit 1; }
     mkdir -p "$out/phase-$k"
     status=0
@@ -35,18 +37,18 @@ phase_walk() {
     PYTHONPATH="$here" "$PYTHON" -m romgen.report "${rom%.z64}.tests.tsv" "$out/phase-$k/stdout.txt" "$out/phase-$k" > /dev/null
   done
   {
-    echo "== timing-phase"
+    echo "== $1"
     grep -v ' exit=0 n64-run: stop=emux-exit' "$out/runs.txt" || true
-    (cd "$here" && "$PYTHON" -m romgen.suites.nemu64.phase "$out")
+    (cd "$here" && "$PYTHON" -m romgen.suites.nemu64.phase "$out" "$3")
   } > "$out/summary.txt"
   cat "$out/summary.txt" >> "$results/summary.txt"
 }
 
 for set in $sets; do
-  if [ "$set" = timing-phase ]; then
-    phase_walk
-    continue
-  fi
+  case "$set" in
+    timing-phase) phase_walk timing-phase nemu64-timing 2026; continue ;;
+    timing-phase-2022) phase_walk timing-phase-2022 nemu64-timing-2022 2022; continue ;;
+  esac
   rom="$N64_TIMING_HOME/roms/nemu64-$set.z64"
   [ -f "$rom" ] || { echo "missing $rom; run romgen/build.py first" >&2; exit 1; }
   out="$results/$set"
