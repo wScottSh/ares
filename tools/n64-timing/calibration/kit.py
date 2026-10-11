@@ -801,6 +801,20 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += vintrs
+    irqclr_q = next(q for q in questions() if q["id"] == "irq-clear")
+
+    def irqclr(fired):
+        return Log(sample_log("".join(f"#bench cpu2-irqclr {line}-d{d} d={d} reps=2 min=18 max=41 lo=9 hi=9 fired={f}\n"
+                                      for line in ("timer", "mi") for d, f in enumerate(fired)), rom="kit-cpu2"))
+    irqclrs = [("irq-clear: the console samples as the fork does (0, 4, 4)", irqclr((0, 4, 4)), "pass", "6 values"),
+               ("irq-clear: the delayed CP0 write rule (4, 4, 4, scratch build)", irqclr((4, 4, 4)), "fail", "differ"),
+               ("irq-clear: a line that reaches Cause one instruction late (0, 0, 4)", irqclr((0, 0, 4)), "fail", "differ")]
+    for name, hw, want, said in irqclrs:
+        got, detail = compare(irqclr_q, [hw], [irqclr((0, 4, 4))])
+        ok = got == want and said in detail
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += irqclrs
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
