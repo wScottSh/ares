@@ -93,7 +93,7 @@ Each kit ROM is compared with the fork's run from power-on. A Reset is a warm bo
 
 ### Order
 
-Run the ROMs in this order. The times are the fork's emulated time from boot to the `#kit-end` line. The console's time is the same to within its boot time. Every log fits the 32 KiB SRAM.
+Run the ROMs in this order. `kit-bus` answers `vi-blank-counting`, which ingestion needs before it judges any question that runs with the VI off (see [B11 first](#b11-first)). In a session that runs only some of the ROMs, include `kit-bus`. The times are the fork's emulated time from boot to the `#kit-end` line. The console's time is the same to within its boot time. Every log fits the 32 KiB SRAM.
 
 <!-- From a run.sh output: tools/n64-timing/calibration/kit.py --table RUN_DIR -->
 | # | ROM | Runs for | Log | Film it? | Layout pads | Answers |
@@ -243,8 +243,21 @@ The command does these things:
 
 1. It parses every file and prints one line for each log, with the ROM, the record count, and `INCOMPLETE` when the footer is missing or does not match. It prints one line for each external ROM's files. Before it stores anything, it compares each kit log's `rom_sha256` with the fork's log of the same ROM and build. If one differs, the console ran a different ROM from the fork's. The command then stops, stores nothing, and prints both values and the commit that built the console's ROM. To continue, run `run.sh` at that commit and give its output to `--model`, or run the kit again on the console with the current ROMs. It also stops when an external ROM's capture is not the ROM its question names: a Majora's Mask BENCH or n64-systembench capture whose `rom-sha256.txt` differs from the fork's and the pin, a Thar0 capture whose configurations are not the port's, or a snapper64 file that is not a published dump.
 2. It stores every log under `docs/calibration/hardware/console-<date>/` (reset captures as `<rom>.reset.<n>.log`, external files under `ext-<rom>/`), with a `manifest.tsv` that records each source file's SHA-256, the kit commit, the ROM's `rom_sha256`, `RI_REFRESH`, the boot (power-on or reset), the controller ports that answered and the build (boot delay and layout pad).
-3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures at a layout pad against the fork's range over its boot delays at that pad (see [Layout pads](#layout-pads)). A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`.
+3. It compares each question's points with the fork's run of the same ROM, under the question's rule: the console's values over all its captures at a layout pad against the fork's range over its boot delays at that pad (see [Layout pads](#layout-pads)). A capture that lacks any point the question names fails. It writes each result as the `hw:<question>` row of `docs/spec/n64-timing-results.tsv`. It decides `vi-blank-counting` before any question that runs with the VI off (see [B11 first](#b11-first)).
 4. It regenerates the spec and the inventory, and prints each behavior whose status changed.
+
+### B11 first
+
+The fork refreshes RDRAM only while the VI is active (`ri.refresh-trigger`). The source the row cites, rdram-bus-arbitration.md B11, says a console also refreshes before VI init, at one refresh per line of H_TOTAL 0x7FF (about 42 us). Every point that runs with the VI blank is exposed to that conflict. A console that refreshes there reads slower than the fork for a reason that is not the question's own. So ingestion decides B11 first, and judges VI-off questions only after that.
+
+- The `vi_off` column of `tools/n64-timing/calibration/questions.tsv` is `yes` for each question that compares a value from a point run with the VI blank. `behaviors.py --check` fails if a question reads a point that romgen runs with `VI_OFF` and its column is `no`. A point whose kernel blanks the VI itself, a derived value built from other ROMs' records (`bus-derived`, `tex-derived`) and an external ROM (`nemu64-timing`, Thar0, n64-systembench) are set by hand.
+- `hw:vi-blank-counting` (`kit-bus`, point `bus-vi/vi-blank`) is the B11 question. The fork's VI stops counting lines while blank, so it reads `timeout 1`. A console reading of `timeout 0` means the VI counts lines while blank, and the refresh runs.
+- Until `hw:vi-blank-counting` has a console verdict, each `vi_off` question reads `pending:b11`, even when its own capture is complete. So capture `kit-bus` in every session that captures a ROM with VI-off points. A `kit-bus` capture that hangs (`#kit-timeout`) gives no verdict.
+- If `hw:vi-blank-counting` passes (the console reads `timeout 1`), the `vi_off` questions are judged as every other question is.
+- If the console reads `timeout 0`, ingestion stores the capture, then stops before it writes any result. It names what it needs: the fork must run again with a model of the pre-init refresh, and only after that can a VI-off question get a verdict. That model needs a reference for the refresh interval with the VI blank, for the cost of each such refresh, and for the reason nemu64-test's VI-off loads and n64-systembench's uncached reads, which conflict with refresh at blank, read as they do. Do not choose those values to fit the capture.
+- A question with `vi_off` set to `no` is never held.
+
+The `span-write-release` band (`steady_half` range:abs:0.76) is wide enough for both sides of B11, and it stays that wide. It is gated like every other `vi_off` question.
 
 ### Latency histograms
 

@@ -18,7 +18,9 @@ capture after the Reset button. A file or directory named ext-<rom>* holds an ex
    (NAME defaults to console-<date>),
 3. recomputes every hw:<question> row of docs/spec/n64-timing-results.tsv against the fork's run of
    the same kit ROMs (--model, a calibration/run.sh output; without it run.sh runs into
-   $N64_TIMING_HOME/results/calib),
+   $N64_TIMING_HOME/results/calib). B11 comes first: a question whose vi_off column is yes reads
+   pending:b11 until hw:vi-blank-counting has a console verdict, and when that verdict shows the console
+   refreshing with the VI blank (kit.py b11), ingest stops before it writes any result,
 4. regenerates the spec (behaviors.py) and prints every behavior whose status changed.
 
 --dry-run does all of it in a scratch copy of the tree and prints the changes; the repository is
@@ -120,6 +122,9 @@ def store(root, capture, name, model):
 
 def refresh(root, model):
     kit = load(root, "tools/n64-timing/calibration/kit.py", "kit_refresh")
+    answer, why = kit.b11(root, model)
+    if answer == "pre-init-refresh":
+        raise SystemExit(f"ingest: B11 first: {why}")
     path = Path(root) / RESULTS
     lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
     kept = [l for l in lines if not l.startswith("hw:")]

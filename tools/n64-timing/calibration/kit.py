@@ -13,6 +13,7 @@ boot delay (calibration/run.sh). A question (questions.tsv) names points and met
 """
 import collections
 import fnmatch
+import functools
 import math
 import os
 import re
@@ -30,7 +31,13 @@ import noise  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
-QUESTION_COLUMNS = ["id", "question", "decides", "kit", "points", "metric", "rule", "closes", "source", "boot"]
+QUESTION_COLUMNS = ["id", "question", "decides", "kit", "points", "metric", "rule", "closes", "source", "boot", "vi_off"]
+#vi_off is yes when any value the question compares comes from a point run with the VI blank (TYPE=0):
+#the fork refreshes RDRAM only while the VI is active, and ri.refresh-trigger's open conflict (B11)
+#says a console refreshes before VI init too. Such a verdict waits on B11's question (b11()).
+#behaviors.py --check holds it to romgen's VI_OFF flag (vi_off_points); a point whose kernel blanks
+#the VI itself, a derived point of another ROM's records and an external ROM are set by hand.
+B11 = "vi-blank-counting"
 #How the console was started before the capture: power-on (a power cycle) or reset (the Reset button
 #after a kit ROM ran). A capture file named *.reset.* is a reset capture.
 BOOTS = ("power-on", "reset")
@@ -583,10 +590,78 @@ def result(root, run_dir, qid):
 
 def result_from(root, model_dir, qid):
     """A pending gate until a capture of the question's kit ROM is ingested, then pass or fail against
-    the fork's run of the same ROM in model_dir (a calibration/run.sh output)."""
+    the fork's run of the same ROM in model_dir (a calibration/run.sh output). A vi_off question's
+    verdict reads pending:b11 until B11's question has a console verdict that agrees with the fork."""
     q = next((q for q in questions(root) if q["id"] == qid), None)
     if q is None:
         return None
+    res, detail = judge(root, model_dir, q)
+    if q.get("vi_off") != "yes" or qid == B11 or res.startswith("pending:") or res == "missing":
+        return res, detail
+    answer, why = b11(root, model_dir)
+    return (res, detail) if answer == "no-pre-init-refresh" else ("pending:b11", why)
+
+
+B11_STOP = (
+    "the console's VI counts lines while blank (hw:{b11} reads timeout 0, the fork 1), so RDRAM refresh runs "
+    "before VI init (rdram-bus-arbitration.md B11) and the fork, which refreshes only while the VI is active "
+    "(ri.refresh-trigger), does not model it. No vi_off question is judged against this fork. Re-run the fork "
+    "with a pre-init refresh model, then ingest again. That model needs a reference for each of: the refresh "
+    "interval with the VI blank (B11 states one per line at H_TOTAL 0x7FF, about 42 us; nothing measures it), "
+    "the cost of each such refresh (ri.refresh-clean, ri.refresh-dirty), and why nemu64-test's VI-off loads "
+    "(nemu64:timing/load-from-uncached-vi-off) and n64-systembench's uncached reads, which conflict with refresh "
+    "at blank, read as they do (the ri.refresh-trigger note). The capture is stored; hardware-run.md, Ingest")
+
+
+def b11(root, model_dir):
+    """(answer, why), B11 as the console answers hw:vi-blank-counting: no-pre-init-refresh when its verdict
+    passes (the console's VI stops counting while blank, as the fork's does), pre-init-refresh when it fails
+    on complete logs that read timeout 0 (questions.tsv: the VI counts lines, and the refresh runs, while
+    blank), undecided otherwise."""
+    res, detail = result_from(root, model_dir, B11)
+    if res == "pass":
+        return "no-pre-init-refresh", detail
+    q = next(q for q in questions(root) if q["id"] == B11)
+    logs = [log for log in captures(root)[0].get(q["kit"], [])
+            if log.complete and log.boot == q.get("boot", "power-on") and not any(log.timeouts.values())]
+    seen = {v for p in q["points"].split() for vs in values(logs, p, "timeout").values() for v in vs}
+    if res == "fail" and seen == {0}:
+        return "pre-init-refresh", B11_STOP.format(b11=B11)
+    return "undecided", (f"judged once hw:{B11} has a console verdict (B11, ri.refresh-trigger; hardware-run.md, "
+                         f"Ingest); hw:{B11} is {res}")
+
+
+@functools.lru_cache(maxsize=None)
+def romgen_vi_off(kit):
+    """{rom/point: whether romgen runs it with the VI blank (benches.VI_OFF on its bench_run or bench_multi
+    step)} for a calib-suite kit ROM, else {}."""
+    from romgen.suite import Suite
+    from romgen.suites.bench.benches import VI_OFF
+    from romgen.suites.calib import sets
+    if kit not in sets.KITS:
+        return {}
+    suite = Suite(kit, "Calib", "")
+    for build in sets.KITS[kit]:
+        build(suite)
+    return {f"{t.name}/{v.desc}": any(isinstance(st.params[2], int) and st.params[2] & VI_OFF for st in v.steps
+                                      if st.routine in ("bench_run", "bench_multi"))
+            for t in suite.tests for v in t.values}
+
+
+def vi_off_points(q):
+    """The romgen points behind the question's values that run with the VI blank: every point a pattern
+    names, or for a derived point every point of its ROM. A derived point of another ROM's records
+    (bus-derived, tex-derived) finds none."""
+    points = romgen_vi_off(q["kit"])
+    out = set()
+    for pattern in q["points"].split():
+        named = [k for k in points if fnmatch.fnmatchcase(k, pattern)]
+        named = named or [k for k in points if k.split("/")[0] == pattern.split("/")[0]]
+        out |= {k for k in named if points[k]}
+    return sorted(out)
+
+
+def judge(root, model_dir, q):
     kit = q["kit"]
     if kit.startswith("none"):
         return "pending:calibration-16", f"{kit}: no kit ROM"
@@ -1032,6 +1107,9 @@ def self_test():
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
+    b11_cases = b11_self_test()
+    failed += b11_cases.count(False)
+    cases += b11_cases
     latch_q = next(q for q in questions() if q["id"] == "vi-frame-latch")
 
     def vi_latch(late, bank2, bank3):
@@ -1314,6 +1392,83 @@ def span_cost_self_test():
         got, detail = compare(q, [hw], [span_cost_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-span2: span-cost, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
+def b11_self_test():
+    """B11 first: a vi_off question reads pending:b11 until hw:vi-blank-counting has a console verdict, is
+    judged as before once the console agrees with the fork (timeout 1: no refresh while blank), and stops
+    ingest when the console counts lines while blank (timeout 0); a question with vi_off no is never held."""
+    import subprocess
+    import tempfile
+    sha = "a" * 64
+    dcb = "#bench dcb sw-lw pairs=16 reps=8 min={} max=101\n#bench dcb nop-nop pairs=16 reps=8 min=16 max=16\n"
+    blank = "#bench bus-vi vi-blank bank=2 v=256 lines=10 late=0 reps=1 min=1 max=1 timeout={}\n#kit-timeout pi=0 rdp={}\n"
+    qs = [{"id": B11, "kit": "kit-bus", "points": "bus-vi/vi-blank", "metric": "timeout", "rule": "exact", "vi_off": "yes"},
+          {"id": "t-off", "kit": "kit-cpu", "points": "dcb/*", "metric": "min", "rule": "range:abs:1", "vi_off": "yes"},
+          {"id": "t-on", "kit": "kit-cpu", "points": "dcb/*", "metric": "min", "rule": "range:abs:1", "vi_off": "no"}]
+    out = []
+
+    def setup(tmp, console_blank, scratch_questions=True):
+        root, model = Path(tmp) / "root", Path(tmp) / "model"
+        (root / HARDWARE / "c").mkdir(parents=True)
+        if scratch_questions:
+            (root / QUESTIONS).parent.mkdir(parents=True)
+            (root / QUESTIONS).write_text("\t".join(QUESTION_COLUMNS) + "\n" + "".join(
+                "\t".join(q.get(c, "power-on" if c == "boot" else "-") for c in QUESTION_COLUMNS) + "\n" for q in qs))
+        else:
+            (root / "tools").mkdir(parents=True)
+            (root / "tools" / "n64-timing").symlink_to(HERE.parent, target_is_directory=True)
+        (root / HARDWARE / "c" / "kit-cpu.1.log").write_bytes(sample_log(dcb.format(26), rom_sha256=sha))
+        if console_blank is not None:
+            (root / HARDWARE / "c" / "kit-bus.1.log").write_bytes(
+                sample_log(blank.format(*console_blank), rom_sha256=sha, rom="kit-bus"))
+        (model / "boot-1").mkdir(parents=True)
+        (model / "boot-1" / "kit-cpu.txt").write_bytes(sample_log(dcb.format(24), rom_sha256=sha))
+        (model / "boot-1" / "kit-bus.txt").write_bytes(sample_log(blank.format(1, 0), rom_sha256=sha, rom="kit-bus"))
+        return root, model
+
+    for name, console_blank, want_answer, want in [
+            ("no kit-bus capture yet", None, "undecided", {"t-off": "pending:b11", "t-on": "fail"}),
+            ("the console's VI stops while blank (timeout 1, as the fork)", (1, 0), "no-pre-init-refresh",
+             {"t-off": "fail", "t-on": "fail"}),
+            ("the console counts lines while blank (timeout 0)", (0, 0), "pre-init-refresh",
+             {"t-off": "pending:b11", "t-on": "fail"}),
+            ("a kit-bus capture whose RDP wait gave up reads timeout 0", (0, 1), "undecided",
+             {"t-off": "pending:b11", "t-on": "fail"})]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model = setup(tmp, console_blank)
+            got = {qid: result_from(root, model, qid) for qid in want}
+            answer = b11(root, model)[0]
+        ok = answer == want_answer and {k: v[0] for k, v in got.items()} == want
+        out.append(ok)
+        print(f"kit: self-test: B11 first, {name}: {'ok' if ok else 'FAILED'} (b11 {answer}; "
+              + "; ".join(f"{k} {r}: {d[:70]}" for k, (r, d) in got.items()) + ")")
+    run_refresh = ("import importlib.util, sys\n"
+                   "spec = importlib.util.spec_from_file_location('ingest', sys.argv[1])\n"
+                   "ingest = importlib.util.module_from_spec(spec)\n"
+                   "spec.loader.exec_module(ingest)\n"
+                   "ingest.refresh(*sys.argv[2:])\n")
+    header = "# standing run\ncheck\tresult\tdetail\n"
+    for name, console_blank, want in [
+            ("ingest stops when the console counts lines while blank, and writes no result", (0, 0), None),
+            ("ingest judges a vi_off question once the console's VI stops while blank", (1, 0),
+             {f"hw:{B11}": "pass", "hw:cpu-reads": "fail", "hw:dcb": "fail"})]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model = setup(tmp, console_blank, scratch_questions=False)
+            results = root / "docs/spec/n64-timing-results.tsv"
+            results.parent.mkdir(parents=True)
+            results.write_text(header)
+            proc = subprocess.run([sys.executable, "-c", run_refresh, str(HERE / "ingest.py"), str(root), str(model)],
+                                  capture_output=True, text=True)
+            written = dict(l.split("\t")[:2] for l in results.read_text().splitlines()[2:])
+        if want is None:
+            ok = proc.returncode != 0 and "pre-init refresh model" in proc.stderr and not written
+        else:
+            ok = proc.returncode == 0 and all(written.get(c) == r for c, r in want.items())
+        out.append(ok)
+        print(f"kit: self-test: B11 first, {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}; "
+              + (proc.stderr.strip()[:90] if want is None else ", ".join(f"{c} {written.get(c)}" for c in want)) + ")")
     return out
 
 

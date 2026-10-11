@@ -1665,6 +1665,12 @@ def calibration_errors(root, rows, checks, found):
         elif len(q["rule"].split()) not in (1, len(q["metric"].split())):
             errors.append(f"{where}: rule `{q['rule']}` names {len(q['rule'].split())} rules for "
                           f"{len(q['metric'].split())} metrics; give one rule, or one per metric")
+        if q.get("vi_off") not in ("yes", "no"):
+            errors.append(f"{where}: vi_off `{q.get('vi_off')}` must be yes (a compared value comes from a point run "
+                          f"with the VI blank, so its verdict waits on hw:{kit.B11}) or no")
+        elif q["vi_off"] == "no" and (blank := kit.vi_off_points(q)):
+            errors.append(f"{where}: vi_off is no, but romgen runs {len(blank)} of its points with the VI blank "
+                          f"(benches.VI_OFF), first {blank[0]}; set it to yes")
         for c in q["closes"].split():
             if c != "-" and c not in ids and not check_defined(c, explicit, suite_files) and not re.match(r"^#\d+$", c):
                 errors.append(f"{where}: closes `{c}`, which is no behavior row, check, item:<id> or #issue")
@@ -1735,6 +1741,9 @@ def render_inventory(root, rows, checks, found):
         "A question's result is its `hw:<id>` check: pending:calibration-16 until "
         "`tools/n64-timing/calibration/ingest.py` stores a console capture, then pass when the console's values "
         "fall in the fork's range over its boot delays under the question's rule, fail otherwise. "
+        f"A question with `vi_off` yes in questions.tsv ({sum(q.get('vi_off') == 'yes' for q in qs)} of {len(qs)}) "
+        f"reads pending:b11 until `hw:{kit.B11}` has a console verdict, because the fork refreshes RDRAM only while "
+        "the VI is active (`ri.refresh-trigger`, B11; hardware-run.md, Ingest). "
         f"Kit ROMs: {', '.join(f'`{k}`' for k in kit.KIT_ROMS)}. `ext:` names a ROM outside the repository "
         "that the procedure runs and ingestion stores; calibration/kit.py EXT_ROMS compares the ones with a reader. "
         "`none:` is a question with no kit ROM, with the reason.",
