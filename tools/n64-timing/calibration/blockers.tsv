@@ -1,7 +1,6 @@
 id	kind	class	seed	decider	unit	separates	signed	searched
 clause:mg-1	clause	follows	follows	-	-	-	-	-
 clause:mg-2	clause	follows	follows	-	-	-	-	-
-clause:mg-3	clause	A	A	-	U-MAP-D3	-	-	-
 clause:mg-4	clause	C	C	hw-run	-	-	-	-
 clause:mg-5	clause	follows	follows	-	-	-	-	-
 clause:sr-2	clause	follows	follows	-	-	-	-	-
