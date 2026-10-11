@@ -433,6 +433,47 @@ def exception_points():
     return out
 
 
+IRQCLR_D = (0, 1, 2)
+IRQCLR_TIMER_TICKS = 8
+# The match lands 2 * TICKS pclk after the start's mfc0 (COUNT ticks every 2 pclk), the aligned label 5 after it,
+# and the first nop 3 after the label, so the clear after LEAD nops is the first instruction past the match.
+IRQCLR_TIMER_LEAD = 2 * IRQCLR_TIMER_TICKS - 8
+SP_STATUS = 0xA4040010
+MI_MASK = 0xA430000C
+
+
+def irqclr_points():
+    """cpu.irq-sample off the software IP bits: an interrupt whose condition rises, then falls d = 0, 1, 2
+    instructions later (d = 0: the next instruction drops it). timer: a COMPARE match sets IP7 and a COMPARE
+    rewrite clears it. The shot first aligns its stream to COUNT's phase (a second mfc0 shows whether COUNT ticked
+    since the start's, and the untaken path runs one more nop), so the match lands before the same instruction in
+    every shot. mi: an SP_STATUS set-intr store raises the SP line (IP2), the load after it waits for the store,
+    and an MTC0 Status clearing IM2 drops it. An SP_STATUS clear-intr store cannot place the fall: it lands as late
+    after its issue as the set does."""
+    out = []
+    for d in IRQCLR_D:
+        body = (f"    mfc0 $t1, $count\n    bne $t1, $t8, {{cont}}_d{d}\n    nop\n    nop\n{{cont}}_d{d}:\n"
+                f"    addiu $t1, $t8, {IRQCLR_TIMER_TICKS}\n    addiu $t2, $t8, -1\n    mtc0 $t1, $compare\n"
+                + nops(IRQCLR_TIMER_LEAD + d) + "\n    mtc0 $t2, $compare\n" + nops(16))
+        out.append(exact_point(
+            "irqclr", f"timer-d{d}", body, [("line", "IP7"), ("d", d)],
+            "    mfc0 $t1, $count\n    addiu $t1, $t1, -1\n    mtc0 $t1, $compare\n" + STATUS_SET.format(bits=0x8001),
+            "    mfc0 $t1, $count\n    addiu $t1, $t1, -1\n    mtc0 $t1, $compare\n"
+            + STATUS_CLEAR.format(mask=0xFFFF7FFE),
+            VEC_ON + "\n    la $t0, cpu2_save\n    mfc0 $t1, $compare\n    sw $t1, 0($t0)",
+            "    la $t0, cpu2_save\n    lw $t1, 0($t0)\n    mtc0 $t1, $compare\n" + VEC_OFF))
+    for d in IRQCLR_D:
+        body = "    sw $t3, 0($t0)\n    lw $t1, 0($t0)\n" + nops(d) + "\n    mtc0 $t5, $status\n" + nops(16)
+        out.append(exact_point(
+            "irqclr", f"mi-d{d}", body, [("line", "IP2-SP"), ("d", d)],
+            f"    li $t0, {SP_STATUS:#x}\n    li $t3, 0x10\n    li $t4, 0x8\n    sw $t4, 0($t0)\n    lw $t1, 0($t0)\n"
+            + STATUS_SET.format(bits=0x401) + "\n    mfc0 $t5, $status\n    li $t1, 0xFFFFFBFF\n    and $t5, $t5, $t1",
+            f"    li $t0, {SP_STATUS:#x}\n    sw $t4, 0($t0)\n    lw $t1, 0($t0)\n" + STATUS_CLEAR.format(mask=0xFFFFFBFE),
+            VEC_ON + f"\n    li $t0, {MI_MASK:#x}\n    li $t1, 0x2\n    sw $t1, 0($t0)",
+            f"    li $t0, {MI_MASK:#x}\n    li $t1, 0x1\n    sw $t1, 0($t0)\n" + VEC_OFF))
+    return out
+
+
 LDI_SETUP = ("    la $t0, cpu2_ldi_data\n    lw $t1, 0($t0)\n    lwc1 $f6, 0($t0)\n    ldc1 $f8, 8($t0)\n"
              "    move $t2, $zero")
 
@@ -787,7 +828,7 @@ cpu2_fit3_vec:
 """
 
 POINTS = (base_points() + exception_points() + ldi_points() + fpu_points() + cache_points() + wb_points()
-          + countw_points() + smc_points() + ctc1ce_points())
+          + countw_points() + smc_points() + ctc1ce_points() + irqclr_points())
 
 
 def builder(rom_name):
