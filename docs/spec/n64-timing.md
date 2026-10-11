@@ -348,6 +348,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:dom2-read` | pending:calibration-16 | no complete power-on console capture of kit-cpu in docs/calibration/hardware |
 | `hw:dpc-sequencing` | pending:calibration-16 | no complete power-on console capture of rdpstat-dpc in docs/calibration/hardware |
 | `hw:fetch-ahead` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
+| `hw:filesel-glyph` | pending:calibration-16 | no complete power-on console capture of kit-zmem in docs/calibration/hardware |
 | `hw:fill-copy-rate` | pending:calibration-16 | no complete power-on console capture of kit-tex in docs/calibration/hardware |
 | `hw:fpu-classes` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
 | `hw:ifill` | pending:calibration-16 | no complete power-on console capture of kit-cpu in docs/calibration/hardware |
