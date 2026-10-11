@@ -380,6 +380,7 @@ def validate(root):
     checks, explicit, suites, suite_files = load_checks(root, errors)
     lint_errors, sites = lint_module().lint(root)
     errors += lint_errors
+    wall_rows(root, errors)
     seen = {}
     read = constants_read(root, {constant_name(r["id"]) for r in rows if constant(r)})
     for row in rows:
@@ -700,7 +701,9 @@ def results_source(found):
     return found.get("#source", ("", ""))[1]
 
 
+COMMIT = re.compile(r"\b[0-9a-f]{7,40}\b")
 WALL_BUDGET = "tools/n64-timing/mmbench/wall-budget.tsv"
+WALL_COLUMNS = ["run", "wall_s", "commit", "same_tree_as", "date", "load", "user_s", "instructions_u", "source"]
 BUDGET_S = 120
 TOOLS_BENCH = (
     "mm-decomp-60fps `tools/bench` (untracked in the checkout at 56fa21dd) still runs `ares` from PATH "
@@ -710,9 +713,20 @@ TOOLS_BENCH = (
     "`func_80173B48` is the unpinned retail code. Per-behavior provenance is in `docs/spec/mm-bench.md`.")
 
 
+def wall_rows(root, errors):
+    """same_tree_as is `-` or a standing-run commit whose tree outside docs/ equals the timed commit's."""
+    rows = read_tsv(root, WALL_BUDGET, WALL_COLUMNS, errors)
+    for r in rows:
+        if not COMMIT.fullmatch(r["commit"]):
+            errors.append(f"{WALL_BUDGET}:{r['line']}: commit `{r['commit']}` is not a 7- to 40-hex commit")
+        if r["same_tree_as"] != "-" and not COMMIT.fullmatch(r["same_tree_as"]):
+            errors.append(f"{WALL_BUDGET}:{r['line']}: same_tree_as `{r['same_tree_as']}` is not `-` or a 7- to 40-hex commit")
+    return rows
+
+
 def current_walls(root):
     """wall-budget.tsv keeps every timing, oldest first; a run's last row is its current one."""
-    rows = tsv_rows(Path(root) / WALL_BUDGET)
+    rows = wall_rows(root, [])
     last = {r["run"]: i for i, r in enumerate(rows)}
     return [r for i, r in enumerate(rows) if last[r["run"]] == i]
 
@@ -740,9 +754,6 @@ def destination(root, found):
         ("MM bench integration: point `tools/bench` at the fork, remove the `func_80173B48` pin", "not done",
          TOOLS_BENCH.format(md5=md5.group(1) if md5 else "?")),
     ]
-
-
-COMMIT = re.compile(r"\b[0-9a-f]{7,40}\b")
 
 
 def ids(items):
@@ -789,8 +800,10 @@ def predicates(root, rows, checks, found):
     walls = current_walls(root)
     slow = max(walls, key=lambda r: float(r["wall_s"]))
     run_commits = COMMIT.findall(results_source(found))
-    wall_commits = {c for r in walls for c in COMMIT.findall(r["source"])}
-    retimed = any(a.startswith(b) or b.startswith(a) for a in run_commits for b in wall_commits)
+    named = {r["run"]: [c for c in (r["commit"], r["same_tree_as"]) if c != "-"] for r in walls}
+    wall_commits = {c for cs in named.values() for c in cs}
+    stale = [run for run, cs in named.items() if not any(a.startswith(b) or b.startswith(a) for a in run_commits for b in cs)]
+    retimed = bool(run_commits) and not stale
     weak = sorted(c for c, res in result.items() if WEAK.match(res))
     failing = sorted(c for c, res in result.items() if res == "fail")
     other_gates = sorted(c for c, res in result.items() if res.startswith("pending:") and res != "pending:calibration-16")
@@ -812,7 +825,8 @@ def predicates(root, rows, checks, found):
         (f"det and stepcap pass, and the 600-field MM run takes <= {BUDGET_S} s, re-timed on current master",
          det == stepcap == "pass" and float(slow["wall_s"]) <= BUDGET_S and retimed,
          f"det {det}, stepcap {stepcap}; slowest scene {slow['run']} {float(slow['wall_s']):g} s; the wall times name "
-         f"{ids(sorted(wall_commits))} and the standing run {ids(run_commits)}, and the clause holds only when they match"),
+         f"{ids(sorted(wall_commits))} and the standing run {ids(run_commits)}, and the clause holds only when every scene's "
+         f"last row names the run's commit in its commit or same_tree_as column; scenes whose last row does not: {ids(stale)}"),
         ("no check is fail", not failing, f"{len(failing)} fail: {ids(failing)}"),
         ("no check is consistent-only or pass-conditional", not weak,
          f"{len(weak)}: " + ", ".join(f"`{c}` {result[c]}" for c in weak) if weak else "none"),
@@ -1717,6 +1731,7 @@ def self_test(root):
             landed = True
         else:
             landed = False
+        run_commit = COMMIT.findall(text(work / RESULTS).split("\n")[0])[0]
         cases = [
             ("the committed tree", None, None, None),
             ("a row waiting on calibration #16 with no kit test", TABLE, row_field("cpu.dcb", "verify", "pending:calibration-16"),
@@ -1788,7 +1803,19 @@ def self_test(root):
              "so a pass verifies the arithmetic, not the model"),
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("an older, slower timing kept as history", WALL_BUDGET,
-             lambda t: t.replace("\n", "\nfilesel-rotate\t999" + "\t-" * (t.split("\n")[0].count("\t") - 1) + "\n", 1), None),
+             lambda t: t.replace("\n", "\nfilesel-rotate\t999\t0000000" + "\t-" * (len(WALL_COLUMNS) - 3) + "\n", 1), None),
+            ("one scene re-timed on the standing run, the others stale", WALL_BUDGET,
+             lambda t: "\n".join(l if l.startswith("filesel-rotate\t") or l.count("\t") < 2
+                                 else l.replace(run_commit, l.split("\t")[2]) for l in t.split("\n")),
+             f"{CLOSURE} differs from the generated output"),
+            ("an empty wall commit", WALL_BUDGET, row_field("sct", "commit", ""), "commit `` is not a 7- to 40-hex commit"),
+            ("a short wall commit that prefixes the run's", WALL_BUDGET, row_field("sct", "commit", run_commit[:3]),
+             f"commit `{run_commit[:3]}` is not a 7- to 40-hex commit"),
+            ("a malformed same_tree_as", WALL_BUDGET, row_field("sct", "same_tree_as", run_commit[:3]),
+             f"same_tree_as `{run_commit[:3]}` is not `-` or a 7- to 40-hex commit"),
+            ("a scene whose source only mentions the run commit", WALL_BUDGET,
+             lambda t: row_field("sct", "source", f"not {run_commit}")(row_field("sct", "same_tree_as", "-")(t)),
+             f"{CLOSURE} differs from the generated output"),
             ("editing the closure draft", CLOSURE, lambda t: t + "manual edit\n", f"{CLOSURE} differs from the generated output"),
             ("a check with no result", RESULTS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("unit:timeline\t")),
              "check `unit:timeline` has no result"),
