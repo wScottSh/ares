@@ -140,7 +140,9 @@ hw:vi-intr-latency	pending:calibration-16	no complete power-on console capture o
 hw:vi-mid-field-blank	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-rcp-phase	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:wb-drain-target	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
+hw:wb-evict	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:wb-release	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
+hw:wb-spaced	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:write-granularity	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:write-granularity-pixels	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:xbus-fetch-rate	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
