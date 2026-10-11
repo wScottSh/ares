@@ -114,7 +114,7 @@ auto SysAD::run(Clock limit) -> void {
     ri.post({e.address, e.size, RiBus::Direction::Write, RiBus::Requester::CpuSysAD, (u16)(&e - entries)}, start);
     return;
   }
-  //No measurement exists for a register write's drain (vr4300-wb.md); sysad.register-write.
+  //Fit to the systembench poll rows; no hardware measures the drain itself (vr4300-wb.md); sysad.register-write.
   e.phase = Entry::Phase::Applying;
   e.done = start + Timing::Behavior::SysadRegisterWrite;
   update();

@@ -44,6 +44,7 @@ fu.joybus-56-63	followups pif-joy / verify-80	Hardware 56 B and 63 B empty joybu
 fu.pif-ram-dword	followups sysbench / verify-75	An LD from PIF RAM (the fork reads the word twice)
 fu.power-on-compare	followups T7c	The power-on COMPARE value (cop0hazard leaves IP7 set after the COUNT test wraps through Compare = 0)
 fu.hpos-holdoff	followups labels-phase	hpos holdoff_rclk_max from a window that starts on a refresh
+fu.vi-frame-latch	issue #107	Whether the VI latches V_VIDEO and the Y accumulator per frame (kit-bus bus-vi vvideo-outside-late and bus-vi-latch points; n64brew says it does, the fork read both per line before #107)
 fu.vi-mid-field-blank	issue #84	What hardware does on a VI blank and re-enable mid-field (kit-vi vi-mid-field points; the fork crashed there before #84)
 plan.fit3	green-plan pending.md section 8 (U-FIT3)	Kit points that decide cpu.count-write-hold, cpu.fetch-ahead-slots and cpu.ctc1-fpe-ce without re-running their nemu64-test fit data (cop0hazard count, the cycle SMC cases, cycle ctc1)
 plan.spdma	green-plan pending.md section 2 (U-SPDMA)	The cost of one SP DMA of 8-128 B per direction, which no CPU-polled kit point resolves (verify-85 2a.5)

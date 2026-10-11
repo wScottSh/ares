@@ -130,6 +130,12 @@ def derive(rom, points):
             base = points["none-0"] if not p["kind"].startswith("rect+") else points[f"rect-{n}"]
             metric = "per_sync_clk" if rom == "rdp-sync-sweep" else "per_cmd_clk"
             per(name, metric, (p["clock"] - base["clock"]) / n)
+    if rom == "vi-frame-latch" and not any(p.get("timeout") for p in points.values()):
+        #Which reference each late write's loads match: no threshold, so no fitted constant. A timed-out
+        #point loaded nothing, so it matches neither.
+        late, base, nofetch = (points[k]["n"] for k in ("vvideo-outside-late", "base", "vvideo-outside"))
+        per("vvideo-outside-late", "fetches", int(abs(late - base) < abs(late - nofetch)))
+        per("y-late-bank2", "vi_bank", 2 if points["y-late-bank2"]["n"] < points["y-late-bank3"]["n"] else 3)
     if rom == "rdp-atomic-sweep":
         for name, p in points.items():
             if p["atomic"]:
@@ -182,8 +188,13 @@ class Phase:
         return round(statistics.median(self.values), 3)
 
     @property
+    def fmean(self):
+        """The unrounded mean, which every band check compares; `mean` is its 3-decimal display."""
+        return statistics.fmean(self.values)
+
+    @property
     def mean(self):
-        return round(statistics.fmean(self.values), 3)
+        return round(self.fmean, 3)
 
 
 @dataclass
@@ -248,7 +259,7 @@ def layout_verdict(pad_verdicts):
 
 
 def pad_verdicts(row, layout):
-    return [label(row, ph.lo, ph.hi, ph.mean) for ph in layout.pads.values()]
+    return [label(row, ph.lo, ph.hi, ph.fmean) for ph in layout.pads.values()]
 
 
 def verdict(row, layout):
@@ -260,8 +271,9 @@ def verdict(row, layout):
 
 
 def pad_phases_text(layout):
-    """Each pad's range and mean over the boot delays, `pad:lo..hi/mean` (behaviors.py parses it back)."""
-    return " ".join(f"{p}:{round(ph.lo, 3)}..{round(ph.hi, 3)}/{ph.mean}" for p, ph in layout.pads.items())
+    """Each pad's range and unrounded mean over the boot delays, `pad:lo..hi/mean` (behaviors.py parses it
+    back and recomputes the pad's verdict, so the mean keeps every digit the band check compared)."""
+    return " ".join(f"{p}:{round(ph.lo, 3)}..{round(ph.hi, 3)}/{ph.fmean!r}" for p, ph in layout.pads.items())
 
 
 def acceptance(row, phase):
@@ -271,7 +283,7 @@ def acceptance(row, phase):
     if phase is None or row["kind"] != "check" or row["rule"] != "consistent":
         return "-", "-"
     lo, hi = float(row["lo"]), float(row["hi"])
-    mean_ok = holds("mean", lo, hi, phase.lo, phase.hi, phase.mean)
+    mean_ok = holds("mean", lo, hi, phase.lo, phase.hi, phase.fmean)
     half = (hi - lo + phase.hi - phase.lo) / 2
     return ("pass" if mean_ok else "fail"), f"{100 * half / float(row['expected']):.1f}"
 

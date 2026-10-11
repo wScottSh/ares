@@ -765,6 +765,25 @@ def self_test():
     span2_cases = span2_self_test()
     failed += span2_cases.count(False)
     cases += span2_cases
+    latch_q = next(q for q in questions() if q["id"] == "vi-frame-latch")
+
+    def vi_latch(late, bank2, bank3):
+        pts = (("bus-vi", "base", 1104), ("bus-vi", "vvideo-outside", 1231), ("bus-vi", "vvideo-outside-late", late),
+               ("bus-vi-latch", "y-late-bank2", bank2), ("bus-vi-latch", "y-late-bank3", bank3))
+        return Log(sample_log("".join(f"#bench {rom} {pt} n={n}\n" for rom, pt, n in pts), rom="kit-bus"))
+    fork = vi_latch(1108, 1107, 1197)
+    latches = [("vi-frame-latch: a console that latches per frame (the fork's loads)", fork, "pass"),
+               ("vi-frame-latch: loads 40 off the fork's on the latch side of each category",
+                vi_latch(1148, 1067, 1157), "pass"),
+               ("vi-frame-latch: a console that reads V_VIDEO per line (the late case at the no-fetch count)",
+                vi_latch(1231, 1107, 1197), "fail"),
+               ("vi-frame-latch: a console that recomputes y per line (bank 3 loses more)", vi_latch(1108, 1197, 1107), "fail")]
+    for name, hw, want in latches:
+        got, detail = compare(latch_q, [hw], [fork])
+        ok = got == want and (want == "fail" or "2 values" in detail)
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += latches
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed

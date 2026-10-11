@@ -6,6 +6,7 @@ romgen/suites/calib/<module>.py.
 """
 import collections
 import math
+from romgen.suites.bench import report as bench_report
 
 
 def fit(xs, ys):
@@ -265,4 +266,16 @@ def span2(recs):
     return out
 
 
-DERIVED = [tex, zmem, cpu2, bus, span2]
+def vi_latch(recs):
+    """kit-bus's frame-latch points read as bench:vi-frame-latch reads them (bench report.py), so the
+    console and the fork's bench decide the same two categories: fetches (1 when the late V_VIDEO
+    case's loads are nearer the no-write case's than the no-fetch case's) and vi_bank (the bank whose
+    loads lose more after the late Y write)."""
+    points = {pt: recs[("bus-vi", pt)] for pt in ("base", "vvideo-outside", "vvideo-outside-late")}
+    points.update((pt, recs[("bus-vi-latch", pt)]) for pt in ("y-late-bank2", "y-late-bank3"))
+    got = bench_report.derive("vi-frame-latch", points)
+    return {("bus-derived", "vi-latch"): {"fetches": got["vvideo-outside-late"]["fetches"],
+                                          "vi_bank": got["y-late-bank2"]["vi_bank"]}}
+
+
+DERIVED = [tex, zmem, cpu2, bus, vi_latch, span2]

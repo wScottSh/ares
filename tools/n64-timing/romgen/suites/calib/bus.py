@@ -23,6 +23,7 @@ BUS_POLLS = 0x100000          # poll bound: over 2 VI fields at one RCP register
 SP_REGS, DPC_REGS, MI_REGS, PI_REGS, VI_REGS = 0xA4040000, 0xA4100000, 0xA4300000, 0xA4600000, 0xA4400000
 MI_INTR = MI_REGS + 0x8
 VI_CTRL, VI_H_VIDEO, VI_V_VIDEO, VI_X_SCALE, VI_Y_SCALE = (VI_REGS + o for o in (0x00, 0x24, 0x28, 0x30, 0x34))
+VI_ORIGIN = VI_REGS + 0x04
 
 # runtime.py vi_init's values of the registers these points change; k_bus_vline writes them back.
 VI_INIT = {VI_CTRL: 0x324E, VI_H_VIDEO: 0x006C02EC, VI_V_VIDEO: 0x002501FF, VI_X_SCALE: 0x200, VI_Y_SCALE: 0x400}
@@ -142,8 +143,10 @@ VI_CASES = [
     ("hvideo-half", [(VI_H_VIDEO, 0x006C01AC)], 0),
     ("vvideo-outside", [(VI_V_VIDEO, V_VIDEO_EARLY_OFF)], 0),
     ("x-2.0-late", [(VI_X_SCALE, 0x800)], 1),
-    ("vi-blank-late", [(VI_CTRL, ctrl(kind=0))], 1),
+    # before vi-blank-late: a VI re-enabled from a blank follows V_VIDEO per line until its next field
+    # (vi.frame-latch, #77), and vi-blank-late re-enables it after its window
     ("vvideo-outside-late", [(VI_V_VIDEO, V_VIDEO_EARLY_OFF)], 1),
+    ("vi-blank-late", [(VI_CTRL, ctrl(kind=0))], 1),
 ]
 # V_VIDEO opened from V 8: the window (V 12 to 32, half-lines) lies inside it but above ares's display
 # window, which starts at half-line 34 on NTSC (vi.cpp window(), vi.display-window).
@@ -177,6 +180,22 @@ def refresh_banks(suite):
                     [("case", "vvideo-outside")])
 
 
+# The Y accumulator (vi.frame-latch, #107): ORIGIN and Y_SCALE 2.0 with Y_OFFSET 0x3FF written once
+# V_CURRENT reads V_TARGET. Accumulating from the frame's 1.0 the window fetches framebuffer lines
+# 111-131, bank 2; recomputed from the new Y_SCALE and Y_OFFSET it fetches lines 221-245, bank 3. The
+# loads in the bank the VI reads lose about 95 more than in the other (bus-vi base, base-bank5).
+Y_LATE_ORIGIN = 0x002E4000        # 3 MiB less 112 KiB: line 179 of 640 B starts bank 3
+Y_LATE = [(VI_ORIGIN, Y_LATE_ORIGIN), (VI_Y_SCALE, 0x03FF << 16 | 0x800)]
+LOAD_BANK3 = 0x003F0000           # FB1's bank, which nothing else reads here
+
+
+def vi_y_late(suite):
+    """Runs last in the ROM: ORIGIN stays at Y_LATE_ORIGIN (k_bus_vline restores only VI_INIT)."""
+    rom = Rom(suite, "bus-vi-latch")
+    for bank, addr in ((2, VI_BANK_LOAD), (3, LOAD_BANK3)):
+        vline_point(rom, f"y-late-bank{bank}", addr, Y_LATE, 1, [("case", "y-late")])
+
+
 VINTR_BIAS = 4096
 VINTR_REPS = 16
 VINTR_STEP = 2
@@ -192,7 +211,7 @@ def vi_intr(suite):
     rom.test.values.append(Value("v-intr", steps, []))
 
 
-BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr]
+BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr, vi_y_late]
 
 VI_RESTORE = "\n".join(f"    .word 0x{reg:08X}, 0x{val:08X}" for reg, val in VI_INIT.items())
 
@@ -481,8 +500,15 @@ bus_vl_touch_loop:
     addiu $t5, $t5, -16
     bgtz $t5, bus_vl_touch_loop
     addiu $t4, $t4, 16
-    jal bus_vwait_eq
+    # V_CURRENT bit 0 is the field, which vi_init's odd V_SYNC (0x20D) leaves where boot put it: wait
+    # for the target line in the field the VI is in (field 1 timed out every point, u-107-fix)
+    li $t0, 0xA4400010
+    lw $t0, 0($t0)
     lw $a0, 4($s0)
+    andi $t0, $t0, 1
+    or $a0, $a0, $t0
+    jal bus_vwait_eq
+    sw $a0, 4($s0)
     beqz $v0, bus_vl_timeout
     nop
     lw $t0, 16($s0)

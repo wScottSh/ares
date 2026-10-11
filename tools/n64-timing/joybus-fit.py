@@ -23,9 +23,10 @@ from romgen.suites.bench.benches import SB_JOY_FRAMES  # noqa: E402
 
 BYTE = 2000  # rclk per joybus byte: n64brew Joybus Protocol, 4 us per bit x 8 at 62.5 MHz
 # ares charges this much of a RD64B total after the joybus phase (the 64 B RDRAM write, the poll
-# and the harness): measured on master c7824c6da as the mean of measured minus estimateTiming over
-# the 8 JOY points, 28..50 rclk (poll quantization), mean 36.1.
-ARES_AFTER = 36
+# and the harness), measured as the mean of measured minus estimateTiming over the 12 JOY rows of the
+# era systembench build (33 runs each): 35.5 on master 3b6b910ed, 45.5 (39.5..52) once
+# sysad.register-write moved from 60 to 100 units (u-drain), since its PIF RAM write drains later.
+ARES_AFTER = 46
 PRESENT = {0}  # ports with a device on the fit's rig (assumed; n64-run connects port 1 only)
 
 FRAMES = {point: block for point, (block, _) in SB_JOY_FRAMES.items()}
