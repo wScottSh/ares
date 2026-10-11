@@ -55,6 +55,7 @@ KIT_ROMS = {
     "nemu64-cop0hazard": ("nemu64", "cop0hazard", False),
     "kit-tex": ("calib", "kit-tex", True),
     "kit-zmem": ("calib", "kit-zmem", True),
+    "kit-zread": ("calib", "kit-zread", True),
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
     "cpu-llsc": ("cpu", "llsc", False),
@@ -812,6 +813,9 @@ def self_test():
     span2_cases = span2_self_test()
     failed += span2_cases.count(False)
     cases += span2_cases
+    zread1_cases = zread1_self_test()
+    failed += zread1_cases.count(False)
+    cases += zread1_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -922,6 +926,49 @@ def span2_self_test():
         got, detail = compare(rows[qid], [hw], [model])
         out.append(got == want)
         print(f"kit: self-test: kit-span2: {qid}, want {want}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
+def zread1_log(per_read=0.0, poll=0, count=0, both=None):
+    """A kit-zread log of the 320 px points at the fork's pad-0 values, each 64 B read of a one-image
+    line moved `per_read` rclk (10 reads a line), each both-images point moved `both[(bank, h)]` rclk,
+    every clock moved `poll` rclk and `count` red pixels written."""
+    body = ""
+    for mode, bank, by_h in (("none", "zsep", {8: (2735, 2663), 16: (5337, 5255)}),
+                             ("imrd", "zsep", {8: (4079, 3998), 16: (7684, 7608)}),
+                             ("zcmp", "zsep", {8: (4079, 3998), 16: (7684, 7608)}),
+                             ("both", "zsep", {8: (6148, 6060), 16: (11801, 11723)}),
+                             ("both", "zsame", {8: (6852, 6781), 16: (13252, 13178)})):
+        for h, (clock, buf) in by_h.items():
+            moved = round(per_read * 10 * h) if mode in ("imrd", "zcmp") else (both or {}).get((bank, h), 0)
+            body += (f"#bench zmem-read1 {mode}-{bank}-w320-h{h} mode={mode} z={bank} w=320 h={h} n=1 vi=off reps=4 "
+                     f"clock={clock + moved + poll} bufbusy={buf + moved} count={count}\n")
+    return Log(sample_log(body, rom="kit-zread"))
+
+
+def zread1_self_test():
+    """kit-zread's per-read report value, the zread-1cyc rule against Thar0's per-read average, and each
+    both-images rule against variant-q0's moves at its own bank's points."""
+    out = []
+    got = zread1_log().records.get(("zmem-read1", "imrd-zsep-w320-fit"), {}).get("rclk_per_read")
+    out.append(got == 45.125)
+    print(f"kit: self-test: kit-zread: the fork's 320 px line derives 45.125 rclk per read: "
+          f"{'ok' if got == 45.125 else 'FAILED'} ({got})")
+    rows = {q["id"]: q for q in questions()}
+    for name, qid, hw, want in [
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc", zread1_log(poll=24), "pass"),
+            ("a console at Thar0's 44.17 rclk per read, 0.99 under the fork's 45.16", "zread-1cyc",
+             zread1_log(per_read=-0.99), "fail"),
+            ("a console that writes a pixel", "zread-1cyc", zread1_log(count=1), "fail"),
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc-both-zsep", zread1_log(poll=24), "pass"),
+            ("variant-q0's separate-bank moves, -85 at 16 lines and -43 at 8 (thar0-zcmp-residual.md)",
+             "zread-1cyc-both-zsep", zread1_log(both={("zsep", 16): -85, ("zsep", 8): -43}), "fail"),
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc-both-zsame", zread1_log(poll=24), "pass"),
+            ("variant-q0's same-bank moves, -277 at 16 lines and -128 at 8", "zread-1cyc-both-zsame",
+             zread1_log(both={("zsame", 16): -277, ("zsame", 8): -128}), "fail")]:
+        got, detail = compare(rows[qid], [hw], [zread1_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-zread: {qid}, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 

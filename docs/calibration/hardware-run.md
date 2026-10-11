@@ -32,7 +32,7 @@ sha256sum "$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z6
 
 That path is the default `romgen/build.py --ipl3` reads. The file is not committed to this repository.
 
-Allow about six and a half hours for the required runs and seven and a half for the recommended ones (inferred from the per-run times below; no console session has been timed). About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
+Allow about six hours and 35 minutes for the required runs and seven hours and 35 minutes for the recommended ones (inferred from the per-run times below, at about three minutes for each power cycle, load and copy; `kit-zread` adds one run to the six and a half hours estimated before it; no console session has been timed). About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
 
 ## Build the kit
 
@@ -46,7 +46,7 @@ Allow about six and a half hours for the required runs and seven and a half for 
 
 2. Copy the console builds to the flashcart's SD card:
 
-   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-noise`).
+   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`).
    - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`, `kit-pif`. Run `kit-pif` only through the SC64 `upload` path (see [The PIF boot timeout](#the-pif-boot-timeout)).
    - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
@@ -115,10 +115,11 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 15 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
 | 16 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
 | 17 | `kit-zmem` | 1.8 s | 29.2 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 18 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 19 | `kit-bus` | 1.6 s | 11.3 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
-| 20 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
-| 21 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
+| 18 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
+| 19 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 20 | `kit-bus` | 1.6 s | 11.3 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
+| 21 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 22 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
 
 For each ROM:
 
