@@ -323,8 +323,9 @@ def span2(recs):
 
 
 def span_cost(recs):
-    """kit-span2's span-cost points: rclk per 1 px x 256-line rectangle from the N = 64 less N = 16 replays."""
-    lo, hi = recs[("span-cost", "b16-w1-n16")], recs[("span-cost", "b16-w1-n64")]
+    """kit-span2's span-cost points: rclk per 1 px x 256-line alpha-fail rectangle from the N = 64 less
+    N = 16 replays."""
+    lo, hi = recs[("span-cost", "acfail-n16")], recs[("span-cost", "acfail-n64")]
     return {("span-cost", "fit"): {"rclk_per_rect": round((hi["clock"] - lo["clock"]) / 48, 2)}}
 
 

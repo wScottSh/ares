@@ -232,13 +232,17 @@ SPAN_COST_REPLAYS = (16, 64)
 
 
 def span_cost(suite):
-    """span_write's 1 px rectangle at 16 bpp, MM's color depth, replayed N = 16 and 64 times: 256
-    one-pixel 1-cycle spans per rectangle, so DPC_CLOCK per added rectangle moves 256 times any per-span
-    cost (rdp.span-line-gap, prehw-plan.md U-SCT-SPAN, mm:south-clock-town)."""
+    """span_write's 1 px rectangle at 16 bpp, MM's color depth, with every pixel failing alpha compare
+    (PRIMITIVE alpha 0 under a blend alpha threshold of 0xFF), replayed N = 16 and 64 times: 256 one-pixel
+    1-cycle spans per rectangle that write nothing, the compute-only shape Thar0's alpha all-fail
+    rectangles have. DPC_CLOCK per added rectangle moves 256 times any per-span cost; a written 1 px
+    span would hide it behind its write (rdp.span-line-gap, prehw-plan.md U-SCT-SPAN, mm:south-clock-town)."""
     rom = Rom(suite, "span-cost")
+    prologue = [*span2_prologue(16, rcp.AC_THRESHOLD)[:3], rcp.set_prim_color(0xFF000000),
+                rcp.set_blend_color(rcp.rgba8(0, 0, 0, 0xFF)), rcp.set_other_mode(rcp.CYC_1CYCLE, rcp.AC_THRESHOLD)]
     for n in SPAN_COST_REPLAYS:
-        rdp_point(rom, f"b16-w1-n{n}", [rcp.fill_rectangle(0, 0, 1, SPAN2_LINES)], n,
-                  [("bpp", 16), ("w", 1), ("h", SPAN2_LINES)], prologue=span2_prologue(16, 0))
+        rdp_point(rom, f"acfail-n{n}", [rcp.fill_rectangle(0, 0, 1, SPAN2_LINES)], n,
+                  [("bpp", 16), ("w", 1), ("h", SPAN2_LINES), ("ac", "fail")], prologue=prologue)
 
 
 @dataclass

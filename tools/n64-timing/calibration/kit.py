@@ -1223,11 +1223,11 @@ def zread1_self_test():
 
 
 def span_cost_log(per_rect=0.0, poll=(0, 0)):
-    """A kit-span2 log of the span-cost points at the fork's pad-0 clocks (45164 and 180479: 2819.06 rclk per
+    """A kit-span2 log of the span-cost points at the fork's pad-0 clocks (20748 and 82572: 1288.0 rclk per
     rectangle), each rectangle moved `per_rect` rclk and the N = 16 and N = 64 clocks moved `poll` rclk."""
-    body = "".join(f"#bench span-cost b16-w1-n{n} bpp=16 w=1 h=256 n={n} vi=off reps=4 "
+    body = "".join(f"#bench span-cost acfail-n{n} bpp=16 w=1 h=256 ac=fail n={n} vi=off reps=4 "
                    f"clock={clock + round(per_rect * n) + moved}\n"
-                   for n, clock, moved in ((16, 45164, poll[0]), (64, 180479, poll[1])))
+                   for n, clock, moved in ((16, 20748, poll[0]), (64, 82572, poll[1])))
     return Log(sample_log(body, rom="kit-span2"))
 
 
@@ -1236,9 +1236,9 @@ def span_cost_self_test():
     (rdp.span-line-gap + 1/750 MHz on 256 spans: 21.33 rclk per rectangle, prehw-plan.md U-SCT-SPAN)."""
     out = []
     got = span_cost_log().records.get(("span-cost", "fit"), {}).get("rclk_per_rect")
-    out.append(got == 2819.06)
-    print(f"kit: self-test: kit-span2: the fork's span-cost points derive 2819.06 rclk per rectangle: "
-          f"{'ok' if got == 2819.06 else 'FAILED'} ({got})")
+    out.append(got == 1288.0)
+    print(f"kit: self-test: kit-span2: the fork's span-cost points derive 1288.0 rclk per rectangle: "
+          f"{'ok' if got == 1288.0 else 'FAILED'} ({got})")
     q = next(q for q in questions() if q["id"] == "span-cost")
     for name, hw, want in [
             ("a console whose two readings sit at opposite ends of the poll bound", span_cost_log(poll=(-24, 24)), "pass"),
