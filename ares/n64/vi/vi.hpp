@@ -20,6 +20,7 @@ struct VI : Thread, Memory::RCP<VI> {
   auto step(u32 vclks) -> void;
 
   auto line() -> void;
+  auto latchFrame() -> void;
   auto startFetch() -> void;
   auto fetchDue() -> void;
   auto refresh() -> void;
@@ -78,11 +79,30 @@ struct VI : Thread, Memory::RCP<VI> {
     s32 dy0, dy1, dx0, dx1;
     u32 hscanStart, vscanStart, hscanLen, vscanLen;
   };
+  //Latched once per field (vi.frame-latch). n64brew Video_Interface: mid-frame
+  //V_VIDEO writes are ignored, as if latched at the start of the frame; the VI
+  //keeps an accumulated vertical offset, loaded from Y_OFFSET at the start of
+  //the frame and advanced by Y_SCALE every line, that a mid-frame Y_SCALE or
+  //Y_OFFSET write does not reset.
+  struct Frame {
+    n10 vstart;
+    n10 vend;
+    u32 y;    //the accumulated offset, in the units of compose's y
+    s32 row;  //the screen row y belongs to
+    //From power-on or a blank until a field in which the VI fetched a line ends,
+    //the frame follows the registers each line. While a program sets the VI up,
+    //H_SYNC and V_SYNC may still be 0 and fields last a few VCLKs (vi_init writes
+    //VI_CONTROL first), and no reference says what such a field, or one the VI
+    //enters partway, latches (#77).
+    enum class Settle : u8 { Unfetched, Fetched, Latched } settle = Settle::Unfetched;
+  } frame;
+
   //The registers a line is fetched and composed with, read once at its HSYNC
   //(vi.register-sample). n64brew Video_Interface says ORIGIN, WIDTH, H_VIDEO
   //and the scales can be changed mid-frame during horizontal blank, read here
   //as a line taking them at its start (inferred). No reference says when
-  //VI_CTRL is read; the model reads it with the rest (#84).
+  //VI_CTRL is read; the model reads it with the rest (#84). V_VIDEO comes from
+  //the frame latch.
   struct Geometry {
     n2  colorDepth;
     n1  serrate;
@@ -94,7 +114,6 @@ struct VI : Thread, Memory::RCP<VI> {
     n12 xscale;
     n12 xsubpixel;
     n12 yscale;
-    n12 ysubpixel;
 
     auto bpp() const -> u32 { return colorDepth == 2 ? 2 : 4; }
     auto window() const -> Window;
@@ -129,6 +148,8 @@ struct VI : Thread, Memory::RCP<VI> {
     u32 origin = 0;  //RDRAM address of framebuffer line n
     u32 pitch = 0;   //bytes per framebuffer line
     u32 line = 0;    //framebuffer line n
+    u32 y = 0;       //the accumulated offset at screen row `row`
+    s32 row = 0;
     u32 output = 0;  //vcounter of the output line
     //progress
     u32  count = 0;  //slots this line

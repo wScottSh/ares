@@ -38,11 +38,19 @@ auto VI::serialize(serializer& s) -> void {
   s(vclk.vclks);
   s(inactiveCounter);
 
+  s(frame.vstart);
+  s(frame.vend);
+  s(frame.y);
+  s(frame.row);
+  s((u8&)frame.settle);
+
   s(fetch.hsync.origin.units);
   s(fetch.hsync.vclks);
   s(fetch.origin);
   s(fetch.pitch);
   s(fetch.line);
+  s(fetch.y);
+  s(fetch.row);
   s(fetch.geometry.colorDepth);
   s(fetch.geometry.serrate);
   s(fetch.geometry.field);
@@ -53,7 +61,6 @@ auto VI::serialize(serializer& s) -> void {
   s(fetch.geometry.xscale);
   s(fetch.geometry.xsubpixel);
   s(fetch.geometry.yscale);
-  s(fetch.geometry.ysubpixel);
   s(fetch.output);
   s(fetch.next);
   s(fetch.inFlight);
