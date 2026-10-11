@@ -145,19 +145,22 @@ def bus_reads(suite):
 
 
 PI_ROW_ENDS = [0x7F8, 0x7FC, 0x7C0]
+PI_ROW_CROSSES = [(16, 0x7F2), (19, 0x7F2), (26, 0x7F4), (12, 0x7FA), (39, 0x7F8), (24, 0x7EE)]
 
 
 def pi_dma_rowend(suite):
     """pi-dma-sizes' DMAs into RDRAM 8 B, 4 B and 64 B before a 2 KiB row end, so the first block ends at
     the row (followups: PI first block ending at a row end). At 4 B the first block holds no more bytes
-    than its misalignment, so the rule posts an empty-mask write (pi.first-block-empty-write)."""
+    than its misalignment, so the rule posts an empty-mask write (pi.first-block-empty-write).
+    PI_ROW_CROSSES are the worst n64_pi_dma_test points (pidma:logs): small DMAs whose non-empty first
+    block is clipped at the row and whose rest crosses it (prehw-plan U-PIROW-CROSS)."""
     rom = Rom(suite, "pi-dma-rowend")
     pi = benches.PI_BASE
-    for off in PI_ROW_ENDS:
-        for size in (8, 128, 1024):
-            benches.sb_while(rom, f"cart-to-ram-{size}-off{off:x}",
-                             [(pi + 0x0, benches.PI_DMA_BUF + off), (pi + 0x4, 0x10000000)], (pi + 0xC, size - 1),
-                             pi + 0x10, 10, [("bytes", size), ("off", off)])
+    points = [(size, off) for off in PI_ROW_ENDS for size in (8, 128, 1024)] + PI_ROW_CROSSES
+    for size, off in points:
+        benches.sb_while(rom, f"cart-to-ram-{size}-off{off:x}",
+                         [(pi + 0x0, benches.PI_DMA_BUF + off), (pi + 0x4, 0x10000000)], (pi + 0xC, size - 1),
+                         pi + 0x10, 10, [("bytes", size), ("off", off)])
 
 
 STATUS_FRAME = [0xFF010300FFFFFFFF] * 4 + [0xFE00000000000000] + [0] * 2 + [1]
@@ -263,11 +266,12 @@ KITS = {
     "kit-span2": [span_write, span_imrd],
     "kit-tex": tex.BUILDERS,
     "kit-zmem": zmem.BUILDERS,
+    "kit-zread": [zmem.reads_1cycle],
     "kit-cpu2": cpu2.BUILDERS,
     "kit-bus": bus.BUILDERS,
 }
-KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM],
-           "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
+KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-zread": [zmem.ASM], "kit-cpu2": [cpu2.ASM],
+           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
