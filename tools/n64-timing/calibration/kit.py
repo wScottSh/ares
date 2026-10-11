@@ -1076,18 +1076,18 @@ def self_test():
     cases += lasts
     eret_q, triv_q = (next(q for q in questions() if q["id"] == i) for i in ("eret-chain", "fpu-trivial-chain"))
 
-    def chain(eret, jump=96, trivial=36, by3=108):
-        return Log(sample_log("".join(f"#bench cpu2-chain {pt} reps=8 min={m} max={m + 380}\n" for pt, m in
-                                      (("eret-x24", eret), ("jump-x24", jump), ("trivial-x24", trivial), ("by3-x24", by3))),
+    def chain(eret, jump=160, trivial=48, by3=144):
+        return Log(sample_log("".join(f"#bench cpu2-chain {pt} reps=8 min={m} max={m + 760}\n" for pt, m in
+                                      (("eret-x40", eret), ("jump-x40", jump), ("trivial-x32", trivial), ("by3-x32", by3))),
                               rom="kit-cpu2"))
-    fork_chain = [chain(108), chain(109, jump=97)]
-    chains = [("eret-chain: the console reads as the fork", eret_q, chain(109), "pass"),
-              ("eret-chain: CpuEret +1 unit (110, U-CPU2-CHAINS sweep) is inside 1 tick", eret_q, chain(110), "pass"),
-              ("eret-chain: CpuEret +2 units (111..112) is rejected", eret_q, chain(111), "fail"),
-              ("fpu-trivial-chain: CpuFpuTrivial +1 unit reads 37 in some logs of every pad, inside 1 tick", triv_q, chain(108, trivial=37), "pass"),
-              ("fpu-trivial-chain: CpuFpuTrivial +2 units (39) is rejected", triv_q, chain(108, trivial=39), "fail"),
-              ("fpu-trivial-chain: MUL.D by a power of two at the 8 pclk control cost (108)", triv_q,
-               chain(108, trivial=108), "fail")]
+    fork_chain = [chain(180), chain(181, jump=161)]
+    chains = [("eret-chain: the console reads as the fork", eret_q, chain(181), "pass"),
+              ("eret-chain: one tick past the fork's 181 is inside the tolerance", eret_q, chain(182), "pass"),
+              ("eret-chain: two ticks past the fork's 181 is rejected", eret_q, chain(183), "fail"),
+              ("fpu-trivial-chain: one tick past the fork's 48 is inside the tolerance", triv_q, chain(180, trivial=49), "pass"),
+              ("fpu-trivial-chain: two ticks past the fork's 48 is rejected", triv_q, chain(180, trivial=50), "fail"),
+              ("fpu-trivial-chain: MUL.D by a power of two at the by-3.0 control cost (144)", triv_q,
+               chain(180, trivial=144), "fail")]
     for name, q, hw, want in chains:
         got, detail = compare(q, [hw], fork_chain)
         ok = got == want

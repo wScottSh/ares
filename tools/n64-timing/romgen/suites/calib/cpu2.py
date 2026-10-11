@@ -852,7 +852,8 @@ cpu2_fit3_vec:
     nop
 """
 
-CHAIN_N = 24
+#Chain lengths: the smallest that resolve one stored unit at every pad, prehw-plan.md D10.
+ERET_N, MULD_N = 40, 32
 # One 32-byte line: EPC and Status.EXL written, then ERET 3 instructions after the Status write and 4 after
 # the EPC write (VR4300 UM U10504EJ7V0UM00 Table 19-2 p.625: MTC0 Status 3, MTC0 EPC 2). The trailing nop is
 # the jump's delay slot; ERET has none and never reaches it.
@@ -883,32 +884,32 @@ def chain_kernel(name, setup, body, post, data=""):
 
 
 def chain_points():
-    """cpu.eret and cpu.fpu-trivial over CHAIN_N unrolled instances, so a sub-tick change per
+    """cpu.eret and cpu.fpu-trivial over ERET_N and MULD_N unrolled instances, so a sub-tick change per
     instance adds up past COUNT's 2 pclk tick (fix-182). Each pairs with a control that lacks the cost:
     the ERET blocks against the same blocks ending in a jump, and MUL.D by 2.0 and 0.5 (a zero
     mantissa, pipeline.cpp fastOperands) against MUL.D by 3.0."""
     out = []
-    for point, end in (("eret-x24", "    eret"), ("jump-x24", "    jr $t0")):
+    for point, end in ((f"eret-x{ERET_N}", "    eret"), (f"jump-x{ERET_N}", "    jr $t0")):
         name = ident("chain", point)
         setup = f"""    mfc0 $t2, $status
     ori $t1, $t2, 3
     xori $t1, $t1, 1
     la $t0, {name}_blk"""
-        body = f"{name}_blk:\n" + "\n".join([CHAIN_BLOCK.format(end=end)] * CHAIN_N)
+        body = f"{name}_blk:\n" + "\n".join([CHAIN_BLOCK.format(end=end)] * ERET_N)
         post = "    mtc0 $t2, $status\n    nop\n    nop"
         out.append(Point("chain", point, name, chain_kernel(name, setup, body, post),
-                         (("blocks", CHAIN_N), ("end", end.split()[0])), reps=8, extra=()))
-    for point, a, b, operand in (("trivial-x24", 2.0, 0.5, "pow2"), ("by3-x24", 3.0, 3.0, "normal")):
+                         (("blocks", ERET_N), ("end", end.split()[0])), reps=8, extra=()))
+    for point, a, b, operand in ((f"trivial-x{MULD_N}", 2.0, 0.5, "pow2"), (f"by3-x{MULD_N}", 3.0, 3.0, "normal")):
         name = ident("chain", point)
         setup = f"""    la $t0, {name}_ops
     ldc1 $f0, 0($t0)
     ldc1 $f2, 8($t0)
     ldc1 $f4, 16($t0)
 {FS_CLEAR}"""
-        body = "\n".join(["    mul.d $f0, $f0, $f2", "    mul.d $f0, $f0, $f4"] * (CHAIN_N // 2))
+        body = "\n".join(["    mul.d $f0, $f0, $f2", "    mul.d $f0, $f0, $f4"] * (MULD_N // 2))
         data = f".align 8\n{name}_ops: .dword {f64(1.5):#x}, {f64(a):#x}, {f64(b):#x}"
         out.append(Point("chain", point, name, chain_kernel(name, setup, body, FPU_RESTORE, data),
-                         (("ops", CHAIN_N), ("op", "mul.d"), ("operand", operand)), reps=8, extra=()))
+                         (("ops", MULD_N), ("op", "mul.d"), ("operand", operand)), reps=8, extra=()))
     return out
 
 
