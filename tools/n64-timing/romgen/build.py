@@ -67,7 +67,7 @@ def runtime_text(extra_asm, consts):
 
 def git_sha():
     here = os.path.dirname(os.path.abspath(__file__))
-    sha = subprocess.run(["git", "-C", here, "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True).stdout.strip()
+    sha = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()[:12]
     dirty = subprocess.run(["git", "-C", here, "status", "--porcelain", "--", ".."], capture_output=True, text=True).stdout.strip()
     return (sha or "unknown") + ("-dirty" if dirty else "")
 

@@ -50,16 +50,17 @@ PAGE_FIELDS = 480         # 8 s at 60 fields per second
 
 HEADER = b"#kit rom="
 UNSTAMPED = "0" * 64
+SHA_COLS = len("0123456789ab-dirty")
 
 
 def rom_sha256(rom):
     """A console build's identity: sha256 of the ROM with its header's sha= and rom_sha256= values
-    zeroed. A ROM cannot hold its own hash, and a later commit that leaves the kit's bytes alone must
-    still match the console's capture."""
+    zeroed, the sha= value's padding included. A ROM cannot hold its own hash, and a later commit, or a
+    dirty tree, that leaves the kit's bytes alone must still match the console's capture."""
     rom = bytearray(rom)
     start = rom.index(HEADER)
     line = bytes(rom[start:rom.index(b"\0", start)])
-    for m in re.finditer(rb" (sha|rom_sha256)=(\S+)", line):
+    for m in re.finditer(rb" (sha|rom_sha256)=(\S+ *)(?= |$)", line):
         rom[start + m.start(2):start + m.end(2)] = b"0" * len(m.group(2))
     return hashlib.sha256(rom).hexdigest()
 
@@ -158,11 +159,13 @@ def regs_asm(label, regs):
 
 
 def asm(rom_id, sha, variant):
-    """variant is padded to a fixed width so every boot-delay and layout-pad build keeps one code layout."""
+    """sha and variant are padded to a fixed width so a dirty tree and every boot-delay and layout-pad
+    build keep one code layout."""
+    assert len(sha) <= SHA_COLS, f"sha {sha} is longer than the header's {SHA_COLS} columns"
     assert len(variant) <= 12, f"build name {variant} is longer than the header's 12 columns"
     glyphs = ",".join(f"{g >> 32:#010x},{g & 0xFFFFFFFF:#010x}" for g in font8x8.GLYPHS)
     return rf"""
-hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha} rom_sha256={UNSTAMPED} fmt=1 build={variant:<12}")}
+hw_str_header: .asciiz {runtime.asm_string(f"#kit rom={rom_id} sha={sha:<{SHA_COLS}} rom_sha256={UNSTAMPED} fmt=1 build={variant:<12}")}
 hw_str_end: .asciiz {runtime.asm_string(f"#kit-end rom={rom_id} bytes=")}
 hw_str_fnv: .asciiz " fnv="
 hw_str_hex: .asciiz "#hex "

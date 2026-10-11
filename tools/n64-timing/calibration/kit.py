@@ -720,6 +720,12 @@ def self_test():
               ("another commit's build of the same bytes keeps the rom_sha256",
                hwout.rom_sha256(rom.replace(b"sha=78b4427b8d86", b"sha=0123456789ab")) == stamped),
               ("one changed code byte changes the rom_sha256", hwout.rom_sha256(rom.replace(b"code", b"codf")) != stamped)]
+    def built(sha):
+        line = next(l for l in hwout.asm("kit-cpu", sha, "single").splitlines() if l.startswith("hw_str_header:"))
+        return hwout.stamp(b"\0" * 64 + line[line.index('"') + 1:line.rindex('"')].encode() + b"\0code")
+    clean, dirty = built("78b4427b8d86"), built("78b4427b8d86-dirty")
+    idents.append(("a dirty tree's build keeps the clean build's layout and rom_sha256",
+                   len(clean) == len(dirty) and hwout.rom_sha256(clean) == hwout.rom_sha256(dirty)))
     for name, ok in idents:
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'}")
