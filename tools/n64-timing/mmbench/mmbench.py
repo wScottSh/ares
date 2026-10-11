@@ -7,7 +7,6 @@ scene, marks the first field of its window, and stops the run when the window en
 
 import argparse
 import hashlib
-import math
 import os
 import re
 import struct
@@ -19,6 +18,7 @@ from pathlib import Path
 
 ROM_MD5 = "2a0a8acb61538235bc1094d297fb6556"  # zeldaret/mm baseroms/n64-us/checksum-compressed.md5
 WINDOW = 600
+BENCH_WARMUP = 120  # mm_bench.py WARMUP: the BENCH ROM's first measured game frame
 
 # NTSC-U 1.0 addresses from zeldaret/mm 56fa21dd tools/disasm/n64-us/variables.txt and the
 # struct offsets in include/ (z64game.h, z64play.h, z64actor.h, regs.h).
@@ -28,7 +28,7 @@ OVERLAY_CONSOLE_LOGO = GAMESTATE_TABLE + 2 * 0x30
 OVERLAY_TITLE_SETUP = GAMESTATE_TABLE + 4 * 0x30
 OVERLAY_FILE_SELECT = GAMESTATE_TABLE + 5 * 0x30
 REG_EDITOR = 0x801F3F60  # gRegEditor; dREG(80)/dREG(81) are data[26*96+80/81] at +0x14
-SAVE_GAME_MODE = 0x801EF670 + 0x3CA8  # gSaveContext.gameMode; 2 = GAMEMODE_FILE_SELECT
+SAVE_GAME_MODE = 0x801EF670 + 0x3CA8  # gSaveContext.gameMode; 0 = GAMEMODE_NORMAL, 2 = GAMEMODE_FILE_SELECT
 PLAY = "[0x801E3FB0]"  # sEffectContext.play, set by Play_Init
 SCENE_ID = PLAY + "+0xA4"
 TRANSITION_MODE = PLAY + "+0x18B4A"
@@ -96,10 +96,12 @@ def scene_settled(scene_id):
     ]
 
 
-def via_map_select(index):
+def via_map_select(index, normal_mode=False):
     # Map select is in the retail ROM but unreachable. Copying its overlay entry over
     # TitleSetup's makes ConsoleLogo hand off to it; MapSelect_Init starts the cursor at
-    # dREG(80) when it is in range.
+    # dREG(80) when it is in range. ConsoleLogo leaves gameMode at GAMEMODE_TITLE_SCREEN, which
+    # hides the HUD in Play; normal_mode sets GAMEMODE_NORMAL, as file select does when it loads
+    # a file (z_file_choose_NES.c), and as the BENCH ROM boots.
     return [
         overlay_loaded(OVERLAY_CONSOLE_LOGO),
         f"copy 0x{OVERLAY_MAP_SELECT:08X} 0x{OVERLAY_TITLE_SETUP:08X} 0x30",
@@ -107,6 +109,7 @@ def via_map_select(index):
         f"poke [0x{REG_EDITOR:08X}]+0x1436 h {index}",
         overlay_loaded(OVERLAY_TITLE_SETUP),
         "wait 30",
+    ] + ([f"poke 0x{SAVE_GAME_MODE:08X} w 0"] if normal_mode else []) + [
         "input A",
         "wait 10",
         "input",
@@ -129,17 +132,6 @@ def walk(moves):
     for stick, fields in moves:
         steps += [f"input {stick}", f"wait {fields}"]
     return steps
-
-
-def circle(fields, period, step=5):
-    # Turning the stick a full circle every `period` fields keeps Link running loops in the
-    # open plaza instead of reaching an exit, a wall, or an NPC that opens a textbox.
-    moves = []
-    for t in range(0, fields, step):
-        angle = 2 * math.pi * t / period
-        x, y = round(STICK * math.sin(angle)), round(-STICK * math.cos(angle))
-        moves.append((f"x={x} y={y}", min(step, fields - t)))
-    return moves
 
 
 def title_to_filesel(phase=0):
@@ -241,10 +233,11 @@ def scene_scripts(phase=0):
         "filesel-rotate": filesel_main_menu() + move_cursor(-STICK, FS_BTN_MAIN_OPTIONS) + ["mark window"]
         + counters("start") + sum((rotate_to_options_and_back(n) for n in range(ROTATIONS)), [])
         + counters("end") + ["mark end", "stop"],
-        "sct": via_map_select(92) + scene_settled(0x6F) + ["mark window"]
+        # The BENCH ROM's south_clock_town state (mm_bench.py): it measures from Play's game frame 120,
+        # with no input.
+        "sct": via_map_select(92, normal_mode=True) + scene_settled(0x6F) + [f"until {GAME_FRAMES} w >= {BENCH_WARMUP}", "mark window"]
         + [f"peek {name} {addr} w" for name, addr, _ in BUFFER_POINTERS]
-        + play_counters("start")
-        + walk([(f"y=-{STICK}", 60)] + circle(WINDOW - 60, period=180))
+        + play_counters("start") + [f"wait {WINDOW}"]
         + play_counters("end") + [f"peek end.scene {SCENE_ID} h", "stop"],
         "field": via_map_select(2) + scene_settled(0x2D) + ["mark window"] + play_counters("start")
         + walk([(f"y=-{STICK}", 400), (f"x={STICK} y=-{STICK}", 200)])

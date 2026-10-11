@@ -27,7 +27,7 @@ bench:sp-dma-sweep	check	C	A	sp-dma-direction	U-SB-PR2	-	-	systembench PR #2 @7c
 bench:uncached-sizes-u32-banked	check	B	A	cpu-reads	U-SEPARATES	-	-	-
 bench:wb-fifth-store	check	B	B	wb-release	U-SEPARATES	-	-	prehw-plan 2.3: NEC VR4300 UM ('has a space') conflicts with R4300i ('emptied'), vr4300-wb.md:37; systembench PR #2 RCP I/O R+W shows a read empties the buffer but does not time the 5th store
 mm:filesel-named	check	B	B	mm-filesel	U-GLYPH	-	-	-
-mm:south-clock-town	check	B	B	count-per-field	U-SCT-MATCH	-	-	-
+mm:south-clock-town	check	B	B	mm-bench	U-SCT-MATCH	-	-	-
 nemu64:timing/load-from-uncached-vi-on-same-bank	check	A	A	vi-cpu-contention nemu64-console	U-NEMU-2022	-	-	-
 nemu64:timing/load-miss-vi-off	check	A	A	dirty-miss nemu64-console	U-NEMU-2022	-	-	-
 pidma:logs	check	B	B	pi-dma-small	U-PIROW-CROSS	-	-	-
