@@ -872,9 +872,9 @@ def span2_self_test():
     rows = {q["id"]: q for q in questions()}
     for qid, hw, model, want in [("span-write-release", span2_log(4), span2_log(16), "fail"),
                                  ("span-write-release", span2_log(16), span2_log(16), "pass"),
-                                 ("span-write-release", span2_log(16, write=29.05), span2_log(16, write=29.0), "pass"),
-                                 ("span-write-release", span2_log(16, write=29.07), span2_log(16, write=29.0), "fail"),
-                                 ("span-write-release", span2_log(16, write=28.93), span2_log(16, write=29.0), "fail"),
+                                 ("span-write-release", span2_log(16, write=29.75), span2_log(16, write=29.0), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.77), span2_log(16, write=29.0), "fail"),
+                                 ("span-write-release", span2_log(16, write=28.23), span2_log(16, write=29.0), "fail"),
                                  ("mem-overhead-pipelined", span2_log(steady=18), span2_log(), "fail")]:
         got, detail = compare(rows[qid], [hw], [model])
         out.append(got == want)

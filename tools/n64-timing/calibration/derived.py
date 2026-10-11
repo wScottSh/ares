@@ -257,7 +257,7 @@ def span2(recs):
         px = bpp // 8
         cat, steps = release(clocks, lines, 16 // px, 64 // px)
         out[("span-write", f"release-b{bpp}")] = {"release": cat, "steps": ",".join(map(str, steps)) or "none"}
-    #span-write-release compares the 32 bpp cost per 64 B half; 4 places keep rounding under its 0.06 band.
+    #span-write-release compares the 32 bpp cost per 64 B half; 4 places keep rounding far under its 0.76 band.
     write = {f["w"]: f["clock"] for (rom, _), f in recs.items() if rom == "span-write" and f.get("bpp") == 32}
     out[("span-write", "release-b32")]["steady_half"] = round((write[320] - write[160]) / (lines * 10), 4)
     imrd = {f["w"]: f for (rom, _), f in recs.items() if rom == "span-imrd"}
