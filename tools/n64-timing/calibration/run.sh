@@ -13,7 +13,8 @@
 # $N64_TIMING_HOME/roms/systembench where standing.sh builds it; the fork side of ext:systembench),
 # OUT_DIR/ext/mm-bench/<scene>.txt (each Majora's Mask BENCH scene ROM from $MM_BENCH_ROMS, default
 # $N64_TIMING_HOME/roms/mm-bench where build-mm-bench.sh writes them; the fork side of ext:mm-bench)
-# and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
+# and .err, the cartridge SRAM the run left (.srm), each kit-noise run's ARES_DPLOG (.dplog, its spans' noise
+# clocks for kit.py's noise reader), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
 # env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, N64_CALIB_PADS,
 # SYSBENCH_ROMS, MM_BENCH_ROMS.
 set -euo pipefail
@@ -70,6 +71,7 @@ find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   case "$rel" in boot-*/kit-dma.z64 | p*/boot-*/kit-dma.z64) echo "$rom $out/pads-4/${rel%.z64} 4" ;; esac
 done | xargs -P "${CALIB_JOBS:-4}" -n 3 sh -c '
   mkdir -p "$(dirname "$2")"
+  case "$1" in */kit-noise.z64) export ARES_DPLOG="$2.dplog" ;; esac
   "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
 ' sh
 wait "$thar0_pid" || echo "thar0 port run failed (see $out/ext/thar0.err)" >&2

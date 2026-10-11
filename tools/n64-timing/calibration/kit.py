@@ -26,6 +26,7 @@ sys.path.insert(0, str(HERE))
 from romgen.suites.bench import report as bench_report  # noqa: E402
 import derived  # noqa: E402
 import mm_bench  # noqa: E402
+import noise  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
@@ -102,6 +103,7 @@ class Log:
         self.header = dict(kv.split("=", 1) for kv in first.split()[1:] if "=" in kv)
         self.text = text
         rom = self.header.get("rom", "?")
+        snap = None
         for line in rest.split("\n"):
             parts = line.split()
             if len(parts) >= 3 and parts[0] == "#bench":
@@ -116,7 +118,9 @@ class Log:
                 regs = {k: int(v, 16) for k, _, v in (kv.partition("=") for kv in parts[1:])}
                 setattr(self, "pi" if parts[0] == "#kit-pi" else "timeouts", regs)
             elif len(parts) == 4 and parts[0] == "@snap":
-                self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3]}
+                snap = self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3], "data": bytearray()}
+            elif len(parts) >= 3 and parts[0] == "#hex" and snap is not None:
+                snap["data"] += b"".join(int(w, 16).to_bytes(4, "big") for w in parts[2:])
             elif len(parts) == 3 and parts[0] == "#hist":
                 fields = self.records.setdefault((rom, parts[1]), {})
                 fields["hist"] = ",".join(filter(None, [fields.get("hist"), parts[2]]))
@@ -159,6 +163,7 @@ def derive(records):
             records.update(fn(records))
         except (KeyError, ZeroDivisionError, TypeError):
             pass
+    records.update(noise.derive(records))
     frozen = [p["seen"] for point, p in by_rom.get("cmd-fetch", {}).items() if point.startswith("frozen-") and "seen" in p]
     if frozen:
         #A frozen RDP's CURRENT stops only where a fetch ended; the highest offset is the full FIFO,
@@ -1090,6 +1095,7 @@ if __name__ == "__main__":
         sys.exit(0)
     if sys.argv[1:2] == ["--layout"]:
         print(layout_table(sys.argv[2]))
+        print(noise.offset_table(sys.argv[2]))
         sys.exit(0)
     if sys.argv[1:2] == ["--noise-rate"]:
         table, consistent = noise_table(sys.argv[2] if sys.argv[2:] else None)
