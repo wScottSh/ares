@@ -765,10 +765,10 @@ bus_vi_init:
 {VI_RESTORE}
 
 # args = {{load addr, H_SYNC, V_VIDEO, window ticks, slow ticks, gate polls}}. Two passes of: write
-# V_VIDEO, H_SYNC_LEAP and H_SYNC, start an 8 B SP DMA and poll SP_DMA_BUSY, restore the three. The
-# first pass writes vi_init's values, so the second runs from the I-cache and touches no RDRAM until
-# its DMA finishes. Between the DMA and the restore, the second pass waits for the next field and
-# times uncached loads for the window. RES[2] = 1 if the DMA was still busy after the polls, RES[3] = its ticks, RES[4] = loads,
+# V_VIDEO, H_SYNC_LEAP and H_SYNC, wait for the next field, start an 8 B SP DMA and poll SP_DMA_BUSY,
+# restore the three. The first pass writes vi_init's values, so the second runs from the I-cache and
+# touches no RDRAM until its DMA finishes. Between the DMA and the restore, the second pass times
+# uncached loads for the window. RES[2] = 1 if the DMA was still busy after the polls, RES[3] = its ticks, RES[4] = loads,
 # RES[5] = loads of slow ticks or more, RES[6] = the longest. v0 = the loads' summed ticks.
 k_bus_hsync:
     addiu $sp, $sp, -32
@@ -796,6 +796,19 @@ bus_hs_pass:
     or $t2, $t2, $t3
     sw $t2, 0x20($t0)
     sw $t3, 0x1C($t0)
+    # the line in progress keeps its length, and V_VIDEO takes effect at the next field
+    # (vi.frame-latch): start from V_CURRENT's next wrap
+    lw $t8, 0x10($t0)
+    li $t2, {BUS_POLLS}
+bus_hs_field:
+    lw $t9, 0x10($t0)
+    sltu $s3, $t9, $t8
+    bnez $s3, bus_hs_gate
+    move $t8, $t9
+    addiu $t2, $t2, -1
+    bnez $t2, bus_hs_field
+    nop
+bus_hs_gate:
     sw $zero, 0x0($t1)
     li $t2, {SP_DMA_BUF}
     sw $t2, 0x4($t1)
@@ -815,18 +828,6 @@ bus_hs_dma_done:
     mfc0 $t7, $count
     beqz $a2, bus_hs_restore
     subu $t7, $t7, $t9
-    # V_VIDEO takes effect at the next field (vi.frame-latch): wait for V_CURRENT to wrap
-    lw $t8, 0x10($t0)
-    li $t2, {BUS_POLLS}
-bus_hs_field:
-    lw $t9, 0x10($t0)
-    sltu $s3, $t9, $t8
-    bnez $s3, bus_hs_go
-    move $t8, $t9
-    addiu $t2, $t2, -1
-    bnez $t2, bus_hs_field
-    nop
-bus_hs_go:
     mfc0 $s3, $count
 bus_hs_win:
     mfc0 $t8, $count
