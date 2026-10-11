@@ -35,7 +35,7 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `rdp-sync-setter` | What do the RDP syncs and one-word setters cost? | N bare syncs, N rectangle+sync pairs, N one-word setters: DPC_CLOCK | kit-rdp | rdp-sync-sweep/* rdp-setter-sweep/* | clock per point | range:rel:1 | `rdp.sync-full` `bench:rdp-sync-sweep` `bench:rdp-setter-sweep` `rdp.setter` `item:16.sync-in-flight` `rdp.sync-pipe` `rdp.sync-tile` `rdp.sync-load` | pending:calibration-16 |
 | `rdp-atomic` | What does ATOMIC_PRIM add per primitive, and only when primitives overlap? | N 16x4 rectangles with the atomic bit off and on: DPC_CLOCK | kit-rdp | rdp-atomic-sweep/* | clock per point | range:rel:1 | `rdp.atomic-dead` `bench:rdp-atomic-sweep` `item:16.atomic` | pending:calibration-16 |
 | `rdp-rect-base` | What are the rectangle base, per-line gap and dead pixels, independent of the Thar0 alpha-fail fit? Does DPC_PIPEBUSY count memory stalls (CLOCK - PIPEBUSY as a stall counter)? | cen64 dpc_probe RECTN and DUTY shapes: DPC_CLOCK, BUFBUSY, PIPEBUSY | kit-rdp | rdp-rectn/* | clock bufbusy pipebusy per point | range:abs:20.4 exact exact | `rdp.primitive-base` `rdp.span-dead-pixels` `rdp.span-line-gap` `bench:rdp-rectn` `item:16.pipebusy-stall` `item:16.span-law` | pending:calibration-16 |
-| `span-width` | How does DPC_CLOCK of an IM_RD span grow with width at 16 and 32 bpp (span transaction unit, read latency)? | 33 widths 1-80 px at both depths: DPC_CLOCK, BUFBUSY, PIPEBUSY | kit-span | span-width/b* | clock per point | range:rel:2 | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.span-slots` `item:16.span-slots` `item:16.span-transaction` `item:16.span-law` | pending:calibration-16 |
+| `span-width` | How does DPC_CLOCK of an IM_RD span grow with width at 16 and 32 bpp (span transaction unit, read latency)? | 33 widths 1-80 px at both depths: DPC_CLOCK, BUFBUSY, PIPEBUSY | kit-span | span-width/b* | clock per point | range:rel:2 | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.color-half-pixels-16bpp` `rdp.span-slots` `item:16.span-slots` `item:16.span-transaction` `item:16.span-law` | pending:calibration-16 |
 | `stale-read` | Does a non-atomic rectangle 32 px wide read the stale color the previous one wrote (rdpstat-1prim expects cen64's extrapolation)? | the four 1PRIMITIVE stale-read cases' pass or fail | rdpstat-1prim | * | v0 per point | exact | `rdp.atomic-dead` `rdpstat:1prim` `item:fu.stale-read-32px` `rdpstat:1prim-32px` | pending:calibration-16 |
 | `dpc-sequencing` | Do DMA_BUSY and END_PENDING sequence as the model does (no console capture)? | the rdpstat DPC sequencing cases' pass or fail | rdpstat-dpc | * | v0 per point | exact | `rdpstat:dpc-sequencing` | pending:calibration-16 |
 | `unsynced-attrs` | Does a combiner change without a sync reach a rectangle already in flight, in 1- and 2-cycle? | the rdpstat unsynced cases' pass or fail | rdpstat-unsynced | * | v0 per point | exact | `rdpstat:unsynced-combiner` | pending:calibration-16 |
@@ -142,7 +142,7 @@ Rows whose checks wait on the console run. 30 rows, 30 with a kit question.
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
 | `rdp.fill-copy-rate` | pending:calibration-16 | hw:fill-copy-rate hw:copy-passfail hw:thar0-console | `hw:thar0-console`, `hw:fill-copy-rate`, `hw:copy-passfail` |
 | `rdp.tmem-load-rate` | pending:calibration-16 pending:report-only | bench:rdp-loadsz-sweep hw:tmem-load-rate hw:tmem-load-setup hw:loadtile-rows | `hw:tmem-load-rate`, `hw:tmem-load-setup`, `hw:loadtile-rows` |
-| `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp | `hw:color-half-16bpp` |
+| `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp hw:span-width | `hw:color-half-16bpp`, `hw:span-width` |
 | `rdp.noise-alpha-dither` | pending:calibration-16 | hw:noise-alpha-dither | `hw:noise-alpha-dither` |
 | `rdp.noise-dither-bits` | pending:calibration-16 | hw:noise-dither-bits | `hw:noise-dither-bits` |
 | `legacy.cpu.interrupt-entry` | pending:calibration-16 | ~nemu64:cop0hazard/softwareinterrupt hw:nemu64-cop0hazard-console hw:cpu-exceptions | `hw:cpu-exceptions`, `hw:nemu64-cop0hazard-console` |
@@ -192,7 +192,7 @@ Rows with no published value: the console decides the choice. 23 rows, 20 with a
 | `rdp.cmd-fetch-burst` | pending:calibration-16 | hw:cmd-fetch-burst | `hw:cmd-fetch-burst` |
 | `rdp.xbus-fetch-rate` | pass | rdpstat:xbus hw:xbus-fetch-rate | `hw:xbus-fetch-rate` |
 | `rdp.sync-full` | pass | bench:rdp-sync-sweep hw:rdp-sync-setter hw:attribute-sync-cost | `hw:rdp-sync-setter`, `hw:attribute-sync-cost` |
-| `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp | `hw:color-half-16bpp` |
+| `rdp.color-half-pixels-16bpp` | pending:calibration-16 | hw:color-half-16bpp hw:span-width | `hw:color-half-16bpp`, `hw:span-width` |
 | `rdp.span-slots` | fail | thar0:imrd-1cycle snapper:span-tri hw:span-width hw:imrd-zcmp-slots hw:thar0-console ~hw:snapper64 hw:imrd-zcmp-slots-2cyc hw:zread-2cyc | `hw:span-width`, `hw:thar0-console`, `hw:snapper64`, `hw:imrd-zcmp-slots`, `hw:imrd-zcmp-slots-2cyc`, `hw:zread-2cyc` |
 | `rdp.noise-pixel-offset` | pass | noise:rect-1016 hw:noise-pixel-offset hw:noise-idle hw:noise-2cycle hw:noise-stall | `hw:noise-pixel-offset`, `hw:noise-idle`, `hw:noise-2cycle`, `hw:noise-stall` |
 | `rdp.noise-alpha-dither` | pending:calibration-16 | hw:noise-alpha-dither | `hw:noise-alpha-dither` |
@@ -377,7 +377,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `rdp.atomic-dead` | vendor reference | `hw:rdp-atomic`, `hw:stale-read`, `hw:atomic-contention`, `hw:clobber` |
 | `rdp.span-ram-half` | measured reference | `hw:snapper64` |
 | `rdp.span-ram-segment` | wiki reference | `hw:snapper64` |
-| `rdp.color-half-pixels-16bpp` | model-choice | `hw:color-half-16bpp` |
+| `rdp.color-half-pixels-16bpp` | model-choice | `hw:color-half-16bpp`, `hw:span-width` |
 | `rdp.span-read-latency` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console`, `hw:mm-filesel`, `hw:imrd-zcmp-slots`, `hw:imrd-zcmp-slots-2cyc`, `hw:zread-2cyc`, `hw:zread-1cyc` |
 | `rdp.mem-overhead-read` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:span-width`, `hw:thar0-console`, `hw:zread-1cyc` |
 | `rdp.mem-overhead-write` | fit; check thar0:nozb-visep-imrd-1cyc, thar0:zbrw-pass-zbsep-visep-noimrd-1cyc, thar0:zbrw-fail-zbsame-visame-imrd-2cyc, thar0:nozb-visame-noimrd-1cyc, mm:filesel-named fail | `hw:thar0-console`, `hw:span-write-release` |
