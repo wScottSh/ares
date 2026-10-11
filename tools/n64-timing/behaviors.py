@@ -2554,10 +2554,12 @@ def self_test(root):
         ran += 1
         for undo in restore:
             undo()
-        restore = edit(BLOCKERS, lambda t: t + "unit:timeline\tcheck\tC\t-\tdcb\t-\t-\t-\t-\n")
+        restore = edit(RESULTS, lambda t: re.sub(r"^(hw:[^\t]+)\tpending:calibration-16\t", r"\1\tpass\t", t, flags=re.M))
         gen, _, blockers = generated(work)
-        ok = not any(BLOCKERS in e for e in gen) and any("`unit:timeline` is not an open item" in e for e in blockers)
-        print(f"self-test: a stale blocker row fails --check, not generation (ingest regenerates): {'ok' if ok else 'FAILED'}")
+        ok = not gen and any("is not an open item" in e for e in blockers)
+        print(f"self-test: a console run that passes every hw:* check regenerates the spec (ingest, dry-run.sh) and "
+              f"leaves its closed items' blocker rows to --check: {'ok' if ok else 'FAILED'}: {len(gen)} generation errors, "
+              f"{sum('is not an open item' in e for e in blockers)} stale rows")
         failures += not ok
         ran += 1
         restore()
