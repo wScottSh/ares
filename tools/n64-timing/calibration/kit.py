@@ -1380,12 +1380,55 @@ def noise_self_test():
         out.append(got == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail})")
     out += noise_reader_self_test(draws, draws2, mutated("cd-noise-84", 0x808080FF, "kit-noise2")["cd-noise-84"])
+    out += noise_order_self_test()
     for name, draw, want in [("gray 0x80 bounds b at 0", draws["cd-noise-16"], 0),
                              ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256),
                              ("cd-noise-84 bounds b at 512", draws2["cd-noise-84"], 512)]:
         bits = noise_bits(draw)
         out.append(bits == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if bits == want else 'FAILED'} ({bits})")
+    return out
+
+
+def noise_order_self_test():
+    """Each noise kit ROM starts every draw before its first dump, each into its own surface, and draws each
+    mapping snap after only draws whose stored pixels do not depend on noise. So a mapping draw's noise clock
+    depends neither on the time a dump took over earlier pixels nor on how many pixels an earlier draw stored
+    (verify-173 item 4; U-NOISE-ORDER)."""
+    import itertools
+    from types import SimpleNamespace
+    from romgen import rcp
+    from romgen.suites.calib import sets
+
+    def fixed_stores(name, width, bpp, lists):
+        commands = [c for _, dl in lists for c in dl]
+        if not next(c for c in commands if c >> 56 == 0xEF) & 1:
+            return True
+        draw = noise_draw(name, width, bpp, commands)
+        ranges = [NOISE_RANGE[u] if u in draw["uses"] else (0,) for u in ("ad", "cd", "ac")]
+        return len({noise_pixel(draw, *v) is None for v in itertools.product(*ranges)}) == 1
+
+    out = []
+    for kit, cases in sets.NOISE_KITS.items():
+        names = [c[0] for c in cases]
+        for (reads_kit, snap) in noise.READS:
+            if reads_kit != kit:
+                continue
+            varying = [c[0] for c in cases[:names.index(snap)] if not fixed_stores(*c)]
+            out.append(not varying)
+            print(f"kit: self-test: noise order: {kit} {snap} follows only draws whose stored pixels do not depend on "
+                  f"noise: {'ok' if not varying else 'FAILED'} ({', '.join(varying) or 'none vary'})")
+        suite = SimpleNamespace(tests=[])
+        sets.NoiseKit(set_name=kit).build(suite)
+        steps = [s for v in suite.tests[0].values for s in v.steps]
+        starts = [i for i, s in enumerate(steps) if s.routine == "step_write32" and s.params[0] == rcp.DPC_END]
+        dumps = [i for i, s in enumerate(steps) if s.routine == "snap_emit"]
+        spans = sorted((s.params[1], s.params[1] + s.params[2]) for s in steps if s.routine == "snap_emit")
+        ok = (len(starts) == sum(len(d) for *_, d in sets.NOISE_KITS[kit]) and len(dumps) == len(sets.NOISE_KITS[kit])
+              and max(starts) < min(dumps) and all(hi <= lo for (_, hi), (lo, _) in zip(spans, spans[1:])))
+        out.append(ok)
+        print(f"kit: self-test: noise order: {kit} starts its {len(starts)} draws before its {len(dumps)} dumps, "
+              f"each on its own surface: {'ok' if ok else 'FAILED'}")
     return out
 
 
