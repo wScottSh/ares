@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 152 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run u-drain-fix2/standing on abecdf764). 2 consistent-only, 24 fail, 12 fit only, 4 model-choice, 69 pass, 13 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
+The spec is `docs/spec/n64-timing.md`: 153 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run u-drain-fix2/standing on abecdf764). 2 consistent-only, 24 fail, 12 fit only, 4 model-choice, 69 pass, 13 pending:calibration-16, 15 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
 
 ## Green predicates
 
@@ -40,7 +40,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
 | every hw:* check is ingested and passes | **no** | 0 of 89 pass, 89 pending:calibration-16 |
-| every row that is not excluded or out-of-kit is verified | **no** | 69 of 146 rows that are not excluded pass, counting the 12 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
+| every row that is not excluded or out-of-kit is verified | **no** | 69 of 147 rows that are not excluded pass, counting the 12 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
 
@@ -177,6 +177,7 @@ No published value exists for these, and no check measures them: their checks ar
 | `vi.display-window` | model-choice | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `rdp.fill-copy-rate` | vendor | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `rdp.tmem-load-rate` | rtl | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
+| `rdp.row-drain` | inferred | calibration-16, report-only | no check the program can run decides it: no hardware value is published, or the published one (a vendor figure, a test author's note, or a total over several rows that only guards each of them) has no corpus that measures this row. The console calibration run (#16, hardware only, open) closes it; the check runs and reports its number but asserts none; its source names the published value it reports against, or says none is published. Asserting that value, or the console calibration run (#16) where none is published, closes it |
 | `legacy.clock.vclk-pal` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.nmi-entry` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |
 | `legacy.cpu.sysad-frozen-step` | legacy | no-corpus | no corpus in the program measures this behavior; it stays pending until one does |

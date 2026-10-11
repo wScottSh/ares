@@ -288,10 +288,10 @@ auto RDP::land(Clock at) -> void {
 
 //Posts the snapshot reads of the next queued span: color if IM_RD, Z if
 //Z_CMP (rdp.read-gate), one span ahead of the pipeline (SDK 12.2.3: the next
-//span is prefetched into another span buffer). A 1-primitive span waits for
-//every earlier write-back to land and for rdp.atomic-dead clocks after the
+//span is prefetched into another span buffer). A 1-primitive span waits
+//rdp.atomic-dead clocks after every earlier write-back has landed and the
 //previous span was rendered (SDK 12.2.3: "30 to 40 null cycles after the
-//last span of a primitive is rendered"; 1prim-cost.md).
+//last span of a primitive is rendered"; 1prim-cost.md; ADR 0001 decision 3).
 auto RDP::prefetch(Clock at) -> void {
   retire();
   if(pipe.prefetched >= 0 || pipe.count == Slots) return;
@@ -301,7 +301,7 @@ auto RDP::prefetch(Clock at) -> void {
   if(!rdp_render_span_peek(0, &info)) return;
   if(info.atomic && info.primitive != pipe.lastPrimitive) {
     if(pipe.count || pipe.current >= 0) return;
-    Clock barrier = max(pipe.lastWrite, pipe.lastSpanEnd + Timing::Behavior::RdpAtomicDead);
+    Clock barrier = max(pipe.lastWrite, pipe.lastSpanEnd) + Timing::Behavior::RdpAtomicDead;
     if(barrier > at) return wakeAt(barrier);
   }
   u32 index = (pipe.head + pipe.count) % Slots;
@@ -337,13 +337,15 @@ auto RDP::prefetch(Clock at) -> void {
   setup(slot.depth, info.zb_address & 0xffffff, z ? 2 : 0, rmw && info.z_compare, Depth);
 }
 
-//Shades the prefetched span once its snapshot has landed and the pipeline
-//is free: pixels are computed now, from the bytes the RI delivered.
+//Shades the prefetched span once its snapshot has landed, the pipeline is
+//free and every earlier write-back has landed (rdp.row-drain: n64brew Set
+//Color Image, "there is no such buffering across multiple rows"): pixels are
+//computed now, from the bytes the RI delivered.
 auto RDP::startSpan(Clock at) -> bool {
   if(pipe.prefetched < 0) return false;
   auto& slot = slots[pipe.prefetched];
-  if(slot.reads) return false;
-  Clock start = max(pipe.time, slot.ready);
+  if(slot.reads || pipe.writes) return false;
+  Clock start = max(max(pipe.time, slot.ready), pipe.lastWrite);
   if(start > at) return wakeAt(start), false;
   rdp_memwin windows[2];
   u32 n = 0;
