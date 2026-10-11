@@ -59,6 +59,7 @@ hw:register-write	pass
 hw:ri-priority	pass
 hw:ri-priority-overlap	pass
 hw:ri-reorder	pass
+hw:si-write64-poll	pass
 hw:snapper64	pass
 hw:sp-dma-direction	pass
 hw:sp-dma-rsp	pass

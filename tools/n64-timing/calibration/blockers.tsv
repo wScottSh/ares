@@ -10,12 +10,12 @@ clause:sr-4	clause	follows	follows	-	-	-	-	-
 clause:sr-5	clause	follows	follows	-	-	-	-	-
 clause:sr-6	clause	follows	follows	-	-	-	-	-
 bench:dirty-miss-isolated	check	B	B	dirty-miss	U-SEPARATES	-	-	prehw-plan 2.3: NEC VR4300 UM s.12.5.2 p.304 gives the order only; systembench PR #2 has invalid victims only; nemu64 cache.rs lists the dirty victim as TODO
-bench:dirty-row-sweep	check	A	A	dirty-row	U-SB-PR2	-	-	-
-bench:ifill-isolated	check	A	A	ifill	U-SB-PR2	-	-	-
-bench:mi-memset-cached	check	A	A	memset-vi	U-SB-PR2	-	-	-
+bench:dirty-row-sweep	check	B	A	dirty-row	U-SEPARATES	-	-	-
+bench:ifill-isolated	check	B	A	ifill	U-SEPARATES	-	-	-
+bench:mi-memset-cached	check	B	A	memset-vi	U-SEPARATES	-	-	-
 bench:mi-memset-repeat	check	A	A	memset-vi	U-REPEAT-RI	-	-	-
 bench:mi-memset-rspdma	check	B	B	vi-first-line memset-vi	U-SEPARATES	-	-	prehw-plan 2.2: n64brew Video_Interface conflicts with RDRAM_Interface and Video_Interface on H_TOTAL defaults; MiSTer and nemu64 do not model it
-bench:mi-memset-uncached	check	A	A	memset-vi	U-SB-PR2	-	-	-
+bench:mi-memset-uncached	check	B	A	memset-vi	U-SEPARATES	-	-	-
 bench:pi-dma-sizes	check	B	B	pi-dma-small systembench	U-SEPARATES	-	-	prehw-plan 2.3: no phase recording exists
 bench:pi-dma-sizes-8	check	B	B	pi-dma-small	U-SEPARATES	-	-	prehw-plan 2.3: no phase recording exists
 bench:rdp-loadsz-sweep	check	C	C	tmem-load-rate	-	at=tmem-load-rate tex-derived/all load-block-clk-per-byte;fork=0.7028..0.7028;alt=0.418;cite=https://gitlab.com/jgemu/cen64/-/blob/50c9a7f/src/rdp/rdpsoft_core.c#L3350	-	jgemu cen64 50c9a7f rdpsoft_core.c:3346-3353 (0.418 clk/B, rejected by rel:3; reverted in abc292f); MiSTer RTL 8 B/clk (0.125 not printed); libdragon, systembench, nemu64 (no TMEM timing)
@@ -23,8 +23,8 @@ bench:rdp-rectn	check	C	C	rdp-rect-base	-	at=rdp-rect-base rdp-rectn/duty-320x24
 bench:si-dma-read64-2	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
 bench:si-dma-read64-3	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
 bench:si-dma-read64-4	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
-bench:sp-dma-sweep	check	A	A	sp-dma-direction	U-SB-PR2	-	-	-
-bench:uncached-sizes-u32-banked	check	A	A	cpu-reads	U-SB-PR2	-	-	-
+bench:sp-dma-sweep	check	C	A	sp-dma-direction	U-SB-PR2	-	-	systembench PR #2 @7c2f96d4 main.c:1613 SPDMAW 0x1000 = 623 RCP (one DMA; the question's chain keys give 4.2 tolerances, derived, past the bound); n64brew 6.5 B/rclk and hcs64 5.55 (far, and hcs64 is ri.overhead-read's fit datum)
+bench:uncached-sizes-u32-banked	check	B	A	cpu-reads	U-SEPARATES	-	-	-
 bench:wb-fifth-store	check	B	B	wb-release	U-SEPARATES	-	-	prehw-plan 2.3: NEC VR4300 UM ('has a space') conflicts with R4300i ('emptied'), vr4300-wb.md:37; systembench PR #2 RCP I/O R+W shows a read empties the buffer but does not time the 5th store
 mm:filesel-named	check	B	B	mm-filesel	U-GLYPH	-	-	-
 mm:south-clock-town	check	B	B	count-per-field	U-SCT-MATCH	-	-	-
@@ -36,7 +36,7 @@ systembench:joy-2j	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-
 systembench:joy-3j	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
 systembench:joy-4j	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
 systembench:pi-dma-8	check	B	B	systembench	U-SEPARATES	-	-	prehw-plan 2.1: rasky/n64-systembench has no README, issues #1 and #2 unrelated, no hardware notes; the pidma recording agrees with the model's 8 B cost
-systembench:u32r-banked	check	A	A	systembench	U-SB-PR2	-	-	-
+systembench:u32r-banked	check	B	A	systembench	U-SEPARATES	-	-	-
 thar0:ac-zbsame-vioff-imrd-1cyc	check	B	B	thar0-console	U-ZREAD-1CYC	-	-	-
 thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	check	B	B	thar0-console	U-ZREAD-1CYC	-	-	-
 thar0:fill-mode	check	A	A	fill-copy-rate	U-LABELS-2	-	-	-
@@ -119,8 +119,8 @@ ri.row-of	row	B	C	nemu64-console	U-SEPARATES	-	-	NEC 2 KiB row (the fork); nemu6
 ri.write-hit	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 49.8 ms (3.95 tolerances; sysad.rdram-block-write-period's fit datum); 25.7 ms (7.5 tolerances, derived); NEC tWriteHit (the fork's basis)
 scheduler.tie-rank	row	D	D	scheduler.tie-rank	-	-	-	-
 si.io-busy	row	B	B	poll-phase systembench	U-SEPARATES	-	-	-
-si.write64	row	B	B	systembench	U-SI-POLL-Q	-	-	-
-si.write64-rom	row	B	B	systembench	U-SI-POLL-Q	-	-	-
+si.write64	row	B	B	si-write64-poll	U-SEPARATES	-	-	-
+si.write64-rom	row	B	B	si-write64-poll	U-SEPARATES	-	-	-
 sp.dma-burst	row	B	C	sp-dma-direction	U-SEPARATES	-	-	dma-timing.md:50 (the row's basis); n64brew 2.58 ms applied to the sp-dma chain (unpublished equivalence); hcs64 (far)
 sysad.rdram-block-write-period	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 49.8 ms (the row's fit data); PR #2 DCACHE rows 35/39 (fill only); nemu64 cache.rs:21-22 (TODO); MiSTer memorymux (no total)
 sysad.rdram-write-period	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 25.7 ms (the row's fit data); PR #2 U32W 46 (latency, far, not printed as a total); MiSTer memorymux (no total)

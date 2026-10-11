@@ -256,6 +256,14 @@ joybus-pads	pads-4:si-dma/read64-3	min	range:abs:15	62925..62925
 joybus-pads	pads-4:si-dma/read64-4	min	range:abs:15	80137..80137
 joybus-pads	pads-4:si-dma/write64	min	range:abs:15	3049..3050
 joybus-pads	pads-4:si-dma/write64-rom	min	range:abs:15	1607..1607
+si-write64-poll	si-dma/write64	max2	range:abs:15	3057..3057
+si-write64-poll	si-dma/write64	min	range:abs:15	3049..3050
+si-write64-poll	si-dma/write64-rom	max2	range:abs:15	1615..1615
+si-write64-poll	si-dma/write64-rom	min	range:abs:15	1607..1607
+si-write64-poll	pads-4:si-dma/write64	max2	range:abs:15	3057..3057
+si-write64-poll	pads-4:si-dma/write64	min	range:abs:15	3049..3050
+si-write64-poll	pads-4:si-dma/write64-rom	max2	range:abs:15	1615..1615
+si-write64-poll	pads-4:si-dma/write64-rom	min	range:abs:15	1607..1607
 vi-cpu-contention	uncached-vs-hpos/bank2-vi	holdoff_rclk_max	range:abs:36.7	46.67..50.67
 vi-cpu-contention	uncached-vs-hpos/bank2-vi	median_pclk	range:abs:2	36..36
 vi-cpu-contention	uncached-vs-hpos/bank2-vi	outliers_per_line	range:abs:2	10..10
