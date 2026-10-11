@@ -1,8 +1,9 @@
 """Judges the nemu64 averaged tests over the VI phases (phases.py; docs/design/green-plan.md
 section 3, "nemu64 phase walk").
 
-usage: python -m romgen.suites.nemu64.phase RESULTS_DIR
+usage: python -m romgen.suites.nemu64.phase RESULTS_DIR [LAYOUT]
        python -m romgen.suites.nemu64.phase --self-test
+LAYOUT is the harness the phase ROMs link (measure.LAYOUT_2026, the default, or LAYOUT_2022).
 RESULTS_DIR holds phase-<K>/stdout.txt for every delay K. Writes RESULTS_DIR/measurements.tsv
 (min, max, median and sum of each averaged value at each delay) and RESULTS_DIR/phase.tsv (one row
 per value: each statistic's range over the delays, the phase mean, the ROM's bands and the verdict).
@@ -19,7 +20,7 @@ from pathlib import Path
 
 from ... import runtime as rt
 from ...suite import Suite
-from . import phases, timing
+from . import measure, phases, timing
 
 AVG = re.compile(r"^avg (\d+) (\d+) (\d+) (\d+)$")
 RECORD = re.compile(r"^@(\d+\.\d+) \d")
@@ -27,11 +28,11 @@ STATS = ("min", "max", "median", "sum")
 RUNS = 1000
 
 
-def averaged_values():
+def averaged_values(layout=measure.LAYOUT_2026):
     """(index, test, value desc, {result slot: (lo, hi)}) in phase-ROM order, from the same
     builder the ROM's checks come from."""
     suite = Suite("phase", "Timing", "")
-    timing.build_averaged(suite)
+    timing.build_averaged(suite, layout)
     return [(f"{ti}.{vi}", t.name, v.full_desc or v.desc,
              {c.a: (c.b, c.c) for c in v.checks if c.op == rt.CHK_RANGE})
             for ti, t in enumerate(suite.tests) for vi, v in enumerate(t.values)]
@@ -85,9 +86,14 @@ def self_test():
         bad.append(f"an avg line pairs with the record after it: got {read_phase(tmp / 'stdout.txt')}")
     if len(averaged_values()) != 21 or any(sorted(b) != [0, 1, 2, 3] for *_, b in averaged_values()):
         bad.append("the phase ROM holds the 21 averaged values, each with min, max, median and sum bands")
+    sums = {layout: {i: b[3] for i, _, _, b in averaged_values(layout)}
+            for layout in (measure.LAYOUT_2026, measure.LAYOUT_2022)}
+    moved = {i for i in sums[measure.LAYOUT_2026] if sums[measure.LAYOUT_2026][i] != sums[measure.LAYOUT_2022][i]}
+    if moved != {"2.0"} or not sums[measure.LAYOUT_2022]["2.0"][0] <= 40700 <= sums[measure.LAYOUT_2022]["2.0"][1]:
+        bad.append(f"the 2022 layout differs from 2026 only in the same-bank mean 40.7: values {sorted(moved)} differ")
     for line in bad:
         print(f"phase self-test FAIL: {line}")
-    print(f"phase self-test: {len(cases) + 2 - len(bad)} of {len(cases) + 2} pass")
+    print(f"phase self-test: {len(cases) + 3 - len(bad)} of {len(cases) + 3} pass")
     return 1 if bad else 0
 
 
@@ -95,6 +101,7 @@ def main():
     if sys.argv[1] == "--self-test":
         sys.exit(self_test())
     results = Path(sys.argv[1])
+    layout = sys.argv[2] if len(sys.argv) > 2 else measure.LAYOUT_2026
     runs = {k: read_phase(results / f"phase-{k}" / "stdout.txt") for k in phases.DELAYS}
     with open(results / "measurements.tsv", "w", encoding="utf-8", newline="\n") as f:
         f.write("delay\tindex\t" + "\t".join(STATS) + "\n")
@@ -102,7 +109,7 @@ def main():
             for index, r in sorted(by_index.items()):
                 f.write(f"{k}\t{index}\t" + "\t".join(map(str, r)) + "\n")
     rows = []
-    for index, test, value, bands in averaged_values():
+    for index, test, value, bands in averaged_values(layout):
         got = [runs[k][index] for k in phases.DELAYS if index in runs[k]]
         missing = len(phases.DELAYS) - len(got)
         if missing:

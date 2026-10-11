@@ -75,6 +75,7 @@ hw:fpu-classes	pending:calibration-16	no complete power-on console capture of ki
 hw:ifill	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:imrd-zcmp-slots	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:imrd-zcmp-slots-2cyc	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
+hw:irq-clear	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:joybus-pads	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:load-interlock-cop	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:loadtile-rows	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
