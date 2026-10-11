@@ -43,6 +43,9 @@ CHECKSUMMED_END = 0x101000
 COMPARED = ("vi", "rdp_ticks")
 #Reported beside the verdict, not judged: the RDP's own busy time from the DPC counters.
 REPORTED = ("rdp_ticks", "dpc_pipebusy")
+#Reported, not judged, when a capture holds both: the named-only work is the gap between the two
+#file-select screens (prehw-plan section 3), so both sides' named-minus-empty median gap is shown.
+GAP = ("file_select_empty", "file_select_named")
 
 
 def rom_name(scene):
@@ -158,11 +161,28 @@ def model_run(model_dir, scene):
     return runs[-1] if runs else None
 
 
+def num(x):
+    return str(int(x)) if x == int(x) else f"{x:.1f}"
+
+
+def span(xs):
+    lo, hi = min(xs), max(xs)
+    return num(lo) if lo == hi else f"{num(lo)}..{num(hi)}"
+
+
+def deciles(values):
+    """p10 and p90 of one run's per-frame values."""
+    q = statistics.quantiles(values, n=10, method="inclusive")
+    return q[0], q[8]
+
+
 def compare(paths, model_dir, scenes):
     """(result, detail). Per scene of `scenes` the capture holds: each complete console run's median `vi`
     and `rdp_ticks` must lie within the fork's per-frame min..max of the same column over its run of the
     same ROM. The fork's run is one deterministic boot phase, so its 600-frame range is the spread it
-    has; the medians and the mean fields per game frame of both sides are reported."""
+    has. Reported, not judged: the mean fields per game frame, the median, p10 and p90 of each REPORTED
+    column on both sides, and with both GAP scenes their named-minus-empty median gap on both sides.
+    A console value given as lo..hi spans its runs."""
     mismatch = rom_mismatch(paths, model_dir)
     if mismatch:
         return "fail", mismatch
@@ -173,9 +193,9 @@ def compare(paths, model_dir, scenes):
     cut = [r for r in runs if not r.complete]
     if cut:
         return "fail", f"{len(cut)} of {len(runs)} console runs end early (no BENCH END or fewer frames); first {cut[0].scene}"
-    off, notes = [], []
+    off, notes, models = [], [], {}
     for scene in sorted({r.scene for r in runs}):
-        model = model_run(model_dir, scene)
+        model = models[scene] = model_run(model_dir, scene)
         if model is None or not model.complete:
             return "missing", f"no complete fork run of mm-bench {scene} in {model_dir}/ext/mm-bench; run calibration/run.sh"
         mine = [r for r in runs if r.scene == scene]
@@ -186,23 +206,35 @@ def compare(paths, model_dir, scenes):
             lo, hi = min(mv), max(mv)
             meds = [statistics.median(r.values(col)) for r in mine]
             if not all(lo <= m <= hi for m in meds):
-                off.append(f"{scene} {col} console median {min(meds)}..{max(meds)} outside fork {lo}..{hi}")
+                off.append(f"{scene} {col} console median {num(min(meds))}..{num(max(meds))} outside fork {lo}..{hi}")
         fpf = [sum(r.values("vi")) / len(r.rows) for r in mine]
+        cols = [col for col in REPORTED if col in model.columns]
         notes.append(f"{scene} fields/frame console {min(fpf):.3f}..{max(fpf):.3f} fork "
                      f"{sum(model.values('vi')) / len(model.rows):.3f}, " + ", ".join(
-                         f"{col} median console {min(statistics.median(r.values(col)) for r in mine)} fork "
-                         f"{statistics.median(model.values(col))}" for col in REPORTED if col in model.columns))
+                         f"{col} median console {span([statistics.median(r.values(col)) for r in mine])} fork "
+                         f"{num(statistics.median(model.values(col)))}, "
+                         f"p10 console {span([deciles(r.values(col))[0] for r in mine])} fork {num(deciles(model.values(col))[0])}, "
+                         f"p90 console {span([deciles(r.values(col))[1] for r in mine])} fork {num(deciles(model.values(col))[1])}"
+                         for col in cols))
+    if set(GAP) <= set(models):
+        empty, named = ([r for r in runs if r.scene == scene] for scene in GAP)
+        for col in [col for col in REPORTED if all(col in models[scene].columns for scene in GAP)]:
+            console = [statistics.median(n.values(col)) - statistics.median(e.values(col)) for e in empty for n in named]
+            fork = statistics.median(models[GAP[1]].values(col)) - statistics.median(models[GAP[0]].values(col))
+            notes.append(f"named-minus-empty median {col} console {span(console)} fork {num(fork)}, "
+                         f"console minus fork {span([c - fork for c in console])}")
     detail = f"{len(runs)} console runs of {len({r.scene for r in runs})} scenes; " + "; ".join(notes)
     if off:
         return "fail", f"{len(off)} medians outside the fork's range; first {off[0]}; {detail}"
     return "pass", f"median vi and rdp_ticks within the fork's per-frame range; {detail}"
 
 
-def sample(scene="south_clock_town", vi=(3, 3, 4, 3), rdp=(1500000, 1600000, 1700000, 1650000), end=True):
-    """A BENCH log as the ROM prints it, with the given per-frame vi and rdp_ticks."""
+def sample(scene="south_clock_town", vi=(3, 3, 4, 3), rdp=(1500000, 1600000, 1700000, 1650000), end=True, pipe=None):
+    """A BENCH log as the ROM prints it, with the given per-frame vi and rdp_ticks, and dpc_pipebusy if given."""
     lines = [f"BENCH START scene={SCENES[scene][0]} name={scene} seed=0x{SEED:08X} warmup={WARMUP} frames={len(vi)} "
-             f"emux=1 retrace_ticks=783000 counter_hz=46875000", "BENCH COLUMNS frame vi rdp_ticks"]
-    lines += [f"BENCH F {i} {v} {r}" for i, (v, r) in enumerate(zip(vi, rdp))]
+             f"emux=1 retrace_ticks=783000 counter_hz=46875000",
+             "BENCH COLUMNS frame vi rdp_ticks" + (" dpc_pipebusy" if pipe else "")]
+    lines += [f"BENCH F {i} {v} {r}" + (f" {pipe[i]}" if pipe else "") for i, (v, r) in enumerate(zip(vi, rdp))]
     return "\n".join(lines + (["BENCH END"] if end else [])) + "\n"
 
 
@@ -210,7 +242,7 @@ def self_test():
     """(cases, failed): the reader's verdicts and ingest's refusal of a capture of other ROMs."""
     import subprocess
     import tempfile
-    pinned = "".join(f"{SCENES[s][1]}  {rom_name(s)}\n" for s in ("south_clock_town", "file_select_named"))
+    pinned = "".join(f"{SCENES[s][1]}  {rom_name(s)}\n" for s in ("south_clock_town", "file_select_empty", "file_select_named"))
     other = f"{'b' * 64}  {rom_name('south_clock_town')}\n"
     sct, filesel = ("south_clock_town",), ("file_select_empty", "file_select_named")
     cases = [("a capture that agrees", sample(), pinned, "pass", "within the fork's per-frame range"),
@@ -225,19 +257,51 @@ def self_test():
               "no BENCH run of file_select_empty file_select_named", filesel),
              ("a capture with another scene's run, which the question does not read",
               sample() + sample("file_select_named", vi=(5, 5, 5, 5)), pinned, "pass", "1 console runs of 1 scenes")]
+    #The fork's file-select runs: medians 1125000 and 1625000 rdp_ticks (gap 500000), 900000 and 1050000
+    #dpc_pipebusy (gap 150000); inclusive deciles of 4 frames interpolate at 0.3 and 2.7 sorted places.
+    def empty(shift=0):
+        return sample("file_select_empty", vi=(1, 2, 1, 1), rdp=tuple(v + shift for v in (1000000, 1100000, 1200000, 1150000)),
+                      pipe=(800000, 900000, 1000000, 900000))
+
+    def named(shift=0):
+        return sample("file_select_named", vi=(2, 2, 1, 2), rdp=tuple(v + shift for v in (1500000, 1600000, 1700000, 1650000)),
+                      pipe=(1000000, 1100000, 1000000, 1100000))
+    fork = {"south_clock_town": sample(), "file_select_empty": empty(), "file_select_named": named()}
+    cases += [("a file-select capture equal to the fork: gap 0 on both columns, each scene's p10 and p90",
+               empty() + named(), pinned, "pass",
+               ("named-minus-empty median rdp_ticks console 500000 fork 500000, console minus fork 0",
+                "named-minus-empty median dpc_pipebusy console 150000 fork 150000, console minus fork 0",
+                "file_select_empty fields/frame console 1.250..1.250 fork 1.250, rdp_ticks median console 1125000 "
+                "fork 1125000, p10 console 1030000 fork 1030000, p90 console 1185000 fork 1185000, dpc_pipebusy median "
+                "console 900000 fork 900000, p10 console 830000 fork 830000, p90 console 970000 fork 970000",
+                "file_select_named fields/frame console 1.750..1.750 fork 1.750, rdp_ticks median console 1625000 "
+                "fork 1625000, p10 console 1530000 fork 1530000, p90 console 1685000 fork 1685000"), filesel),
+              ("a capture whose named rdp_ticks run 50000 above the fork's: the gap shows it, the verdict does not",
+               empty() + named(50000), pinned, "pass",
+               ("named-minus-empty median rdp_ticks console 550000 fork 500000, console minus fork 50000",
+                "named-minus-empty median dpc_pipebusy console 150000 fork 150000, console minus fork 0",
+                "rdp_ticks median console 1675000 fork 1625000, p10 console 1580000 fork 1530000"), filesel),
+              ("two console runs of each screen: every pairing's gap and each run's deciles as a range",
+               empty() + empty(20000) + named() + named(50000), pinned, "pass",
+               ("4 console runs of 2 scenes", "named-minus-empty median rdp_ticks console 480000..550000 fork 500000, "
+                "console minus fork -20000..50000", "p10 console 1530000..1580000 fork 1530000"), filesel),
+              ("a capture of the named screen alone has no gap", named(), pinned, "pass",
+               ("1 console runs of 1 scenes", "!named-minus-empty"), filesel)]
     failed = 0
     for name, text, shas, want, why, *scenes in cases:
         with tempfile.TemporaryDirectory() as tmp:
             model, capture = Path(tmp) / "model", Path(tmp) / "ext-mm-bench"
             (model / "ext" / "mm-bench").mkdir(parents=True)
-            (model / "ext" / "mm-bench" / "south_clock_town.txt").write_text(sample())
+            for scene, log in fork.items():
+                (model / "ext" / "mm-bench" / f"{scene}.txt").write_text(log)
             (model / "rom-sha256.txt").write_text(pinned)
             capture.mkdir()
             (capture / "sct.isviewer.log").write_text(text.replace("\n", "\r\n"))
             if shas:
                 (capture / "rom-sha256.txt").write_text(shas)
             got, detail = compare(sorted(capture.iterdir()), model, scenes[0] if scenes else sct)
-        ok = got == want and why in detail
+        whys = (why,) if isinstance(why, str) else why
+        ok = got == want and all((w[1:] not in detail) if w.startswith("!") else (w in detail) for w in whys)
         failed += not ok
         print(f"mm_bench: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail})")
     run_store = ("import importlib.util, sys\n"

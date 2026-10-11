@@ -105,7 +105,7 @@ Labels: **[M]** measured this session (the command and file are named), **[C]** 
 2. **Reference strength.**
    - n64brew table, one number per method, 0.1 ms resolution. Loop, VI state and run count are unpublished [C]. It is the fit's own data, so it can never be independent for these two rows (pref 21).
 3. **Root cause (ranked).**
-   - (a) The model's CPU-visible VI cost is about 2x too large (Q3, nemu64 independent data) [I, strongest].
+   - (a) The model's CPU-visible VI cost is about 2x too large (Q3, nemu64 independent data) [I, strongest]. U-NEMU-2022: this holds against the 2026 same-bank mean only; against the 2022 mean the same-bank tail matches. The other-bank tail is too large under both (item D, "The 2x claim under both harnesses").
    - (b) The table was VI-off [I, equally consistent with the memset data alone].
    - (c) A sub-SClock drain structure [G, no reference; the SysAD drain is SClock-synchronous, NEC §12.7].
    - These are not separable without #16.
@@ -216,6 +216,20 @@ Labels: **[M]** measured this session (the command and file are named), **[C]** 
    - Rank tweaks.
    - Smaller bursts.
    - Widen ±4.
+
+
+7. **The 2x claim under both harnesses (U-NEMU-2022).**
+   - nemu64-test measured these values under two harnesses. Its 2022 `get_cycles` (`cache.rs` at de30f2df) read 40.7 same bank. Its 2026 co-located loop (0603245f76) read 36.3 same bank. Only that value was re-measured. Other bank 32.5 and VI off 32.54 are the same in both [C].
+   - The tail is a VI-on mean minus the VI-off mean, per load. The model's tails are the 64-phase means of `run-nemu64.sh timing-phase` and `timing-phase-2022` at fa8942d10 [M]. Raw data on unicron: `~/n64-timing/results/u-nemu-2022/after/nemu64/timing-phase{,-2022}/phase.tsv`.
+
+     | Harness | Hardware same bank | Model same bank | Ratio | Hardware other bank | Model other bank |
+     |---|---|---|---|---|---|
+     | 2026 | 36.3 - 32.54 = 3.76 | 41.79 - 33.00 = 8.79 | 2.34 | 32.5 - 32.54 = -0.04 | 34.83 - 33.00 = 1.83 |
+     | 2022 | 40.7 - 32.54 = 8.16 | 41.24 - 33.00 = 8.25 | 1.01 | 32.5 - 32.54 = -0.04 | 34.39 - 33.00 = 1.39 |
+
+   - "About 2x" holds against the 2026 same-bank value. Against the 2022 value, the same-bank tail matches, and the 2022 check passes (41.24 in 36.7..44.7). The other-bank tail is about 1.4 to 1.8 pclk in the model and about 0 on hardware under both harnesses. So the VI-on other-bank excess stands under either reading [M, C].
+   - The hardware same-bank mean moved 4.4 pclk between harnesses. The model moved 0.55 pclk (41.79 to 41.24) [M]. The ported 2022 layout does not reproduce the hardware's harness sensitivity. The 2022 loop and buffer addresses came from nemu64-test's allocator and are unpublished. The port puts them on disjoint icache lines. The 2022 TODO (14e6f72d) names shared lines as the unstable case. Which harness reflects the steady-state VI cost is not decided by any reference [I]. q24 `vi-cpu-contention` and q34 `nemu64-console` decide it.
+   - Load Miss VI off is 41.000 under both harnesses against 42.5 +- 0.5 [M]. The missing D-fill tail does not depend on the harness. The 2022 Load Miss VI-on same-bank value passes at 44.17, against an upper bound of 44.25 [M].
 
 ### E. nemu64:timing/load-miss-vi-off (C7 × 8: every miss exactly 41; hardware mean 42.5±0.5, median 41)
 
