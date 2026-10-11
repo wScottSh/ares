@@ -212,7 +212,12 @@ struct Channel {
       bank.valid  = true;
       bank.row    = row;
       free = g.dataEnd + trailer(b.requester, b.direction);
-      if(write) c.bytesWritten += b.bytes, writeDevice = deviceOf(b.address); else c.bytesRead += b.bytes;
+      if(write) {
+        c.bytesWritten += b.bytes;
+        writeDevice = deviceOf(b.address);
+      } else {
+        c.bytesRead += b.bytes;
+      }
       c.rowMisses += g.rowMiss;
     }
     //NEC uPD488170L p44 tPostMemWriteDelay: 4 tCYCLE before the next transaction
