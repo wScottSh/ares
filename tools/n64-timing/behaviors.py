@@ -927,10 +927,13 @@ RESOLUTION_UNIT = "U-SEPARATES"
 #An alternative more than this many tolerances from the fork must be a printed number cited by line.
 ALT_BOUND = 4
 #A mut that is one quantum of a named model parameter: step=1<unit>, the parameter's own unit, or step=<n><unit>;eq=1
-#when n stored units is the first step that changes the output, the effective quantum (clause 3).
+#when n stored units is the first step that changes the output, the effective quantum (clause 3), or
+#step=<k*><unit>;eq=1;grid=trace when a per-op trace shows k* is the slack threshold of a downstream grid (U-MUT-RULE-3).
 STEP = re.compile(r"(\d+)([A-Za-z][\w/-]*)")
 QUANTUM = ("param", "step")
 EFFECTIVE = "eq"
+GRID = "grid"
+GRID_TRACE = "trace"
 LINE_CITE = re.compile(r"\S:\d+\b|#L\d+")
 
 
@@ -1120,7 +1123,7 @@ def judge(rule, model, value):
 def separates_problems(b, row, fork, scopes):
     """What keeps a C row's separates cell from showing its question tells the fork from an alternative (section 1
     clause 3): at=<question> <key> <metric>;fork=<value>;alt=<value>;cite=<reference>, or mut=<value>;cite=<unit>,
-    optionally with param=<parameter>;step=<n><unit>[;eq=1] naming the model parameter the mutation steps."""
+    optionally with param=<parameter>;step=<n><unit>[;eq=1[;grid=trace]] naming the model parameter the mutation steps."""
     fields = dict(f.split("=", 1) for f in b["separates"].split(";") if "=" in f)
     shape = ("fork", "alt", "cite") if "alt" in fields else ("fork", "mut", "cite")
     if shape[1] == "mut" and any(f in fields for f in QUANTUM):
@@ -1128,10 +1131,12 @@ def separates_problems(b, row, fork, scopes):
         if missing:
             return [f"names a mut with {' and '.join(f'{f}=' for f in QUANTUM if f not in missing)} but no "
                     f"{' or '.join(f'{f}=' for f in missing)}; a stepped mut names both the parameter and the step"]
-        shape += QUANTUM + ((EFFECTIVE,) if EFFECTIVE in fields else ())
+        if GRID in fields and EFFECTIVE not in fields:
+            return [f"separates grid=`{fields[GRID]}` needs eq=1: grid=trace marks a slack-threshold effective quantum"]
+        shape += QUANTUM + tuple(f for f in (EFFECTIVE, GRID) if f in fields)
     if set(fields) != {"at", *shape}:
         return [f"separates must read `at=<question> <key> <metric>;fork=<value>;alt=<value>;cite=<reference>` or "
-                f"`...;mut=<value>;cite=<unit>[;param=<parameter>;step=<n><unit>[;eq=1]]`; it reads `{b['separates']}`"]
+                f"`...;mut=<value>;cite=<unit>[;param=<parameter>;step=<n><unit>[;eq=1[;grid=trace]]]`; it reads `{b['separates']}`"]
     step = STEP.fullmatch(fields["step"]) if "step" in fields else None
     if "step" in fields and step is None:
         return [f"separates step=`{fields['step']}` must read <count><unit>, such as step=1pclk"]
@@ -1139,6 +1144,8 @@ def separates_problems(b, row, fork, scopes):
         return [f"separates step=`{fields['step']}` must have a count of 1 or more"]
     if fields.get(EFFECTIVE, "1") != "1":
         return [f"separates eq=`{fields[EFFECTIVE]}` must read eq=1: the step is the parameter's effective quantum"]
+    if fields.get(GRID, GRID_TRACE) != GRID_TRACE:
+        return [f"separates grid=`{fields[GRID]}` must read grid={GRID_TRACE}: the signer's per-op trace proves the threshold"]
     quantum = step is not None and (int(step[1]) == 1 or EFFECTIVE in fields)
     at = fields["at"].split()
     if len(at) != 3 or at[0] not in b["decider"].split():
@@ -2697,6 +2704,16 @@ def self_test(root):
              "sysad.rdram-write-period", "must have a count of 1 or more"),
             ("an eq=1 with no param or step", BLOCKERS, fit_mut(300000, quantum=";eq=1", signed="verify-self-test"),
              "sysad.rdram-write-period", "separates must read"),
+            ("a slack-threshold mut (eq=1;grid=trace) far past 4 tolerances, signed", BLOCKERS,
+             fit_mut(3000000, quantum=effective + ";grid=trace", signed="verify-self-test"), "sysad.rdram-write-period", None),
+            ("a grid=trace mut without eq=1", BLOCKERS,
+             fit_mut(300000, quantum=effective.replace(";eq=1", ";grid=trace"), signed="verify-self-test"),
+             "sysad.rdram-write-period", "needs eq=1"),
+            ("a grid= other than trace", BLOCKERS,
+             fit_mut(300000, quantum=effective + ";grid=ri/bus.hpp:342", signed="verify-self-test"),
+             "sysad.rdram-write-period", "must read grid=trace"),
+            ("a slack-threshold mut with an empty signed", BLOCKERS, fit_mut(300000, quantum=effective + ";grid=trace"),
+             "sysad.rdram-write-period", "names a one-quantum mut of `sysad.rdram-write-period` with an empty signed"),
             ("an effective-quantum mut the rule accepts", BLOCKERS,
              fit_mut(0, quantum=effective, signed="verify-self-test"), "sysad.rdram-write-period", "accepts mut="),
             ("a mut whose cite is no unit", BLOCKERS, fit_mut(8000, cite="scratch-build"), "sysad.rdram-write-period",
