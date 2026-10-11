@@ -117,16 +117,18 @@ for plain_tsv in plains:
         if "failed" in logs or not line or bench(f"{name}-load-{field}.out") != line or later != want:
             bad.append(field)
     counts = " ".join("-" if n is None else str(n) for n in posted)
-    if None in posted:
-        print(f"repeat write {name}: FAIL, the runner reported no posted-repeats count at a save ({counts})")
+    if bad:
+        why = f"fields {bad} differ from the plain run"
+    elif None in posted:
+        why = "the runner reported no posted-repeats count at a save"
     elif not any(posted):
-        print(f"repeat write {name}: FAIL, no save held a posted repeat write (posted-repeats {counts}),"
-              " so the comparison cannot see a lost repeat flag; move the boot delays (romgen/suites/state)")
-    verdict = "FAIL" if bad or None in posted or not any(posted) else "PASS"
-    failed |= verdict == "FAIL"
-    print(f"repeat write {name}: {verdict}, loaded after field 0 from saves after fields 1-{len(posted)},"
-          f" posted-repeats {counts}"
-          + (f"; fields {bad} differ from the plain run" if bad else f", every run prints {line[0].split()[-1] if line else '-'}"))
+        why = ("no save held a posted repeat write, so the comparison cannot see a lost repeat flag;"
+               " move the delays (romgen/suites/state)")
+    else:
+        why = None
+    failed |= why is not None
+    print(f"repeat write {name}: {'FAIL' if why else 'PASS'}, loaded after field 0 from saves after fields"
+          f" 1-{len(posted)}, posted-repeats {counts}, " + (why or f"every run prints {line[0].split()[-1]}"))
 
 sys.exit(1 if failed else 0)
 EOF

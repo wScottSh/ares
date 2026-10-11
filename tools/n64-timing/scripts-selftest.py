@@ -139,7 +139,7 @@ def main():
 
         status, text = state_roundtrip(tmp, env, 1)
         results.append(("state-roundtrip.sh passes when a save holds a posted repeat write",
-                        status == 0 and text.count(": PASS") == 4, status, text))
+                        status == 0 and "FAIL" not in text and text.count("repeat write state-repeat-") == 3, status, text))
         status, text = state_roundtrip(tmp, env, 0)
         results.append(("state-roundtrip.sh fails when no save holds a posted repeat write",
                         status not in (0, None) and "no save held a posted repeat write" in text

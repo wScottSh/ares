@@ -7,10 +7,40 @@ state replays wrong changes the printed line."""
 from ... import runtime
 from ..bench import asm, benches
 from ..bench.sets import SetDef
+from ...suite import Step
 
 STATE_BYTES = 64 << 10
 
 ASM = r"""
+# args = {delay}. Waits out two VI field starts, then `delay` loop iterations. state-roundtrip.sh
+# loads its states after field 0, and a slot that had already made a repeat write would keep its
+# own repeat flag through a load that lacks it. The delay walks the phase the field start fixed.
+state_settle:
+    lw $t3, 0($a0)
+    li $t0, 0xA4400010
+    li $t2, 2
+ss_field:
+    lw $t1, 0($t0)
+    sltiu $t1, $t1, 10
+    bnez $t1, ss_field
+    nop
+ss_start:
+    lw $t1, 0($t0)
+    sltiu $t1, $t1, 10
+    beqz $t1, ss_start
+    nop
+    addiu $t2, $t2, -1
+    bnez $t2, ss_field
+    nop
+ss_delay:
+    beqz $t3, ss_done
+    nop
+    b ss_delay
+    addiu $t3, $t3, -1
+ss_done:
+    jr $ra
+    nop
+
 # Kernel. args = {addr (KSEG1), bytes}. Per 128 B: queue a 4 KiB RSP DMA DMEM -> RDRAM if the
 # DMA queue has room, set MI repeat mode, read MI_MODE back (all older writes done), SD the
 # block's address plus the start COUNT, then NOPs while the repeat write waits behind the DMA for the channel.
@@ -62,18 +92,18 @@ ksr_sum:
 """
 
 
-def repeat(suite):
+def repeat(suite, delay):
     rom = benches.Rom(suite, "state-repeat")
     rom.point("vi-on", "k_state_repeat", [benches.KSEG1 | benches.MEMSET_BUF, STATE_BYTES],
-              [("bytes", STATE_BYTES), ("vi", "on")], reps=128, extra=("sum",))
+              [("bytes", STATE_BYTES), ("vi", "on")], reps=128, extra=("sum",),
+              pre=[Step("state_settle", [delay], 0)])
 
 
-#The runner reports the posted repeat writes at each save and state-roundtrip.sh fails unless a
-#save of each ROM holds one. With 64 NOPs (32 left some boot delays without one, 850 and 900
-#among them), every delay of 600..1300 tried has such a save among fields 1-9.
-DELAYS = (680, 1262)
+#state-roundtrip.sh fails a ROM none of whose saves holds a posted repeat write. These delays
+#give 2-3 such saves each; a delay sweep of 0..1262 found none at 80, 100 and 300.
+DELAYS = (150, 900, 1262)
 
-SETS = [SetDef(f"state-repeat-{k}", f"state-repeat-{k}", "Bench", "(bench=state-repeat)", repeat, [asm.ASM, ASM],
-               {"SCRATCH_BASE": runtime.SCRATCH_BASE, "BOOT_DELAY": k, "LAYOUT_PAD": 0,
-                "SP_DMA_BUF": benches.SP_DMA_BUF})
+SETS = [SetDef(f"state-repeat-{k}", f"state-repeat-{k}", "Bench", "(bench=state-repeat)",
+               lambda suite, k=k: repeat(suite, k), [asm.ASM, ASM],
+               {"SCRATCH_BASE": runtime.SCRATCH_BASE, "SP_DMA_BUF": benches.SP_DMA_BUF})
         for k in DELAYS]
