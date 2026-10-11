@@ -274,25 +274,14 @@ def offset_table(run_dir):
     return "\n".join(out)
 
 
-def period(series):
-    """The boot-delay period of a snap's distance over step-1 sweeps (one {delay: distance} per pad): the lag
-    whose mean |d(k + lag) - d(k)|, summed over the sweeps, is the least of the curve's local minima past lag 1,
-    among lags the sweep spans twice.
-    Nearby delays sit at nearly the same phase, so the curve starts at its lowest; lag 1 is not a minimum."""
-    curves = [[s[k] for k in sorted(s)] for s in series]
-    n = min(map(len, curves))
-    mad = {lag: sum(sum(map(abs, map(int.__sub__, c[lag:], c[:-lag]))) / (len(c) - lag) for c in curves)
-           for lag in range(1, n // 2 + 2)}
-    minima = [lag for lag in range(2, n // 2 + 1) if mad[lag] < mad[lag - 1] and mad[lag] <= mad[lag + 1]]
-    return min(minima, key=mad.get) if minima else None
-
-
 def sweep_table(run_dir):
     """noise-sweep.sh's derivation of each READS snap's offset set (prehw-plan.md U-NOISE-ORDER): the fork's
-    distance at every layout pad and every boot delay 1..last, step 1. The boot phase moves a draw's start by up
-    to hundreds of clocks where a refresh or VI fetch lands between two draws (verify-177 item 4), and that
-    repeats with a period in boot delays. The sweep must span two periods, and the delays past the first period
-    must add nothing to its extent, which shows the first period held every phase. D +- K spans the sweep."""
+    distance at every layout pad and every boot delay 1..last, step 1. The kits start their draws at a V_CURRENT
+    line start, and the boot delay also moves that start across one poll iteration (sets.vi_line_sync). What else
+    it changes is the VI's state at the sync: its field bit, and where its clock edges fall against the CPU's and
+    RDP's (verify-177b fix round). Each state holds over a run of boot delays and recurs, so the delays past the
+    sweep's first half must add nothing to the first half's extent, which shows the first half held every state
+    the fork reaches. D +- K spans the sweep."""
     out, ok = [], True
     for (kit, snap), question in READS.items():
         by_pad = runs(run_dir, kit, snap)
@@ -302,20 +291,17 @@ def sweep_table(run_dir):
             out.append(f"{snap}: no step-1 sweep from boot delay 1 at pads {steps or 'any'} in {run_dir}")
             ok = False
             continue
-        p = period(list(by_pad.values()))
-        if p is None:
-            out.append(f"{snap}: sweep 1..{last} spans no period twice")
-            ok = False
-            continue
+        half = last // 2
         every = [v for ds in by_pad.values() for v in ds.values()]
-        first = [v for ds in by_pad.values() for k, v in ds.items() if k <= p]
-        rest = [v for ds in by_pad.values() for k, v in ds.items() if k > p]
-        held = min(rest) >= min(first) and max(rest) <= max(first)
+        first = [v for ds in by_pad.values() for k, v in ds.items() if k <= half]
+        rest = [v for ds in by_pad.values() for k, v in ds.items() if k > half]
+        held = bool(first) and min(rest) >= min(first) and max(rest) <= max(first)
         ok &= held
         d, k = offset_set_of(every)
-        out.append(f"{snap} ({question}): period {p} boot delays; {len(by_pad)} pads x delays 1..{last}; pads " +
+        out.append(f"{snap} ({question}): {len(by_pad)} pads x delays 1..{last}; pads " +
                    ", ".join(f"{q}: {min(ds.values()) - d:+d}..{max(ds.values()) - d:+d}" for q, ds in sorted(by_pad.items())) +
-                   f" from D; delays 1..{p} span {min(first)}..{max(first)}, {p + 1}..{last} span {min(rest)}..{max(rest)}"
-                   f"{'' if held else ' (past the first period: the sweep has not held every phase)'}; "
+                   f" from D; delays 1..{half} span {min(first, default=None)}..{max(first, default=None)}, "
+                   f"{half + 1}..{last} span {min(rest)}..{max(rest)}"
+                   f"{'' if held else ' (past the first half: the sweep has not held every state)'}; "
                    f"offset set {snap} D = {d} +- {k}")
     return "\n".join(out), ok

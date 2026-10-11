@@ -347,11 +347,20 @@ NOISE_KITS = {"kit-noise": NOISE_CASES, "kit-noise2": NOISE2_CASES}
 #bit passes: vi_init's odd V_SYNC leaves it where boot put it (k_bus_vline), and the noise sweep reaches both.
 NOISE_FIELD_LINE, NOISE_SYNC_LINE = 0x100, 8
 V_CURRENT = rcp.VI_BASE + 0x10
+#Where in its poll the CPU sees the line change is not fixed: a console leaves the poll up to one iteration after
+#the fork would. One iteration is the V_CURRENT read (behaviors.tsv cpu.rcp-register-read, 22 pclk) and the
+#loop's 5 other instructions, 27 pclk, 9 cal_spin iterations of 3 pclk. The fork's builds spin after the sync
+#by SYNC_SPIN, then SYNC_SPIN +- POLL_SPINS as the boot delay steps, so a step-1 boot delay sweep (noise-sweep.sh)
+#crosses every VI start it reaches with the CPU up to one poll iteration either side; boot delay 1, the
+#console build, spins SYNC_SPIN.
+POLL_SPINS = 9
+SYNC_SPIN = POLL_SPINS + 1
 
 
-def vi_line_sync():
+def vi_line_sync(boot_delay=1):
+    spin = SYNC_SPIN + (boot_delay - 1 + POLL_SPINS) % (2 * POLL_SPINS + 1) - POLL_SPINS
     return [wait_eq(V_CURRENT, 0x3FE, line << 1, WAIT, 0)
-            for line in (NOISE_FIELD_LINE, NOISE_SYNC_LINE, NOISE_SYNC_LINE + 1)]
+            for line in (NOISE_FIELD_LINE, NOISE_SYNC_LINE, NOISE_SYNC_LINE + 1)] + [Step("cal_spin", [spin])]
 
 
 SPIN_ASM = """
@@ -397,7 +406,7 @@ class NoiseKit:
         #dump between two draws made the later draw's noise clock depend on the earlier one's noise bits
         #(verify-173 item 4): a console with other bits could read offset-outside-bound. kit.py's noise order
         #self-test holds this and the draw order.
-        draw_steps = vi_line_sync()
+        draw_steps = vi_line_sync(self.consts.get("BOOT_DELAY", 1))
         for name, width, bpp, surf, draws in cases:
             draw_steps.append(fill32(UNCACHED | surf, width * bpp // 4, 0))
             for spin, lst in draws:

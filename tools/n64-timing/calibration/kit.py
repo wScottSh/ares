@@ -1480,11 +1480,25 @@ def noise_order_self_test():
         out.append(synced)
         print(f"kit: self-test: noise order: {kit} waits for a V_CURRENT line start, either field, before its first "
               f"draw: {'ok' if synced else 'FAILED'} ({[line for *_, line in waits]})")
+        spins = []
+        for k in range(1, 2 * sets.POLL_SPINS + 2):
+            suite = SimpleNamespace(tests=[])
+            sets.NoiseKit(set_name=kit, consts={"DUMP": 0, "BOOT_DELAY": k}).build(suite)
+            steps = [s for v in suite.tests[0].values for s in v.steps]
+            last = max(i for i, s in enumerate(steps) if s.routine == "step_wait_eq" and s.params[0] == sets.V_CURRENT)
+            spins.append(steps[last + 1].params[0] if steps[last + 1].routine == "cal_spin" else None)
+        rcp_read = next(int(line.split("\t")[1]) for line in (ROOT / "ares/n64/timing/behaviors.tsv").read_text().split("\n")
+                        if line.startswith("cpu.rcp-register-read\t"))
+        walks = (None not in spins and sorted(spins) == list(range(spins[0] - sets.POLL_SPINS, spins[0] + sets.POLL_SPINS + 1))
+                 and 3 * sets.POLL_SPINS >= rcp_read + 5)
+        out.append(walks)
+        print(f"kit: self-test: noise order: {kit}'s spin after the sync walks one poll iteration ({rcp_read} + 5 pclk) "
+              f"either side of boot delay 1's over {len(spins)} boot delays: {'ok' if walks else 'FAILED'} ({spins})")
     return out
 
 
 def noise_sweep_self_test():
-    """noise.sweep_table on synthetic ARES_DPLOG sweeps: every draw takes 7000 clocks plus the boot delay mod the
+    """noise.sweep_table on synthetic ARES_DPLOG sweeps: every draw takes 7000 clocks plus the boot delay mod a
     period, and at pad 3 only the anchor takes 300 more for 9 delays of each period, so the set must span that pad."""
     import itertools
     import tempfile
@@ -1510,13 +1524,13 @@ def noise_sweep_self_test():
     out = []
     for name, pads, delays, period, late, want in [
             ("two periods at pads 0 and 3 span pad 3's excursion", (0, 3), range(1, 81), 37, 0, True),
-            ("one period cannot show its phases repeat", (0, 3), range(1, 61), 37, 0, False),
-            ("a second period past the first's extent", (0, 3), range(1, 81), 37, 500, False),
+            ("a first half shorter than the period has not held", (0, 3), range(1, 61), 37, 0, False),
+            ("a second half past the first's extent", (0, 3), range(1, 81), 37, 500, False),
             ("a sweep missing boot delay 78 is not a step-1 sweep", (0,), [k for k in range(1, 81) if k != 78], 37, 0, False)]:
         with tempfile.TemporaryDirectory() as root:
             table, ok = sweep(root, pads, delays, period, late)
         good = ok == want and (not want or all(
-            f"period {period} boot delays" in line and want_set(snap, kit, pads, delays, period) in line
+            want_set(snap, kit, pads, delays, period) in line
             for line, (kit, snap) in zip(table.split("\n"), noise.READS)))
         out.append(good)
         print(f"kit: self-test: noise sweep: {name}: {'ok' if good else 'FAILED'} ({table.split(chr(10))[0]})")
