@@ -9,8 +9,11 @@ band, and prints a measured value only for a point that fails that band.
 
 The run's PI log carries every COUNT read ("C value at"), so this script recovers the ROM's
 own measurement exactly: for each timed DMA start ("L W size dram cart at"), t0 is the last
-COUNT read before the start and t1 the first one after it. The replay is valid only when it
-reproduces every "Found:" value the ROM printed in the same run.
+COUNT read before the start and t1 the first one after it. The replay must agree with what the
+ROM said in the same run: it reproduces every "Found:" value the ROM printed, and when the ROM
+reports 0 failures, every replayed mean at sizes 1-383 lies inside the ROM's own band, since the
+ROM printed nothing (pi_dma_test.c:211). A run that would pass the rule but whose replay
+contradicts the ROM's silence reads UNCHECKED; a failing comparison reads FAIL either way.
 
 Pass rule (green-plan.md section 3, pidma:logs): every point at sizes 8-382, except 305-352,
 lies within the golden min..max +-3%, and the ROM's own self-check reports 0 failures.
@@ -36,6 +39,15 @@ EXCLUDED = (305, 352)
 EXCLUDED_REASON = ("the golden logs come from the ROM's MODE_GENERATE build, whose cart buffer sits at another "
                    "PI page phase: this ROM's buffer starts 0xd0 into a 512 B page, so its DMAs cross a page from "
                    "305 B on, while hardware's jump falls at about 353 B (green-plan/pisi.md item 3, inferred)")
+
+
+def f32(x):
+    """x rounded to an IEEE single, as the ROM's float arithmetic rounds each step."""
+    return struct.unpack("f", struct.pack("f", x))[0]
+
+
+#TIMING_TEST_TOLERANCE 0.1f (pi_dma_test.c:14); the constants fold in float.
+ROM_LOW, ROM_HIGH = f32(1 - f32(0.1)), f32(1 + f32(0.1))
 
 
 def golden(logdir):
@@ -123,6 +135,17 @@ def rom_failures(text):
     return int(m.group(1) or 0) if m else None
 
 
+def rom_band(lo, hi):
+    """The ROM's band for a point: exp_minticks*(1.0f-TOLERANCE) .. exp_maxticks*(1.0f+TOLERANCE), in float."""
+    return f32(lo * ROM_LOW), f32(hi * ROM_HIGH)
+
+
+def rom_silent(mean, lo, hi):
+    """pi_dma_test.c:211 does not fire: avgticks, converted to float, is not outside the ROM's band."""
+    low, high = rom_band(lo, hi)
+    return mean is not None and not (mean < low or mean > high)
+
+
 def deviation(mean, lo, hi):
     return (mean - lo) / lo if mean < lo else (mean - hi) / hi if mean > hi else 0.0
 
@@ -148,17 +171,27 @@ def verdict(gold, meas, printed, failures):
     for k in in_all:
         if k in means:
             worst[k[1]] = max(worst.get(k[1], 0.0), deviation(means[k], *gold[k]), key=abs)
-    if wrong or failures != 0:
+    loud = sorted(k for k in gold if not rom_silent(means.get(k), *gold[k])) if failures == 0 else []
+    if wrong or failures != 0 or ok_rule != len(in_rule):
         word = "FAIL"
-    elif not printed:
-        word = "UNCHECKED"
     else:
-        word = "PASS" if ok_rule == len(in_rule) else "FAIL"
-    replay = (("replay unchecked: the ROM printed no measured value (it prints one only for a point outside its "
-               "own 10% band), so this run cannot show the replay reproduces it") if not printed else
-              f"replay reproduces {len(printed)}/{len(printed)} printed values" if not wrong else
-              "replay INVALID, printed values not reproduced (point: printed, replayed) "
-              + ", ".join(f"(0x{o + 0x780:x},{s}): {p}, {r}" for (o, s), (p, r) in sorted(wrong.items())))
+        word = "UNCHECKED" if loud else "PASS"
+    if wrong:
+        replay = ("replay INVALID, printed values not reproduced (point: printed, replayed) "
+                  + ", ".join(f"(0x{o + 0x780:x},{s}): {p}, {r}" for (o, s), (p, r) in sorted(wrong.items())))
+    elif printed:
+        replay = f"replay reproduces {len(printed)}/{len(printed)} printed values"
+    elif failures != 0:
+        replay = "the ROM printed no measured value"
+    elif loud:
+        replay = (f"replay contradicts the ROM's silence at {len(loud)}/{len(gold)} points, outside the ROM's own "
+                  f"float band min*0.9..max*1.1 (pi_dma_test.c:211) though it printed none (point: replayed, band) "
+                  + ", ".join(f"(0x{o + 0x780:x},{s}): {means.get((o, s), 'missing')}, "
+                              f"{rom_band(*gold[o, s])[0]:g}..{rom_band(*gold[o, s])[1]:g}" for o, s in loud[:8])
+                  + (", ..." if len(loud) > 8 else ""))
+    else:
+        replay = (f"replay agrees with the ROM's silence: {len(gold)}/{len(gold)} points inside the ROM's own float "
+                  f"band min*0.9..max*1.1 (pi_dma_test.c:211)")
     return word, (f"pidma: {word}: exact COUNT replay, {replay}; "
                   f"sizes {SIZES[0]}-{SIZES[1]} except {EXCLUDED[0]}-{EXCLUDED[1]} {ok_rule}/{len(in_rule)} within "
                   f"+-{TOLERANCE:.0%} of hardware min..max (all sizes {SIZES[0]}-{SIZES[1]}: {ok_all}/{len(in_all)}); "
@@ -220,9 +253,16 @@ def self_test():
         ("a ROM self-check failure fails", run(at_hw, {}, 1), "FAIL"),
         ("no ROM verdict fails", run(at_hw, {}, None), "FAIL"),
         ("a printed value the replay does not reproduce fails", run(at_hw, {(0, 8): 161}, 0), "FAIL"),
-        ("a run whose ROM printed no value is unchecked, not a pass", run(at_hw, {}, 0), "UNCHECKED"),
-        ("a run whose ROM printed no value is unchecked, not a fail",
-         run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), "UNCHECKED"),
+        ("a silent ROM whose band holds every replayed mean passes", run(at_hw, {}, 0), "PASS"),
+        ("a point 4% over hardware fails though the ROM was silent",
+         run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), "FAIL"),
+        ("a passing run whose replay lies outside the silent ROM's band is unchecked",
+         run([(0, 1, 144)] + at_hw[1:], {}, 0), "UNCHECKED"),
+        ("a failing run whose replay lies outside the silent ROM's band still fails",
+         run([(0, 1, 144)] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, {}, 0), "FAIL"),
+        ("a replayed mean at the ROM's float bound max*1.1 is inside", run([(0, 1, 143)] + at_hw[1:], {}, 0), "PASS"),
+        ("an excluded point missing from the replay contradicts the silent ROM",
+         run([first] + [(0, 8, 160)] * 4, {}, 0), "UNCHECKED"),
     ]
     failed = 0
     for name, got, want in cases:
