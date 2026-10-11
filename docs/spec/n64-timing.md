@@ -37,7 +37,7 @@ Results come from `behaviors.py --results` over one standing run of every suite,
 From `docs/spec/map-1-closure-draft.md`, which gives each clause and its evidence (`docs/design/green-plan.md` section 1).
 
 - SOFTWARE_COMPLETE: not decided. 3 of 3 computed clauses hold; 1 is not computed from the repository.
-- SOFTWARE_READY: 0 of 6 clauses hold.
+- SOFTWARE_READY: 1 of 6 clauses hold.
 - MAP_GREEN: does not hold. 0 of 4 computed clauses hold; 1 is not computed from the repository.
 
 ## Behaviors

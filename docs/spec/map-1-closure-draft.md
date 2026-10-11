@@ -9,7 +9,7 @@ The spec is `docs/spec/n64-timing.md`: 153 behaviors, each with a basis, a refer
 The three reports of `docs/design/green-plan.md` section 1, computed from the tables and the results. SOFTWARE_COMPLETE is the software-only end state; SOFTWARE_READY cannot hold without the console run (#16); MAP_GREEN is the map's destination.
 
 - SOFTWARE_COMPLETE: not decided. 3 of 3 computed clauses hold; 1 is not computed from the repository.
-- SOFTWARE_READY: 0 of 6 clauses hold.
+- SOFTWARE_READY: 1 of 6 clauses hold.
 - MAP_GREEN: does not hold. 0 of 4 computed clauses hold; 1 is not computed from the repository.
 
 ### SOFTWARE_COMPLETE
@@ -25,7 +25,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 
 | Clause | Holds | Evidence |
 |---|---|---|
-| det and stepcap pass, and the 600-field MM run takes <= 120 s, re-timed on current master | **no** | det pass, stepcap pass; slowest scene filesel-rotate 102.897 s; the wall times name `6dfbf7166` and the standing run `d1874254e`, and the clause holds only when they match |
+| det and stepcap pass, and the 600-field MM run takes <= 120 s, re-timed on current master | yes | det pass, stepcap pass; slowest scene filesel-rotate 104.817 s; the wall times name `d1874254e`, `fbf33c91a` and the standing run `d1874254e`, and the clause holds only when they match |
 | no check is fail | **no** | 17 fail: `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:mi-memset-uncached`, `mm:filesel-named`, `nemu64:timing/load-from-uncached-vi-on-same-bank`, `nemu64:timing/load-miss-vi-off`, `pidma:logs`, `systembench:pi-dma-8`, `thar0:ac-zbsame-vioff-imrd-1cyc`, `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc`, `thar0:imrd-1cycle`, `thar0:nozb-visame-noimrd-1cyc`, `thar0:nozb-visep-imrd-1cyc`, `thar0:separate-bank`, `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`, `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`, `thar0:zcmp` |
 | no check is consistent-only or pass-conditional | **no** | 3: `bench:mi-memset-rspdma` pass-conditional:#77, `bench:uncached-sizes-u32-banked` consistent-only, `systembench:u32r-banked` consistent-only |
 | every pending check is pending:calibration-16 on a kit question a tool can compare | **no** | other gates: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; hw checks whose question no tool compares: none |
@@ -36,7 +36,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 
 | Clause | Holds | Evidence |
 |---|---|---|
-| SOFTWARE_READY | **no** | 0 of 6 clauses hold |
+| SOFTWARE_READY | **no** | 1 of 6 clauses hold |
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
 | every hw:* check is ingested and passes | **no** | 0 of 89 pass, 89 pending:calibration-16 |
@@ -47,7 +47,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | Item | Result | Evidence |
 |---|---|---|
 | Timing is bit-deterministic across runs | **pass** | `det` pass: det-mm: determinism: PASS, 85 files byte-identical, 23404 fields with trace_hash; det-nemu64-cop0hazard: determinism: PASS, 3 files byte-identical, 1 fields with trace_hash; det-nemu64-cycle: determinism: PASS, 3 files byte-identical, 2 fields with trace_hash; det-nemu64-timing: determinism: PASS, 3 files byte-identical, 24 fields with trace_hash; `stepcap` pass: stepcap-mm: stepcap: PASS, 85 files byte-identical, 23404 fields with trace_hash; stepcap-nemu64-cop0hazard: stepcap: PASS, 3 files byte-identical, 1 fields with trace_hash; stepcap-nemu64-cycle: stepcap: PASS, 3 files byte-identical, 2 fields with trace_hash; stepcap-nemu64-timing: stepcap: PASS, 3 files byte-identical, 24 fields with trace_hash |
-| A 600-frame MM bench run takes <= 2 min | **pass** | slowest scene filesel-rotate 102.897 s of 120 s; title 39.27, filesel 55.948, filesel-named 81.334, filesel-options 67.071, filesel-rotate 102.897, sct 63.097, field 60.669 s (tools/n64-timing/mmbench/wall-budget.tsv: T16 (PR #71) serial median of 3 runs on master 6dfbf7166, runner copied to a fresh file (README Run budget)) |
+| A 600-frame MM bench run takes <= 2 min | **pass** | slowest scene filesel-rotate 104.817 s of 120 s; poweron 26.875, title 40.441, filesel 57.135, filesel-named 83.074, filesel-options 68.453, filesel-rotate 104.817, sct 63.996, field 62.067 s (tools/n64-timing/mmbench/wall-budget.tsv: U-WALL serial median of 5 runs on master fbf33c91a (ares/ and tools/ identical to standing run d1874254e), runner copied to a fresh file, interleaved with the T16 runner (mmbench/wall.py, README Run budget)) |
 | MM file select (#11): empty files <= 1.05 and named files 1.90-2.10 fields per game frame, both must pass | **fail** | `mm:filesel-empty` pass: filesel: median over 5 phases: mean 1.0113 (min 1.0113, max 1.0158), 98.9% (min 98.4%, max 98.9%) of game frames at 1 field(s); `mm:filesel-named` fail: filesel-named: median over 5 phases: mean 1.6789 (min 1.6695, max 1.6893), 67.9% (min 66.9%, max 68.9%) of game frames at 2 field(s) |
 | MM bench integration: point `tools/bench` at the fork, remove the `func_80173B48` pin | **not done** | mm-decomp-60fps `tools/bench` (untracked in the checkout at 56fa21dd) still runs `ares` from PATH through `tools/ares/ares-headless.sh` and records the upstream ares revision, and its BENCH build still pins `func_80173B48` (`src/code/game.c`, `tools/bench/README.md`). The fork measures MM with its own `tools/n64-timing/mmbench` instead, on the retail NTSC-U 1.0 ROM (mmbench.py checks MD5 2a0a8acb61538235bc1094d297fb6556), where `func_80173B48` is the unpinned retail code. Per-behavior provenance is in `docs/spec/mm-bench.md`. |
 
