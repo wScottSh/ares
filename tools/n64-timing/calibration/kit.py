@@ -970,8 +970,10 @@ def noise_rate(snaps, draws):
     if floor >= NOISE_RATE_MAX:
         reasons.append(f"{' '.join(testable)}: false-match rate >= {floor:.3g} at K = 0 ({mappings} mappings, b <= {bits})")
         return "report-only", "; ".join(reasons)
-    return "not ruled out", "; ".join(reasons + [f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, "
-                                                 f"b <= {bits}); the offset reader is not built"])
+    unread = [s for s in testable if s not in noise.READS]
+    return ("not ruled out" if unread else "read"), "; ".join(reasons + [
+        f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, b <= {bits}); "
+        + (f"no offset reader for {' '.join(unread)}" if unread else "the offset reader gives the mapping per log")])
 
 
 def noise_table(run_dir=None, root=ROOT):
@@ -995,7 +997,22 @@ def noise_table(run_dir=None, root=ROOT):
         verdicts.append(f"{q['id']}: " + ": ".join(noise_rate(snaps, draws)))
     out += [""] + verdicts
     out += [f"fork contradicts b = 0 for {', '.join(contradicted)}"] if contradicted else []
-    return "\n".join(out), not contradicted
+    unresolved = []
+    for snap, question in noise.READS.items():
+        fixed = noise.offset_set(question, Path(root) / QUESTIONS)
+        out.append(f"{snap}: offset set " + (f"D = {fixed[0]} +- {fixed[1]} ({question} source)" if fixed else
+                                             f"not fixed in {question}'s source; run kit.py --layout"))
+        got = [log.records.get(("snap", snap), {}) for log in logs]
+        results = collections.Counter(r.get("mapping", "unread") for r in got)
+        rates = [float(r["rate"]) for r in got if r.get("rate", "-") != "-"]
+        if logs:
+            out.append(f"{snap}: fork logs {dict(results)}, false-match rate " +
+                       (f"{min(rates):.3g}..{max(rates):.3g}, b {min(r['b'] for r in got if r.get('b') is not None)}.."
+                        f"{max(r['b'] for r in got if r.get('b') is not None)}" if rates else "-"))
+            unresolved += [snap] if set(results) != {"angrylion"} else []
+    out += [f"fork logs do not resolve to the fork's mapping (angrylion, rdp_core.c rdp_noise_dither_alpha) for "
+            f"{', '.join(unresolved)}"] if unresolved else []
+    return "\n".join(out), not contradicted and not unresolved
 
 
 def noise_self_test():
@@ -1021,11 +1038,54 @@ def noise_self_test():
         got, detail = noise_rate(snaps, among)
         out.append(got == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail})")
+    out += noise_reader_self_test(draws)
     for name, draw, want in [("gray 0x80 bounds b at 0", draws["cd-noise-16"], 0),
                              ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256)]:
         bits = noise_bits(draw)
         out.append(bits == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if bits == want else 'FAILED'} ({bits})")
+    return out
+
+
+def noise_reader_self_test(draws):
+    """The offset reader on synthetic logs: the LFSRs at a known clock, drawn as the kit draws them."""
+    def rect(t, flip=None):
+        px = []
+        for i, (a, b, c) in enumerate(noise.bits(t, 1016)):
+            a ^= i == flip
+            px += [0xFF if a and not b else 0 if a else b << 7 | c << 6 | 0x20] * 3 + [0xE0]
+        return bytes(px)
+
+    def snap(t, mapping, draw):
+        return b"".join(b"\xff\xff" if noise_pixel(draw, ad=noise.AD_MAPPINGS[mapping](*abc)[0]) is not None
+                        else b"\0\0" for abc in noise.bits(t, draw["width"]))
+
+    import re as _re
+    hpp = (ROOT / "tools/n64-timing/tests/noise-datasets.hpp").read_text()
+    data = {n: "".join(_re.findall(r'"([01x]*)"', body)) for n, body in _re.findall(r"char (Noise\w+)\[\] =([^;]*);", hpp)}
+    #noise-lfsr.cpp AbFirstPixel and CFirstPixel[0]: the console clocks of Thar0's datasets A, B and C0 from all ones.
+    console = [(data["NoiseA"], 256_586_636, 0), (data["NoiseB"], 256_586_636, 1), (data["NoiseC0"], 161_308_259, 2)]
+
+    t0, d, k = 5_000_000, 1000, 20
+    over = noise.LFSR["a"].period + 12345
+    ad, threshold = draws["ad-noise-7f"], {**draws["ad-noise-threshold"], "bits16": True, "width": 512}
+    out = []
+    for name, got, want in [
+            ("Angrylion pixels at offset +7 read angrylion", noise.read(rect(t0), snap(t0 + d + 7, "angrylion", ad), ad, d, k)["result"], "angrylion"),
+            ("MiSTer pixels read mister-odd", noise.read(rect(t0), snap(t0 + d, "mister-odd", ad), ad, d, k)["result"], "mister-odd"),
+            ("mutation: Angrylion pixels 5000 clocks past the set read offset-outside-bound",
+             noise.read(rect(t0), snap(t0 + d + 5000, "angrylion", ad), ad, d, k)["result"], "offset-outside-bound"),
+            ("mutation: the set one clock short of the true offset reads offset-outside-bound",
+             noise.read(rect(t0), snap(t0 + d + k + 1, "angrylion", ad), ad, d, k)["result"], "offset-outside-bound"),
+            ("a draw that stores nothing for any value (b = 0) reads ambiguous",
+             noise.read(rect(t0), snap(t0 + d, "angrylion", threshold), threshold, d, k)["result"], "ambiguous"),
+            ("an anchor with one a bit flipped reads no-anchor", noise.read(rect(t0, flip=500), snap(t0 + d, "angrylion", ad), ad, d, k)["result"], "no-anchor"),
+            ("an anchor past one period of a is found", noise.anchor(rect(over)), over),
+            *[(f"the LFSRs give Thar0's console dataset {'abc'[i].upper()} at its clock", all(
+                x == "x" or int(x) == abc[i] for x, abc in zip(bits, noise.bits(t, len(bits)))), True) for bits, t, i in console],
+            ("Angrylion at offset 0 prints a rate below 1e-6", noise.read(rect(t0), snap(t0 + d, "angrylion", ad), ad, d, k)["rate"] < noise.RATE_MAX, True)]:
+        out.append(got == want)
+        print(f"kit: self-test: noise offset reader: {name}: {'ok' if got == want else 'FAILED'} ({got})")
     return out
 
 
