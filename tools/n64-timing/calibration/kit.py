@@ -1083,9 +1083,9 @@ def self_test():
     fork_chain = [chain(180), chain(181, jump=161)]
     chains = [("eret-chain: the console reads as the fork", eret_q, chain(181), "pass"),
               ("eret-chain: one tick past the fork's 181 is inside the tolerance", eret_q, chain(182), "pass"),
-              ("eret-chain: two ticks past the fork's 181 is rejected", eret_q, chain(183), "fail"),
+              ("eret-chain: CpuEret +1 unit (183 in every log, fix-185 sweep) is rejected", eret_q, chain(183), "fail"),
               ("fpu-trivial-chain: one tick past the fork's 48 is inside the tolerance", triv_q, chain(180, trivial=49), "pass"),
-              ("fpu-trivial-chain: two ticks past the fork's 48 is rejected", triv_q, chain(180, trivial=50), "fail"),
+              ("fpu-trivial-chain: CpuFpuTrivial +1 unit (50 in every log, fix-185 sweep) is rejected", triv_q, chain(180, trivial=50), "fail"),
               ("fpu-trivial-chain: MUL.D by a power of two at the by-3.0 control cost (144)", triv_q,
                chain(180, trivial=144), "fail")]
     for name, q, hw, want in chains:
