@@ -4,6 +4,8 @@ Each function takes one log's records ({(rom, point): fields}) and returns {(rom
 add, or raises KeyError when the log lacks its points (kit.derive skips it). The points are named in
 romgen/suites/calib/<module>.py.
 """
+import collections
+import math
 from romgen.suites.bench import report as bench_report
 
 
@@ -213,6 +215,60 @@ def vintr(recs):
     return {("bus-derived", "vintr"): {"vintr-mean-lag": round((v["sum"] - v["min"] - v["max"]) / (v["reps"] - 2) - v["bias"], 1)}}
 
 
+#DPC_CLOCK's read lands on the CPU's MI_INTR poll, at most 20.4 rclk late (questions.tsv rdp-rect-base).
+POLL_RCLK = 20.4
+#One refresh: the IPL3 dirty refresh delay (ri.refresh-dirty, 54 rclk) plus the row retry it leaves
+#(ri.retry-dirty, 30 tc = 7.5 rclk).
+REFRESH_RCLK = 61.5
+#A width step adds one pixel per line at 1 px/rclk (rdp.span-1cycle). Two adjacent widths differ
+#outside that by less than one poll period and, the rectangle growing by less than one refresh
+#interval, by at most one refresh less or two more: an excess above this is a stall.
+STEP_RCLK = POLL_RCLK + 2 * REFRESH_RCLK
+#One 64 B read and one 64 B write-back on the RDRAM wire, row hits: (10 + 32 + 2) + (4 + 32 + 4) tc
+#(ri.read-hit, ri.write-hit, ri.octbyte, ri.post-read-gap, ri.post-write-gap) = 21 rclk at 4 tc per
+#rclk, above the 16 clocks a 32 bpp half shades in; with a refresh's share of the channel (61.5 rclk
+#per VI line of 42 us = 2625 rclk, rdram-bus-arbitration.md B11) and the poll and refresh error of a
+#160 px difference over 10 halves of 256 lines.
+WIRE_HALF_RCLK = 21.6
+
+
+def release(clocks, lines, segment_px, half_px):
+    """The width spacing of DPC_CLOCK's stall steps over consecutive widths ({width: clock})."""
+    steps = [w + 1 for w in sorted(clocks) if w + 1 in clocks and clocks[w + 1] - clocks[w] - lines > STEP_RCLK]
+    if not steps:
+        return "no-step", steps
+    if len(steps) == 1:
+        return f"single-{steps[0]}", steps
+    gaps = collections.Counter(b - a for a, b in zip(steps, steps[1:]))
+    top = max(gaps.values())
+    period = math.gcd(*[g for g, n in gaps.items() if n == top])
+    return {segment_px: "segment", half_px: "half"}.get(period, f"period-{period}"), steps
+
+
+def span2(recs):
+    """kit-span2: per depth, the spacing of a write-only span's stall steps (segment: every 16 B,
+    half: every 64 B, no-step, else period-<px> or single-<width>), and IM_RD's steady cost per 64 B
+    half against the RI wire time (wire-bound or above-wire)."""
+    out = {}
+    lines = recs[("span-write", "b32-w1")]["h"]
+    for bpp in (32, 16):
+        pts = [f for (rom, _), f in recs.items() if rom == "span-write" and f.get("bpp") == bpp]
+        clocks = {f["w"]: f["clock"] for f in pts if f["w"] <= 80}
+        px = bpp // 8
+        cat, steps = release(clocks, lines, 16 // px, 64 // px)
+        steady = {f["w"]: f["clock"] for f in pts}
+        out[("span-write", f"release-b{bpp}")] = {
+            "release": cat, "steps": ",".join(map(str, steps)) or "none",
+            "steady_half": round((steady[320] - steady[160]) / (lines * 160 * px / 64), 2)}
+    imrd = {f["w"]: f for (rom, _), f in recs.items() if rom == "span-imrd"}
+    steady = (imrd[320]["clock"] - imrd[160]["clock"]) / (lines * 10)
+    write16 = recs[("span-write", "b32-w16")]["clock"]
+    out[("span-imrd", "port")] = {"port": "wire-bound" if steady <= WIRE_HALF_RCLK else "above-wire",
+                                  "steady_half": round(steady, 2),
+                                  "one_half_read": round((imrd[16]["clock"] - write16) / lines, 2)}
+    return out
+
+
 def vi_latch(recs):
     """kit-bus's frame-latch points read as bench:vi-frame-latch reads them (bench report.py), so the
     console and the fork's bench decide the same two categories: fetches (1 when the late V_VIDEO
@@ -225,4 +281,4 @@ def vi_latch(recs):
                                           "vi_bank": got["y-late-bank2"]["vi_bank"]}}
 
 
-DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch]
+DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch, span2]

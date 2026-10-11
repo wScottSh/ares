@@ -44,6 +44,7 @@ KIT_ROMS = {
     "kit-hpos": ("calib", "kit-hpos", True),
     "kit-rdp": ("calib", "kit-rdp", True),
     "kit-span": ("calib", "kit-span", True),
+    "kit-span2": ("calib", "kit-span2", True),
     "kit-noise": ("calib", "kit-noise", True),
     "rdpstat-1prim": ("rdpstat", "1prim", False),
     "rdpstat-dpc": ("rdpstat", "dpc", False),
@@ -761,6 +762,9 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: cpu-llsc: the Watch probe's record survives parsing: {'ok' if ok else 'FAILED'} ({watch})")
     cases += llscs + [("llsc watch record", None, None)]
+    span2_cases = span2_self_test()
+    failed += span2_cases.count(False)
+    cases += span2_cases
     latch_q = next(q for q in questions() if q["id"] == "vi-frame-latch")
 
     def vi_latch(late, bank2, bank3):
@@ -802,6 +806,59 @@ def self_test():
     failed += mm_failed
     print(f"kit.py: self-test: {len(cases)} cases, {failed} failed")
     return failed
+
+
+def span2_log(period=0, stall=256, steady=60.0, at=()):
+    """A kit-span2 log: 256-line write-only rectangles at 32 bpp (16 bpp: twice the pixels per period)
+    whose clock grows 256 rclk per pixel plus `stall` at the first pixel of every `period` px past the
+    second (0: never) or at each width in `at` (both depths), each width off by the instrument's worst error against the verdict
+    (one poll period and two refreshes up on a width without a step, poll plus one refresh down on a step); and IM_RD
+    rectangles costing `steady` rclk per 64 B half and line."""
+    lines = 256
+    body = ""
+    for bpp in (32, 16):
+        p = period * 32 // bpp
+        clock = 1000
+        for w in range(1, 81):
+            step = w in at or p and w > 2 * p and w % p == 1
+            clock += lines + (stall - derived.POLL_RCLK - derived.REFRESH_RCLK if step else derived.POLL_RCLK + 2 * derived.REFRESH_RCLK - 0.5)
+            body += f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 clock={int(clock)}\n"
+        for w in (160, 320):
+            body += (f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
+                     f"clock={int(clock + (w - 80) * lines)}\n")
+    for w in (1, 8, 16, 32, 64, 128, 160, 192, 256, 320):
+        body += (f"#bench span-imrd b32-w{w} bpp=32 w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
+                 f"clock={int(10000 + max(0, w // 16 - 1) * steady * lines)}\n")
+    return Log(sample_log(body, rom="kit-span2"))
+
+
+def span2_self_test():
+    """kit-span2's derived categories under the instrument's worst error, and the question rows' rule."""
+    out = []
+    for name, log, key, field, want in [
+            ("a 1 rclk per line stall every 4 px at 32 bpp reads segment", span2_log(4), "release-b32", "release", "segment"),
+            ("... and every 8 px at 16 bpp", span2_log(4), "release-b16", "release", "segment"),
+            ("a stall every 16 px reads half", span2_log(16), "release-b32", "release", "half"),
+            ("no stall reads no-step under the worst error", span2_log(0), "release-b32", "release", "no-step"),
+            ("a stall the error could make reads no-step", span2_log(16, stall=60), "release-b32", "release", "no-step"),
+            ("a stall every 8 px at 32 bpp reads period-8", span2_log(8), "release-b32", "release", "period-8"),
+            ("one stall at 40 px reads single-40", span2_log(at={40}), "release-b32", "release", "single-40"),
+            ("step spacings 6 and 4 tied as most common read their gcd, period-2",
+             span2_log(at={10, 16, 22, 26, 30}), "release-b32", "release", "period-2"),
+            ("IM_RD at 21.5 rclk per half reads wire-bound", span2_log(steady=21.5), "port", "port", "wire-bound"),
+            ("IM_RD at 22 rclk per half reads above-wire", span2_log(steady=22), "port", "port", "above-wire")]:
+        rom = "span-imrd" if key == "port" else "span-write"
+        got = log.records.get((rom, key), {}).get(field)
+        out.append(got == want)
+        print(f"kit: self-test: kit-span2: {name}: {'ok' if got == want else 'FAILED'} ({got})")
+    rows = {q["id"]: q for q in questions()}
+    for qid, hw, model, want in [("span-write-release", span2_log(4), span2_log(16), "fail"),
+                                 ("span-write-release", span2_log(16), span2_log(16), "pass"),
+                                 ("mem-overhead-pipelined", span2_log(steady=18), span2_log(), "fail")]:
+        got, detail = compare(rows[qid], [hw], [model])
+        out.append(got == want)
+        print(f"kit: self-test: kit-span2: {qid}, want {want}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
 
 
 def layout_rows(run_dir, root=ROOT):

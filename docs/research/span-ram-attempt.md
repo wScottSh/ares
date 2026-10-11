@@ -112,4 +112,9 @@ Two choices could remove the write-gate regressions without a refit. Neither is 
 - write-back released per 16 B segment rather than per 64 B half (span-ram.md row 6 and open question 4);
 - memory overhead modeled as pipelined latency rather than port occupancy.
 
-Both are #16 items (`item:16.span-write-release`, `item:16.mem-overhead-pipelined` in `tools/n64-timing/calibration/items.tsv`). The kit's existing points constrain them but do not separate them (the kit-limit entries in `undecidable.tsv` say why and name the point that would). The existing questions span-width, imrd-zcmp-slots(-2cyc) and zread-2cyc decide the half and ordering details around them.
+Both are #16 items (`item:16.span-write-release`, `item:16.mem-overhead-pipelined` in `tools/n64-timing/calibration/items.tsv`). The older kit points constrain them but do not separate them. Kit ROM `kit-span2` (U-SPAN-KIT) adds the points that do, under two questions in `tools/n64-timing/calibration/questions.tsv`:
+
+- `span-write-release`: 256-line write-only 1-cycle rectangles at every width 1-80 px, at 32 and 16 bpp. Each answer is one category, the spacing of DPC_CLOCK's stall steps: `segment` (4 px at 32 bpp), `half` (16 px), `no-step`, or `period-<px>` / `single-<width>`. The step threshold comes from the DPC_CLOCK poll and refresh bounds, not from the fork.
+- `mem-overhead-pipelined`: the same rectangles with IM_RD, out to 320 px. The steady cost per 64 B half is compared with 21.6 rclk, the datasheet wire time of one read and one write-back. `wire-bound` refutes occupancy. `above-wire` is what occupancy predicts, but a pipelined RDP with too few halves to hide its latency would also read `above-wire`, so that answer alone does not decide.
+
+The questions' rows give the derivations, and they say why span-width and kit-zmem's plain points cannot decide either question. The existing questions span-width, imrd-zcmp-slots(-2cyc) and zread-2cyc decide the half and ordering details around them.
