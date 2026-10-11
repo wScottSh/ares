@@ -15,6 +15,7 @@ hw:copy-passfail	pass
 hw:copy-passfail-pixels	pass
 hw:count-per-field	pass
 hw:count-write-hold	pass
+hw:count-write-phase	pass
 hw:cpu-exceptions	pass
 hw:cpu-llsc-console	pass
 hw:cpu-reads	pass

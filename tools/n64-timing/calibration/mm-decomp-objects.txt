@@ -1,4 +1,27 @@
 # wScottSh/mm-decomp-60fps git objects: `<type> <sha> <bytes>`, then the body (a tree as cat-file -p text). Written by mm_bench.py --evidence; behaviors.py checks each hash.
+commit eb7d6cc1ac0440c9b0133155f84ba07a9bcf7fcc 1031
+tree ad504b7533cca2950155988dad00832791722e44
+parent bff939cac321daee240f2d015433c44863d8eca6
+author wScottSh <scott.sheppard@hey.com> 1791709464 -0700
+committer wScottSh <scott.sheppard@hey.com> 1791709464 -0700
+
+bench: boot Play as map select does; South Clock Town at 12:00
+
+The BENCH Play scenes skipped ConsoleLogo and MapSelect_Init, so Link
+kept SaveContext_Init's playerForm 0 (Fierce Deity) and fileNum 0
+(measured in the fork's runner: playerForm 0x00, fileNum 0 at South Clock
+Town's fade-in). Bench_BootPlay now sets what that route sets: fileNum
+0xFF (z_title.c), cutsceneIndex 0, human form and linkAge 0
+(MapSelect_Init). South Clock Town moves from 10:00 to 12:00, the time
+MapSelect_PrintCutsceneSetting sets for cutscene index 0.
+
+The BENCH South Clock Town scene is then the state of the ares fork's
+mmbench sct scene (map select entry 92: human Link, day 1, 12:00), so a
+console run of this ROM can decide that scene's check
+(wScottSh/ares U-SCT-MATCH).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
 commit bff939cac321daee240f2d015433c44863d8eca6 1207
 tree a37dfe0948f98de6ca92dbf1d9ec5d940ae6cc56
 parent 707602c67646c6e553a3c50f4ccb74641e8b5dfe
@@ -53,7 +76,7 @@ gpgsig -----BEGIN PGP SIGNATURE-----
 Merge pull request #1 from wScottSh/bench/fork
 
 bench: measure on the ares timing-model fork, drop the func_80173B48 pin
-tree a37dfe0948f98de6ca92dbf1d9ec5d940ae6cc56 1255
+tree ad504b7533cca2950155988dad00832791722e44 1255
 100644 blob c7b900f060953d3c52467696b9fc67841543b415	.clang-format
 100644 blob caf62ab7f82469713436600647a862890d6c76df	.clang-tidy
 100644 blob cbd25a6bf46091021f3bcda626861eec45255bbc	.gitattributes
@@ -72,10 +95,10 @@ tree a37dfe0948f98de6ca92dbf1d9ec5d940ae6cc56 1255
 100644 blob f5fe93f61d7788bef59499a5fa7416c7cca5320d	requirements.txt
 040000 tree ea021a40559bcdef8a0b9b02c5b5a9e02f5d8f10	rsp
 040000 tree 11613ec42ed1f6341d7bf56143d352cfd7394b5b	spec
-040000 tree 573406e58a4303bdfa8d638264e037695448043d	src
-040000 tree 5fb12faa6b23b0ecce60d13d44e35400a9c88406	tools
+040000 tree 53c5dbc673c25cf0436f68bc1aae57c727494b23	src
+040000 tree 1d13ef25dbe3b030e1699839b3ae38e9b155cd1e	tools
 
-tree 5fb12faa6b23b0ecce60d13d44e35400a9c88406 3782
+tree 1d13ef25dbe3b030e1699839b3ae38e9b155cd1e 3782
 100644 blob 64942c49bbc44513a86ee4e7adbffce6357cfec8	.gitignore
 100644 blob 574a6eaeb9853a0cb01a3dca63e8af1eb5408f96	Makefile
 040000 tree f4a501f90401955c7b2ec0f484e021687be563ca	ZAPD
@@ -85,7 +108,7 @@ tree 5fb12faa6b23b0ecce60d13d44e35400a9c88406 3782
 040000 tree 768f5a2b04e354af111cccae221f314a7ca4157b	asm-processor
 100755 blob fefb68ca4fb5a3bb239570599eae6fa4162780ed	assist.py
 040000 tree 3a40a809aadd834504845ad0fe76a6ceece1547b	audio
-040000 tree 592f0130e51f706966b71df45b8de355744b2bb9	bench
+040000 tree 6a422c73ce88b02187666f9e14c5bf8027f75762	bench
 040000 tree 6fb23cbd6cba9d7cb1f719134e2ece67b6dd7322	buildtools
 100755 blob 3f16754dc6799567fed0fcca9a9a1da4efe3836e	calc_bss.sh
 100755 blob 61c70265bff0d8728c22bd8effc7e62c8bdaa385	check_format.sh
@@ -134,13 +157,13 @@ tree 5fb12faa6b23b0ecce60d13d44e35400a9c88406 3782
 040000 tree 70aff9aadf7bc0d99a4d415d11b9721597a73510	warnings_count
 100755 blob 756c2c5a2fcfe81fab294497507f3214e193629e	weekeventregconvert.py
 
-tree 592f0130e51f706966b71df45b8de355744b2bb9 252
-100644 blob d63713b51086f4a51af0bd05f7304a6db4096ba9	README.md
+tree 6a422c73ce88b02187666f9e14c5bf8027f75762 252
+100644 blob e89803140379a3acdc8f74e95d950f5d6c8b103b	README.md
 100755 blob 472a0ec8a2a8a7596e22a0572c5524a1dad0c281	analyze.py
 100755 blob 802ee34ae51d98a04de55189eb8e7db79bf43c57	bench.py
 100755 blob 8011b463739fe7ceb89b8dceaab8f704a9ad897b	memmap.py
 
-blob d63713b51086f4a51af0bd05f7304a6db4096ba9 10814
+blob e89803140379a3acdc8f74e95d950f5d6c8b103b 11032
 # Benchmark mode
 
 > **Warning: the timing model is not calibrated against hardware yet.** `bench.py` runs the ROM on the
@@ -189,7 +212,7 @@ recorded.
 
 All under `#if BENCH`. The build goes to `build/n64-us-bench`, with `COMPARE=0`.
 
-- `title_setup.c`: boots straight into the scene (`Bench_Boot`): Play with the debug save at a fixed scene, day 1 10:00, or the file-select screen.
+- `title_setup.c`: boots straight into the scene (`Bench_Boot`): Play as map select loads it (the debug save, human Link) at a fixed scene, day 1 10:00 (South Clock Town 12:00, the time map select sets), or the file-select screen.
 - `z_play.c`: `Rand_Seed(gBenchConfig.seed)` instead of `osGetTime()`.
 - `graph.c`: timestamps around `Graph_Update` and `GameState_Update`.
 - `src/code/bench.c` and `bench_emux.s`: record buffer, IS-Viewer output, and emux opcodes.
@@ -256,6 +279,8 @@ Measured on unicron (shared host, load average 2.6 before the runs and 6.2 after
 ## Fork baseline (not hardware-calibrated): 2026-10-09, retail code + bench hooks
 
 Fork `nightly-234-g253e1c8ea`, 1 run x 600 frames per scene, warmup 120, seed 0x12345678 (`analyze.py` output). Times are medians unless noted.
+
+These runs predate the human-Link boot: Link was Fierce Deity (`playerForm` 0) in all four scenes, and South Clock Town ran at 10:00.
 
 | metric | South Clock Town | Termina Field | Mountain Village | Great Bay Coast |
 |---|---|---|---|---|
