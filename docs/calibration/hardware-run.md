@@ -42,7 +42,7 @@ Allow about six and a half hours for the required runs and seven and a half for 
    tools/n64-timing/calibration/run.sh
    ```
 
-   This builds every kit ROM at 8 layout pads and runs each one on the fork: the walked kit ROMs at 8 boot delays per pad, `kit-dma` also with four controllers, the romgen Thar0 port, and n64-systembench when its ROM is built (see n64-systembench under [External ROMs](#external-roms); without it `hw:systembench` reads `missing`). That run is the model side of each comparison. It writes `$N64_TIMING_HOME/results/calib/` and takes about five minutes on a loaded 32-core host. It fails if any ROM's cartridge SRAM copy differs from its ISViewer copy, if a ROM left the PI domain-1 timing changed, or if any wait gave up (see [A hang](#a-hang)).
+   This builds every kit ROM at 8 layout pads and runs each one on the fork: the walked kit ROMs at 8 boot delays per pad, `kit-dma` also with four controllers, the romgen Thar0 port, n64-systembench when its ROM is built (see n64-systembench under [External ROMs](#external-roms); without it `hw:systembench` reads `missing`), and the Majora's Mask BENCH ROMs, which it requires (see Majora's Mask bench under [External ROMs](#external-roms)). That run is the model side of each comparison. It writes `$N64_TIMING_HOME/results/calib/` and takes about five minutes on a loaded 32-core host. It fails if any ROM's cartridge SRAM copy differs from its ISViewer copy, if a ROM left the PI domain-1 timing changed, or if any wait gave up (see [A hang](#a-hang)).
 
 2. Copy the console builds to the flashcart's SD card:
 
@@ -173,7 +173,7 @@ These ROMs are not built by the kit. Each capture goes in the capture directory 
   ```
 
   The script needs docker. It builds rasky/n64-systembench `50f5066` with its vendored libdragon and GCC 12.2.0 (libdragon `a54ccd736`'s Dockerfile), with the `timeit_average` tie fix; this is the build the `systembench:*` checks run. Its `provenance.txt` must show `fd5ec6c06acb686608c53554950c8b6b12b011dca5b30bf22bd7277a8d986823  n64-systembench.z64`, and `rambuf` sits at 0x800278c0. Run that unpadded `n64-systembench.z64` with one controller in port 1, not a boot-delay build, and save its ISViewer log as `capture/ext-systembench/run1.isviewer.log` (and `run2.isviewer.log` for the second run). The log names no build, so copy the `provenance.txt` line for the file you flashed into `capture/ext-systembench/rom-sha256.txt` (`<sha256>  n64-systembench.z64`). Ingestion stores nothing unless that sha256, the fork's (`run.sh` records it in `rom-sha256.txt`) and the pin above are the same. Ingestion then compares each of the 34 rows with the fork's run of the same file (`run.sh` writes it to `ext/systembench.txt`) under the ROM's own rule (within 1 CPU or 2 RCP cycles, or 0.2 %), and counts the rows that also match the published hardware value. It answers `systembench`. The comparison holds only for this binary: a change of one to three instructions in a poll loop moves the poll rows by up to 10 RCP cycles (verify-83), and `rambuf`'s address decides U32R rand and PI DMA 1 KiB, so a log from any other build decides nothing.
-- **Majora's Mask bench** (`ext-mm-bench`). Build the BENCH ROMs before `run.sh`, so the fork runs the same files:
+- **Majora's Mask bench** (`ext-mm-bench`). Build the BENCH ROMs before `run.sh`, so the fork runs the same files (`run.sh` exits 1 without them; `standing.sh` builds them):
 
   ```sh
   tools/n64-timing/calibration/build-mm-bench.sh

@@ -12,7 +12,8 @@
 # OUT_DIR/ext/systembench.txt (the unpadded hardware-era n64-systembench ROM from $SYSBENCH_ROMS, default
 # $N64_TIMING_HOME/roms/systembench where standing.sh builds it; the fork side of ext:systembench),
 # OUT_DIR/ext/mm-bench/<scene>.txt (each Majora's Mask BENCH scene ROM from $MM_BENCH_ROMS, default
-# $N64_TIMING_HOME/roms/mm-bench where build-mm-bench.sh writes them; the fork side of ext:mm-bench)
+# $N64_TIMING_HOME/roms/mm-bench where build-mm-bench.sh writes them; the fork side of ext:mm-bench;
+# without them it exits 1 before it builds anything)
 # and .err, the cartridge SRAM the run left (.srm), and rom-sha256.txt. A standing run keeps it as <run dir>/calib for behaviors.py --results.
 # env: N64_RUN (default: this worktree's runner), CALIB_JOBS (default 4), N64_CALIB_DELAYS, N64_CALIB_PADS,
 # SYSBENCH_ROMS, MM_BENCH_ROMS.
@@ -21,6 +22,9 @@ set -euo pipefail
 out="${1:-$N64_TIMING_HOME/results/calib}"
 run="${N64_RUN:-$(n64_target n64-run)}"
 here="$n64_repo/tools/n64-timing"
+mmroms="${MM_BENCH_ROMS:-$N64_TIMING_HOME/roms/mm-bench}"
+compgen -G "$mmroms/mm-bench-*.z64" >/dev/null || { echo "no $mmroms/mm-bench-*.z64: build the Majora's Mask BENCH ROMs" \
+  "with calibration/build-mm-bench.sh first; hw:mm-bench and hw:mm-filesel have no model side without them" >&2; exit 1; }
 pads="$("$PYTHON" -c 'import sys; sys.path.insert(0, sys.argv[1]); from romgen.suites.calib import sets; print(*sets.PADS)' "$here")"
 singles="$("$PYTHON" - "$here" <<'PY'
 import sys
@@ -50,19 +54,14 @@ else
 fi
 "$run" "$out/ext/thar0-rdp.z64" --emulated-seconds 3600 --wall-seconds 3600 > "$out/ext/thar0.txt" 2> "$out/ext/thar0.err" &
 thar0_pid=$!
-mmroms="${MM_BENCH_ROMS:-$N64_TIMING_HOME/roms/mm-bench}"
 mm_pids=()
-if compgen -G "$mmroms/mm-bench-*.z64" >/dev/null; then
-  mkdir -p "$out/ext/mm-bench"
-  (cd "$mmroms" && sha256sum mm-bench-*.z64) >> "$out/rom-sha256.txt"
-  for rom in "$mmroms"/mm-bench-*.z64; do
-    scene="$(basename "$rom" .z64)"
-    "$run" "$rom" --wall-seconds 1800 > "$out/ext/mm-bench/${scene#mm-bench-}.txt" 2> "$out/ext/mm-bench/${scene#mm-bench-}.err" &
-    mm_pids+=($!)
-  done
-else
-  echo "no $mmroms/mm-bench-*.z64 (calibration/build-mm-bench.sh): hw:mm-bench stays missing" >&2
-fi
+mkdir -p "$out/ext/mm-bench"
+(cd "$mmroms" && sha256sum mm-bench-*.z64) >> "$out/rom-sha256.txt"
+for rom in "$mmroms"/mm-bench-*.z64; do
+  scene="$(basename "$rom" .z64)"
+  "$run" "$rom" --wall-seconds 1800 > "$out/ext/mm-bench/${scene#mm-bench-}.txt" 2> "$out/ext/mm-bench/${scene#mm-bench-}.err" &
+  mm_pids+=($!)
+done
 printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
 find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   rel="${rom#$out/roms/}"
