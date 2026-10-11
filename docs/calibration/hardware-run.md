@@ -98,7 +98,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 <!-- From a run.sh output: tools/n64-timing/calibration/kit.py --table RUN_DIR -->
 | # | ROM | Runs for | Log | Film it? | Layout pads | Answers |
 |---|---|---|---|---|---|---|
-| 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | 0-7 | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
+| 1 | `kit-cpu` | 0.2 s | 10.0 KB | no | 0-7 | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read`, `op-slope` |
 | 2 | `kit-vi` | 4.2 s | 3.4 KB | no | 0-7 | `vi-first-line`, `count-per-field`, `vi-mid-field-blank` |
 | 3 | `kit-dma` | 1.2 s | 18.7 KB | no | 0-7 | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `si-write64-poll`, `pi-row-end`, `sp-dma-rsp`, `repeat-write` |
 | 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | 0-7 | `vi-cpu-contention` |

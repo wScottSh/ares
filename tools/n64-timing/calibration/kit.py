@@ -1288,7 +1288,8 @@ def op_slope_log(shift=None, reads=(0, 0)):
 
 
 def op_slope_self_test():
-    """op-slope's per-operation value and its rule at the COUNT bound (2 ticks over 48 operations)."""
+    """op-slope's per-operation value, its rule at the COUNT bound (2 ticks over 48 operations) and against the one
+    stored-unit mutation the rule rejects (prehw-plan.md U-OP-SLOPE)."""
     out = []
     got = {op: op_slope_log().records.get(("op-slope", f"{op}-fit"), {}).get("rclk_per_op") for op in OP_SLOPE_FORK}
     want = {"reg-write": 8.3333, "dmiss": 28.0, "ifill": 30.1389, "u32r": 22.0, "row-miss-clean": 28.0,
@@ -1302,7 +1303,9 @@ def op_slope_self_test():
             ("both readings at opposite ends of the COUNT bound, 2 ticks over 48 operations", op_slope_log(reads=(-1, 1)), "pass"),
             ("2 ticks under the fork over 48 operations", op_slope_log(every(-2)), "pass"),
             ("3 ticks over the fork over 48 operations, just past the bound", op_slope_log(every(3)), "fail"),
-            ("3 ticks under the fork at row-miss-dirty only", op_slope_log({"row-miss-dirty": -3}), "fail")]:
+            ("3 ticks under the fork at row-miss-dirty only", op_slope_log({"row-miss-dirty": -3}), "fail"),
+            ("sysad.register-write one stored unit down, 8.25 rclk per store as its scratch build read (u-op-slope)",
+             op_slope_log({"reg-write": -3}), "fail")]:
         got, detail = compare(q, [hw], [op_slope_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-cpu: op-slope, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
