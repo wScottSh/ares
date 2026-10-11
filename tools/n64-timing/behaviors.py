@@ -789,8 +789,10 @@ def predicates(root, rows, checks, found):
     walls = current_walls(root)
     slow = max(walls, key=lambda r: float(r["wall_s"]))
     run_commits = COMMIT.findall(results_source(found))
-    wall_commits = {c for r in walls for c in COMMIT.findall(r["source"])}
-    retimed = any(a.startswith(b) or b.startswith(a) for a in run_commits for b in wall_commits)
+    named = {r["run"]: [r["commit"], *COMMIT.findall(r["source"])] for r in walls}
+    wall_commits = {c for cs in named.values() for c in cs}
+    stale = [run for run, cs in named.items() if not any(a.startswith(b) or b.startswith(a) for a in run_commits for b in cs)]
+    retimed = bool(run_commits) and not stale
     weak = sorted(c for c, res in result.items() if WEAK.match(res))
     failing = sorted(c for c, res in result.items() if res == "fail")
     other_gates = sorted(c for c, res in result.items() if res.startswith("pending:") and res != "pending:calibration-16")
@@ -812,7 +814,8 @@ def predicates(root, rows, checks, found):
         (f"det and stepcap pass, and the 600-field MM run takes <= {BUDGET_S} s, re-timed on current master",
          det == stepcap == "pass" and float(slow["wall_s"]) <= BUDGET_S and retimed,
          f"det {det}, stepcap {stepcap}; slowest scene {slow['run']} {float(slow['wall_s']):g} s; the wall times name "
-         f"{ids(sorted(wall_commits))} and the standing run {ids(run_commits)}, and the clause holds only when they match"),
+         f"{ids(sorted(wall_commits))} and the standing run {ids(run_commits)}, and the clause holds only when every scene's "
+         f"last row names the run's commit; scenes whose last row does not: {ids(stale)}"),
         ("no check is fail", not failing, f"{len(failing)} fail: {ids(failing)}"),
         ("no check is consistent-only or pass-conditional", not weak,
          f"{len(weak)}: " + ", ".join(f"`{c}` {result[c]}" for c in weak) if weak else "none"),
@@ -1717,6 +1720,7 @@ def self_test(root):
             landed = True
         else:
             landed = False
+        run_commit = COMMIT.findall(text(work / RESULTS).split("\n")[0])[0]
         cases = [
             ("the committed tree", None, None, None),
             ("a row waiting on calibration #16 with no kit test", TABLE, row_field("cpu.dcb", "verify", "pending:calibration-16"),
@@ -1789,6 +1793,10 @@ def self_test(root):
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("an older, slower timing kept as history", WALL_BUDGET,
              lambda t: t.replace("\n", "\nfilesel-rotate\t999" + "\t-" * (t.split("\n")[0].count("\t") - 1) + "\n", 1), None),
+            ("one scene re-timed on the standing run, the others stale", WALL_BUDGET,
+             lambda t: "\n".join(l if l.startswith("filesel-rotate\t") or l.count("\t") < 2
+                                 else l.replace(run_commit, l.split("\t")[2]) for l in t.split("\n")),
+             f"{CLOSURE} differs from the generated output"),
             ("editing the closure draft", CLOSURE, lambda t: t + "manual edit\n", f"{CLOSURE} differs from the generated output"),
             ("a check with no result", RESULTS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("unit:timeline\t")),
              "check `unit:timeline` has no result"),
