@@ -311,7 +311,33 @@ The scripts are the ones `mmbench.py` writes. Each scene's wall time covers the 
 | `sct` | 906 | 63.10 | 62.92 to 63.57 | CPU interpreter 23%, RSP 22%, RI and timeline 22% |
 | `field` | 924 | 60.67 | 60.66 to 60.74 | CPU interpreter 24%, RSP 22%, RI and timeline 21% |
 
-`mmbench/wall-budget.tsv` holds these medians; the map #1 closure draft reads the budget result from it. Every scene is within the budget. `filesel-rotate` is the closest, at 103 s for 1764 fields, because its window runs eight rotations (1157 fields) instead of 600. The runner is single-threaded and runs 3.8 to 4.8 instructions per cycle, so the wall time follows the instruction count on one core. The shares come from `perf record -F 999` runs that are not part of the timing. The other subsystems are the pixel engine's shading (11 to 23%), the RDP front end's scheduling (6 to 8%), and the per-field state hash behind `trace_hash` (7 to 11%).
+`mmbench/wall-budget.tsv` keeps every timing, oldest first, with its commit, date, load average, user CPU and `instructions:u`. The map #1 closure draft reads each scene's last row. Every scene is within the budget. `filesel-rotate` is the closest, at 103 s for 1764 fields, because its window runs eight rotations (1157 fields) instead of 600. The runner is single-threaded and runs 3.8 to 4.8 instructions per cycle, so the wall time follows the instruction count on one core. The shares come from `perf record -F 999` runs that are not part of the timing. The other subsystems are the pixel engine's shading (11 to 23%), the RDP front end's scheduling (6 to 8%), and the per-field state hash behind `trace_hash` (7 to 11%).
+
+### Re-timing (U-WALL)
+
+`mmbench/wall.py` repeats the measurement above. Each side is a runner copied to a fresh file and the mmbench result directory its scripts and `stats.tsv` come from. The scenes run one at a time. The sides alternate, and their order flips every repeat. Each run records the 1-minute load average before and after it, and `perf stat` wall, user and sys seconds, `cycles:u` and `instructions:u`. A run whose `stats.tsv` differs from its side's reference is marked `DIFF`. `--sweep 1,5` times whole `mmbench.py` runs at each `--phases` value instead.
+
+```sh
+wall.py MM.z64 --out OUT --side t16=COPY_A=REF_A --side head=COPY_B=REF_B   # 5 repeats by default
+wall.py MM.z64 --out OUT --side head=COPY_B=REF_B --sweep 1,5
+```
+
+On 2026-10-10, master `fbf33c91a` ran 5 repeats per scene, interleaved with T16's runner. T16's runner is the same file T16 timed (sha256 `82cdf3b0...`), and it used T16's scripts. Load average was 1.00 to 1.87 on 32 threads. All 80 runs wrote their reference `stats.tsv`. The master scripts add `bus start` and `bus end`, so `filesel-named` runs 1512 fields and `filesel-rotate` runs 1762.
+
+| Scene | Wall median, T16 runner (s) | Wall median, `fbf33c91a` (s) | `fbf33c91a` range (s) | Wall | `instructions:u` |
+|---|---|---|---|---|---|
+| power-on | 26.37 | 26.87 | 26.78 to 26.97 | +1.9% | +0.66% |
+| `title` | 39.70 | 40.44 | 40.34 to 40.68 | +1.9% | +0.63% |
+| `filesel` | 56.28 | 57.14 | 57.05 to 57.51 | +1.5% | +0.57% |
+| `filesel-named` | 81.56 | 83.07 | 82.99 to 84.13 | +1.9% | +0.86% |
+| `filesel-options` | 67.56 | 68.45 | 68.34 to 70.38 | +1.3% | +0.47% |
+| `filesel-rotate` | 103.36 | 104.82 | 104.57 to 104.93 | +1.4% | +0.50% |
+| `sct` | 63.49 | 64.00 | 63.90 to 64.24 | +0.8% | +0.31% |
+| `field` | 61.13 | 62.07 | 61.91 to 62.16 | +1.5% | +0.55% |
+
+Every scene is still within the budget. The slowest is `filesel-rotate`, at 104.8 s, which leaves 15.2 s. The run is still bound by one core: user CPU is within 0.14 s of wall, sys is under 0.4 s, it runs 3.8 to 4.8 instructions per cycle, and the clock is 3.44 to 3.45 GHz. `instructions:u` is the same in every repeat of a scene to four significant figures. User CPU grew more than the instruction count, so the extra time is lower IPC as well as more work (inferred). On `field`, the largest symbols are `Timeline::advance` (16%), `CPU::instruction` (14%), RSP execution (about 15% over 4 symbols), the state-hash serializer (6%), and 2-cycle span drawing (5%). These shares come from one `perf record -F 999` run that is not part of the timing.
+
+The file-select phase sweep (`mmbench.py --phases 5`, default `--jobs`) costs 3.0x the CPU of `--phases 1`: 1466 s user against 485 s, and 2.015e13 `instructions:u` against 7.135e12 (5 interleaved repeats each). Its wall time is 106.2 s (105.8 to 111.2) against 105.5 s (105.2 to 105.9). The sweep adds 12 runs, and on this host each one gets a free core, so the wall time stays bound by `filesel-rotate`, the longest single run. The host's own load was about 1. The bench drove load to 3 to 10.5. On a host with fewer free cores than the bench's 19 runs, the sweep adds wall time (inferred). verify-131 measured +31% at load 20 to 32.
 
 ## Calibration kit
 
