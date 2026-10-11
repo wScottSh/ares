@@ -779,6 +779,9 @@ def self_test():
     zread1_cases = zread1_self_test()
     failed += zread1_cases.count(False)
     cases += zread1_cases
+    glyph_cases = glyph_self_test()
+    failed += glyph_cases.count(False)
+    cases += glyph_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -932,6 +935,34 @@ def zread1_self_test():
         got, detail = compare(rows[qid], [hw], [zread1_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-zread: {qid}, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
+def glyph_log(per_glyph=0.0, poll=(0, 0)):
+    """A kit-zmem log of the glyph points at the fork's pad-0 clocks (16132 and 64132: 1000 rclk per glyph),
+    each glyph moved `per_glyph` rclk and the N = 16 and N = 64 clocks moved `poll` rclk."""
+    body = "".join(f"#bench zmem-glyph glyph-{n} glyph=file1-0 n={n} vi=off reps=4 "
+                   f"clock={clock + round(per_glyph * n) + moved}\n"
+                   for n, clock, moved in ((16, 16132, poll[0]), (64, 64132, poll[1])))
+    return Log(sample_log(body, rom="kit-zmem"))
+
+
+def glyph_self_test():
+    """filesel-glyph's per-glyph value, its rule at the poll bound and against U-GLYPH's mutation (every textured
+    span under 16 px charged as 16 px: 1025.31 rclk per glyph on the fork, prehw-plan.md U-GLYPH)."""
+    out = []
+    got = glyph_log().records.get(("zmem-glyph", "fit"), {}).get("rclk_per_glyph")
+    out.append(got == 1000.0)
+    print(f"kit: self-test: kit-zmem: the fork's glyph points derive 1000.0 rclk per glyph: "
+          f"{'ok' if got == 1000.0 else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "filesel-glyph")
+    for name, hw, want in [
+            ("a console whose two readings sit at opposite ends of the poll bound", glyph_log(poll=(-24, 24)), "pass"),
+            ("U-GLYPH's mutation, 25.31 rclk per glyph over the fork", glyph_log(per_glyph=25.31), "fail"),
+            ("a console 2 rclk per glyph under the fork", glyph_log(per_glyph=-2), "fail")]:
+        got, detail = compare(q, [hw], [glyph_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-zmem: filesel-glyph, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 
