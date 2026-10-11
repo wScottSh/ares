@@ -26,6 +26,7 @@ hw:dirty-row	pass
 hw:dom2-read	pass
 hw:dpc-sequencing	pass
 hw:fetch-ahead	pass
+hw:filesel-glyph	fail
 hw:fill-copy-rate	pass
 hw:fpu-classes	pass
 hw:ifill	pass

@@ -4,7 +4,8 @@
 # usage: run.sh [SET...]
 # SET defaults to "span-tri test-mode-rw fill-tri-sweep rect-nosync". ROMs come from
 # romgen/build.py --suite snapper --out $SNAPPER_ROMS (default $N64_TIMING_HOME/roms); the dumps
-# from fetch.sh. Without the dumps, the comparison prints pending:snapper-lfs.
+# from fetch.sh. It exits 1 after the last set when any set's comparison failed, as it does
+# without the dumps (pending:snapper-lfs).
 # Output: $N64_TIMING_HOME/results/snapper/<set>/{stdout.txt,stderr.txt,records.tsv,compare.txt}
 #         $N64_TIMING_HOME/results/snapper/summary.txt
 set -euo pipefail
@@ -16,6 +17,7 @@ runner="${N64_RUN:-$(n64_target n64-run)}"
 roms="${SNAPPER_ROMS:-$N64_TIMING_HOME/roms}"
 
 sets="${*:-span-tri test-mode-rw fill-tri-sweep rect-nosync}"
+failed=
 
 results="${SNAPPER_RESULTS:-$N64_TIMING_HOME/results/snapper}"
 mkdir -p "$results"
@@ -33,6 +35,7 @@ for set in $sets; do
     echo "== $set exit=$status"
     grep '^n64-run: stop=' "$out/stderr.txt" || echo "n64-run: no stop line"
     PYTHONPATH="$(dirname "$romgen")" "$PYTHON" -m romgen.suites.snapper.compare \
-      "$set" "$out/stdout.txt" "$out" 2>&1 || true
-  } | tee -a "$results/summary.txt"
+      "$set" "$out/stdout.txt" "$out" 2>&1
+  } | tee -a "$results/summary.txt" || failed="$failed $set"
 done
+[ -z "$failed" ] || { echo "snapper: the comparison failed for:$failed (see $results/summary.txt)" >&2; exit 1; }

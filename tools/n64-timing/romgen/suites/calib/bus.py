@@ -212,7 +212,34 @@ def vi_intr(suite):
     rom.test.values.append(Value("v-intr", steps, []))
 
 
-BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr, vi_y_late]
+# Lines shorter than a refresh, and shorter than the fetch (ri.refresh-latch, vi.fetch-overrun). A line
+# lasts H_SYNC + 1 VCLK (ares vi.cpp line()); the 52 rclk refresh holdoff (n64brew RDRAM_Interface) is
+# 40.5 VCLK at 62.5 MHz RCP and 48.681812 MHz VCLK (n64brew Clock_Timing, NTSC).
+HSYNC_INIT, HSYNC_LEAP_INIT = 0xC15, 0x0C150C15   # runtime.py vi_init
+HSYNC_REFRESH = [("0.25", 9), ("0.5", 19), ("0.9", 35)]
+HSYNC_FETCH = 399             # 400 VCLK: below H_START (108 px of 4 VCLK), so the line ends before its first burst is due
+V_VIDEO_NONE = 0x01000100     # start = end: no line is in the window, so the VI fetches nothing
+HSYNC_WINDOW = V_LINES * LINE_TICKS
+HSYNC_GATE_POLLS = 4096
+HSYNC_EXTRA = ["starved", "gate_ticks", "n", "slow", "lat_max"]
+
+
+def hsync_short(suite):
+    """Timed uncached loads in bank 5 for HSYNC_WINDOW ticks with H_SYNC short. An 8 B SP DMA polled
+    from the I-cache gates the loads: if it does not finish, the channel is starved, H_SYNC is
+    restored and the point logs starved 1 instead of hanging the ROM on a load. fetch-overrun-none
+    is fetch-overrun with no line in V_VIDEO: the loads it gains are the window time the VI held."""
+    rom = Rom(suite, "bus-hsync")
+    for frac, hs in HSYNC_REFRESH:
+        rom.point(f"refresh-{frac}", "k_bus_hsync", [KSEG1 | LOAD_BANK5, hs, V_VIDEO_NONE, HSYNC_WINDOW, SLOW_TICKS,
+                                                    HSYNC_GATE_POLLS],
+                  [("hsync", hs), ("v_video", "none"), ("window", HSYNC_WINDOW)], reps=1, extra=HSYNC_EXTRA)
+    for name, v_video, which in (("fetch-overrun", VI_INIT[VI_V_VIDEO], "init"), ("fetch-overrun-none", V_VIDEO_NONE, "none")):
+        rom.point(name, "k_bus_hsync", [KSEG1 | LOAD_BANK5, HSYNC_FETCH, v_video, HSYNC_WINDOW, SLOW_TICKS, HSYNC_GATE_POLLS],
+                  [("hsync", HSYNC_FETCH), ("v_video", which), ("window", HSYNC_WINDOW)], reps=1, extra=HSYNC_EXTRA)
+
+
+BUILDERS = [vi_boot_phase, ai_rate, ri_priority, vi_fetch_modes, refresh_banks, vi_intr, vi_y_late, hsync_short]
 
 VI_RESTORE = "\n".join(f"    .word 0x{reg:08X}, 0x{val:08X}" for reg, val in VI_INIT.items())
 
@@ -736,4 +763,117 @@ bus_vi_end:
 .align 8
 bus_vi_init:
 {VI_RESTORE}
+
+# args = {{load addr, H_SYNC, V_VIDEO, window ticks, slow ticks, gate polls}}. Two passes of: write
+# V_VIDEO, H_SYNC_LEAP and H_SYNC, wait for the next field, start an 8 B SP DMA and poll SP_DMA_BUSY,
+# restore the three. The first pass writes vi_init's values, so the second runs from the I-cache and
+# touches no RDRAM until its DMA finishes. Between the DMA and the restore, the second pass times
+# uncached loads for the window. RES[2] = 1 if the DMA was still busy after the polls, RES[3] = its ticks, RES[4] = loads,
+# RES[5] = loads of slow ticks or more, RES[6] = the longest. v0 = the loads' summed ticks.
+k_bus_hsync:
+    addiu $sp, $sp, -32
+    sd $s0, 0($sp)
+    sd $s1, 8($sp)
+    sd $s2, 16($sp)
+    sd $s3, 24($sp)
+    lw $v1, 0($a0)
+    lw $t5, 12($a0)
+    lw $t6, 16($a0)
+    lw $t7, 20($a0)
+    li $t0, 0xA4400000
+    li $t1, 0xA4040000
+    li $t3, {HSYNC_INIT}
+    li $t4, {VI_INIT[VI_V_VIDEO]}
+    move $a2, $zero
+    move $a3, $zero
+    move $v0, $zero
+    move $s0, $zero
+    move $s1, $zero
+    move $s2, $zero
+bus_hs_pass:
+    sw $t4, 0x28($t0)
+    sll $t2, $t3, 16
+    or $t2, $t2, $t3
+    sw $t2, 0x20($t0)
+    sw $t3, 0x1C($t0)
+    # the line in progress keeps its length, and V_VIDEO takes effect at the next field
+    # (vi.frame-latch): start from V_CURRENT's next wrap
+    lw $t8, 0x10($t0)
+    li $t2, {BUS_POLLS}
+bus_hs_field:
+    lw $t9, 0x10($t0)
+    sltu $s3, $t9, $t8
+    bnez $s3, bus_hs_gate
+    move $t8, $t9
+    addiu $t2, $t2, -1
+    bnez $t2, bus_hs_field
+    nop
+bus_hs_gate:
+    sw $zero, 0x0($t1)
+    li $t2, {SP_DMA_BUF}
+    sw $t2, 0x4($t1)
+    addiu $t2, $zero, 7
+    mfc0 $t9, $count
+    sw $t2, 0x8($t1)
+bus_hs_poll:
+    lw $t2, 0x18($t1)
+    andi $t2, $t2, 1
+    beqz $t2, bus_hs_dma_done
+    addiu $t7, $t7, -1
+    bnez $t7, bus_hs_poll
+    nop
+    b bus_hs_restore
+    addiu $a3, $zero, 1
+bus_hs_dma_done:
+    mfc0 $t7, $count
+    beqz $a2, bus_hs_restore
+    subu $t7, $t7, $t9
+    mfc0 $s3, $count
+bus_hs_win:
+    mfc0 $t8, $count
+    lw $t2, 0($v1)
+    addu $t2, $t2, $zero
+    mfc0 $t9, $count
+    subu $t2, $t9, $t8
+    addiu $s0, $s0, 1
+    addu $v0, $v0, $t2
+    sltu $t8, $t2, $t6
+    bnez $t8, bus_hs_fast
+    sltu $t8, $s2, $t2
+    addiu $s1, $s1, 1
+bus_hs_fast:
+    beqz $t8, bus_hs_nomax
+    subu $t9, $t9, $s3
+    move $s2, $t2
+bus_hs_nomax:
+    sltu $t9, $t9, $t5
+    bnez $t9, bus_hs_win
+    nop
+bus_hs_restore:
+    li $t2, {HSYNC_INIT}
+    sw $t2, 0x1C($t0)
+    li $t2, {HSYNC_LEAP_INIT}
+    sw $t2, 0x20($t0)
+    li $t2, {VI_INIT[VI_V_VIDEO]}
+    sw $t2, 0x28($t0)
+    bnez $a3, bus_hs_out
+    nop
+    bnez $a2, bus_hs_out
+    addiu $a2, $zero, 1
+    lw $t3, 4($a0)
+    lw $t4, 8($a0)
+    b bus_hs_pass
+    lw $t7, 20($a0)
+bus_hs_out:
+    sw $a3, 0($a1)
+    sw $t7, 4($a1)
+    sw $s0, 8($a1)
+    sw $s1, 12($a1)
+    sw $s2, 16($a1)
+    ld $s0, 0($sp)
+    ld $s1, 8($sp)
+    ld $s2, 16($sp)
+    ld $s3, 24($sp)
+    jr $ra
+    addiu $sp, $sp, 32
 """
