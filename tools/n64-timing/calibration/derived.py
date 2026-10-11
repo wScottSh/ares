@@ -322,6 +322,13 @@ def span2(recs):
     return out
 
 
+def span_cost(recs):
+    """kit-span2's span-cost points: rclk per 1 px x 256-line alpha-fail rectangle from the N = 64 less
+    N = 16 replays."""
+    lo, hi = recs[("span-cost", "acfail-n16")], recs[("span-cost", "acfail-n64")]
+    return {("span-cost", "fit"): {"rclk_per_rect": round((hi["clock"] - lo["clock"]) / 48, 2)}}
+
+
 def vi_latch(recs):
     """kit-bus's frame-latch points read as bench:vi-frame-latch reads them (bench report.py), so the
     console and the fork's bench decide the same two categories: fetches (1 when the late V_VIDEO
@@ -374,4 +381,4 @@ def block_write_slope(recs):
     return out
 
 
-DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, hsync, repeat, op_slope, block_write_slope]
+DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, span_cost, hsync, repeat, op_slope, block_write_slope]

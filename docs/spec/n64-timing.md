@@ -39,7 +39,7 @@ From `docs/spec/map-1-closure-draft.md`, which gives each clause and its evidenc
 - SOFTWARE_COMPLETE: does not hold. 2 of 3 computed clauses hold; 1 is not computed from the repository.
 - SOFTWARE_READY: 2 of 6 clauses hold.
 - MAP_GREEN: does not hold. 1 of 5 computed clauses hold.
-- PREHW_COMPLETE: 2 of 6 computed clauses hold; 1 not computed from the repository; does not hold. Open software work, class A: none; class B: `ai.fetch-bytes`, `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:uncached-sizes-u32-banked`, `bench:wb-fifth-store`, `cpu.dcb`, `cpu.dfill-total`, `cpu.dirty-miss-order`, `cpu.ifill-stall`, `cpu.uncached-read-total`, `cpu.wb-block-entries`, `cpu.wb-release`, `mm:south-clock-town`, `ri.arbitration`, `ri.post-read-gap`, `ri.rank.vi`, `ri.retry-clean`, `sysad.rdram-block-write-period`, `vi.register-sample`; no row: 0.
+- PREHW_COMPLETE: 2 of 6 computed clauses hold; 1 not computed from the repository; does not hold. Open software work, class A: none; class B: `ai.fetch-bytes`, `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:uncached-sizes-u32-banked`, `bench:wb-fifth-store`, `cpu.dcb`, `cpu.dfill-total`, `cpu.dirty-miss-order`, `cpu.ifill-stall`, `cpu.uncached-read-total`, `cpu.wb-block-entries`, `cpu.wb-release`, `ri.arbitration`, `ri.post-read-gap`, `ri.rank.vi`, `ri.retry-clean`, `sysad.rdram-block-write-period`, `vi.register-sample`; no row: 0.
 
 ## Behaviors
 
@@ -398,6 +398,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:snapper64` | pending:calibration-16 | no console capture of snapper64 (capture name ext-snapper64*) in docs/calibration/hardware |
 | `hw:sp-dma-direction` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:sp-dma-rsp` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
+| `hw:span-cost` | pending:calibration-16 | no complete power-on console capture of kit-span2 in docs/calibration/hardware |
 | `hw:span-width` | pending:calibration-16 | no complete power-on console capture of kit-span in docs/calibration/hardware |
 | `hw:span-write-release` | pending:calibration-16 | no complete power-on console capture of kit-span2 in docs/calibration/hardware |
 | `hw:stale-read` | pending:calibration-16 | no complete power-on console capture of rdpstat-1prim in docs/calibration/hardware |
