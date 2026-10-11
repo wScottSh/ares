@@ -2563,7 +2563,7 @@ def self_test(root):
         restore()
         for rule, model, value, want in [("exact", "3,5", "5", (True, None)), ("exact", "3,5", "4", (False, None)),
                                          ("range:abs:2", "10..12", "14", (True, 1.0)), ("range:abs:2", "10..12", "15", (False, 1.5)),
-                                         ("range:rel:1", "100..100", "102", (False, 2.0)),
+                                         ("range:rel:1", "200..200", "203", (False, 1.5)),
                                          ("systembench:RCP", "193..193", "195", (True, 2 / 2)),
                                          ("systembench:RCP", "193..193", "196", (False, 3 / 2))]:
             got = judge(rule, model, value)
