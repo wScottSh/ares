@@ -1,7 +1,7 @@
 """The ROM state-roundtrip.sh saves and loads in: MI repeat writes made while an RSP DMA holds
 the RDRAM channel, so a repeat write waits posted for its RI grant. The runner saves at a field
-boundary, between two instructions; the CPU spends most of each step in a run of NOPs, so a save
-can land while a repeat write is still posted. Each step's pattern is its address plus the rep's start COUNT, and the
+boundary, between two instructions; the CPU runs NOPs after each repeat write, so a save can land
+while a repeat write is still posted. Each step's pattern is its address plus the rep's start COUNT, and the
 ROM prints a sum over every rep of the first and last octbyte of each 128 B block, so a repeat write the loaded
 state replays wrong changes the printed line."""
 from ... import runtime
@@ -37,7 +37,7 @@ ksr_mode:
     lw $t6, 0($t4)
     addu $t6, $t0, $t2
     sd $t6, 0($t0)
-""" + "    nop\n" * 32 + r"""
+""" + "    nop\n" * 64 + r"""
     addiu $t0, $t0, 128
     bne $t0, $t1, ksr_loop
     nop
@@ -68,9 +68,9 @@ def repeat(suite):
               [("bytes", STATE_BYTES), ("vi", "on")], reps=128, extra=("sum",))
 
 
-#Boot delays at which a save after field 4 holds a repeat write still posted to the RI (found by
-#dumping the SysAD queue at each save; a load that drops the entry's repeat flag then changes
-#the sum). state-roundtrip.sh saves after fields 1-6 of each.
+#The runner reports the posted repeat writes at each save and state-roundtrip.sh fails unless a
+#save of each ROM holds one. With 64 NOPs (32 left some boot delays without one, 850 and 900
+#among them), every delay of 600..1300 tried has such a save among fields 1-9.
 DELAYS = (680, 1262)
 
 SETS = [SetDef(f"state-repeat-{k}", f"state-repeat-{k}", "Bench", "(bench=state-repeat)", repeat, [asm.ASM, ASM],

@@ -6,11 +6,12 @@
 #      change trace_hash from that field on while every other column of that row stays
 #      identical. A poke mid-game can be overwritten by the game's next TMEM load first.
 #   3. Repeat write: romgen's state suite (MI repeat writes behind an RSP DMA) is saved after
-#      each of fields 1-6, and a fresh run loads each state after field 0, before its first
-#      repeat write. That run must print the plain run's #bench line, whose sum covers every
-#      repeat write's bytes, and its later rows must match the plain run's (frame, cpu_cycles
-#      and trace_hash belong to the run). The save after field 4 holds a repeat write still
-#      posted to the RI; a state without its repeat flag replays it wrong and changes the sum.
+#      each field of its plain run but the last, and a fresh run loads each state after field 0,
+#      before its first repeat write. That run must print the plain run's #bench line, whose sum
+#      covers every repeat write's bytes, and its later rows must match the plain run's (frame,
+#      cpu_cycles and trace_hash belong to the run). A state without a posted repeat write's flag
+#      replays it wrong and changes the sum, so each ROM fails unless the runner reports
+#      posted-repeats > 0 at one of its saves; otherwise the comparison could not see the flag.
 # usage: state-roundtrip.sh ROM [FRAMES]   (FRAMES default 600)
 # env:   N64_RUN=<n64-run binary> skips the build; OUT=<dir> sets the output directory.
 set -euo pipefail
@@ -40,7 +41,7 @@ printf 'wait 30\npoke-tmem 0x123 0x5a\n' > "$out/poke.txt"
 for rom in "$out"/state-roms/*.z64; do
   name="$(basename "$rom" .z64)"
   "$exe" "$rom" --frames 30 --stats "$out/$name-plain.tsv" > "$out/$name-plain.out" 2> "$out/$name-plain.log"
-  for field in 1 2 3 4 5 6; do
+  for field in $(seq 1 $(($(wc -l < "$out/$name-plain.tsv") - 3))); do
     printf 'wait %d\nsave-state %s\n' "$field" "$out/$name-$field.bin" > "$out/$name-save-$field.txt"
     printf 'load-state %s\n' "$out/$name-$field.bin" > "$out/$name-load-$field.txt"
     "$exe" "$rom" --frames $((field + 1)) --script "$out/$name-save-$field.txt" > /dev/null 2> "$out/$name-save-$field.log"
@@ -50,6 +51,7 @@ for rom in "$out"/state-roms/*.z64; do
 done
 
 exec "$PYTHON" - "$out" <<'EOF'
+import re
 import sys
 from pathlib import Path
 
@@ -103,16 +105,27 @@ for plain_tsv in plains:
     _, base = rows(plain_tsv.name)
     line = bench(f"{name}-plain.out")
     bad = []
-    for field in range(1, 7):
+    posted = []
+    for field in range(1, len(base) - 1):
         _, loaded = rows(f"{name}-load-{field}.tsv")
-        logs = (out / f"{name}-save-{field}.log").read_text() + (out / f"{name}-load-{field}.log").read_text()
+        save_log = (out / f"{name}-save-{field}.log").read_text()
+        count = re.search(r"^n64-run: save-state .* posted-repeats=(\d+)$", save_log, re.M)
+        posted.append(int(count[1]) if count else None)
+        logs = save_log + (out / f"{name}-load-{field}.log").read_text()
         later = [[r[c] for c in machine] for r in loaded[1:]]
         want = [[r[c] for c in machine] for r in base[field + 1:field + 1 + len(later)]]
         if "failed" in logs or not line or bench(f"{name}-load-{field}.out") != line or later != want:
             bad.append(field)
-    verdict = "FAIL" if bad else "PASS"
-    failed |= bool(bad)
-    print(f"repeat write {name}: {verdict}, loaded after field 0 from saves after fields 1-6"
+    counts = " ".join("-" if n is None else str(n) for n in posted)
+    if None in posted:
+        print(f"repeat write {name}: FAIL, the runner reported no posted-repeats count at a save ({counts})")
+    elif not any(posted):
+        print(f"repeat write {name}: FAIL, no save held a posted repeat write (posted-repeats {counts}),"
+              " so the comparison cannot see a lost repeat flag; move the boot delays (romgen/suites/state)")
+    verdict = "FAIL" if bad or None in posted or not any(posted) else "PASS"
+    failed |= verdict == "FAIL"
+    print(f"repeat write {name}: {verdict}, loaded after field 0 from saves after fields 1-{len(posted)},"
+          f" posted-repeats {counts}"
           + (f"; fields {bad} differ from the plain run" if bad else f", every run prints {line[0].split()[-1] if line else '-'}"))
 
 sys.exit(1 if failed else 0)

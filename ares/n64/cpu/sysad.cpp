@@ -248,6 +248,15 @@ template<u32 Size> auto SysAD::forward(u32 address, u64 value) const -> u64 {
   return value;
 }
 
+auto SysAD::postedRepeats() const -> u32 {
+  u32 n = 0;
+  for(u32 i : range(count)) {
+    auto& e = entries[(head + i) & 3];
+    n += e.repeat && e.phase == Entry::Phase::Posted;
+  }
+  return n;
+}
+
 auto SysAD::serialize(serializer& s) -> void {
   for(auto& e : entries) {
     s((u8&)e.phase);

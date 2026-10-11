@@ -40,6 +40,8 @@ struct SysAD : Timing::Actor, RI::Client {
   auto granted(const RiBus::Grant&) -> void override;
   auto writesOwnBytes(const RiBus::Burst&) -> bool override;
   auto serialize(serializer&) -> void;
+  //Queued MI repeat writes posted to the RI and not yet granted (host tools only).
+  auto postedRepeats() const -> u32;
 
   //The RI decides on rclk edges and the CPU restarts on pclk edges. From a
   //pclk-aligned request the wait for the deciding edge averages this many

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Runs the harness shell scripts against a stub runner in scratch homes and checks that a failure
 reaches their exit status: snapper run.sh without the snapper64 dumps, calibration/run.sh without the
-Majora's Mask BENCH ROMs, and standing.sh when a script it runs fails. Takes about 15 s.
+Majora's Mask BENCH ROMs, standing.sh when a script it runs fails, and state-roundtrip.sh when no save
+of a repeat-write ROM holds a posted repeat write. Takes about 15 s.
 
 usage: scripts-selftest.py
 """
@@ -32,6 +33,44 @@ def stub(path, status):
     path.write_text(f"#!/bin/sh\nexit {status}\n")
     path.chmod(0o755)
     return path
+
+
+#Writes the rows, #bench line and save-state report state-roundtrip.sh reads; a state-suite ROM ends
+#after field 9 (one row once it loads a state) and the TMEM poke changes trace_hash from field 31 on.
+STATE_RUNNER = r"""#!/usr/bin/env python3
+import os, sys
+args = sys.argv[1:]
+opt = lambda name: args[args.index(name) + 1] if name in args else None
+script = open(opt("--script")).read().split() if opt("--script") else []
+frames = int(opt("--frames"))
+if "state-repeat" in args[0]:
+    frames = 1 if "load-state" in script else min(frames, 10)
+    print("#bench state-repeat vi-on sum=1")
+if opt("--stats"):
+    with open(opt("--stats"), "w") as f:
+        f.write("frame\tcpu_cycles\ttrace_hash\tvi\n")
+        for n in range(frames):
+            f.write(f"{n}\t{n}\t{'p' if 'poke-tmem' in script and n > 30 else 'h'}{n}\t1\n")
+for i, word in enumerate(script):
+    if word == "save-state":
+        open(script[i + 1], "wb").write(b"state")
+        count = os.environ.get("STUB_POSTED")
+        print(f"n64-run: save-state {script[i + 1]} frame=1" + (f" posted-repeats={count}" if count else ""), file=sys.stderr)
+"""
+
+
+def state_roundtrip(tmp, env, posted):
+    """(exit status, stdout) of state-roundtrip.sh on the stub runner reporting `posted` at each save."""
+    runner = tmp / "state-run"
+    runner.write_text(STATE_RUNNER)
+    runner.chmod(0o755)
+    out = tmp / f"srt-{posted}"
+    env = dict(env, N64_RUN=str(runner), OUT=str(out))
+    if posted is not None:
+        env["STUB_POSTED"] = str(posted)
+    proc = subprocess.run([str(HERE / "state-roundtrip.sh"), str(tmp / "mm.z64"), "600"], env=env,
+                          capture_output=True, text=True, timeout=120)
+    return proc.returncode, proc.stdout + proc.stderr
 
 
 def main():
@@ -97,6 +136,17 @@ def main():
         results.append(("standing.sh does not count a failing ctest or determinism verdict as a script failure",
                         bool(first) and not any(n == "ctest" or n.startswith(("det-", "stepcap-")) for n in named),
                         status, first or err))
+
+        status, text = state_roundtrip(tmp, env, 1)
+        results.append(("state-roundtrip.sh passes when a save holds a posted repeat write",
+                        status == 0 and text.count(": PASS") == 4, status, text))
+        status, text = state_roundtrip(tmp, env, 0)
+        results.append(("state-roundtrip.sh fails when no save holds a posted repeat write",
+                        status not in (0, None) and "no save held a posted repeat write" in text
+                        and "round trip: PASS" in text and "from the plain run" not in text, status, text))
+        status, text = state_roundtrip(tmp, env, None)
+        results.append(("state-roundtrip.sh fails when the runner reports no posted-repeats count",
+                        status not in (0, None) and "reported no posted-repeats count" in text, status, text))
 
     failed = 0
     for name, ok, status, detail in results:
