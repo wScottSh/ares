@@ -1135,6 +1135,8 @@ def separates_problems(b, row, fork, scopes):
     step = STEP.fullmatch(fields["step"]) if "step" in fields else None
     if "step" in fields and step is None:
         return [f"separates step=`{fields['step']}` must read <count><unit>, such as step=1pclk"]
+    if step is not None and int(step[1]) < 1:
+        return [f"separates step=`{fields['step']}` must have a count of 1 or more"]
     if fields.get(EFFECTIVE, "1") != "1":
         return [f"separates eq=`{fields[EFFECTIVE]}` must read eq=1: the step is the parameter's effective quantum"]
     quantum = step is not None and (int(step[1]) == 1 or EFFECTIVE in fields)
@@ -2690,6 +2692,9 @@ def self_test(root):
             ("an eq= other than 1", BLOCKERS,
              fit_mut(300000, quantum=effective.replace("eq=1", "eq=2"), signed="verify-self-test"),
              "sysad.rdram-write-period", "must read eq=1"),
+            ("an eq=1 effective-quantum mut with step count 0", BLOCKERS,
+             fit_mut(300000, quantum=effective.replace("12unit", "0unit"), signed="verify-self-test"),
+             "sysad.rdram-write-period", "must have a count of 1 or more"),
             ("an eq=1 with no param or step", BLOCKERS, fit_mut(300000, quantum=";eq=1", signed="verify-self-test"),
              "sysad.rdram-write-period", "separates must read"),
             ("an effective-quantum mut the rule accepts", BLOCKERS,
