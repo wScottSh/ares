@@ -8,7 +8,6 @@ clause:sr-2	clause	follows	follows	-	-	-	-	-
 clause:sr-3	clause	follows	follows	-	-	-	-	-
 clause:sr-4	clause	follows	follows	-	-	-	-	-
 clause:sr-5	clause	follows	follows	-	-	-	-	-
-clause:sr-6	clause	follows	follows	-	-	-	-	-
 bench:dirty-miss-isolated	check	B	B	dirty-miss	U-SEPARATES	-	-	prehw-plan 2.3: NEC VR4300 UM s.12.5.2 p.304 gives the order only; systembench PR #2 has invalid victims only; nemu64 cache.rs lists the dirty victim as TODO
 bench:dirty-row-sweep	check	B	A	dirty-row	U-SEPARATES	-	-	-
 bench:ifill-isolated	check	B	A	ifill	U-SEPARATES	-	-	-
@@ -91,7 +90,7 @@ rdp.cmd-fifo-dwords	row	C	C	cmd-fifo-depth	-	at=cmd-fifo-depth fifo-depth/nops-5
 rdp.color-half-pixels-16bpp	row	B	B	color-half-16bpp	U-SEPARATES	-	-	-
 rdp.fill-copy-rate	row	C	C	thar0-console fill-copy-rate copy-passfail	-	at=fill-copy-rate tex-derived/all fill-b16-bytes-per-clk;fork=6.69..6.696;alt=8;cite=https://ultra64.ca/files/documentation/online-manuals/man-v5-1/pro-man/pro12/12-01.htm#L89	verify-158	SDK 5.1 pro-man 12-01.htm 12.1.4 (fill 64 bits per clock = 8 B, rejected) and 12.1.5; n64brew RDP Pipeline (no per-clock rate); rdp-command-timing.md:66-67
 rdp.mem-overhead-read	row	B	C	span-width zread-1cyc	U-SEPARATES	-	-	span-ram.md (no latency); rdp-memory-traffic.md Q1 (open); thar0-zcmp-residual.md:53 (fit data); cen64 rdp_core.c:5346-5362 (no-read law only)
-rdp.mem-overhead-write	row	B	B	-	U-WRITE-HOLD-Q	-	-	-
+rdp.mem-overhead-write	row	C	B	span-write-release	U-WRITE-HOLD-Q	verify-159b	-	U-WRITE-HOLD-Q fix round alt search, no alt found: n64brew Reality_Display_Processor and its Pipeline page (sync waits 50/33/25 cycles, fill writes 64 bits at a time; no write-back cost); MiSTer RDP.vhd @5725381 :1380-1432 (framebuffer writes queue as 8 B fifoOut entries to the DDR3 mux; no 64 B write-back hold); cen64 jgemu rdp_core.c:5346-5362 @2f8d7bc (span law 129/128 clk per pixel + 12 per line, color image depth and othermodes unpublished, so no 32 bpp write-only half cost); gopher64 parallel-rdp/interface.cpp:1032-1037 @16274f6 (SyncFull interrupt after scissor area / 2; no memory cost); N64 SDK pro-man 12.1 (fill peak 64 bits per clock, 1-cycle at most 1 px per clock, 'stalled at MI'; peaks, not a write hold); Thar0 RDP-Timing-Tests is the fit's own data, so not an alt
 rdp.noise-alpha-dither	row	B	B	noise-alpha-dither	U-NOISE-READER	-	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:39-41 cite a/b/c mappings for G_AD_NOISE only (Angrylion 0-7, MiSTer odd 1-7), none for the G_AC_DITHER threshold, so ac-dither has no mapping to test; ad-noise-threshold stores nothing for any value (alpha 0x78 + 7 < blend 0x80), b = 0, false-match rate >= 2 at K = 0; report-only until a kit-noise ROM change
 rdp.noise-dither-bits	row	B	B	noise-dither-bits	U-NOISE-READER	-	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:40 names Angrylion irand and MiSTer lfsr(8:0), neither a mapping of a, b, c; cd-noise-16's gray 0x80 has low bits 0, so no dither value rounds it (b = 0, fork 1 dump over 64 logs); report-only until a kit-noise ROM change
 rdp.port-lookahead	row	B	C	imrd-zcmp-slots-2cyc	U-SEPARATES	-	-	behaviors.tsv reference (no source for reorder depth); questions.tsv imrd-zcmp-slots-2cyc (fork values only); span-ram.md; MiSTer RDP.vhd (no reorder queue)

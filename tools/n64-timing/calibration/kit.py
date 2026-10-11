@@ -876,12 +876,12 @@ def self_test():
     return failed
 
 
-def span2_log(period=0, stall=256, steady=60.0, at=()):
+def span2_log(period=0, stall=256, steady=60.0, at=(), write=16.0):
     """A kit-span2 log: 256-line write-only rectangles at 32 bpp (16 bpp: twice the pixels per period)
     whose clock grows 256 rclk per pixel plus `stall` at the first pixel of every `period` px past the
     second (0: never) or at each width in `at` (both depths), each width off by the instrument's worst error against the verdict
     (one poll period and two refreshes up on a width without a step, poll plus one refresh down on a step); and IM_RD
-    rectangles costing `steady` rclk per 64 B half and line."""
+    rectangles costing `steady` rclk per 64 B half and line; 32 bpp write-only lines past 80 px cost `write` per half."""
     lines = 256
     body = ""
     for bpp in (32, 16):
@@ -892,8 +892,9 @@ def span2_log(period=0, stall=256, steady=60.0, at=()):
             clock += lines + (stall - derived.POLL_RCLK - derived.REFRESH_RCLK if step else derived.POLL_RCLK + 2 * derived.REFRESH_RCLK - 0.5)
             body += f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 clock={int(clock)}\n"
         for w in (160, 320):
+            per_px = write / 16 if bpp == 32 else 1
             body += (f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
-                     f"clock={int(clock + (w - 80) * lines)}\n")
+                     f"clock={round(clock + (w - 80) * lines * per_px)}\n")
     for w in (1, 8, 16, 32, 64, 128, 160, 192, 256, 320):
         body += (f"#bench span-imrd b32-w{w} bpp=32 w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
                  f"clock={int(10000 + max(0, w // 16 - 1) * steady * lines)}\n")
@@ -922,6 +923,9 @@ def span2_self_test():
     rows = {q["id"]: q for q in questions()}
     for qid, hw, model, want in [("span-write-release", span2_log(4), span2_log(16), "fail"),
                                  ("span-write-release", span2_log(16), span2_log(16), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.75), span2_log(16, write=29.0), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.77), span2_log(16, write=29.0), "fail"),
+                                 ("span-write-release", span2_log(16, write=28.23), span2_log(16, write=29.0), "fail"),
                                  ("mem-overhead-pipelined", span2_log(steady=18), span2_log(), "fail")]:
         got, detail = compare(rows[qid], [hw], [model])
         out.append(got == want)

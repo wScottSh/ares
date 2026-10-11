@@ -260,8 +260,8 @@ def release(clocks, lines, segment_px, half_px):
 
 def span2(recs):
     """kit-span2: per depth, the spacing of a write-only span's stall steps (segment: every 16 B,
-    half: every 64 B, no-step, else period-<px> or single-<width>), and IM_RD's steady cost per 64 B
-    half against the RI wire time (wire-bound or above-wire)."""
+    half: every 64 B, no-step, else period-<px> or single-<width>), the 32 bpp write-only steady cost
+    per 64 B half, and IM_RD's steady cost per 64 B half against the RI wire time (wire-bound or above-wire)."""
     out = {}
     lines = recs[("span-write", "b32-w1")]["h"]
     for bpp in (32, 16):
@@ -269,10 +269,10 @@ def span2(recs):
         clocks = {f["w"]: f["clock"] for f in pts if f["w"] <= 80}
         px = bpp // 8
         cat, steps = release(clocks, lines, 16 // px, 64 // px)
-        steady = {f["w"]: f["clock"] for f in pts}
-        out[("span-write", f"release-b{bpp}")] = {
-            "release": cat, "steps": ",".join(map(str, steps)) or "none",
-            "steady_half": round((steady[320] - steady[160]) / (lines * 160 * px / 64), 2)}
+        out[("span-write", f"release-b{bpp}")] = {"release": cat, "steps": ",".join(map(str, steps)) or "none"}
+    #span-write-release compares the 32 bpp cost per 64 B half; 4 places keep rounding far under its 0.76 band.
+    write = {f["w"]: f["clock"] for (rom, _), f in recs.items() if rom == "span-write" and f.get("bpp") == 32}
+    out[("span-write", "release-b32")]["steady_half"] = round((write[320] - write[160]) / (lines * 10), 4)
     imrd = {f["w"]: f for (rom, _), f in recs.items() if rom == "span-imrd"}
     steady = (imrd[320]["clock"] - imrd[160]["clock"]) / (lines * 10)
     write16 = recs[("span-write", "b32-w16")]["clock"]
