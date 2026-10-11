@@ -124,6 +124,8 @@ def main():
     a = p.parse_args()
     if a.summary:
         return summary(a.out)
+    if not a.rom or not a.side:
+        p.error("ROM and at least one --side are required")
     sides = [s.split("=", 2) for s in a.side]
     for name, exe, ref in sides:
         if not os.access(exe, os.X_OK) or not Path(ref).is_dir():
