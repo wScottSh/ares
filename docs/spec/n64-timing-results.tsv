@@ -134,7 +134,8 @@ hw:write-granularity	pending:calibration-16	no complete power-on console capture
 hw:write-granularity-pixels	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:xbus-fetch-rate	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:zread-1cyc	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
-hw:zread-1cyc-both	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
+hw:zread-1cyc-both-zsame	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
+hw:zread-1cyc-both-zsep	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
 hw:zread-2cyc	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 mm:filesel-empty	pass	filesel: median over 5 phases: mean 1.0113 (min 1.0113, max 1.0158), 98.9% (min 98.4%, max 98.9%) of game frames at 1 field(s)
 mm:filesel-named	fail	filesel-named: median over 5 phases: mean 1.6789 (min 1.6695, max 1.6893), 67.9% (min 66.9%, max 68.9%) of game frames at 2 field(s)
