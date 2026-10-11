@@ -1,0 +1,309 @@
+# wScottSh/mm-decomp-60fps git objects: `<type> <sha> <bytes>`, then the body (a tree as cat-file -p text). Written by mm_bench.py --evidence; behaviors.py checks each hash.
+commit eb7d6cc1ac0440c9b0133155f84ba07a9bcf7fcc 1031
+tree ad504b7533cca2950155988dad00832791722e44
+parent bff939cac321daee240f2d015433c44863d8eca6
+author wScottSh <scott.sheppard@hey.com> 1791709464 -0700
+committer wScottSh <scott.sheppard@hey.com> 1791709464 -0700
+
+bench: boot Play as map select does; South Clock Town at 12:00
+
+The BENCH Play scenes skipped ConsoleLogo and MapSelect_Init, so Link
+kept SaveContext_Init's playerForm 0 (Fierce Deity) and fileNum 0
+(measured in the fork's runner: playerForm 0x00, fileNum 0 at South Clock
+Town's fade-in). Bench_BootPlay now sets what that route sets: fileNum
+0xFF (z_title.c), cutsceneIndex 0, human form and linkAge 0
+(MapSelect_Init). South Clock Town moves from 10:00 to 12:00, the time
+MapSelect_PrintCutsceneSetting sets for cutscene index 0.
+
+The BENCH South Clock Town scene is then the state of the ares fork's
+mmbench sct scene (map select entry 92: human Link, day 1, 12:00), so a
+console run of this ROM can decide that scene's check
+(wScottSh/ares U-SCT-MATCH).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+commit bff939cac321daee240f2d015433c44863d8eca6 1207
+tree a37dfe0948f98de6ca92dbf1d9ec5d940ae6cc56
+parent 707602c67646c6e553a3c50f4ccb74641e8b5dfe
+parent 32f6c0a2d53cf7ebe39c195e26a76096241e7392
+author Scott Sheppard <scott.sheppard@hey.com> 1791661594 -0700
+committer GitHub <noreply@github.com> 1791661594 -0700
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsFcBAABCAAQBQJqypYaCRC1aQ7uu5UhlAAAh0cQABX68xSaPeEyEo/8ZDzcYtBS
+ BF0xoB4f+90Fs8AhoBQUpFExdn1Tll/dF73DiDhv7e8GC/7a+ZLJoiYSY80hHr28
+ /cIfy48Yk2MWMSQ6A8NvnKR3Pbk624WO88/8b4LxV8ppHgBILiqXWC2f8UjO3DtZ
+ 5S9sSiZSPZTkGRuCBM3N23xLBho6gBnaMkX6JafHi3t8jz8eO5AzSLjRBon+nkrz
+ JrBNoHKKn16YhLwK8IxghF8ht/k2maKwBLymhTcF0im+4NXPTXjLpYYAj1O9ZjEg
+ qvKtG8EL7csJ+gQe8C3dpG7WZvvqa7dXIoxiQvzRbRSwqav0Tz6a5gIkij8bgmw3
+ jyvF9wIsPgdC4AWtcmF0WD2wQ2cwY9lCO8AvGSrJmKPz+/dL4UWS1eWzG4LZJEW2
+ WrTz7RC+QGMEHuCYog1m5IarJdso/afx2lJZdDNebyiPGM3mjDzfgJmlhigg1YkS
+ En+U0YOO0mYXpj+4Hrl3nOvlpYRI8OvzFL9hYjQp1dpuP46N0eHrsrXabaXNLoYi
+ XW39Loy9+bIi2klhQZCNaDQzUoxX/W9mXbLZIWCkFfhsPFcJ3SXDa13NTMbcUcHW
+ KSndvkMHKwaiRgSrZKPaTYNIE2SuhgzOEGjN9H7ZQK645ppb/CldsuHsIz4PhdyB
+ MU0yInLDzxYmy8SRHdtM
+ =NC/t
+ -----END PGP SIGNATURE-----
+ 
+
+Merge pull request #2 from wScottSh/bench/filesel
+
+bench: file-select scenes, DPC counters, and RSP busy % for ares #113
+commit 707602c67646c6e553a3c50f4ccb74641e8b5dfe 1207
+tree 9e678c8a996ec2721660b6243df2a6a18cf55312
+parent 56fa21dd0031a17cfc9e355f609542617598a265
+parent 7ab7fdd1ba413d5c0338a69f05980d892b8f85af
+author Scott Sheppard <scott.sheppard@hey.com> 1791656219 -0700
+committer GitHub <noreply@github.com> 1791656219 -0700
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsFcBAABCAAQBQJqyoEbCRC1aQ7uu5UhlAAAuFIQAG1F+kDA3qIsHGNP25aCsZ/v
+ ViG/LMuVCmP12A6Upqq9dkS5ExZ4qK3NKRWupEv1f7VoIHgISdAz8sdRhNMhpwGC
+ GweNLX9jABqwwE9G9ONL1/6FCu/qZGLhjzP1I0hDvdUR1mpTNV7Tt/05MMF0Db1v
+ GfNOr0ZPLIdmlk2MEh8YTI4DHEzrhskDjBcPBtByIwc86msTS5lRkeUzCFW8D+k4
+ O98+5FX9EX3O4VPfTpRuYnpLZrRBMHX/Ua9ApPvQO6M6FZkqqMTHi/4pr/dYCJtP
+ ht7wpPGm0fIJ0qGnzhaoEbabgXf+eIIRLoRseRU5q36DVQO95EWkkq+RkDh3P0xB
+ dE19K8yzje1UGf6XV+0KET7GpjBdry1rxygB3jfts2rEhA3XlLgBYUXqNJjcGg6+
+ 74ZF9w+61kB5drS/+hdKsmM+HoL8weuoTOiHJq5m2WlLEaDJnGOHuRHqtetDG+j4
+ zcJFYzsjF6M/04jAuewA6vZ1NrtsznLbBT6zzM/l4RF2YsRA0+fv+cq60XFgA2J/
+ nAUbHO0JU2C2x51YGaPxH/NKBsm2DkUn/tYrdNH0MIgc37LR6DkmQ34OYsCnZvBx
+ YDtTIml5+Ua6KUm0wyj6sOYpfbWdDpTLDhQb4fU8mqaPI4Il5k9y35Gz8CVxMIWf
+ eAFL4blGrZgKPBczylvj
+ =uOC8
+ -----END PGP SIGNATURE-----
+ 
+
+Merge pull request #1 from wScottSh/bench/fork
+
+bench: measure on the ares timing-model fork, drop the func_80173B48 pin
+tree ad504b7533cca2950155988dad00832791722e44 1255
+100644 blob c7b900f060953d3c52467696b9fc67841543b415	.clang-format
+100644 blob caf62ab7f82469713436600647a862890d6c76df	.clang-tidy
+100644 blob cbd25a6bf46091021f3bcda626861eec45255bbc	.gitattributes
+040000 tree 3ba047ea430f33c7f03f3a1d59c1deddb59b584a	.github
+100644 blob e6320cb50f33588c4a7896f3c403887e0b93dac2	.gitignore
+100644 blob d1245ebe4c060c703a0c2153f1a7b415b2282978	Dockerfile
+100644 blob 74108e072a15ffcc603326fdae084ce685e62b39	Makefile
+100644 blob 0a809bbdace76dc49879d33af3d389580dfc28fe	README.md
+040000 tree 81e4deca809ad3f26965c4436ea0c83525bb131a	assets
+040000 tree c3d337a1680068152e6966fd0ffe0e18e93d8519	baseroms
+120000 blob 9f7d52b4db648cc2381e4068cfba3b7ca9bef21b	diff.py
+100644 blob daf34ce157848e484e2a32827bba9a399f88af80	diff_settings.py
+040000 tree e0f3d726ff4174493b64c426dc8ab14e8f0b283e	docs
+040000 tree 44d08588ccb701d7354b816202a4f844ac186b18	include
+040000 tree 3ff95ec5613e975a0aa744a5ebeb83fb4bbe7be9	linker_scripts
+100644 blob f5fe93f61d7788bef59499a5fa7416c7cca5320d	requirements.txt
+040000 tree ea021a40559bcdef8a0b9b02c5b5a9e02f5d8f10	rsp
+040000 tree 11613ec42ed1f6341d7bf56143d352cfd7394b5b	spec
+040000 tree 53c5dbc673c25cf0436f68bc1aae57c727494b23	src
+040000 tree 1d13ef25dbe3b030e1699839b3ae38e9b155cd1e	tools
+
+tree 1d13ef25dbe3b030e1699839b3ae38e9b155cd1e 3782
+100644 blob 64942c49bbc44513a86ee4e7adbffce6357cfec8	.gitignore
+100644 blob 574a6eaeb9853a0cb01a3dca63e8af1eb5408f96	Makefile
+040000 tree f4a501f90401955c7b2ec0f484e021687be563ca	ZAPD
+040000 tree 7f3bc1e231776458202592cb57201d7b4ddef149	ZAPDConfigs
+040000 tree 649fc43bb59425beec6fb682a53ab8ba2552bf7c	ares
+040000 tree 3e3ea5bb476fd4ccd4db5b158b477d79ad708af8	asm-differ
+040000 tree 768f5a2b04e354af111cccae221f314a7ca4157b	asm-processor
+100755 blob fefb68ca4fb5a3bb239570599eae6fa4162780ed	assist.py
+040000 tree 3a40a809aadd834504845ad0fe76a6ceece1547b	audio
+040000 tree 6a422c73ce88b02187666f9e14c5bf8027f75762	bench
+040000 tree 6fb23cbd6cba9d7cb1f719134e2ece67b6dd7322	buildtools
+100755 blob 3f16754dc6799567fed0fcca9a9a1da4efe3836e	calc_bss.sh
+100755 blob 61c70265bff0d8728c22bd8effc7e62c8bdaa385	check_format.sh
+100755 blob f91b2d601d3e7c75b811c209150a3496a6392c08	check_reordering.py
+100755 blob ee91d08ebb6c4e0e540efe857e2314533e25d4ed	decompress_baserom.py
+040000 tree ca6c59b8b5216f14ee192a8c06e02806208587d0	disasm
+100755 blob 9b16556c526cc12c25f866319b9893d4981b8323	entr.py
+100755 blob 7205dfcc92bd74f1667414aee5b8a457b8baf7f2	eventinfconvert.py
+100755 blob 926f89b72561e48908415aa804c85ce242025a1b	extract_assets.py
+100644 blob 44e613c650d48298673ca90c6eb37b47e875acca	extract_audio.py
+100755 blob 3e009e9763530406f390d8d07ce7a4c35057c784	extract_baserom.py
+100755 blob 30d8e70bace984ab912db4b43607d01bc5b76b16	extract_incbins.py
+100644 blob d2d5ea247e430bd61aa3f66b592da8056ab18b44	extract_text.py
+100755 blob 7f6b3363a5499a51eedc67566c179641031d660f	extract_yars.py
+040000 tree 111fcf74f0183afc907ff174918843b9554aa67a	fado
+040000 tree 8ae61a3be745879a4d2b2b6a37d1131d2a4283c7	filelists
+100755 blob 78eaf9975eb8055b87f935c735eb30fe51b40cc7	first_diff.py
+100755 blob 871b8e48c3c815a73ca648f0627e01837bf1d5b5	fix_bss.py
+100755 blob a1941b69ac5f119a2132ab8800815693e6d3967d	fixle.sh
+100755 blob 662d3fc00adc595ca6a2455094fd34013c698b3a	format.py
+100755 blob 6c177d252d4dfaeccb0f76651aec618651894a52	get_actor_sizes.py
+100755 blob 393e0ed61593564b3266b35e42d96a602f6e0a02	gitable.py
+040000 tree fb392ce7b3d14a0505ad59be8d900fe188af55c0	graphovl
+100755 blob 3e614818069447ae5dc847938a0037920893499d	ido_block_numbers.py
+100755 blob 55dd79dfd8670b05e666100992261b7f2d0aaed1	m2ctx.py
+100755 blob 8e9e42c507ad2601f7bbac8b4a28483a38679bfc	namefixer.py
+040000 tree c7fd83d7a224a27c71879fc973435b6646f08c3a	overlayhelpers
+100644 blob 0aa806f2a47e37213fc75a391d885eaa8c6037cc	permuter_settings.toml
+100755 blob e48656b7c1562a99d32562e37ece27f680b42716	progress.py
+100755 blob 892e3f885e4fc685ac5599a4a17e0f9ee129915e	regconvert.py
+100755 blob b0f18922b30af7193a4a8b1966650766c1593562	reloc_spec_check.sh
+100755 blob 84ab9487f322c59b93e8c0e80aa80d5060685a63	rename_global_asm.py
+100755 blob 5c8262feacc6d050fdc8b4416827810d3dae6b17	rename_sym.sh
+100755 blob 2aa69d5fdb5a5d5663a3c3e3dde21cde875c2839	retail_progress.py
+100755 blob 49a1e50dab926cf94a4de862b9fb4fa4818735cf	schedule_timeconv.py
+100755 blob dbb4581847e4c9e2c10102a34ee3560fe6013203	set_o32abi_bit.py
+100755 blob fbd7aa75531f917719557baa71342824eeab0ec9	sfxconvert.py
+040000 tree ce391550fed9520bb5e3f93668ce4b425e37f26b	sizes
+100755 blob 86493c87b3bc0e35e0a1045cf94a52906ae1c45a	sort_actor_funcs.py
+100755 blob 7634c3ddd8539f9f4f426f2d0f6a6a1b1aacd3b3	sym_info.py
+040000 tree 147e5e90d6ea9a02c71c390ec91f293ca5a8326b	text
+100755 blob 2486b7f94a4bc1e1ef99e283cb1484ccc26b668e	timeconv.py
+040000 tree a07e234519aea8c637cccb27eaefc18de9dbf144	version
+100755 blob 5f41f88aef867222d4983e257d57f1be0e856f13	vt_fmt.py
+100644 blob 8debd89e0cce06332a44fabd034e1892afa46d70	vtxdis.c
+040000 tree 70aff9aadf7bc0d99a4d415d11b9721597a73510	warnings_count
+100755 blob 756c2c5a2fcfe81fab294497507f3214e193629e	weekeventregconvert.py
+
+tree 6a422c73ce88b02187666f9e14c5bf8027f75762 252
+100644 blob e89803140379a3acdc8f74e95d950f5d6c8b103b	README.md
+100755 blob 472a0ec8a2a8a7596e22a0572c5524a1dad0c281	analyze.py
+100755 blob 802ee34ae51d98a04de55189eb8e7db79bf43c57	bench.py
+100755 blob 8011b463739fe7ceb89b8dceaab8f704a9ad897b	memmap.py
+
+blob e89803140379a3acdc8f74e95d950f5d6c8b103b 11032
+# Benchmark mode
+
+> **Warning: the timing model is not calibrated against hardware yet.** `bench.py` runs the ROM on the
+> ares timing-model fork ([wScottSh/ares](https://github.com/wScottSh/ares), `tools/n64-timing`), where
+> RDP, RSP, bus and CPU time are emulated from published hardware references and every run is
+> bit-deterministic. No run has been compared against a real console. Its spec,
+> `docs/spec/n64-timing.md` in the fork, lists each timing behavior with its reference and status.
+
+Repeatable per-frame performance measurement for the MM decomp. Background and sources:
+[docs/research/n64-emulator-accuracy.md](../../docs/research/n64-emulator-accuracy.md),
+[docs/research/n64-perf-tooling.md](../../docs/research/n64-perf-tooling.md) (in Scott's checkout, not in this branch).
+
+## Quick start
+
+```bash
+make -j32 BENCH=1                                    # -> build/n64-us-bench/mm-n64-us.z64
+tools/bench/bench.py --scene all --runs 1 --jobs 4 --label my-change
+~/.venvs/n64perf/bin/python tools/bench/analyze.py bench-results/<dir>          # summary + plots
+~/.venvs/n64perf/bin/python tools/bench/analyze.py bench-results/<A> bench-results/<B>   # A/B
+tools/bench/memmap.py build/n64-us/mm-n64-us.elf build/n64-us-bench/mm-n64-us.elf  # static RAM
+```
+
+`make` without `BENCH=1` is unchanged and still matches (checked: `mm-n64-us.z64: OK`).
+
+## Runner
+
+`bench.py` runs each ROM in `n64-run`, the fork's headless runner. It needs no display, always has emux
+and IS-Viewer on, always runs the CPU and RSP interpreters, reads no host clock, and exits when the
+ROM requests an emux exit. Where the runner comes from:
+
+| Setting | Effect |
+|---|---|
+| `--runner PATH` or `$N64_RUN` | Use this `n64-run` binary. |
+| otherwise | Build it with `tools/n64-timing/build.sh` in the fork checkout and use that binary. A no-op when the build is up to date. |
+| `--fork DIR` or `$ARES_FORK` | Fork checkout to build from. Default `~/repos/ares`. |
+| `$N64_BUILD_DIR` | Build directory for `build.sh`. Default `~/n64-timing/build/<checkout name>`. |
+| `--timeout S` | Host seconds per run, passed as `n64-run --wall-seconds`. Default 600; a run took up to 214 s on a loaded host. |
+
+`meta.json` records the runner path and its sha256. When `bench.py` built the runner, it also records
+`ares_fork`, the `git describe --tags --dirty` of the fork checkout. With `--runner`, `ares_fork` is
+`null`, because the binary can come from any tree. Each result also has `runner_stop`, the runner's
+`n64-run: stop=...` line. A run counts as ok only when it ends with `stop=emux-exit` and all frames were
+recorded.
+
+## What `BENCH=1` changes
+
+All under `#if BENCH`. The build goes to `build/n64-us-bench`, with `COMPARE=0`.
+
+- `title_setup.c`: boots straight into the scene (`Bench_Boot`): Play as map select loads it (the debug save, human Link) at a fixed scene, day 1 10:00 (South Clock Town 12:00, the time map select sets), or the file-select screen.
+- `z_play.c`: `Rand_Seed(gBenchConfig.seed)` instead of `osGetTime()`.
+- `graph.c`: timestamps around `Graph_Update` and `GameState_Update`.
+- `src/code/bench.c` and `bench_emux.s`: record buffer, IS-Viewer output, and emux opcodes.
+
+`bench.py` patches the `BenchConfig` block (magic `BNCH`) in a copy of the ROM: scene, warmup, frames, seed. Changing these needs no rebuild. Records are kept in RAM during measurement and written out over IS-Viewer only at the end. The ROM then exits the emulator via emux `XIOCTL`.
+
+`func_80173B48` keeps its retail code. It is the effect budget: the VI time for one game frame minus the
+last frame's RDP time. Rain, snow and the dust Link kicks up scale with it. Stock ares took no emulated
+time for RDP work, so the BENCH build used to pin the budget to ignore RDP time. The fork emulates RDP
+time deterministically, so the pin is gone.
+
+Scenes (`sBenchScenes` in `bench.c`; keep `SCENES` in `bench.py` in sync):
+
+| # | scene |
+|---|---|
+| 0 | South Clock Town |
+| 1 | Termina Field |
+| 2 | Mountain Village (winter, snow) |
+| 3 | Great Bay Coast |
+| 4 | `file_select_empty`: file select, both files empty |
+| 5 | `file_select_named`: file select, File 1 and File 2 named "A" |
+
+There is no input yet: Link stands at the spawn point, and the file-select cursor stays on File 1.
+
+The file-select scenes write files 1 and 2 to flash at boot, before file select loads them. A named file is the
+new save that name entry writes for the name "A" (`Sram_InitSave`); the other files and both owl saves are
+written empty. On a console this overwrites the cartridge's flash save. A file-select frame is recorded only on
+the idle main screen (`CM_MAIN_MENU`), so the warmup starts after the fade-in. The divisor is 1, so `vi` is
+fields per game frame. `actors`, `zelda_free` and `zelda_max_free` are 0 (only Play sets up ZeldaArena).
+
+## Columns
+
+Times are OSTime ticks (46.875 MHz); `analyze.py` converts them to ms.
+
+| column | meaning |
+|---|---|
+| `vi` | VI retraces between consecutive frame ends. Equals the divisor (3 = 20 fps) when not lagging |
+| `pre_ticks` | `Graph_Update` start to `GameState_Update` start: input, `Audio_Update`, gfx pool setup |
+| `game_ticks` | `GameState_Update` wall time: game logic plus display-list build. **The main CPU metric.** Includes preemption by higher-priority threads (audio, scheduler) |
+| `cpu_ticks` | Whole `Graph_Update`, including waiting for the previous RCP task |
+| `rsp_gfx_ticks`, `rsp_aud_ticks` | Scheduler's existing accumulators: RSP task start to done |
+| `rdp_ticks` | Gfx task start to DP full sync (`gRDPTimeTotal`). Not RDP busy time: it includes the wait for the RSP |
+| `opa/xlu/ovl_bytes` | Display-list bytes used this frame. Capacities: 105,472 / 16,384 / 8,192 |
+| `zelda_free`, `zelda_max_free` | ZeldaArena free bytes and largest free block |
+| `tha_free`, `sys_free` | Always 0 in Play: the arena is fully handed to ZeldaArena |
+| `cpu_cycles` … `rdram_dp` | emux `XPROF` slot deltas: cache misses, RSP cycles and halted cycles, RDRAM bytes per bus master |
+| `rsp_cycles`, `rsp_halted` | On the fork, in 750 MHz units: `rsp_cycles` is RSP busy time and `rsp_halted` RSP halted time, so their sum is the frame's elapsed time. A fork without [wScottSh/ares#113](https://github.com/wScottSh/ares/pull/113) (the fix for [#82](https://github.com/wScottSh/ares/issues/82)) reads `rsp_halted` as 0. `analyze.py`'s `rsp busy %` is `rsp_cycles / (rsp_cycles + rsp_halted)`, so it reads 100% on such a fork |
+| `dpc_clock`, `dpc_bufbusy`, `dpc_pipebusy`, `dpc_tmem` | The DPC counters, in RCP clocks (62.5 MHz), from the previous frame end to this one: `Bench_EndFrame` reads them, then clears them. `dpc_clock` is elapsed time; `dpc_pipebusy` is the RDP's busy time, unlike `rdp_ticks`. `analyze.py` reports it as `rdp busy ms` |
+| `rdram_dp` | `DP_DRAW` plus `DP_DMA` bytes. The fork tags the pixel engine's RDRAM bursts as `DP_DRAW` (`ares/n64/ri/bus.cpp`), so framebuffer, Z and texture traffic count here and in `rdram_total` |
+| `bench_ticks` | The bench bookkeeping's own cost on the previous frame (about 0.1–0.2 ms) |
+
+## Validity: what to trust
+
+Measured on unicron (shared host, load average 2.6 before the runs and 6.2 after) on 2026-10-09, fork `nightly-234-g253e1c8ea`:
+
+- **Runs are bit-deterministic.** Two `bench.py --scene all --runs 1` invocations of the same ROM wrote byte-identical CSV and log files for all four scenes, timing columns included. One run per variant is enough; extra runs repeat the same bytes.
+- **The effect budget does not change these four scenes.** With the pin removed, actors, divisor and `opa/xlu/ovl_bytes` are identical frame for frame to a pinned build in all four scenes. Computed from `rdp_ticks`, the unpinned budget stays between 14.0 and 24.0 ms. Snow saturates at a budget of 14 ms or more (`z_object_kankyo.c`). No scene has rain, and Link stands still, so he kicks up no dust. A scene with rain or player movement would change with the RDP time.
+- **The two builds still differ in timing.** Removing the pin changes the code, so the code layout and heap move (ZeldaArena free is 64 bytes lower). Median `game_ms` moved by -0.9% to +0.4% per scene. South Clock Town lagged on 7 frames instead of 6, at different frames. One run each, so this is one point per build, not a trend.
+- **Host time.** A 600-frame run (boot, 120 warmup frames, 600 measured, about 2270 VI fields) took 151 to 214 s per scene, 4 runs in parallel. Single-run wall time was not measured.
+- **Memory cost of the bench build.** It adds 66.7 KiB to code plus bss (mostly the 600-frame record buffer). The system heap, and so ZeldaArena free, is 66.7 KiB smaller than retail. (Measured by Scott on 2026-10-04.)
+- **`cpu_cycles` is wall clock.** It counts the idle thread too, so it isn't a busy measure.
+- **Not calibrated.** No number here has been compared against a console. `bench.c` writes IS-Viewer at `0x13FF0000`, which a SummerCart64 can forward over USB; that path is untested.
+
+## Fork baseline (not hardware-calibrated): 2026-10-09, retail code + bench hooks
+
+Fork `nightly-234-g253e1c8ea`, 1 run x 600 frames per scene, warmup 120, seed 0x12345678 (`analyze.py` output). Times are medians unless noted.
+
+These runs predate the human-Link boot: Link was Fierce Deity (`playerForm` 0) in all four scenes, and South Clock Town ran at 10:00.
+
+| metric | South Clock Town | Termina Field | Mountain Village | Great Bay Coast |
+|---|---|---|---|---|
+| fps (divisor) | 20.0 (3) | 20.0 (3) | 20.0 (3) | 20.0 (3) |
+| lag frames | 1.17% | 0% | 0% | 0% |
+| game ms (med / p95 / max) | 22.5 / 23.5 / 24.9 | 22.9 / 28.0 / 32.7 | 18.1 / 19.3 / 19.7 | 31.0 / 32.1 / 32.7 |
+| 60fps CPU headroom (16.7 - p95) | -6.75 ms | -11.3 ms | -2.58 ms | -15.4 ms |
+| RSP gfx / audio ms | 24.7 / 9.40 | 18.1 / 7.42 | 15.8 / 5.27 | 21.9 / 6.22 |
+| RDP ms (gfx task start to full sync) | 34.2 | 26.1 | 27.3 | 27.6 |
+| actors | 38 | 160 | 43 | 156 |
+| POLY_OPA peak (% cap) | 17.1% | 13.5% | 10.5% | 27.4% |
+| ZeldaArena free min | 950 KiB | 695 KiB | 1251 KiB | 932 KiB |
+| I$ / D$ misses per frame | 21.1k / 20.3k | 18.9k / 21.6k | 16.6k / 14.5k | 21.3k / 23.6k |
+| RDRAM traffic per frame (incl. RDP) | 5.59 MiB | 4.99 MiB | 4.79 MiB | 5.25 MiB |
+
+The stock-ares baseline from 2026-10-04 (ares `a776c509b`) is in this file's history. It is not comparable: stock ares charged no time for RDP work and pinned the effect budget.
+
+## Next steps (not done)
+
+- Input replay: a per-frame pad table fed in at `GameState_GetInput` (`game.c`). Needs a recorded input source.
+  `n64-run --script` can also drive the controller from outside the ROM (`input`, `wait`); `bench.py` passes no script yet.
+- A scene with rain, and one with Link moving, so the effect budget's dependence on RDP time is exercised.
+- More scenes: boss arena, pause menu (divisor changes to 2), indoor scenes.
+- Per-system CPU breakdown with emux `XPROF` slots around actor update, draw, collision and the environment.
+- Real hardware: SummerCart64 + `sc64deployer debug`, ≥ 10 runs per variant, DPC counters.
+

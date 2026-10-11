@@ -266,11 +266,12 @@ KITS = {
     "kit-span2": [span_write, span_imrd],
     "kit-tex": tex.BUILDERS,
     "kit-zmem": zmem.BUILDERS,
+    "kit-zread": [zmem.reads_1cycle],
     "kit-cpu2": cpu2.BUILDERS,
     "kit-bus": bus.BUILDERS,
 }
-KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-cpu2": [cpu2.ASM], "kit-bus": [bus.ASM],
-           "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
+KIT_ASM = {"kit-tex": [tex.ASM], "kit-zmem": [zmem.ASM], "kit-zread": [zmem.ASM], "kit-cpu2": [cpu2.ASM],
+           "kit-bus": [bus.ASM], "kit-vi": [asm.VI_MID_ASM], "kit-dma": [rspdma.ASM]}
 
 # The noise kit: Thar0/RDP-Noise's rectangle (suites/noise) and variants for rdp-noise.md questions
 # 1-4. Each record dumps its surface as #hex lines.
@@ -311,6 +312,10 @@ NOISE_CASES = [
     ("ad-noise-threshold", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
                                                    rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF78,
                                                    blend=0x00000080))]),
+    # alpha 0x7F + AD >= blend 0x80 iff AD != 0: Angrylion's 0-7 drops a pixel, MiSTer's odd 1-7 never does
+    # (rdp-noise.md:39). 512 px at 16 bpp is the most pixels whose dump keeps the log inside the 32 KiB SRAM.
+    ("ad-noise-7f", 512, 2, [(0, noise_list(512, B16, 0, 512, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE,
+                                            rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF7F, blend=0x00000080))]),
 ]
 SPIN_ASM = """
 # a0 = {iterations}: an idle CPU spin between two RDP lists.

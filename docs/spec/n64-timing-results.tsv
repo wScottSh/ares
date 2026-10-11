@@ -70,6 +70,7 @@ hw:dirty-row	pending:calibration-16	no complete power-on console capture of kit-
 hw:dom2-read	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dpc-sequencing	pending:calibration-16	no complete power-on console capture of rdpstat-dpc in docs/calibration/hardware
 hw:fetch-ahead	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
+hw:filesel-glyph	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:fill-copy-rate	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:fpu-classes	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:ifill	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
@@ -102,6 +103,7 @@ hw:rdp-hold	pending:calibration-16	no complete power-on console capture of kit-z
 hw:rdp-rect-base	pending:calibration-16	no complete power-on console capture of kit-rdp in docs/calibration/hardware
 hw:rdp-sync-setter	pending:calibration-16	no complete power-on console capture of kit-rdp in docs/calibration/hardware
 hw:refresh-all-banks	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
+hw:refresh-latch	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:register-write	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:ri-priority	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:ri-priority-overlap	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
@@ -123,6 +125,7 @@ hw:unsynced-attrs	pending:calibration-16	no complete power-on console capture of
 hw:vi-blank-counting	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-cpu-contention	pending:calibration-16	no complete power-on console capture of kit-hpos in docs/calibration/hardware
 hw:vi-fetch-modes	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
+hw:vi-fetch-overrun	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-fetch-position	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:vi-first-line	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:vi-frame-latch	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
@@ -134,6 +137,9 @@ hw:wb-release	pending:calibration-16	no complete power-on console capture of kit
 hw:write-granularity	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:write-granularity-pixels	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:xbus-fetch-rate	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
+hw:zread-1cyc	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
+hw:zread-1cyc-both-zsame	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
+hw:zread-1cyc-both-zsep	pending:calibration-16	no complete power-on console capture of kit-zread in docs/calibration/hardware
 hw:zread-2cyc	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 mm:filesel-empty	pass	filesel: median over 5 phases: mean 1.0113 (min 1.0113, max 1.0158), 98.9% (min 98.4%, max 98.9%) of game frames at 1 field(s)
 mm:filesel-named	fail	filesel-named: median over 5 phases: mean 1.6789 (min 1.6695, max 1.6893), 67.9% (min 66.9%, max 68.9%) of game frames at 2 field(s)

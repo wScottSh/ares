@@ -9,8 +9,9 @@
 //staged. So content and time come from the same grants.
 
 //ARES_DPLOG=<file> logs DPC register traffic and the DP interrupt, one line
-//each, for checking the RSP's back-pressure loops (rsp-rdp-fifo.md). Host-side
-//only; it never changes emulation.
+//each, for checking the RSP's back-pressure loops (rsp-rdp-fifo.md), and each
+//span's first noise clock (kit.py's noise reader). Host-side only; it never
+//changes emulation.
 static FILE* dpLog = [] { auto path = getenv("ARES_DPLOG"); return path ? fopen(path, "w") : (FILE*)nullptr; }();
 
 static auto dpLogActor(Timing::ActorId id) -> const char* {
@@ -354,6 +355,8 @@ auto RDP::startSpan(Clock at) -> bool {
   //rdp.noise-pixel-offset; a 2-cycle pixel at its first clock
   const u64 first = (Timing::nextRclkEdge(start) + Timing::Behavior::RdpNoisePixelOffset).units / Timing::UnitsPerRclk;
   rdp_render_set_span_clock(first, RDPTimed::pixelClocks(slot.info.cycle_type, 1).units / Timing::UnitsPerRclk);
+  if(dpLog) fprintf(dpLog, "S %lld noise=%llu y=%d x0=%d x1=%d\n", (long long)start.units, (unsigned long long)first,
+    slot.info.y, slot.info.x0, slot.info.x1);
   auto host = std::chrono::steady_clock::now();
   rdp_render_span_run();
   engine.renderNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - host).count();

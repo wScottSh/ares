@@ -26,6 +26,7 @@ sys.path.insert(0, str(HERE))
 from romgen.suites.bench import report as bench_report  # noqa: E402
 import derived  # noqa: E402
 import mm_bench  # noqa: E402
+import noise  # noqa: E402
 
 QUESTIONS = "tools/n64-timing/calibration/questions.tsv"
 HARDWARE = "docs/calibration/hardware"
@@ -55,10 +56,16 @@ KIT_ROMS = {
     "nemu64-cop0hazard": ("nemu64", "cop0hazard", False),
     "kit-tex": ("calib", "kit-tex", True),
     "kit-zmem": ("calib", "kit-zmem", True),
+    "kit-zread": ("calib", "kit-zread", True),
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
     "cpu-llsc": ("cpu", "llsc", False),
+    "kit-pif": ("pif", "kit-pif", False),
 }
+#kit-pif never sends the PIF terminate-boot command, so the PIF halts it and its log has no footer
+#(romgen/suites/pif). It answers no question: its last COUNT is a report (hardware-run.md).
+PIF_ROM = "kit-pif"
+COUNT_HZ = 46_875_000
 SRAM_BYTES = 0x8000
 
 
@@ -102,6 +109,7 @@ class Log:
         self.header = dict(kv.split("=", 1) for kv in first.split()[1:] if "=" in kv)
         self.text = text
         rom = self.header.get("rom", "?")
+        snap = None
         for line in rest.split("\n"):
             parts = line.split()
             if len(parts) >= 3 and parts[0] == "#bench":
@@ -116,7 +124,9 @@ class Log:
                 regs = {k: int(v, 16) for k, _, v in (kv.partition("=") for kv in parts[1:])}
                 setattr(self, "pi" if parts[0] == "#kit-pi" else "timeouts", regs)
             elif len(parts) == 4 and parts[0] == "@snap":
-                self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3]}
+                snap = self.records[("snap", parts[1])] = {"size": int(parts[2]), "hash": parts[3], "data": bytearray()}
+            elif len(parts) >= 3 and parts[0] == "#hex" and snap is not None:
+                snap["data"] += b"".join(int(w, 16).to_bytes(4, "big") for w in parts[2:])
             elif len(parts) == 3 and parts[0] == "#hist":
                 fields = self.records.setdefault((rom, parts[1]), {})
                 fields["hist"] = ",".join(filter(None, [fields.get("hist"), parts[2]]))
@@ -159,6 +169,7 @@ def derive(records):
             records.update(fn(records))
         except (KeyError, ZeroDivisionError, TypeError):
             pass
+    records.update(noise.derive(records))
     frozen = [p["seen"] for point, p in by_rom.get("cmd-fetch", {}).items() if point.startswith("frozen-") and "seen" in p]
     if frozen:
         #A frozen RDP's CURRENT stops only where a fetch ended; the highest offset is the full FIFO,
@@ -422,9 +433,65 @@ EXT_ROMS = {
     "systembench": ext_systembench,
     "mm-bench": ext_mm_bench,
 }
+#The hardware-era n64-systembench build ext:systembench compares: build-systembench-era.sh 2023's
+#provenance.txt (hardware-run.md, n64-systembench; docs/program/reports/sysbench-era.md).
+SYSTEMBENCH_SHA256 = "fd5ec6c06acb686608c53554950c8b6b12b011dca5b30bf22bd7277a8d986823"
+
+
+def thar0_mismatch(paths, model_dir):
+    """Why a Thar0 capture is not a run of the configuration table the romgen port mirrors, or None. The
+    console runs an upstream build, which no pin names, and its text names no ROM, so the identity is the
+    table itself: each file's configurations, in the order printed, must be the first ones of the port's."""
+    from romgen.suites.thar0.configs import SPECS
+    descs = [s.desc for s in SPECS]
+    for path in paths:
+        lines = normalize(Path(path).read_bytes()).decode("ascii", errors="replace").split("\n")
+        printed = [lines[i - 1] for i, line in enumerate(lines) if line == "BUF = [" and i]
+        if not printed:
+            return f"{Path(path).name} holds no Thar0 configuration (no `BUF = [` block)"
+        at = next((i for i, (got, want) in enumerate(zip(printed, descs)) if got != want), None)
+        if at is not None or len(printed) > len(descs):
+            at = len(descs) if at is None else at
+            return (f"{Path(path).name} prints configuration {at} as {printed[at]!r}, the port's table "
+                    f"(romgen/suites/thar0/configs.py) has {descs[at] if at < len(descs) else 'none'!r}: another "
+                    f"build than Thar0/RDP-Timing-Tests a81ced93b28d (hardware-run.md, External ROMs)")
+    return None
+
+
+def systembench_mismatch(paths, model_dir):
+    """Why a systembench capture is not a run of the pinned hardware-era binary the fork ran, or None. Its
+    text names no build, so the capture carries the rom-sha256.txt of the file that was flashed."""
+    shas = mm_bench.read_shas(paths)
+    model = Path(model_dir) / "rom-sha256.txt"
+    fork = mm_bench.read_shas([model]).get("n64-systembench.z64") if model.exists() else None
+    if not shas:
+        return "the capture has no rom-sha256.txt for the n64-systembench.z64 it ran (hardware-run.md, n64-systembench)"
+    if not shas.get("n64-systembench.z64") == fork == SYSTEMBENCH_SHA256:
+        return (f"the console ran n64-systembench.z64 sha256={shas.get('n64-systembench.z64', 'none')}, the fork ran "
+                f"{fork or 'none'}, the pin is {SYSTEMBENCH_SHA256}; build with build-systembench-era.sh 2023 and run "
+                f"calibration/run.sh")
+    return None
+
+
+def snapper64_mismatch(paths, model_dir):
+    """Why a snapper64 capture is not snapper64 e1cd8a61fc43's dumps, or None. A dump names its test by a
+    hash of its group, test and assert (snapper64 src/framework/assert.cpp), so a dump of another version or
+    ROM has a name the published corpus lacks."""
+    from romgen.suites.snapper import compare as snap
+    corpus = Path(snap.default_corpus())
+    if not corpus.is_dir():
+        return f"no published snapper64 dumps in {corpus} to check the capture's names against (romgen/suites/snapper/fetch.sh)"
+    unknown = [Path(p).name for p in paths if Path(p).suffix != ".test" or not (corpus / Path(p).name).is_file()]
+    if unknown:
+        return (f"{len(unknown)} of {len(paths)} files are not published snapper64 e1cd8a61fc43 dumps; first "
+                f"{unknown[0]}")
+    return None
+
+
 #External ROMs whose output names no ROM identity: ingest refuses a capture these find run on other ROMs
 #than the fork's model side.
-EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch}
+EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch, "thar0": thar0_mismatch, "systembench": systembench_mismatch,
+                "snapper64": snapper64_mismatch}
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run
 #that repeats a row's fit data from an independent one.
 EXT_SUITES = {"thar0": "thar0", "snapper64": "snapper", "systembench": "systembench", "mm-bench": "mm"}
@@ -554,8 +621,26 @@ def compare_layouts(q, hw, model):
                  + "; ".join(first.values()))
 
 
+def pif_report(log):
+    """(the last COUNT kit-pif logged, its sample number, halted). A complete log ran all its samples
+    unhalted: boot was terminated before the ROM ran."""
+    last = log.records.get((PIF_ROM, "count"), {})
+    return last.get("count"), last.get("n"), not log.complete
+
+
+def pif_line(log):
+    count, n, halted = pif_report(log)
+    if count is None:
+        return "no COUNT line"
+    if not halted:
+        return (f"never halted in {count / COUNT_HZ:.3f} s of COUNT: boot was terminated before the ROM ran (a menu "
+                f"launch, not sc64deployer upload)")
+    return f"last COUNT {count} ({count / COUNT_HZ:.3f} s, sample {n}) before the PIF halted the CPU"
+
+
 def verify_run(run_dir):
-    """Errors in a calibration/run.sh output: a log without a valid footer, a cartridge SRAM copy that
+    """Errors in a calibration/run.sh output: a log without a valid footer (for kit-pif, a log the PIF did
+    not halt), a cartridge SRAM copy that
     differs from the ISViewer copy (the flashcart SD path), or domain-1 PI timing that the output
     layer left changed (hwout.py PI_REGS)."""
     from romgen import hwout
@@ -566,7 +651,10 @@ def verify_run(run_dir):
             continue
         data = txt.read_bytes()
         log = Log(data)
-        if not log.complete:
+        pif = log.rom == PIF_ROM
+        if pif and (pif_report(log)[0] is None or not pif_report(log)[2]):
+            errors.append(f"{txt}: the PIF did not halt kit-pif: {pif_line(log)}")
+        if not log.complete and not pif:
             errors.append(f"{txt}: no valid #kit-end footer")
             continue
         srm = txt.with_suffix(".srm")
@@ -574,9 +662,9 @@ def verify_run(run_dir):
             errors.append(f"{txt}: the run left no cartridge SRAM ({srm.name})")
         elif srm.read_bytes() != data[:SRAM_BYTES].ljust(SRAM_BYTES, b"\0"):
             errors.append(f"{srm}: the SRAM copy differs from the ISViewer copy")
-        if log.pi != hwout.DOM1_HEADER:
+        if not pif and log.pi != hwout.DOM1_HEADER:
             errors.append(f"{txt}: domain-1 PI timing at the end {log.pi}, the ROM header's {hwout.DOM1_HEADER}")
-        if log.timeouts != {"pi": 0, "rdp": 0}:
+        if not pif and log.timeouts != {"pi": 0, "rdp": 0}:
             errors.append(f"{txt}: #kit-timeout {log.timeouts or 'missing'}; on the fork no wait may give up")
         rom = Path(run_dir) / "roms" / log.header.get("build", "?") / f"{log.rom}.z64"
         if not rom.exists() or hwout.rom_sha256(rom.read_bytes()) != log.header.get("rom_sha256"):
@@ -713,6 +801,42 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}, stored {stored or 'nothing'})")
     cases += stores
+    from romgen.suites.thar0.configs import SPECS
+    thar0_text = "".join(f"Running {d}...\n{d}\nBUF = [\n    1, \n]\nPIPE = [\n    1, \n]\n" for d in [s.desc for s in SPECS[:2]])
+    pinned = f"{SYSTEMBENCH_SHA256}  n64-systembench.z64\n"
+    exts = [("ingest stores a Thar0 capture of the port's configuration table", {"ext-thar0.usblog.txt": thar0_text}, 0),
+            ("ingest refuses a Thar0 capture whose configurations are not the port's",
+             {"ext-thar0.usblog.txt": thar0_text.replace(SPECS[1].desc, "No ZB, No VI, image_read off, 3-cycle")}, 1),
+            ("ingest stores a systembench capture of the pinned binary",
+             {"ext-systembench/run1.isviewer.log": "Benchmarks done\n", "ext-systembench/rom-sha256.txt": pinned}, 0),
+            ("ingest refuses a systembench capture of another build",
+             {"ext-systembench/run1.isviewer.log": "Benchmarks done\n",
+              "ext-systembench/rom-sha256.txt": f"{'b' * 64}  n64-systembench.z64\n"}, 1),
+            ("ingest refuses a systembench capture that names no binary",
+             {"ext-systembench.isviewer.log": "Benchmarks done\n"}, 1),
+            ("ingest stores snapper64 dumps the published corpus names", {"ext-snapper64/271F815C_1AD4E1E2_01.test": "\0"}, 0),
+            ("ingest refuses snapper64 dumps the published corpus does not name",
+             {"ext-snapper64/271F815C_1AD4E1E2_01.test": "\0", "ext-snapper64/0BADC0DE_0BADC0DE_01.test": "\0"}, 1)]
+    for name, files, want in exts:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, model, capture, home = (Path(tmp) / d for d in ("root", "model", "capture", "home"))
+            (root / "tools").mkdir(parents=True)
+            (root / "tools" / "n64-timing").symlink_to(HERE.parent, target_is_directory=True)
+            for rel, body in files.items():
+                (capture / rel).parent.mkdir(parents=True, exist_ok=True)
+                (capture / rel).write_text(body)
+            model.mkdir()
+            (model / "rom-sha256.txt").write_text(f"{SYSTEMBENCH_SHA256}  /roms/systembench/n64-systembench.z64\n")
+            (home / "corpora" / "snapper64-decoded").mkdir(parents=True)
+            (home / "corpora" / "snapper64-decoded" / "271F815C_1AD4E1E2_01.test").write_bytes(b"\0")
+            proc = subprocess.run([sys.executable, "-c", run_store, str(HERE / "ingest.py"), str(root), str(capture),
+                                   "c", str(model)], capture_output=True, text=True, env=dict(os.environ, N64_TIMING_HOME=str(home)))
+            stored = sorted(p.name for p in (root / HARDWARE).rglob("*") if p.is_file()) if (root / HARDWARE).exists() else []
+        ok = proc.returncode == want and bool(stored) == (want == 0)
+        failed += not ok
+        why = proc.stderr.strip().split("\n")[-1] if proc.returncode else ""
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} (exit {proc.returncode}, stored {stored or 'nothing'}) {why}")
+    cases += exts
     from romgen import hwout
     rom = hwout.stamp(b"\0" * 64 + f"#kit rom=kit-cpu sha=78b4427b8d86 rom_sha256={hwout.UNSTAMPED} fmt=1\0".encode() + b"code")
     stamped = Log(rom).header["rom_sha256"]
@@ -752,6 +876,17 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: kit-hpos samples give a per-load latency histogram in pclk: {'ok' if ok else 'FAILED'} ({got})")
     cases.append(("hpos hist", None, None))
+    samples = "".join(f"#bench kit-pif count n={n} count={2922075 + 468750 * n}\n" for n in range(3))
+    for name, data, want in [
+            ("kit-pif cut by the PIF's halt reports its last COUNT",
+             sample_log(samples, rom="kit-pif", build="single").split(b"#kit-end")[0], (3859575, 2, True)),
+            ("kit-pif with a footer was never halted", sample_log(samples, rom="kit-pif", build="single"),
+             (3859575, 2, False))]:
+        got = pif_report(Log(data))
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {pif_line(Log(data))})")
+        cases.append((name, None, None))
     llsc_q = next(q for q in questions() if q["id"] == "cpu-llsc-console")
 
     def llsc(bad=(), watch=0):
@@ -775,6 +910,12 @@ def self_test():
     span2_cases = span2_self_test()
     failed += span2_cases.count(False)
     cases += span2_cases
+    zread1_cases = zread1_self_test()
+    failed += zread1_cases.count(False)
+    cases += zread1_cases
+    glyph_cases = glyph_self_test()
+    failed += glyph_cases.count(False)
+    cases += glyph_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -828,6 +969,32 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += irqclrs
+    latch_q, overrun_q = (next(q for q in questions() if q["id"] == i) for i in ("refresh-latch", "vi-fetch-overrun"))
+
+    def hsync(starved=0, fetch_n=1117, none_n=1160, slow=(608, 516, 430)):
+        pts = [(f"refresh-{f}", h, s) for (f, h), s in zip((("0.25", 9), ("0.5", 19), ("0.9", 35)), slow)]
+        body = "".join(f"#bench bus-hsync {pt} hsync={h} v_video=none window=29790 reps=1 starved={starved} n=600 "
+                       f"slow={0 if starved else s} lat_max=95\n" for pt, h, s in pts)
+        body += "".join(f"#bench bus-hsync {pt} hsync=399 v_video={v} window=29790 reps=1 starved=0 n={n} slow=78 lat_max={m}\n"
+                        for pt, v, n, m in (("fetch-overrun", "init", fetch_n, 67), ("fetch-overrun-none", "none", none_n, 47)))
+        return Log(sample_log(body, rom="kit-bus"))
+    fork = hsync()
+    shorts = [("refresh-latch: a console with one refresh latch (holdoffs every 6, 4 and 3 lines)", latch_q,
+               hsync(slow=(516, 387, 287)), "pass"),
+              ("refresh-latch: a console that queues every HSYNC's refresh starves the gate DMA", latch_q, hsync(starved=1),
+               "fail"),
+              ("vi-fetch-overrun: a console whose loads run 10% slower and whose VI holds the channel half as long",
+               overrun_q, hsync(fetch_n=1023, none_n=1044), "pass"),
+              ("vi-fetch-overrun: a VI that drops the unposted bursts at each HSYNC (one load apart)", overrun_q,
+               hsync(fetch_n=1159), "fail"),
+              ("vi-fetch-overrun: the derived threshold, 40.5 + 2 x 67 ticks: 8 loads (205 ticks) read as fetched",
+               overrun_q, hsync(fetch_n=1152), "pass")]
+    for name, q, hw, want in shorts:
+        got, detail = compare(q, [hw], [fork])
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += shorts
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
@@ -835,12 +1002,12 @@ def self_test():
     return failed
 
 
-def span2_log(period=0, stall=256, steady=60.0, at=()):
+def span2_log(period=0, stall=256, steady=60.0, at=(), write=16.0):
     """A kit-span2 log: 256-line write-only rectangles at 32 bpp (16 bpp: twice the pixels per period)
     whose clock grows 256 rclk per pixel plus `stall` at the first pixel of every `period` px past the
     second (0: never) or at each width in `at` (both depths), each width off by the instrument's worst error against the verdict
     (one poll period and two refreshes up on a width without a step, poll plus one refresh down on a step); and IM_RD
-    rectangles costing `steady` rclk per 64 B half and line."""
+    rectangles costing `steady` rclk per 64 B half and line; 32 bpp write-only lines past 80 px cost `write` per half."""
     lines = 256
     body = ""
     for bpp in (32, 16):
@@ -851,8 +1018,9 @@ def span2_log(period=0, stall=256, steady=60.0, at=()):
             clock += lines + (stall - derived.POLL_RCLK - derived.REFRESH_RCLK if step else derived.POLL_RCLK + 2 * derived.REFRESH_RCLK - 0.5)
             body += f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 clock={int(clock)}\n"
         for w in (160, 320):
+            per_px = write / 16 if bpp == 32 else 1
             body += (f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
-                     f"clock={int(clock + (w - 80) * lines)}\n")
+                     f"clock={round(clock + (w - 80) * lines * per_px)}\n")
     for w in (1, 8, 16, 32, 64, 128, 160, 192, 256, 320):
         body += (f"#bench span-imrd b32-w{w} bpp=32 w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
                  f"clock={int(10000 + max(0, w // 16 - 1) * steady * lines)}\n")
@@ -881,10 +1049,86 @@ def span2_self_test():
     rows = {q["id"]: q for q in questions()}
     for qid, hw, model, want in [("span-write-release", span2_log(4), span2_log(16), "fail"),
                                  ("span-write-release", span2_log(16), span2_log(16), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.75), span2_log(16, write=29.0), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.77), span2_log(16, write=29.0), "fail"),
+                                 ("span-write-release", span2_log(16, write=28.23), span2_log(16, write=29.0), "fail"),
                                  ("mem-overhead-pipelined", span2_log(steady=18), span2_log(), "fail")]:
         got, detail = compare(rows[qid], [hw], [model])
         out.append(got == want)
         print(f"kit: self-test: kit-span2: {qid}, want {want}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
+def zread1_log(per_read=0.0, poll=0, count=0, both=None):
+    """A kit-zread log of the 320 px points at the fork's pad-0 values, each 64 B read of a one-image
+    line moved `per_read` rclk (10 reads a line), each both-images point moved `both[(bank, h)]` rclk,
+    every clock moved `poll` rclk and `count` red pixels written."""
+    body = ""
+    for mode, bank, by_h in (("none", "zsep", {8: (2735, 2663), 16: (5337, 5255)}),
+                             ("imrd", "zsep", {8: (4079, 3998), 16: (7684, 7608)}),
+                             ("zcmp", "zsep", {8: (4079, 3998), 16: (7684, 7608)}),
+                             ("both", "zsep", {8: (6148, 6060), 16: (11801, 11723)}),
+                             ("both", "zsame", {8: (6852, 6781), 16: (13252, 13178)})):
+        for h, (clock, buf) in by_h.items():
+            moved = round(per_read * 10 * h) if mode in ("imrd", "zcmp") else (both or {}).get((bank, h), 0)
+            body += (f"#bench zmem-read1 {mode}-{bank}-w320-h{h} mode={mode} z={bank} w=320 h={h} n=1 vi=off reps=4 "
+                     f"clock={clock + moved + poll} bufbusy={buf + moved} count={count}\n")
+    return Log(sample_log(body, rom="kit-zread"))
+
+
+def zread1_self_test():
+    """kit-zread's per-read report value, the zread-1cyc rule against Thar0's per-read average, and each
+    both-images rule against variant-q0's moves at its own bank's points."""
+    out = []
+    got = zread1_log().records.get(("zmem-read1", "imrd-zsep-w320-fit"), {}).get("rclk_per_read")
+    out.append(got == 45.125)
+    print(f"kit: self-test: kit-zread: the fork's 320 px line derives 45.125 rclk per read: "
+          f"{'ok' if got == 45.125 else 'FAILED'} ({got})")
+    rows = {q["id"]: q for q in questions()}
+    for name, qid, hw, want in [
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc", zread1_log(poll=24), "pass"),
+            ("a console at Thar0's 44.17 rclk per read, 0.99 under the fork's 45.16", "zread-1cyc",
+             zread1_log(per_read=-0.99), "fail"),
+            ("a console that writes a pixel", "zread-1cyc", zread1_log(count=1), "fail"),
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc-both-zsep", zread1_log(poll=24), "pass"),
+            ("variant-q0's separate-bank moves, -85 at 16 lines and -43 at 8 (thar0-zcmp-residual.md)",
+             "zread-1cyc-both-zsep", zread1_log(both={("zsep", 16): -85, ("zsep", 8): -43}), "fail"),
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc-both-zsame", zread1_log(poll=24), "pass"),
+            ("variant-q0's same-bank moves, -277 at 16 lines and -128 at 8", "zread-1cyc-both-zsame",
+             zread1_log(both={("zsame", 16): -277, ("zsame", 8): -128}), "fail")]:
+        got, detail = compare(rows[qid], [hw], [zread1_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-zread: {qid}, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
+def glyph_log(per_glyph=0.0, poll=(0, 0)):
+    """A kit-zmem log of the glyph points at the fork's pad-0 clocks (16132 and 64132: 1000 rclk per glyph),
+    each glyph moved `per_glyph` rclk and the N = 16 and N = 64 clocks moved `poll` rclk."""
+    body = "".join(f"#bench zmem-glyph glyph-{n} glyph=file1-0 n={n} vi=off reps=4 "
+                   f"clock={clock + round(per_glyph * n) + moved}\n"
+                   for n, clock, moved in ((16, 16132, poll[0]), (64, 64132, poll[1])))
+    return Log(sample_log(body, rom="kit-zmem"))
+
+
+def glyph_self_test():
+    """filesel-glyph's per-glyph value, its rule at the poll bound and against U-GLYPH's mutation (every textured
+    span under 16 px charged as 16 px: 1025.31 rclk per glyph on the fork, prehw-plan.md U-GLYPH)."""
+    out = []
+    got = glyph_log().records.get(("zmem-glyph", "fit"), {}).get("rclk_per_glyph")
+    out.append(got == 1000.0)
+    print(f"kit: self-test: kit-zmem: the fork's glyph points derive 1000.0 rclk per glyph: "
+          f"{'ok' if got == 1000.0 else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "filesel-glyph")
+    for name, hw, want in [
+            ("a console whose two readings sit at opposite ends of the poll bound", glyph_log(poll=(-24, 24)), "pass"),
+            ("U-GLYPH's mutation, 25.31 rclk per glyph over the fork", glyph_log(per_glyph=25.31), "fail"),
+            ("a console 1.0 rclk per glyph over the fork, inside the abs:1.014 poll bound", glyph_log(per_glyph=1.0), "pass"),
+            ("a console 1.01 rclk per glyph over the fork (clocks round to whole rclk: slope 49/48 = 1.021), just past the bound", glyph_log(per_glyph=1.01), "fail"),
+            ("a console 2 rclk per glyph under the fork", glyph_log(per_glyph=-2), "fail")]:
+        got, detail = compare(q, [hw], [glyph_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-zmem: filesel-glyph, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 
@@ -965,8 +1209,10 @@ def noise_rate(snaps, draws):
     if floor >= NOISE_RATE_MAX:
         reasons.append(f"{' '.join(testable)}: false-match rate >= {floor:.3g} at K = 0 ({mappings} mappings, b <= {bits})")
         return "report-only", "; ".join(reasons)
-    return "not ruled out", "; ".join(reasons + [f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, "
-                                                 f"b <= {bits}); the offset reader is not built"])
+    unread = [s for s in testable if s not in noise.READS]
+    return ("not ruled out" if unread else "read"), "; ".join(reasons + [
+        f"{' '.join(testable)}: rate floor {floor:.3g} ({mappings} mappings, b <= {bits}); "
+        + (f"no offset reader for {' '.join(unread)}" if unread else "the offset reader gives the mapping per log")])
 
 
 def noise_table(run_dir=None, root=ROOT):
@@ -990,7 +1236,22 @@ def noise_table(run_dir=None, root=ROOT):
         verdicts.append(f"{q['id']}: " + ": ".join(noise_rate(snaps, draws)))
     out += [""] + verdicts
     out += [f"fork contradicts b = 0 for {', '.join(contradicted)}"] if contradicted else []
-    return "\n".join(out), not contradicted
+    unresolved = []
+    for snap, question in noise.READS.items():
+        fixed = noise.offset_set(question, Path(root) / QUESTIONS)
+        out.append(f"{snap}: offset set " + (f"D = {fixed[0]} +- {fixed[1]} ({question} source)" if fixed else
+                                             f"not fixed in {question}'s source; run kit.py --layout"))
+        got = [log.records.get(("snap", snap), {}) for log in logs]
+        results = collections.Counter(r.get("mapping", "unread") for r in got)
+        rates = [float(r["rate"]) for r in got if r.get("rate", "-") != "-"]
+        if logs:
+            out.append(f"{snap}: fork logs {dict(results)}, false-match rate " +
+                       (f"{min(rates):.3g}..{max(rates):.3g}, b {min(r['b'] for r in got if r.get('b') is not None)}.."
+                        f"{max(r['b'] for r in got if r.get('b') is not None)}" if rates else "-"))
+            unresolved += [snap] if set(results) != {"angrylion"} else []
+    out += [f"fork logs do not resolve to the fork's mapping (angrylion, rdp_core.c rdp_noise_dither_alpha) for "
+            f"{', '.join(unresolved)}"] if unresolved else []
+    return "\n".join(out), not contradicted and not unresolved
 
 
 def noise_self_test():
@@ -1016,11 +1277,56 @@ def noise_self_test():
         got, detail = noise_rate(snaps, among)
         out.append(got == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail})")
+    out += noise_reader_self_test(draws)
     for name, draw, want in [("gray 0x80 bounds b at 0", draws["cd-noise-16"], 0),
                              ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256)]:
         bits = noise_bits(draw)
         out.append(bits == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if bits == want else 'FAILED'} ({bits})")
+    return out
+
+
+def noise_reader_self_test(draws):
+    """The offset reader on synthetic logs: the LFSRs at a known clock, drawn as the kit draws them."""
+    def rect(t, flip=None):
+        px = []
+        for i, (a, b, c) in enumerate(noise.bits(t, 1016)):
+            a ^= i == flip
+            px += [0xFF if a and not b else 0 if a else b << 7 | c << 6 | 0x20] * 3 + [0xE0]
+        return bytes(px)
+
+    def snap(t, mapping, draw):
+        return b"".join(b"\xff\xff" if noise_pixel(draw, ad=noise.AD_MAPPINGS[mapping](*abc)[0]) is not None
+                        else b"\0\0" for abc in noise.bits(t, draw["width"]))
+
+    import re as _re
+    hpp = (ROOT / "tools/n64-timing/tests/noise-datasets.hpp").read_text()
+    data = {n: "".join(_re.findall(r'"([01x]*)"', body)) for n, body in _re.findall(r"char (Noise\w+)\[\] =([^;]*);", hpp)}
+    #noise-lfsr.cpp AbFirstPixel and CFirstPixel[0]: the console clocks of Thar0's datasets A, B and C0 from all ones.
+    console = [(data["NoiseA"], 256_586_636, 0), (data["NoiseB"], 256_586_636, 1), (data["NoiseC0"], 161_308_259, 2)]
+
+    t0, d, k = 5_000_000, 1000, 20
+    over = noise.LFSR["a"].period + 12345
+    ad, threshold = draws["ad-noise-7f"], {**draws["ad-noise-threshold"], "bits16": True, "width": 512}
+    out = []
+    for name, got, want in [
+            ("Angrylion pixels at offset +7 read angrylion", noise.read(rect(t0), snap(t0 + d + 7, "angrylion", ad), ad, d, k)["result"], "angrylion"),
+            ("MiSTer pixels read mister-odd", noise.read(rect(t0), snap(t0 + d, "mister-odd", ad), ad, d, k)["result"], "mister-odd"),
+            ("mutation: Angrylion pixels 5000 clocks past the set read offset-outside-bound",
+             noise.read(rect(t0), snap(t0 + d + 5000, "angrylion", ad), ad, d, k)["result"], "offset-outside-bound"),
+            ("mutation: the set one clock short of the true offset reads offset-outside-bound",
+             noise.read(rect(t0), snap(t0 + d + k + 1, "angrylion", ad), ad, d, k)["result"], "offset-outside-bound"),
+            ("a draw that stores nothing for any value (b = 0) reads ambiguous",
+             noise.read(rect(t0), snap(t0 + d, "angrylion", threshold), threshold, d, k)["result"], "ambiguous"),
+            ("an anchor with one a bit flipped reads no-anchor", noise.read(rect(t0, flip=500), snap(t0 + d, "angrylion", ad), ad, d, k)["result"], "no-anchor"),
+            ("an anchor past one period of a is found", noise.anchor(rect(over)), over),
+            *[(f"the LFSRs give Thar0's console dataset {'abc'[i].upper()} at its clock", all(
+                x == "x" or int(x) == abc[i] for x, abc in zip(bits, noise.bits(t, len(bits)))), True) for bits, t, i in console],
+            ("the rate is (2K+1) x 2 mappings x 2^-b", (lambda r: r["rate"] == (2 * k + 1) * 2 * 2.0 ** -r["b"])(
+                noise.read(rect(t0), snap(t0 + d, "angrylion", ad), ad, d, k)), True),
+            ("Angrylion at offset 0 prints a rate below 1e-6", noise.read(rect(t0), snap(t0 + d, "angrylion", ad), ad, d, k)["rate"] < noise.RATE_MAX, True)]:
+        out.append(got == want)
+        print(f"kit: self-test: noise offset reader: {name}: {'ok' if got == want else 'FAILED'} ({got})")
     return out
 
 
@@ -1063,9 +1369,9 @@ PHOTO_BYTES = 2048
 
 def run_table(run_dir, root=ROOT):
     """hardware-run.md's run-order table from a calibration/run.sh output: each console build's fork
-    run time, log size, whether it is short enough to film, the layout pads the console runs it at
-    (every pad when one of its questions is layout-sensitive, see compare_layouts), and the questions
-    it answers."""
+    run time (kit-pif's: to its last COUNT), log size, whether it is short enough to film, the layout pads
+    the console runs it at (every pad when one of its questions is layout-sensitive, see compare_layouts),
+    and the questions it answers."""
     run_dir = Path(run_dir)
     asks = {}
     for q in questions(root):
@@ -1077,10 +1383,12 @@ def run_table(run_dir, root=ROOT):
         base = run_dir / ("boot-1" if walks else "single") / rom
         err = base.with_suffix(".err").read_text(errors="replace")
         secs = float(re.search(r"emulated_s=([\d.]+)", err).group(1))
+        if rom == PIF_ROM:
+            secs = pif_report(Log(base.with_suffix(".txt").read_bytes()))[0] / COUNT_HZ
         size = len(base.with_suffix(".txt").read_bytes())
         layouts = f"{pads[0]}-{pads[-1]}" if rom in padded and len(pads) > 1 else "0"
         out.append(f"| {n} | `{rom}` | {secs:.1f} s | {size / 1000:.1f} KB | {'yes' if size <= PHOTO_BYTES else 'no'} | "
-                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, []))} |")
+                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, [])) or 'a report, no question'} |")
     return "\n".join(out)
 
 
@@ -1090,6 +1398,7 @@ if __name__ == "__main__":
         sys.exit(0)
     if sys.argv[1:2] == ["--layout"]:
         print(layout_table(sys.argv[2]))
+        print(noise.offset_table(sys.argv[2]))
         sys.exit(0)
     if sys.argv[1:2] == ["--noise-rate"]:
         table, consistent = noise_table(sys.argv[2] if sys.argv[2:] else None)

@@ -62,6 +62,10 @@ def suite_sets(name):
 def runtime_text(extra_asm, consts):
     boot = (runtime.BOOT_DELAY_LOOP if "BOOT_DELAY" in consts else "") + runtime.layout_pad(consts.get("LAYOUT_PAD", 0))
     text = runtime.RUNTIME.replace("\nboot:\n", "\nboot:\n" + boot, 1)
+    if consts.get("NO_TERMINATE_BOOT"):
+        call = "    jal pif_terminate_boot\n    nop\n"
+        assert text.count(call) == 1, "the runtime's pif_terminate_boot call changed shape"
+        text = text.replace(call, "", 1)
     return "\n".join([text] + extra_asm)
 
 
