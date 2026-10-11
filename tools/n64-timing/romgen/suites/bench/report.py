@@ -188,8 +188,13 @@ class Phase:
         return round(statistics.median(self.values), 3)
 
     @property
+    def fmean(self):
+        """The unrounded mean, which every band check compares; `mean` is its 3-decimal display."""
+        return statistics.fmean(self.values)
+
+    @property
     def mean(self):
-        return round(statistics.fmean(self.values), 3)
+        return round(self.fmean, 3)
 
 
 @dataclass
@@ -254,7 +259,7 @@ def layout_verdict(pad_verdicts):
 
 
 def pad_verdicts(row, layout):
-    return [label(row, ph.lo, ph.hi, ph.mean) for ph in layout.pads.values()]
+    return [label(row, ph.lo, ph.hi, ph.fmean) for ph in layout.pads.values()]
 
 
 def verdict(row, layout):
@@ -266,8 +271,9 @@ def verdict(row, layout):
 
 
 def pad_phases_text(layout):
-    """Each pad's range and mean over the boot delays, `pad:lo..hi/mean` (behaviors.py parses it back)."""
-    return " ".join(f"{p}:{round(ph.lo, 3)}..{round(ph.hi, 3)}/{ph.mean}" for p, ph in layout.pads.items())
+    """Each pad's range and unrounded mean over the boot delays, `pad:lo..hi/mean` (behaviors.py parses it
+    back and recomputes the pad's verdict, so the mean keeps every digit the band check compared)."""
+    return " ".join(f"{p}:{round(ph.lo, 3)}..{round(ph.hi, 3)}/{ph.fmean!r}" for p, ph in layout.pads.items())
 
 
 def acceptance(row, phase):
@@ -277,7 +283,7 @@ def acceptance(row, phase):
     if phase is None or row["kind"] != "check" or row["rule"] != "consistent":
         return "-", "-"
     lo, hi = float(row["lo"]), float(row["hi"])
-    mean_ok = holds("mean", lo, hi, phase.lo, phase.hi, phase.mean)
+    mean_ok = holds("mean", lo, hi, phase.lo, phase.hi, phase.fmean)
     half = (hi - lo + phase.hi - phase.lo) / 2
     return ("pass" if mean_ok else "fail"), f"{100 * half / float(row['expected']):.1f}"
 
