@@ -98,6 +98,7 @@ hw:noise-idle	pending:calibration-16	no complete power-on console capture of kit
 hw:noise-pixel-offset	pending:calibration-16	no complete power-on console capture of kit-noise in docs/calibration/hardware
 hw:noise-reset	pending:calibration-16	no complete reset console capture of kit-noise in docs/calibration/hardware
 hw:noise-stall	pending:calibration-16	no complete power-on console capture of kit-noise in docs/calibration/hardware
+hw:op-slope	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:pi-dma-small	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:pi-row-end	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:pipebusy-stall	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
