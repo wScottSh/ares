@@ -1118,6 +1118,8 @@ def glyph_self_test():
     for name, hw, want in [
             ("a console whose two readings sit at opposite ends of the poll bound", glyph_log(poll=(-24, 24)), "pass"),
             ("U-GLYPH's mutation, 25.31 rclk per glyph over the fork", glyph_log(per_glyph=25.31), "fail"),
+            ("a console 1.0 rclk per glyph over the fork, inside the abs:1.014 poll bound", glyph_log(per_glyph=1.0), "pass"),
+            ("a console 1.01 rclk per glyph over the fork (clocks round to whole rclk: slope 49/48 = 1.021), just past the bound", glyph_log(per_glyph=1.01), "fail"),
             ("a console 2 rclk per glyph under the fork", glyph_log(per_glyph=-2), "fail")]:
         got, detail = compare(q, [hw], [glyph_log()])
         out.append(got == want)
