@@ -39,7 +39,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | SOFTWARE_READY | **no** | 1 of 6 clauses hold |
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
-| every hw:* check is ingested and passes | **no** | 0 of 89 pass, 89 pending:calibration-16 |
+| every hw:* check is ingested and passes | **no** | 0 of 90 pass, 90 pending:calibration-16 |
 | every row that is not excluded or out-of-kit is verified | **no** | 69 of 147 rows that are not excluded pass, counting the 12 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
@@ -77,7 +77,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 2 consistent-only, 17 fail, 95 pass, 1 pass-conditional:#77, 107 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 2 consistent-only, 17 fail, 95 pass, 1 pass-conditional:#77, 108 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|
@@ -251,7 +251,7 @@ These checks are gated too, but another check already decides their row.
 | `cpu.mtc0-slow-regs` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.cache-index-load-tag` | pass | `hw:cache-ops` pending (calibration-16); `hw:cache-ops-sum` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `cpu.count-write-hold` | fit only | `hw:count-write-hold` pending (calibration-16) |
-| `cpu.irq-sample` | fit only | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
+| `cpu.irq-sample` | fit only | `hw:cpu-exceptions` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16); `hw:irq-clear` pending (calibration-16) |
 | `cpu.fetch-ahead-slots` | fit only | `hw:fetch-ahead` pending (calibration-16) |
 | `cpu.wb-entries` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.wb-block-entries` | fail | `hw:wb-release` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16) |
