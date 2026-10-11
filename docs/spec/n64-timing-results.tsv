@@ -49,6 +49,7 @@ hw:ai-rate	pending:calibration-16	no complete power-on console capture of kit-bu
 hw:atomic-contention	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
 hw:attribute-stage	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:attribute-sync-cost	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
+hw:block-write-slope	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:cache-ops	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cache-ops-sum	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:clobber	pending:calibration-16	no complete power-on console capture of kit-zmem in docs/calibration/hardware
@@ -119,6 +120,7 @@ hw:si-write64-poll	pending:calibration-16	no complete power-on console capture o
 hw:snapper64	pending:calibration-16	no console capture of snapper64 (capture name ext-snapper64*) in docs/calibration/hardware
 hw:sp-dma-direction	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:sp-dma-rsp	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
+hw:span-cost	pending:calibration-16	no complete power-on console capture of kit-span2 in docs/calibration/hardware
 hw:span-width	pending:calibration-16	no complete power-on console capture of kit-span in docs/calibration/hardware
 hw:span-write-release	pending:calibration-16	no complete power-on console capture of kit-span2 in docs/calibration/hardware
 hw:stale-read	pending:calibration-16	no complete power-on console capture of rdpstat-1prim in docs/calibration/hardware
