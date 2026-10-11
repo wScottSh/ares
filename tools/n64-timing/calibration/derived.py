@@ -245,6 +245,33 @@ def release(clocks, lines, segment_px, half_px):
     return {segment_px: "segment", half_px: "half"}.get(period, f"period-{period}"), steps
 
 
+#COUNT runs at half the 93.75 MHz PClock (VR4300 User's Manual 6.3.3); VCLK at 48.681812 MHz and the RCP
+#at 62.5 MHz on NTSC (n64brew Clock_Timing). The longest refresh holdoff is 54 rclk (n64brew RDRAM_Interface).
+TICKS_PER_VCLK = 46.875 / 48.681812
+REFRESH_MAX_TICKS = 54 * 46.875 / 62.5
+
+
+def hsync(recs):
+    """kit-bus's short lines (bus.py hsync_short). On the refresh points no line is in V_VIDEO, so each
+    slow load is one refresh holdoff: lines per holdoff from the lines H_SYNC puts in the window.
+    fetch-overrun's VI time is the loads fetch-overrun-none gains, at its mean load period. With no
+    burst both windows hold the same one refresh per line, so they differ by at most one holdoff, and
+    by the load each window ends on: `fetch-overrun-fetched` is 1 when the VI time exceeds that."""
+    out = {}
+    pts = {point: f for (rom, point), f in recs.items() if rom == "bus-hsync" and f.get("starved") == 0}
+    for point, f in pts.items():
+        lines = f["window"] / ((f["hsync"] + 1) * TICKS_PER_VCLK)
+        if point.startswith("refresh-") and f["slow"]:
+            out[f"{point}-lines-per-holdoff"] = round(lines / f["slow"], 3)
+    if "fetch-overrun" in pts and "fetch-overrun-none" in pts:
+        fetch, none = pts["fetch-overrun"], pts["fetch-overrun-none"]
+        vi = (none["n"] - fetch["n"]) * none["window"] / none["n"]
+        lines = fetch["window"] / ((fetch["hsync"] + 1) * TICKS_PER_VCLK)
+        out["fetch-overrun-vi-ticks-per-line"] = round(vi / lines, 2)
+        out["fetch-overrun-fetched"] = int(vi > REFRESH_MAX_TICKS + 2 * max(fetch["lat_max"], none["lat_max"]))
+    return {("bus-derived", "hsync"): out} if out else {}
+
+
 def span2(recs):
     """kit-span2: per depth, the spacing of a write-only span's stall steps (segment: every 16 B,
     half: every 64 B, no-step, else period-<px> or single-<width>), and IM_RD's steady cost per 64 B
@@ -281,4 +308,4 @@ def vi_latch(recs):
                                           "vi_bank": got["y-late-bank2"]["vi_bank"]}}
 
 
-DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch, span2]
+DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch, span2, hsync]
