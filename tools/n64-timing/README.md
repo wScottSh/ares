@@ -108,7 +108,7 @@ The core has one rasterizer: the cen64-jgemu pixel engine (`ares/n64/rdp/engine/
 
 `ARES_DPLOG=FILE n64-run ...` logs every `DPC_START`/`DPC_END`/`DPC_STATUS` write, every `DPC_CURRENT`/`DPC_STATUS` read and every DP interrupt. `python tools/n64-timing/dplog-check.py FILE` reports the RSP's back-pressure from it: the `DPC_CURRENT` and `DPC_STATUS` poll loops that iterated, `DPC_END` writes made while `DPC_CURRENT` trailed, and where each DP interrupt fell.
 
-`tools/n64-timing/state-roundtrip.sh ROM [FRAMES]` checks that: a run that saves and reloads its state at fields 150, 300 and 457 must write the same stats file as a plain run, and a TMEM byte poked at field 30 must change `trace_hash` and no other column of that row.
+`tools/n64-timing/state-roundtrip.sh ROM [FRAMES]` checks that: a run that saves and reloads its state at fields 150, 300 and 457 must write the same stats file as a plain run, and a TMEM byte poked at field 30 must change `trace_hash` and no other column of that row. It also builds romgen's `state` suite (MI repeat writes behind an RSP DMA, `romgen/suites/state/sets.py`), saves after each of fields 1-6, and loads each state in a fresh run after field 0: that run must print the plain run's `#bench` line and rows. The save after field 4 holds a repeat write still posted to the RI, so a state without the SysAD entry's repeat flag fails.
 
 ### Frame dumps
 
