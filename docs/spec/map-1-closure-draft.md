@@ -71,7 +71,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 | Check | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|
 | `bench:mi-memset-cached` | vi-on pclk_per_line 72.674..72.728 median 72.684 mean 72.682 (expected 71.24, 71.17..71.31, mean) fail | `cpu.wb-block-entries` `sysad.rdram-block-write-period` | `sysad.rdram-block-write-period` |
-| `bench:mi-memset-repeat` | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `sysad.register-write` | - |
+| `bench:mi-memset-repeat` | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `ri.write-hit` `sysad.register-write` | - |
 | `bench:mi-memset-uncached` | vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `ri.write-hit` `sysad.rdram-write-period` | `sysad.rdram-write-period` |
 | `mm:filesel-named` | filesel-named: median over 5 phases: mean 1.6789 (min 1.6695, max 1.6893), 67.9% (min 66.9%, max 68.9%) of game frames at 2 field(s) | `rdp.span-read-latency` `rdp.mem-overhead-read` `rdp.mem-overhead-write` | - |
 | `nemu64:timing/load-from-uncached-vi-on-same-bank` | 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean | `ri.retry-clean` `ri.bank-of` `ri.row-of` `ri.rank.vi` `vi.lines-per-output-line` `vi.aa-mode-lines` | - |
@@ -106,7 +106,7 @@ None.
 
 | Behavior | Basis | Failing checks |
 |---|---|---|
-| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail |
+| `ri.write-hit` | datasheet | `bench:mi-memset-uncached`: vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail; `bench:mi-memset-repeat`: vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail |
 | `ri.retry-clean` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |
 | `ri.bank-of` | wiki | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |
 | `ri.row-of` | datasheet | `nemu64:timing/load-from-uncached-vi-on-same-bank`: 0 of 1 values pass; with '(true, 24, "36.3f32")': phase mean 41.7905 over 64 phases (band 32.300..40.300), mean 41.656..41.931, median 37 (band 35..37) fail on mean |

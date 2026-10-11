@@ -4,8 +4,9 @@ static constexpr auto ceilPclk(Clock t) -> Clock {
   return {(t.units + Timing::UnitsPerPclk - 1) / Timing::UnitsPerPclk * Timing::UnitsPerPclk};
 }
 
-//RDRAM data the RI moves. MI repeat and EBus test modes, the RDRAM register
-//space and everything else keep their device paths.
+//RDRAM data the RI moves as the CPU wrote it. MI repeat writes go to the RI as
+//their own burst (SysAD::run); EBus test mode, the RDRAM register space and
+//everything else keep their device paths.
 static auto throughRi(u32 address) -> bool {
   return address <= 0x03ef'ffff && !mi.repeating() && !mi.ebusTest();
 }
@@ -101,7 +102,7 @@ auto SysAD::readiness() const -> Timing::Readiness {
 auto SysAD::run(Clock limit) -> void {
   auto& e = *pending();
   if(e.phase == Entry::Phase::Applying) {
-    apply(e);
+    apply(e, e.done);
     e.phase = Entry::Phase::Done;
     free = e.done;
     update();
@@ -114,16 +115,25 @@ auto SysAD::run(Clock limit) -> void {
     ri.post({e.address, e.size, RiBus::Direction::Write, RiBus::Requester::CpuSysAD, (u16)(&e - entries)}, start);
     return;
   }
+  //MI repeat mode: MI tells the RI a count of RepeatCount+1 bytes and repeats the
+  //value into every octbyte (n64brew MIPS_Interface, Repeat Mode).
+  if(e.size <= Dual && e.address <= 0x03ef'ffff && mi.repeating()) {
+    e.repeat = true;
+    e.phase = Entry::Phase::Posted;
+    update();
+    ri.post({e.address, RiBus::repeatBytes(e.address, mi.repeatCount()), RiBus::Direction::Write, RiBus::Requester::CpuSysAD, (u16)(&e - entries)}, start);
+    return;
+  }
   //Fit to the systembench poll rows; no hardware measures the drain itself (vr4300-wb.md); sysad.register-write.
   e.phase = Entry::Phase::Applying;
   e.done = start + Timing::Behavior::SysadRegisterWrite;
   update();
 }
 
-//A posted write whose target is not RDRAM data runs its device path now, at the drain's time.
-auto SysAD::apply(Entry& e) -> void {
-  drainer.clock = e.done;
-  timeline.actingAt(e.done, [&] {
+//A posted write whose target is not RDRAM data, or an MI repeat write, runs its device path at `at`.
+auto SysAD::apply(Entry& e, Clock at) -> void {
+  drainer.clock = at;
+  timeline.actingAt(at, [&] {
     switch(e.size) {
     case Byte:   bus.write<Byte>(e.address, e.value, drainer, RBusDevice::VR4300_UNCACHED); break;
     case Half:   bus.write<Half>(e.address, e.value, drainer, RBusDevice::VR4300_UNCACHED); break;
@@ -148,10 +158,15 @@ auto SysAD::granted(const RiBus::Grant& g) -> void {
     return;
   }
   auto& e = entries[g.burst.tag];
+  if(e.repeat) apply(e, g.dataEnd);
   e.done = g.dataEnd + (e.size > Dual ? BlockWritePath : WritePath);
   e.phase = Entry::Phase::Done;
   free = e.done;
   update();
+}
+
+auto SysAD::writesOwnBytes(const RiBus::Burst& burst) -> bool {
+  return burst.tag != ReadTag && entries[burst.tag].repeat;
 }
 
 template<u32 Size> auto SysAD::readRdram(u32 address, void* data, Clock path) -> void {
@@ -233,11 +248,21 @@ template<u32 Size> auto SysAD::forward(u32 address, u64 value) const -> u64 {
   return value;
 }
 
+auto SysAD::postedRepeats() const -> u32 {
+  u32 n = 0;
+  for(u32 i : range(count)) {
+    auto& e = entries[(head + i) & 3];
+    n += e.repeat && e.phase == Entry::Phase::Posted;
+  }
+  return n;
+}
+
 auto SysAD::serialize(serializer& s) -> void {
   for(auto& e : entries) {
     s((u8&)e.phase);
     s(e.size);
     s(e.slots);
+    s(e.repeat);
     s(e.address);
     s(e.enqueued.units);
     s(e.done.units);

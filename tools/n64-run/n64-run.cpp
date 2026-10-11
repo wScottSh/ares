@@ -429,6 +429,7 @@ struct ScriptRunner {
   auto execute(const script::SaveState& step, u64 frame) -> bool {
     auto state = (*root)->serialize(true);
     if(!file::write(step.path, {state.data(), state.size()})) log("save-state-failed", "-", frame);
+    log("save-state", step.path, frame, {"posted-repeats=", N64::sysad.postedRepeats()});
     return true;
   }
 

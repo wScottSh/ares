@@ -68,6 +68,10 @@ struct Client {
   //with buffer() unused.
   struct Native { u8* data; u8* hidden; u32 base; };
   virtual auto native(const Burst&, Native&) -> bool { return false; }
+  //A write burst whose bytes the client writes itself, in granted(): an MI
+  //repeat write, whose one pattern the MI replays into every octbyte
+  //(n64brew MIPS_Interface, Repeat Mode).
+  virtual auto writesOwnBytes(const Burst&) -> bool { return false; }
 };
 
 //Bytes in the first burst of a transfer of `bytes` at `address`: at most
@@ -76,6 +80,17 @@ constexpr auto split(u32 address, u32 bytes) -> u32 {
   u32 row = 0x800 - (address & 0x7ff);
   u32 n = bytes < row ? bytes : row;
   return n < (u32)Timing::Behavior::RiMaxBurst ? n : (u32)Timing::Behavior::RiMaxBurst;
+}
+
+//Bytes an MI repeat write at `address` asks the RI for: RepeatCount+1 counted
+//from the start of its octbyte, so Count gives RepeatCount/8+1 octbytes at any
+//Addr[2:0] and the byte masks of the first and last octbyte drop the rest
+//(n64brew MIPS_Interface, Repeat Mode; the +1 octbyte is an inferred reading of
+//"RepeatCount[6:3] transfers"). With RepeatCount+1 <= Addr[2:0] that is 0 bytes:
+//one octbyte on the wire with every byte masked, also inferred.
+constexpr auto repeatBytes(u32 address, u32 repeatCount) -> u8 {
+  const s32 bytes = (s32)repeatCount + 1 - (s32)(address & 7);
+  return bytes > 0 ? bytes : 0;
 }
 
 struct Bank {
