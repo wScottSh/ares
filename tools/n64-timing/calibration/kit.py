@@ -1473,8 +1473,8 @@ def noise_sweep_self_test():
     out.append(not ok)
     print(f"kit: self-test: noise sweep: a second period past the first's extent: {'ok' if not ok else 'FAILED'}")
     with tempfile.TemporaryDirectory() as root:
-        write(root, (0,), 80)
-        for k in range(2, 81, 2):
+        write(root, (0,), 200)
+        for k in range(2, 201, 2):
             for kit in sets.NOISE_KITS:
                 (Path(root) / f"boot-{k}" / f"{kit}.dplog").unlink()
         _, ok = noise.sweep_table(root)

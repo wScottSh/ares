@@ -276,7 +276,8 @@ def offset_table(run_dir):
 
 def period(series):
     """The boot-delay period of a snap's distance over step-1 sweeps (one {delay: distance} per pad): the lag
-    whose mean |d(k + lag) - d(k)|, summed over the sweeps, is the least of the curve's local minima past lag 1.
+    whose mean |d(k + lag) - d(k)|, summed over the sweeps, is the least of the curve's local minima past lag 1,
+    among lags the sweep spans twice.
     Nearby delays sit at nearly the same phase, so the curve starts at its lowest; lag 1 is not a minimum."""
     curves = [[s[k] for k in sorted(s)] for s in series]
     n = min(map(len, curves))
@@ -302,8 +303,8 @@ def sweep_table(run_dir):
             ok = False
             continue
         p = period(list(by_pad.values()))
-        if p is None or last < 2 * p:
-            out.append(f"{snap}: sweep 1..{last} does not span two periods (period {p})")
+        if p is None:
+            out.append(f"{snap}: sweep 1..{last} spans no period twice")
             ok = False
             continue
         every = [v for ds in by_pad.values() for v in ds.values()]
