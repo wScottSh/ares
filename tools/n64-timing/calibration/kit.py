@@ -1074,6 +1074,26 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += lasts
+    eret_q, triv_q = (next(q for q in questions() if q["id"] == i) for i in ("eret-chain", "fpu-trivial-chain"))
+
+    def chain(eret, jump=96, trivial=36, by3=108):
+        return Log(sample_log("".join(f"#bench cpu2-chain {pt} reps=8 min={m} max={m + 380}\n" for pt, m in
+                                      (("eret-x24", eret), ("jump-x24", jump), ("trivial-x24", trivial), ("by3-x24", by3))),
+                              rom="kit-cpu2"))
+    fork_chain = [chain(108), chain(109, jump=97)]
+    chains = [("eret-chain: the console reads as the fork", eret_q, chain(109), "pass"),
+              ("eret-chain: CpuEret +1 unit (110, U-CPU2-CHAINS sweep) is inside 1 tick", eret_q, chain(110), "pass"),
+              ("eret-chain: CpuEret +2 units (111..112) is rejected", eret_q, chain(111), "fail"),
+              ("fpu-trivial-chain: CpuFpuTrivial +1 unit reads 37 in some logs of every pad, inside 1 tick", triv_q, chain(108, trivial=37), "pass"),
+              ("fpu-trivial-chain: CpuFpuTrivial +2 units (39) is rejected", triv_q, chain(108, trivial=39), "fail"),
+              ("fpu-trivial-chain: MUL.D by a power of two at the 8 pclk control cost (108)", triv_q,
+               chain(108, trivial=108), "fail")]
+    for name, q, hw, want in chains:
+        got, detail = compare(q, [hw], fork_chain)
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += chains
     with tempfile.TemporaryDirectory() as tmp:
         calib = Path(tmp) / "calib"
         (calib / "single").mkdir(parents=True)
