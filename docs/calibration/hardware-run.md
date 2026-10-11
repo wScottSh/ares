@@ -100,7 +100,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 |---|---|---|---|---|---|---|
 | 1 | `kit-cpu` | 0.2 s | 9.0 KB | no | 0-7 | `dcb`, `register-write`, `ifill`, `wb-release`, `dirty-miss`, `dirty-row`, `cpu-reads`, `poll-phase`, `dom2-read` |
 | 2 | `kit-vi` | 4.2 s | 3.4 KB | no | 0-7 | `vi-first-line`, `count-per-field`, `vi-mid-field-blank` |
-| 3 | `kit-dma` | 1.2 s | 16.8 KB | no | 0-7 | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `pi-row-end`, `sp-dma-rsp` |
+| 3 | `kit-dma` | 1.2 s | 18.0 KB | no | 0-7 | `memset-vi`, `sp-dma-direction`, `pi-dma-small`, `joybus-pads`, `si-write64-poll`, `pi-row-end`, `sp-dma-rsp` |
 | 4 | `kit-hpos` | 0.2 s | 6.7 KB | no | 0-7 | `vi-cpu-contention` |
 | 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | 0-7 | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
 | 6 | `kit-span` | 0.2 s | 9.2 KB | no | 0-7 | `color-half-16bpp`, `span-width` |
@@ -132,6 +132,8 @@ For each ROM:
 A kit ROM's timing can depend on where its code sits against the CPU's 32-byte instruction cache lines. Moving the code by 76 bytes changed 8 of 72 kit verdicts on the fork (issue #100). So `run.sh` builds every kit ROM at 8 layout pads. Pad P inserts P instructions at boot, which moves every later instruction by 4P bytes. Pads 0 to 7 cover one cache line. Pad 0 is the build in `roms/boot-1/`.
 
 A question is layout-sensitive when the fork's values for it differ between pads. `tools/n64-timing/calibration/kit.py --layout RUN_DIR` lists each question, how many of its values differ by pad, and the value whose range moves most. In the table above, a ROM with a layout-sensitive question has `0-7` in its Layout pads column.
+
+The pads move code. The 76-byte shift of issue #100 moved data. It lengthened the `#kit` header string, which comes after the measurement kernels, so the kernels stayed in place and the point tables and output code after the header moved. One fork-only experiment repeated that shift on `kit-dma` (measured, U-LAYOUT-RESIDUE). It lengthened the header by 76 bytes, built every pad 0-7 at every boot delay, and read each shifted log as a capture against the unshifted fork run at the same pad. `sp-dma-direction` passes at all 8 pads. The shift moves 197 of its 240 per-pad value ranges, by at most 26 COUNT ticks, and 58 of them leave the range that pads 0-7 span. Each moved range still meets the same pad's model range with the full `range:rel:1` slack to spare. So `sp-dma-direction` does not need a data axis at this shift. The other five `kit-dma` questions also pass at every pad. The raw data is on unicron in `~/n64-timing/results/u-layout-residue/x76/`: `run-x76.sh` builds and runs the shifted ROMs, `compare.py` scores them, and `compare.txt` is its output. A dirty tree no longer shifts data: `build.py` stamps its `sha=` in the same 12 columns as a clean tree's.
 
 For each of those ROMs, run the build for each pad 1 to 7 once from a power cycle, in addition to the pad 0 runs. Do the same for the `kit-dma` four-controller run and the `kit-noise` reset run (see [Repeat runs](#repeat-runs)) at each pad. That is 91 more runs: 77 for the 11 ROMs, 7 for `kit-dma` with four controllers, and 7 Reset runs of `kit-noise`. At about three minutes for each power cycle, load and copy (inferred, not timed on a console), they add about four and a half hours. The logs are the same size as pad 0's, and each fits the 32 KiB SRAM. Together they add about 1.5 MB to the capture.
 

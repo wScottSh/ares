@@ -69,11 +69,17 @@ def runtime_text(extra_asm, consts):
     return "\n".join([text] + extra_asm)
 
 
+def sha_stamp(sha, dirty):
+    """The #kit header's 12-column sha= value. A dirty tree gives up 6 hex digits to its marker, so it
+    builds the clean tree's code layout (hwout.asm)."""
+    return (sha or "unknown")[:6] + "-dirty" if dirty else (sha or "unknown")[:12]
+
+
 def git_sha():
     here = os.path.dirname(os.path.abspath(__file__))
-    sha = subprocess.run(["git", "-C", here, "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True).stdout.strip()
+    sha = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "-C", here, "status", "--porcelain", "--", ".."], capture_output=True, text=True).stdout.strip()
-    return (sha or "unknown") + ("-dirty" if dirty else "")
+    return sha_stamp(sha, bool(dirty))
 
 
 def build_payload(set_def, hw=None):
