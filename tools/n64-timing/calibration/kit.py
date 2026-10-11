@@ -1023,6 +1023,9 @@ def self_test():
     op_slope_cases = op_slope_self_test()
     failed += op_slope_cases.count(False)
     cases += op_slope_cases
+    wb_cases = wb_points_self_test()
+    failed += wb_cases.count(False)
+    cases += wb_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -1415,6 +1418,39 @@ def op_slope_self_test():
         got, detail = compare(q, [hw], [op_slope_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-cpu: op-slope, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+#The fork's pad-0 boot-1 COUNT mins of kit-cpu's wb-spaced and wb-evict points.
+WB_POINTS_FORK = {("wb-spaced", f"sw-{n}-g{g}"): v for (n, g), v in {
+    (5, 0): 10, (5, 1): 10, (5, 2): 10, (5, 4): 11, (5, 8): 19,
+    (6, 0): 18, (6, 1): 18, (6, 2): 18, (6, 4): 18, (6, 8): 23}.items()}
+WB_POINTS_FORK.update({("wb-evict", f"victims-{v}"): t for v, t in ((1, 56), (2, 90), (3, 126), (4, 160))})
+WB_POINTS_FORK.update({("wb-evict", f"victim-sw{s}"): t for s, t in ((1, 21), (2, 22), (3, 34), (4, 34))})
+
+
+def wb_points_log(moved=None):
+    """A kit-cpu log of the wb-spaced and wb-evict points at the fork's COUNTs, with moved[(rom, point)] in place."""
+    vals = {**WB_POINTS_FORK, **(moved or {})}
+    return Log(sample_log("".join(f"#bench {rom} {point} reps=8 min={v} max=0\n" for (rom, point), v in vals.items()),
+                          rom="kit-cpu"))
+
+
+def wb_points_self_test():
+    """wb-spaced and wb-evict at the COUNT bound (1 tick) and against the mutations prehw-plan.md U-WB-POINTS fixed, at
+    the values their scratch builds read (u-wb-points)."""
+    out = []
+    for qid, name, moved, want in [
+            ("wb-spaced", "sw-6-g0 one tick over the fork", {("wb-spaced", "sw-6-g0"): 19}, "pass"),
+            ("wb-spaced", "sw-6-g0 two ticks over the fork", {("wb-spaced", "sw-6-g0"): 20}, "fail"),
+            ("wb-spaced", "a store into a full buffer waits for it to empty, sw-6-g0 26 and sw-5-g0 26",
+             {("wb-spaced", "sw-6-g0"): 26, ("wb-spaced", "sw-5-g0"): 26}, "fail"),
+            ("wb-evict", "victim-sw2 one tick over the fork", {("wb-evict", "victim-sw2"): 23}, "pass"),
+            ("wb-evict", "victim-sw2 two ticks over the fork", {("wb-evict", "victim-sw2"): 24}, "fail"),
+            ("wb-evict", "cpu.wb-block-entries one entry up (3), victim-sw2 34", {("wb-evict", "victim-sw2"): 34}, "fail")]:
+        q = next(q for q in questions() if q["id"] == qid)
+        got, detail = compare(q, [wb_points_log(moved)], [wb_points_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-cpu: {qid}, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 #The mappings of the a, b and c LFSRs a reader tests for each noise use (noise.py). ad is G_AD_NOISE, two
