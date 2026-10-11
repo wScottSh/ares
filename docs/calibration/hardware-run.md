@@ -105,7 +105,7 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 5 | `kit-rdp` | 0.2 s | 8.3 KB | no | 0-7 | `cmd-fifo-depth`, `cmd-fetch-burst`, `rdp-sync-setter`, `rdp-atomic`, `rdp-rect-base` |
 | 6 | `kit-span` | 0.2 s | 9.2 KB | no | 0-7 | `color-half-16bpp`, `span-width` |
 | 7 | `kit-span2` | 0.5 s | 25.0 KB | no | 0 | `span-write-release`, `mem-overhead-pipelined` |
-| 8 | `kit-noise` | 0.2 s | 29.6 KB | no | 0-7 | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
+| 8 | `kit-noise` | 0.2 s | 32.4 KB | no | 0-7 | `noise-alpha-dither`, `noise-dither-bits`, `noise-pixel-offset`, `noise-idle`, `noise-2cycle`, `noise-stall`, `noise-reset` |
 | 9 | `rdpstat-1prim` | 0.2 s | 1.1 KB | yes | 0 | `stale-read` |
 | 10 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
 | 11 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
