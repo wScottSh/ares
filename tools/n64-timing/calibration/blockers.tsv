@@ -8,7 +8,6 @@ clause:software_ready:2	clause	follows	-	-	-	-
 clause:software_ready:3	clause	follows	-	-	-	-
 clause:software_ready:4	clause	follows	-	-	-	-
 clause:software_ready:5	clause	follows	-	-	-	-
-clause:software_ready:6	clause	follows	-	-	-	-
 bench:dirty-miss-isolated	check	C	dirty-miss	-	-	prehw-plan 2.3: NEC VR4300 UM s.12.5.2 p.304 gives the order only; systembench PR #2 has invalid victims only; nemu64 cache.rs lists the dirty victim as TODO
 bench:dirty-row-sweep	check	A	dirty-row	U-SB-PR2	-	-
 bench:ifill-isolated	check	A	ifill	U-SB-PR2	-	-
@@ -92,7 +91,7 @@ rdp.cmd-fifo-dwords	row	C	cmd-fifo-depth	-	-	-
 rdp.color-half-pixels-16bpp	row	C	color-half-16bpp	-	-	-
 rdp.fill-copy-rate	row	C	thar0-console fill-copy-rate copy-passfail	-	-	-
 rdp.mem-overhead-read	row	C	span-width	-	-	-
-rdp.mem-overhead-write	row	B	-	U-WRITE-HOLD-Q	-	-
+rdp.mem-overhead-write	row	C	span-write-release	U-WRITE-HOLD-Q	fork=28.9988;mut=24.9957;cite=U-WRITE-HOLD-Q	prehw-plan 2.4: u-span-kit report (the fork's 29.0 rclk per 64 B half against 16 shading clocks); the prehw-plan 2.1 sources (Thar0 RDP-Timing-Tests, the fit's own data; n64brew RDP pages, MiSTer RDP.vhd, patents, cen64) were read for stream overlap, not for a write-only half's cost, and this unit searched nothing further, so the row carries the plan-fixed mutations (15 rclk: 24.9957, 24 rclk: 34.0008)
 rdp.noise-alpha-dither	row	B	noise-alpha-dither	U-NOISE-READER	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:39-41 cite a/b/c mappings for G_AD_NOISE only (Angrylion 0-7, MiSTer odd 1-7), none for the G_AC_DITHER threshold, so ac-dither has no mapping to test; ad-noise-threshold stores nothing for any value (alpha 0x78 + 7 < blend 0x80), b = 0, false-match rate >= 2 at K = 0; report-only until a kit-noise ROM change
 rdp.noise-dither-bits	row	B	noise-dither-bits	U-NOISE-READER	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:40 names Angrylion irand and MiSTer lfsr(8:0), neither a mapping of a, b, c; cd-noise-16's gray 0x80 has low bits 0, so no dither value rounds it (b = 0, fork 1 dump over 64 logs); report-only until a kit-noise ROM change
 rdp.port-lookahead	row	C	imrd-zcmp-slots-2cyc	-	-	-
