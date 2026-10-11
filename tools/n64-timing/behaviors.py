@@ -1011,10 +1011,17 @@ def model_text(values, exact=False):
     return ",".join(one(v) for v in values) if exact else f"{one(values[0])}..{one(values[1])}"
 
 
+def mm_bench_rule(kit):
+    """(metric, rule) cells of an ext:mm-bench question: the columns mm_bench.compare judges, each range:abs:<t>."""
+    tol = kit.mm_bench.TOLERANCE
+    return " ".join(tol), " ".join(f"range:abs:{t}" for t in tol.values())
+
+
 def fork_values(root, model_dir):
     """[(question, key, metric, rule, model)]: the fork's side of every question a tool compares, from a
     calibration/run.sh output, as kit.py compares it: lo..hi (a set for an exact rule) over boot delays and layout
-    pads. Keys of the four-controller runs start `pads-4:`. thar0 gives each configuration's pruned BUF and PIPE
+    pads. Keys of the four-controller runs start `pads-4:`. mm-bench gives each scene's per-frame min..max of each
+    judged column from its one fork run (key = scene). thar0 gives each configuration's pruned BUF and PIPE
     average under its 1% rule; systembench each row's reading under main.c's rule (`systembench:<unit>`)."""
     kit = kit_module(root)
     model_dir = Path(model_dir)
@@ -1033,6 +1040,13 @@ def fork_values(root, model_dir):
                             else (min(old[0], v[0]), max(old[1], v[1])))
                 out += [(q["id"], prefix + key, metric, rule_of[metric], model_text(v, rule_of[metric] == "exact"))
                         for (key, metric), v in sorted(merged.items())]
+        elif q["kit"] == "ext:mm-bench":
+            for scene in q["points"].split():
+                run = kit.mm_bench.model_run(model_dir, scene)
+                if run is not None and run.complete:
+                    out += [(q["id"], scene, metric, f"range:abs:{t}",
+                             model_text((min(run.values(metric)), max(run.values(metric)))))
+                            for metric, t in kit.mm_bench.TOLERANCE.items()]
         elif q["kit"] == "ext:thar0" and (model_dir / "ext/thar0.txt").exists():
             from romgen.suites.thar0 import compare as thar0
             model = thar0.parse(str(model_dir / "ext/thar0.txt"))
@@ -1627,7 +1641,12 @@ def calibration_errors(root, rows, checks, found):
         if q["kit"] == "ext:mm-bench" and not (q["points"].split() and set(q["points"].split()) <= set(kit.mm_bench.SCENES)):
             errors.append(f"{where}: points `{q['points']}` must name the BENCH scenes the question reads "
                           f"({' '.join(kit.mm_bench.SCENES)})")
-        if not kit.RULE.match(q.get("rule", "")) or (q["kit"] in kit.KIT_ROMS) == (q.get("rule") == "-"):
+        if q["kit"] == "ext:mm-bench":
+            want = mm_bench_rule(kit)
+            if (q["metric"], q["rule"]) != want:
+                errors.append(f"{where}: metric `{q['metric']}` and rule `{q['rule']}` must be `{want[0]}` and "
+                              f"`{want[1]}`, the columns and tolerances mm_bench.compare judges (TOLERANCE)")
+        elif not kit.RULE.match(q.get("rule", "")) or (q["kit"] in kit.KIT_ROMS) == (q.get("rule") == "-"):
             errors.append(f"{where}: rule `{q.get('rule')}` must be exact or range:abs|rel:<tolerance> for a kit ROM "
                           f"question, `-` otherwise")
         elif len(q["rule"].split()) not in (1, len(q["metric"].split())):
@@ -2318,6 +2337,9 @@ def self_test(root):
              row_field("dcb", "kit", "none: self-test"), "`cpu.dcb` names hw:dcb, whose kit is `none: self-test`, not an in-repo kit ROM"),
             ("an mm-bench question with no points", "tools/n64-timing/calibration/questions.tsv",
              row_field("mm-filesel", "points", ""), "points `` must name the BENCH scenes the question reads"),
+            ("an mm-bench rule wider than mm_bench.compare's tolerance", "tools/n64-timing/calibration/questions.tsv",
+             row_field("mm-bench", "rule", "range:abs:0 range:abs:2"),
+             "rule `range:abs:0 range:abs:2` must be `vi rdp_ticks` and `range:abs:0 range:abs:1`"),
             ("a question closing an unknown id", "tools/n64-timing/calibration/questions.tsv",
              lambda t: t.replace("\tcpu.dcb\t", "\tcpu.no-such-row\t", 1), "closes `cpu.no-such-row`, which is no behavior row"),
             ("a question with more rules than metrics", "tools/n64-timing/calibration/questions.tsv",
