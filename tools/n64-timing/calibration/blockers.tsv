@@ -112,7 +112,7 @@ ri.overhead-write	row	C	memset-vi	-	-	-
 ri.post-read-gap	row	C	sp-dma-direction	-	-	-
 ri.post-write-gap	row	C	sp-dma-direction	-	-	-
 ri.rank.vi	row	C	vi-cpu-contention nemu64-console ri-priority	-	-	-
-ri.refresh-latch	row	B	-	U-VI-SHORT-LINE	-	-
+ri.refresh-latch	row	C	refresh-latch	U-VI-SHORT-LINE	fork=0;mut=1;cite=U-VI-SHORT-LINE	followups.md verify-57: the rule has no reference; n64brew RDRAM_Interface (rdram-bus-arbitration.md B11) gives one SetRR per HSYNC and says nothing of an HSYNC during a refresh; prehw-plan 2.6 (grep of questions.tsv and items.tsv): no earlier short-H_SYNC point; not re-searched by this unit
 ri.request-latency	row	D	ri.request-latency	-	-	-
 ri.retry-clean	row	C	nemu64-console	-	-	-
 ri.row-of	row	C	nemu64-console	-	-	-
@@ -127,7 +127,7 @@ sysad.rdram-write-period	row	C	memset-vi	-	-	-
 sysad.register-write	row	C	register-write wb-drain-target	-	-	-
 vi.aa-mode-lines	row	C	vi-cpu-contention nemu64-console vi-fetch-modes	-	-	-
 vi.display-window	row	C	vi-fetch-modes vi-fetch-position	-	-	-
-vi.fetch-overrun	row	B	-	U-VI-SHORT-LINE	-	-
+vi.fetch-overrun	row	C	vi-fetch-overrun	U-VI-SHORT-LINE	fork=1;mut=0;cite=U-VI-SHORT-LINE	behaviors.tsv: inferred, none published; n64brew Video_Interface (prehw-plan 2.6) gives the X_SCALE limit only; US 6,166,748 gives the burst order within a line only (vi.cpp Fetch::start); MiSTer keeps a 3-line buffer (implementation, not hardware); not re-searched by this unit
 vi.lines-per-output-line	row	C	nemu64-console vi-fetch-modes	-	-	-
 vi.register-sample	row	C	vi-fetch-modes vi-frame-latch	-	-	-
 vi.unfetched-sample	row	A	-	U-LABELS-2	-	-
