@@ -960,6 +960,9 @@ def self_test():
     repeat_cases = repeat_self_test()
     failed += repeat_cases.count(False)
     cases += repeat_cases
+    op_slope_cases = op_slope_self_test()
+    failed += op_slope_cases.count(False)
+    cases += op_slope_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -1267,6 +1270,42 @@ def repeat_self_test():
         got, detail = compare(q, [hw], [repeat_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-dma: repeat-write, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+#The fork's pad-0 boot-1 COUNT mins of kit-cpu's op-slope points (N = 16, N = 64) per operation.
+OP_SLOPE_FORK = {"reg-write": (76, 376), "dmiss": (336, 1344), "ifill": (361, 1446), "u32r": (264, 1056),
+                 "row-miss-clean": (336, 1344), "row-miss-dirty": (481, 1921)}
+
+
+def op_slope_log(shift=None, reads=(0, 0)):
+    """A kit-cpu log of the op-slope points at the fork's COUNTs, the N = 64 point of each operation moved
+    shift[op] ticks and every N = 16 and N = 64 reading moved reads[0] and reads[1] ticks."""
+    shift = shift or {}
+    body = "".join(f"#bench op-slope {op}-n{n} op={op} n={n} vi=off reps=8 "
+                   f"min={ticks + reads[i] + (shift.get(op, 0) if n == 64 else 0)} max=0\n"
+                   for op, pair in OP_SLOPE_FORK.items() for i, (n, ticks) in enumerate(zip((16, 64), pair)))
+    return Log(sample_log(body, rom="kit-cpu"))
+
+
+def op_slope_self_test():
+    """op-slope's per-operation value and its rule at the COUNT bound (2 ticks over 48 operations)."""
+    out = []
+    got = {op: op_slope_log().records.get(("op-slope", f"{op}-fit"), {}).get("rclk_per_op") for op in OP_SLOPE_FORK}
+    want = {"reg-write": 8.3333, "dmiss": 28.0, "ifill": 30.1389, "u32r": 22.0, "row-miss-clean": 28.0,
+            "row-miss-dirty": 40.0}
+    out.append(got == want)
+    print(f"kit: self-test: kit-cpu: the fork's op-slope points derive {want} rclk per operation: "
+          f"{'ok' if got == want else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "op-slope")
+    every = lambda ticks: {op: ticks for op in OP_SLOPE_FORK}  # noqa: E731
+    for name, hw, want in [
+            ("both readings at opposite ends of the COUNT bound, 2 ticks over 48 operations", op_slope_log(reads=(-1, 1)), "pass"),
+            ("2 ticks under the fork over 48 operations", op_slope_log(every(-2)), "pass"),
+            ("3 ticks over the fork over 48 operations, just past the bound", op_slope_log(every(3)), "fail"),
+            ("3 ticks under the fork at row-miss-dirty only", op_slope_log({"row-miss-dirty": -3}), "fail")]:
+        got, detail = compare(q, [hw], [op_slope_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-cpu: op-slope, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 #The mappings of the a, b and c LFSRs a reader tests for each noise use (noise.py). ad is G_AD_NOISE, two
