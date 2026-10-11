@@ -1,4 +1,4 @@
-static const string SerializerVersion = "v153.11-noise";
+static const string SerializerVersion = "v153.12-ri-write-gap";
 
 auto System::serialize(bool synchronize) -> serializer {
   serializer s;
