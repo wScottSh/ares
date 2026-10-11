@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runs the harness shell scripts against a stub runner in scratch homes and checks that a failure
 reaches their exit status: snapper run.sh without the snapper64 dumps, calibration/run.sh without the
-Majora's Mask BENCH ROMs, and standing.sh when a script it runs fails. Takes about a minute.
+Majora's Mask BENCH ROMs, and standing.sh when a script it runs fails. Takes about 10 s.
 
 usage: scripts-selftest.py
 """

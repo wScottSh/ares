@@ -478,7 +478,7 @@ def snapper64_mismatch(paths, model_dir):
 
 
 #External ROMs whose output names no ROM identity: ingest refuses a capture these find run on other ROMs
-#than the fork's model side, or than the ROM the question names.
+#than the fork's model side.
 EXT_IDENTITY = {"mm-bench": mm_bench.rom_mismatch, "thar0": thar0_mismatch, "systembench": systembench_mismatch,
                 "snapper64": snapper64_mismatch}
 #The fork-side runner of each external ROM's checks (checks.tsv), so behaviors.py can tell a console run

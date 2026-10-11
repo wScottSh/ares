@@ -56,9 +56,7 @@ def hex_field(v):
     return int(v, 16)
 
 
-#Every record ARES_PILOG writes and the type of each field after its name: a COUNT read (count, time;
-#cpu/interpreter-scc.cpp), a PI_STATUS read (status, time) and a DMA start each way (size, dram, cart,
-#time; pi/io.cpp).
+#Every record ARES_PILOG writes (cpu/interpreter-scc.cpp, pi/io.cpp) and its fields' types.
 RECORDS = {"C": (int, int), "S": (int, int), "L R": (int, hex_field, hex_field, int), "L W": (int, hex_field, hex_field, int)}
 
 
@@ -78,9 +76,11 @@ def measurements(lines):
         except ValueError:
             raise MalformedLog(f"PI log line {number} is malformed: {line.rstrip()!r}") from None
         if kind == "C":
-            counts.append((values[1], values[0]))
+            count, at = values
+            counts.append((at, count))
         elif kind == "L W":
-            starts.append((values[3], values[0], values[1], values[2]))
+            size, dram, pbus, at = values
+            starts.append((at, size, dram, pbus))
     #the SysAD drain that starts a DMA and the CPU's COUNT reads log from different threads
     counts.sort()
     starts.sort()
@@ -138,8 +138,6 @@ def bands(worst, sizes):
 
 
 def verdict(gold, meas, printed, failures):
-    """(PASS, FAIL or UNCHECKED, summary line) under the pidma:logs pass rule. UNCHECKED: the ROM's own
-    check passed and printed no value, so nothing in the run validates the replay the rule rests on."""
     means = {k: rom_mean(v) for k, v in meas.items()}
     wrong = {k: (v, means.get(k)) for k, v in printed.items() if means.get(k) != v}
     in_all = [k for k in gold if SIZES[0] <= k[1] <= SIZES[1]]
@@ -195,8 +193,7 @@ def self_test():
     first = (0, 1, 120)
     gold = {(0, 1): (100, 130), (0, 8): (160, 160), (0, 320): (3000, 3000)}
     at_hw = [first] + [(0, 8, 160)] * 4 + [(0, 320, 3000)] * 4
-    #the rule's cases: a reproduced printed value outside the rule's sizes, so the replay is checked
-    shown = {(0, 1): 120}
+    reproduced_outside_rule = {(0, 1): 120}
     cases = [
         ("ticks are the ROM's two COUNT reads around a DMA start logged before them",
          measurements(log([first, (0, 8, 163)])), {(0, 1): [120], (0, 8): [163]}),
@@ -214,12 +211,12 @@ def self_test():
         ("a cart-ward DMA start is read and not timed", measurements(log([first]) + ["L R 8 300780 10000000 9999\n"]),
          {(0, 1): [120]}),
         ("the ROM's uint16_t mean of 4 runs", rom_mean([160, 161, 161, 161]), 160),
-        ("a model at the hardware value passes", run(at_hw, shown, 0), "PASS"),
-        ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, shown, 0), "FAIL"),
-        ("a point 3% over hardware passes", run([first] + [(0, 8, 164)] * 4 + [(0, 320, 3000)] * 4, shown, 0), "PASS"),
+        ("a model at the hardware value passes", run(at_hw, reproduced_outside_rule, 0), "PASS"),
+        ("a point 4% over hardware fails", run([first] + [(0, 8, 167)] * 4 + [(0, 320, 3000)] * 4, reproduced_outside_rule, 0), "FAIL"),
+        ("a point 3% over hardware passes", run([first] + [(0, 8, 164)] * 4 + [(0, 320, 3000)] * 4, reproduced_outside_rule, 0), "PASS"),
         ("an excluded size out of band does not fail",
-         run([first] + [(0, 8, 160)] * 4 + [(0, 320, 3300)] * 4, shown, 0), "PASS"),
-        ("a missing point fails", run([first] + [(0, 320, 3000)] * 4, shown, 0), "FAIL"),
+         run([first] + [(0, 8, 160)] * 4 + [(0, 320, 3300)] * 4, reproduced_outside_rule, 0), "PASS"),
+        ("a missing point fails", run([first] + [(0, 320, 3000)] * 4, reproduced_outside_rule, 0), "FAIL"),
         ("a ROM self-check failure fails", run(at_hw, {}, 1), "FAIL"),
         ("no ROM verdict fails", run(at_hw, {}, None), "FAIL"),
         ("a printed value the replay does not reproduce fails", run(at_hw, {(0, 8): 161}, 0), "FAIL"),
