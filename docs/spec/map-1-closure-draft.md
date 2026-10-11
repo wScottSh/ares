@@ -2,7 +2,7 @@
 
 # Map #1 closure (draft)
 
-The spec is `docs/spec/n64-timing.md`: 151 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run u-mm-phase/after on ea12d0a97). 2 consistent-only, 26 fail, 12 fit only, 4 model-choice, 69 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
+The spec is `docs/spec/n64-timing.md`: 151 behaviors, each with a basis, a reference, the checks that decide it and their results (standing run u-span-kit/after on 88c481898). 2 consistent-only, 26 fail, 12 fit only, 4 model-choice, 69 pass, 1 pass-conditional:#77, 9 pending:calibration-16, 14 pending:calibration-16 pending:report-only, 13 pending:no-corpus, 1 pending:report-only. Every behavior that is not a legacy cost is built: the code reads each value or implements each rule. The 16 legacy rows are a third class, apart from built and not-built rows: constants today's core charges with no hardware reference (Legacy costs in today's core, in the spec).
 
 ## Green predicates
 
@@ -25,7 +25,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 
 | Clause | Holds | Evidence |
 |---|---|---|
-| det and stepcap pass, and the 600-field MM run takes <= 120 s, re-timed on current master | **no** | det pass, stepcap pass; slowest scene filesel-rotate 102.897 s; the wall times name `6dfbf7166` and the standing run `ea12d0a97`, and the clause holds only when they match |
+| det and stepcap pass, and the 600-field MM run takes <= 120 s, re-timed on current master | **no** | det pass, stepcap pass; slowest scene filesel-rotate 102.897 s; the wall times name `6dfbf7166` and the standing run `88c481898`, and the clause holds only when they match |
 | no check is fail | **no** | 20 fail: `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:mi-memset-uncached`, `mm:filesel-named`, `nemu64:timing/load-from-uncached-vi-on-same-bank`, `nemu64:timing/load-miss-vi-off`, `pidma:logs`, `systembench:pi-dma-128`, `systembench:pi-dma-8`, `systembench:pi-io-w`, `systembench:si-io-w`, `thar0:ac-zbsame-vioff-imrd-1cyc`, `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc`, `thar0:imrd-1cycle`, `thar0:nozb-visame-noimrd-1cyc`, `thar0:nozb-visep-imrd-1cyc`, `thar0:separate-bank`, `thar0:zbrw-fail-zbsame-visame-imrd-2cyc`, `thar0:zbrw-pass-zbsep-visep-noimrd-1cyc`, `thar0:zcmp` |
 | no check is consistent-only or pass-conditional | **no** | 4: `bench:mi-memset-rspdma` pass-conditional:#77, `bench:uncached-sizes-u32-banked` consistent-only, `systembench:si-dma-w-rom` consistent-only, `systembench:u32r-banked` consistent-only |
 | every pending check is pending:calibration-16 on a kit question a tool can compare | **no** | other gates: `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:pi-dma-sizes`, `bench:pi-dma-sizes-8`, `bench:rdp-loadsz-sweep`, `bench:rdp-rectn`, `bench:si-dma-read64-2`, `bench:si-dma-read64-3`, `bench:si-dma-read64-4`, `bench:sp-dma-sweep`, `bench:wb-fifth-store`, `mm:south-clock-town`, `rdpstat:1prim-32px`, `systembench:joy-2j`, `systembench:joy-3j`, `systembench:joy-4j`, `thar0:fill-mode`; hw checks whose question no tool compares: none |
@@ -39,7 +39,7 @@ The three reports of `docs/design/green-plan.md` section 1, computed from the ta
 | SOFTWARE_READY | **no** | 0 of 6 clauses hold |
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | not computed | not computed from the repository: Scott's merge (decision D3) |
-| every hw:* check is ingested and passes | **no** | 0 of 86 pass, 86 pending:calibration-16 |
+| every hw:* check is ingested and passes | **no** | 0 of 88 pass, 88 pending:calibration-16 |
 | every row that is not excluded or out-of-kit is verified | **no** | 69 of 145 rows that are not excluded pass, counting the 12 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ## Destination
@@ -80,7 +80,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 3 consistent-only, 20 fail, 90 pass, 1 pass-conditional:#77, 104 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 3 consistent-only, 20 fail, 90 pass, 1 pass-conditional:#77, 106 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|

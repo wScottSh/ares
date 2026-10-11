@@ -271,7 +271,7 @@ Each row is a constant that today's core still charges. `tools/n64-timing/litera
 
 ## Check results
 
-One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-mm-phase/after on ea12d0a97).
+One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (standing run u-span-kit/after on 88c481898).
 
 | Check | Result | Detail |
 |---|---|---|
@@ -352,6 +352,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:joybus-pads` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:load-interlock-cop` | pending:calibration-16 | no complete power-on console capture of kit-cpu2 in docs/calibration/hardware |
 | `hw:loadtile-rows` | pending:calibration-16 | no complete power-on console capture of kit-tex in docs/calibration/hardware |
+| `hw:mem-overhead-pipelined` | pending:calibration-16 | no complete power-on console capture of kit-span2 in docs/calibration/hardware |
 | `hw:memset-vi` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:mm-bench` | pending:calibration-16 | no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware |
 | `hw:mm-filesel` | pending:calibration-16 | no console capture of mm-bench (capture name ext-mm-bench*) in docs/calibration/hardware |
@@ -382,6 +383,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:sp-dma-direction` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:sp-dma-rsp` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:span-width` | pending:calibration-16 | no complete power-on console capture of kit-span in docs/calibration/hardware |
+| `hw:span-write-release` | pending:calibration-16 | no complete power-on console capture of kit-span2 in docs/calibration/hardware |
 | `hw:stale-read` | pending:calibration-16 | no complete power-on console capture of rdpstat-1prim in docs/calibration/hardware |
 | `hw:systembench` | pending:calibration-16 | no console capture of systembench (capture name ext-systembench*) in docs/calibration/hardware |
 | `hw:systemtest-rdp` | pending:calibration-16 | no complete power-on console capture of rdpstat-systemtest in docs/calibration/hardware |
