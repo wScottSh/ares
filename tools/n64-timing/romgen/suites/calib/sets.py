@@ -190,6 +190,41 @@ def span_width(suite):
                       prologue=prologue)
 
 
+#kit-span2 (calibration/derived.py span2). Each line of the color image is one 2 KiB RDRAM row
+#(ri.row-of), so every line of a rectangle meets memory alike and no span crosses a row.
+SPAN2_ROW_PX = {32: 512, 16: 1024}
+SPAN2_LINES = 256
+SPAN2_WRITE_WIDTHS = list(range(1, 81)) + [160, 320]
+SPAN2_IMRD_WIDTHS = [1, 8, 16, 32, 64, 128, 160, 192, 256, 320]
+
+
+def span2_prologue(bpp, mode1):
+    siz = IM_SIZ_32b if bpp == 32 else rcp.IM_SIZ_16b
+    return [rcp.set_color_image(rcp.IM_FMT_RGBA, siz, SPAN2_ROW_PX[bpp], COLOR_IMAGE),
+            rcp.set_scissor(0, 0, 320, SPAN2_LINES), rcp.set_combine_lerp(*["0", "0", "0", "PRIMITIVE"] * 4),
+            rcp.set_prim_color(0xFF0000FF), rcp.set_other_mode(rcp.CYC_1CYCLE, mode1)]
+
+
+def span_write(suite):
+    """Write-only 1-cycle rectangles (no IM_RD, no Z) at every width 1-80 px, 160 and 320: the width
+    spacing of DPC_CLOCK's steps shows when a span RAM half is released for reuse
+    (item:16.span-write-release)."""
+    rom = Rom(suite, "span-write")
+    for bpp in (32, 16):
+        for w in SPAN2_WRITE_WIDTHS:
+            rdp_point(rom, f"b{bpp}-w{w}", [rcp.fill_rectangle(0, 0, w, SPAN2_LINES)], 1,
+                      [("bpp", bpp), ("w", w), ("h", SPAN2_LINES)], prologue=span2_prologue(bpp, 0))
+
+
+def span_imrd(suite):
+    """span_write's 32 bpp rectangles with IM_RD, out to 320 px: the steady cost per 64 B half against
+    the RI wire time (item:16.mem-overhead-pipelined)."""
+    rom = Rom(suite, "span-imrd")
+    for w in SPAN2_IMRD_WIDTHS:
+        rdp_point(rom, f"b32-w{w}", [rcp.fill_rectangle(0, 0, w, SPAN2_LINES)], 1,
+                  [("bpp", 32), ("w", w), ("h", SPAN2_LINES)], prologue=span2_prologue(32, rcp.IM_RD))
+
+
 @dataclass
 class BenchKit:
     """A kit ROM built from bench builders and the kit's own; one per boot delay."""
@@ -225,6 +260,7 @@ KITS = {
     "kit-rdp": [benches.rdp_sync_sweep, benches.rdp_setter_sweep, benches.rdp_atomic_sweep, benches.rdp_rectn,
                 fifo_depth, cmd_fetch],
     "kit-span": [span_width],
+    "kit-span2": [span_write, span_imrd],
     "kit-tex": tex.BUILDERS,
     "kit-zmem": zmem.BUILDERS,
     "kit-cpu2": cpu2.BUILDERS,
