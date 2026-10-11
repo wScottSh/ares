@@ -2401,6 +2401,12 @@ count-write-hold	cpu2-countw/slot-3	min	exact	0
 count-write-hold	cpu2-countw/slot-4	min	exact	1
 count-write-hold	cpu2-countw/slot-5	min	exact	1
 count-write-hold	cpu2-countw/slot-6	min	exact	2
+count-write-phase	cpu2-countw-spread/slot-1	spread	exact	0
+count-write-phase	cpu2-countw-spread/slot-2	spread	exact	0
+count-write-phase	cpu2-countw-spread/slot-3	spread	exact	0
+count-write-phase	cpu2-countw-spread/slot-4	spread	exact	0
+count-write-phase	cpu2-countw-spread/slot-5	spread	exact	0
+count-write-phase	cpu2-countw-spread/slot-6	spread	exact	0
 fetch-ahead	cpu2-smc/ahead-1	min	exact	0
 fetch-ahead	cpu2-smc/ahead-2	min	exact	0
 fetch-ahead	cpu2-smc/ahead-3	min	exact	1
@@ -2979,9 +2985,3 @@ span-write-release	span-write/release-b16	release	exact	period-4
 span-write-release	span-write/release-b32	release	exact	period-2
 span-write-release	span-write/release-b32	steady_half	range:abs:0.76	28.9988..28.9988
 mem-overhead-pipelined	span-imrd/port	port	exact	above-wire
-count-write-phase	cpu2-countw-spread/slot-1	spread	exact	0
-count-write-phase	cpu2-countw-spread/slot-2	spread	exact	0
-count-write-phase	cpu2-countw-spread/slot-3	spread	exact	0
-count-write-phase	cpu2-countw-spread/slot-4	spread	exact	0
-count-write-phase	cpu2-countw-spread/slot-5	spread	exact	0
-count-write-phase	cpu2-countw-spread/slot-6	spread	exact	0
