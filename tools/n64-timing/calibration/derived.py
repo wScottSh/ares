@@ -355,4 +355,17 @@ def repeat(recs):
     return out
 
 
-DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, span_cost, hsync, repeat]
+def op_slope(recs):
+    """kit-cpu's back-to-back operations: rclk per operation from the N = 64 less N = 16 COUNT, as repeat."""
+    out = {}
+    for (rom, point), f in recs.items():
+        if rom == "op-slope" and f.get("n") == 16:
+            hi = recs.get((rom, point.replace("-n16", "-n64")))
+            if hi:
+                out[(rom, f"{f['op']}-fit")] = {"rclk_per_op": round((hi["min"] - f["min"]) / 36, 4)}
+    if not out:
+        raise KeyError("op-slope")
+    return out
+
+
+DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, span_cost, hsync, repeat, op_slope]

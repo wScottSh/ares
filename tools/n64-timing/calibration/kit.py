@@ -60,6 +60,7 @@ KIT_ROMS = {
     "kit-zread": ("calib", "kit-zread", True),
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
+    "kit-vilb": ("calib", "kit-vilb", True),
     "cpu-llsc": ("cpu", "llsc", False),
     "kit-pif": ("pif", "kit-pif", False),
 }
@@ -679,6 +680,62 @@ def pif_line(log):
     return f"last COUNT {count} ({count / COUNT_HZ:.3f} s, sample {n}) before the PIF halted the CPU"
 
 
+VILB_ROM = "kit-vilb"
+VILB_WORDS = 128
+VILB_FB_WORDS = 160
+
+
+def vilb_source(word):
+    """(line, index) of a kit-vilb framebuffer word, (0x8000 | line) << 16 | 0x8000 | index
+    (romgen/suites/calib/vilb.py), "zero" for 0, or "other" for a word the pattern does not hold."""
+    hi, lo = word >> 16, word & 0xFFFF
+    if word == 0:
+        return "zero"
+    if hi & 0x8000 and lo & 0x8000 and (lo & 0x7FFF) < VILB_FB_WORDS:
+        return hi & 0x7FFF, lo & 0x7FFF
+    return "other"
+
+
+def vilb_capture(fields):
+    """One kit-vilb point's read-back as runs over the 128 line-buffer words, in address order: (first, last,
+    source) with source a framebuffer line and its index range, "zero" or "other". Its class names a line's
+    words fetched when the line is the newest the buffer holds, stale when an older one (inferred: no source
+    gives the fill order). None when a wait gave up before the read."""
+    if fields.get("timeout") != 0 or any(f"w{i}" not in fields for i in range(VILB_WORDS)):
+        return None
+    sources = [vilb_source(fields[f"w{i}"] & 0xFFFFFFFF) for i in range(VILB_WORDS)]
+    newest = max((s[0] for s in sources if isinstance(s, tuple)), default=None)
+    runs = []
+    for i, s in enumerate(sources):
+        last = runs[-1] if runs else None
+        if last and isinstance(s, tuple) and isinstance(last[2], tuple) and s[0] == last[2][0] and s[1] == last[2][2] + 1:
+            runs[-1] = (last[0], i, (s[0], last[2][1], s[1]))
+        elif last and not isinstance(s, tuple) and s == last[2]:
+            runs[-1] = (last[0], i, s)
+        else:
+            runs.append((i, i, (s[0], s[1], s[1]) if isinstance(s, tuple) else s))
+    classes = collections.Counter("fetched" if isinstance(s, tuple) and s[0] == newest else
+                                  "stale" if isinstance(s, tuple) else s for s in sources)
+    return runs, classes
+
+
+def vilb_line(log):
+    """kit-vilb's report: per point, the 128 words' classes and their runs in address order."""
+    out = []
+    for (rom, point), fields in sorted(log.records.items()):
+        if rom != "vi-linebuf":
+            continue
+        got = vilb_capture(fields)
+        if got is None:
+            out.append(f"{point}: no read (a wait gave up)")
+            continue
+        runs, classes = got
+        text = " ".join(f"{a}-{b}=" + (f"L{s[0]}[{s[1]}..{s[2]}]" if isinstance(s, tuple) else s) for a, b, s in runs)
+        counts = ", ".join(f"{classes[c]} {c}" for c in ("fetched", "stale", "zero", "other") if classes[c])
+        out.append(f"{point} (V_CURRENT {fields.get('v_before')}..{fields.get('v_after')}): {counts}; {text}")
+    return "; ".join(out) or "no vi-linebuf record"
+
+
 def verify_run(run_dir):
     """Errors in a calibration/run.sh output: a log without a valid footer (for kit-pif, a log the PIF did
     not halt), a cartridge SRAM copy that
@@ -960,9 +1017,15 @@ def self_test():
     span_cost_cases = span_cost_self_test()
     failed += span_cost_cases.count(False)
     cases += span_cost_cases
+    vilb_cases = vilb_self_test()
+    failed += vilb_cases.count(False)
+    cases += vilb_cases
     repeat_cases = repeat_self_test()
     failed += repeat_cases.count(False)
     cases += repeat_cases
+    op_slope_cases = op_slope_self_test()
+    failed += op_slope_cases.count(False)
+    cases += op_slope_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -1251,6 +1314,32 @@ def span_cost_self_test():
     return out
 
 
+def vilb_log(words, timeout=0):
+    """A kit-vilb log whose x201 point read `words` back (the fork's run reads 128 zeros)."""
+    body = (f"#bench vi-linebuf x201 x_scale=513 y_scale=2048 aa_mode=3 target=100 reps=1 min=1 max=1 "
+            + " ".join(f"w{i}={w}" for i, w in enumerate(words)) + f" timeout={timeout} v_before=100 v_after=104\n")
+    return Log(sample_log(body, rom="kit-vilb"))
+
+
+def vilb_self_test():
+    """kit-vilb's report over the fork's zeros, a buffer holding two framebuffer lines and a zero tail, a word
+    outside the pattern, and a wait that gave up."""
+    word = lambda line, i: (0x8000 | line) << 16 | 0x8000 | i  # noqa: E731
+    two = [word(62, i) for i in range(40)] + [word(63, i) for i in range(24)] + [0] * 64
+    out = []
+    for name, log, want in [
+            ("the fork's 128 zeros", vilb_log([0] * 128), "x201 (V_CURRENT 100..104): 128 zero; 0-127=zero"),
+            ("lines 62 and 63, then zeros", vilb_log(two),
+             "x201 (V_CURRENT 100..104): 24 fetched, 40 stale, 64 zero; 0-39=L62[0..39] 40-63=L63[0..23] 64-127=zero"),
+            ("a word outside the pattern", vilb_log([0x12345678] + [0] * 127),
+             "x201 (V_CURRENT 100..104): 127 zero, 1 other; 0-0=other 1-127=zero"),
+            ("a wait that gave up", vilb_log([0] * 128, timeout=1), "x201: no read (a wait gave up)")]:
+        got = vilb_line(log)
+        out.append(got == want)
+        print(f"kit: self-test: kit-vilb: {name}: {'ok' if got == want else 'FAILED'} ({got[:120]})")
+    return out
+
+
 def glyph_log(per_glyph=0.0, poll=(0, 0)):
     """A kit-zmem log of the glyph points at the fork's pad-0 clocks (16132 and 64132: 1000 rclk per glyph),
     each glyph moved `per_glyph` rclk and the N = 16 and N = 64 clocks moved `poll` rclk."""
@@ -1319,6 +1408,45 @@ def repeat_self_test():
         got, detail = compare(q, [hw], [repeat_log()])
         out.append(got == want)
         print(f"kit: self-test: kit-dma: repeat-write, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+#The fork's pad-0 boot-1 COUNT mins of kit-cpu's op-slope points (N = 16, N = 64) per operation.
+OP_SLOPE_FORK = {"reg-write": (76, 376), "dmiss": (336, 1344), "ifill": (361, 1446), "u32r": (264, 1056),
+                 "row-miss-clean": (336, 1344), "row-miss-dirty": (481, 1921)}
+
+
+def op_slope_log(shift=None, reads=(0, 0)):
+    """A kit-cpu log of the op-slope points at the fork's COUNTs, the N = 64 point of each operation moved
+    shift[op] ticks and every N = 16 and N = 64 reading moved reads[0] and reads[1] ticks."""
+    shift = shift or {}
+    body = "".join(f"#bench op-slope {op}-n{n} op={op} n={n} vi=off reps=8 "
+                   f"min={ticks + reads[i] + (shift.get(op, 0) if n == 64 else 0)} max=0\n"
+                   for op, pair in OP_SLOPE_FORK.items() for i, (n, ticks) in enumerate(zip((16, 64), pair)))
+    return Log(sample_log(body, rom="kit-cpu"))
+
+
+def op_slope_self_test():
+    """op-slope's per-operation value, its rule at the COUNT bound (2 ticks over 48 operations) and against the one
+    stored-unit mutation the rule rejects (prehw-plan.md U-OP-SLOPE)."""
+    out = []
+    got = {op: op_slope_log().records.get(("op-slope", f"{op}-fit"), {}).get("rclk_per_op") for op in OP_SLOPE_FORK}
+    want = {"reg-write": 8.3333, "dmiss": 28.0, "ifill": 30.1389, "u32r": 22.0, "row-miss-clean": 28.0,
+            "row-miss-dirty": 40.0}
+    out.append(got == want)
+    print(f"kit: self-test: kit-cpu: the fork's op-slope points derive {want} rclk per operation: "
+          f"{'ok' if got == want else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "op-slope")
+    every = lambda ticks: {op: ticks for op in OP_SLOPE_FORK}  # noqa: E731
+    for name, hw, want in [
+            ("both readings at opposite ends of the COUNT bound, 2 ticks over 48 operations", op_slope_log(reads=(-1, 1)), "pass"),
+            ("2 ticks under the fork over 48 operations", op_slope_log(every(-2)), "pass"),
+            ("3 ticks over the fork over 48 operations, just past the bound", op_slope_log(every(3)), "fail"),
+            ("3 ticks under the fork at row-miss-dirty only", op_slope_log({"row-miss-dirty": -3}), "fail"),
+            ("sysad.register-write one stored unit down, 8.25 rclk per store as its scratch build read (u-op-slope)",
+             op_slope_log({"reg-write": -3}), "fail")]:
+        got, detail = compare(q, [hw], [op_slope_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-cpu: op-slope, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 #The mappings of the a, b and c LFSRs a reader tests for each noise use (noise.py). ad is G_AD_NOISE, two
