@@ -780,6 +780,23 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += latches
+    vintr_q = next(q for q in questions() if q["id"] == "vi-intr-latency")
+
+    def vintr(field=0, mean=65716, timeout=0):
+        ticks = "min=0 max=0 sum=0 max2=0" if timeout else f"min=4096 max=4126 sum={mean} max2=4126"
+        return Log(sample_log(f"#bench bus-vintr v-intr v_intr=256 bias=4096 reps=16 {ticks} "
+                              f"v_at_intr=256 iter_ticks=30 timeout={timeout} field={field}\n", rom="kit-bus"))
+    vintrs = [("vi-intr-latency: a console that boots kit-bus into field 1 (#132)", vintr(field=1), [vintr()], "pass",
+               "2 values"),
+              ("vi-intr-latency: a half-line interrupt (lag about 1490 ticks)", vintr(mean=65716 + 14 * 1480), [vintr()],
+               "fail", "differ"),
+              ("vi-intr-latency: a timed-out console point derives no lag", vintr(timeout=1), [vintr()], "fail", "lacks")]
+    for name, hw, model, want, said in vintrs:
+        got, detail = compare(vintr_q, [hw], model)
+        ok = got == want and said in detail
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += vintrs
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed

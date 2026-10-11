@@ -175,13 +175,10 @@ def cpu2(records):
 
 
 def bus(recs):
-    """kit-bus: the AI rate from spans against the 1103-VCLK point (cancels the VI:COUNT ratio), per-load
-    extra ticks under each bus client, the reorder difference, VI loads lost per fetch case, refresh
-    hits per bank and the VI interrupt lag."""
     """kit-bus: the AI's power-on VCLK per sample (against the 1103-VCLK point, so the VI:COUNT clock
     ratio cancels), per-load slowdown under each RDRAM client, the SP DMA's slowdown from same-bank
     loads over other-bank loads (ri-reorder), VI fetch cost in loads lost per window, refresh hits and
-    holdoff per bank, and the VI interrupt's mean lag."""
+    holdoff per bank."""
     g = lambda rom, pt, f: recs[(rom, pt)][f]  # noqa: E731
     out = {}
     span = lambda pt: g("bus-ai", pt, "last_change") - g("bus-ai", pt, "first_change")  # noqa: E731
@@ -205,9 +202,15 @@ def bus(recs):
         f = recs[("bus-refresh", f"bank{bank}")]
         out[f"refresh-bank{bank}-hits"] = f["slow"]
         out[f"refresh-bank{bank}-excess"] = f["lat_max"] - f["lat_min"]
-    v = recs[("bus-vintr", "v-intr")]
-    out["vintr-mean-lag"] = round((v["sum"] - v["min"] - v["max"]) / (v["reps"] - 2) - v["bias"], 1)
     return {("bus-derived", "all"): out}
+
+
+def vintr(recs):
+    """kit-bus's VI interrupt lag: the trimmed mean over the reps. A timed-out point has none (#132)."""
+    v = recs[("bus-vintr", "v-intr")]
+    if v.get("timeout"):
+        return {}
+    return {("bus-derived", "vintr"): {"vintr-mean-lag": round((v["sum"] - v["min"] - v["max"]) / (v["reps"] - 2) - v["bias"], 1)}}
 
 
 def vi_latch(recs):
@@ -222,4 +225,4 @@ def vi_latch(recs):
                                           "vi_bank": got["y-late-bank2"]["vi_bank"]}}
 
 
-DERIVED = [tex, zmem, cpu2, bus, vi_latch]
+DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch]
