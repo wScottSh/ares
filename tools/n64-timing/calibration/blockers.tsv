@@ -60,7 +60,7 @@ cpu.exc-fpu-detect	row	C	fpu-classes	-	-	-
 cpu.fetch-ahead-slots	row	C	fetch-ahead	-	-	-
 cpu.fpu-trivial	row	C	fpu-classes	-	-	-
 cpu.ifill-stall	row	C	ifill	-	-	-
-cpu.irq-sample	row	B	cpu-exceptions	U-IRQ-CLEAR	-	-
+cpu.irq-sample	row	C	irq-clear	U-IRQ-CLEAR	fired at cpu2-irqclr timer-d0..d2 and mi-d0..d2: the fork 0, 4, 4 on both lines against 4, 4, 4 from a scratch build with the delayed CP0 write rule (u-irq-clear; the plan-fixed mutation, the alternative the row's note names); the rule exact rejects it at timer-d0 and mi-d0 at every pad and boot delay	no alt search made for a published value (fit row; U-PREHW-PRED-2 rule); cpu-exceptions irq-sw cannot separate: it reads the same under the mutation (u-irq-clear, measured)
 cpu.uncached-read-total	row	C	cpu-reads nemu64-console systembench	-	-	-
 cpu.wb-block-entries	row	C	wb-release wb-drain-target	-	-	-
 cpu.wb-release	row	C	wb-release wb-drain-target	-	-	-
