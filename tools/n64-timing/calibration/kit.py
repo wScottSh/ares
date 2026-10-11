@@ -720,6 +720,16 @@ def self_test():
               ("another commit's build of the same bytes keeps the rom_sha256",
                hwout.rom_sha256(rom.replace(b"sha=78b4427b8d86", b"sha=0123456789ab")) == stamped),
               ("one changed code byte changes the rom_sha256", hwout.rom_sha256(rom.replace(b"code", b"codf")) != stamped)]
+    def built(sha):
+        line = next(l for l in hwout.asm("kit-cpu", sha, "single").splitlines() if l.startswith("hw_str_header:"))
+        return hwout.stamp(b"\0" * 64 + line[line.index('"') + 1:line.rindex('"')].encode() + b"\0code")
+    from romgen import build
+    full = "78b4427b8d86e64a7a1b8bb15d9c5c3f9a9b2c11"
+    clean, dirty = built(build.sha_stamp(full, False)), built(build.sha_stamp(full, True))
+    idents.append(("a dirty tree's build keeps the clean build's layout and rom_sha256",
+                   len(clean) == len(dirty) and hwout.rom_sha256(clean) == hwout.rom_sha256(dirty)))
+    idents.append(("a stamp shorter than 12 columns is padded to the same layout",
+                   len(built("unknown")) == len(clean)))
     for name, ok in idents:
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'}")
@@ -804,6 +814,20 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += vintrs
+    irqclr_q = next(q for q in questions() if q["id"] == "irq-clear")
+
+    def irqclr(fired):
+        return Log(sample_log("".join(f"#bench cpu2-irqclr {line}-d{d} d={d} reps=2 min=18 max=41 lo=9 hi=9 fired={f}\n"
+                                      for line in ("timer", "mi") for d, f in enumerate(fired)), rom="kit-cpu2"))
+    irqclrs = [("irq-clear: the console samples as the fork does (0, 4, 4)", irqclr((0, 4, 4)), "pass", "6 values"),
+               ("irq-clear: the delayed CP0 write rule (4, 4, 4, scratch build)", irqclr((4, 4, 4)), "fail", "differ"),
+               ("irq-clear: a line that reaches Cause one instruction late (0, 0, 4)", irqclr((0, 0, 4)), "fail", "differ")]
+    for name, hw, want, said in irqclrs:
+        got, detail = compare(irqclr_q, [hw], [irqclr((0, 4, 4))])
+        ok = got == want and said in detail
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += irqclrs
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
