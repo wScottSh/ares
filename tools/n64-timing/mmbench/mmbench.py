@@ -29,6 +29,7 @@ OVERLAY_TITLE_SETUP = GAMESTATE_TABLE + 4 * 0x30
 OVERLAY_FILE_SELECT = GAMESTATE_TABLE + 5 * 0x30
 REG_EDITOR = 0x801F3F60  # gRegEditor; dREG(80)/dREG(81) are data[26*96+80/81] at +0x14
 SAVE_GAME_MODE = 0x801EF670 + 0x3CA8  # gSaveContext.gameMode; 0 = GAMEMODE_NORMAL, 2 = GAMEMODE_FILE_SELECT
+SAVE_TIME = 0x801EF670 + 0xC  # gSaveContext.save.time
 PLAY = "[0x801E3FB0]"  # sEffectContext.play, set by Play_Init
 SCENE_ID = PLAY + "+0xA4"
 TRANSITION_MODE = PLAY + "+0x18B4A"
@@ -96,12 +97,18 @@ def scene_settled(scene_id):
     ]
 
 
-def via_map_select(index, normal_mode=False):
+def clock_time(hours, minutes):
+    return (hours * 60 + minutes) * 0x10000 // (24 * 60)  # CLOCK_TIME, include/macros.h
+
+
+def via_map_select(index, normal_mode=False, time=None):
     # Map select is in the retail ROM but unreachable. Copying its overlay entry over
     # TitleSetup's makes ConsoleLogo hand off to it; MapSelect_Init starts the cursor at
     # dREG(80) when it is in range. ConsoleLogo leaves gameMode at GAMEMODE_TITLE_SCREEN, which
     # hides the HUD in Play; normal_mode sets GAMEMODE_NORMAL, as file select does when it loads
-    # a file (z_file_choose_NES.c), and as the BENCH ROM boots.
+    # a file (z_file_choose_NES.c), and as the BENCH ROM boots. MapSelect_LoadGame keeps the
+    # time (12:00 on this route) for every scene but Clock Tower Interior, so a poke of time
+    # before the A press holds into Play.
     return [
         overlay_loaded(OVERLAY_CONSOLE_LOGO),
         f"copy 0x{OVERLAY_MAP_SELECT:08X} 0x{OVERLAY_TITLE_SETUP:08X} 0x30",
@@ -109,7 +116,8 @@ def via_map_select(index, normal_mode=False):
         f"poke [0x{REG_EDITOR:08X}]+0x1436 h {index}",
         overlay_loaded(OVERLAY_TITLE_SETUP),
         "wait 30",
-    ] + ([f"poke 0x{SAVE_GAME_MODE:08X} w 0"] if normal_mode else []) + [
+    ] + ([f"poke 0x{SAVE_GAME_MODE:08X} w 0"] if normal_mode else []) + (
+        [f"poke 0x{SAVE_TIME:08X} h 0x{time:04X}"] if time is not None else []) + [
         "input A",
         "wait 10",
         "input",
@@ -125,13 +133,6 @@ def play_counters(tag):
         f"peek {tag}.game_frames {GAME_FRAMES} w",
         f"peek {tag}.update_divisor {UPDATE_DIVISOR} b",
     ]
-
-
-def walk(moves):
-    steps = []
-    for stick, fields in moves:
-        steps += [f"input {stick}", f"wait {fields}"]
-    return steps
 
 
 def title_to_filesel(phase=0):
@@ -239,9 +240,10 @@ def scene_scripts(phase=0):
         + [f"peek {name} {addr} w" for name, addr, _ in BUFFER_POINTERS]
         + play_counters("start") + [f"wait {WINDOW}"]
         + play_counters("end") + [f"peek end.scene {SCENE_ID} h", "stop"],
-        "field": via_map_select(2) + scene_settled(0x2D) + ["mark window"] + play_counters("start")
-        + walk([(f"y=-{STICK}", 400), (f"x={STICK} y=-{STICK}", 200)])
-        + play_counters("end") + [f"peek end.scene {SCENE_ID} h", "stop"],
+        # The BENCH ROM's termina_field state (mm_bench.py): 10:00, from Play's game frame 120, with no input.
+        "field": via_map_select(2, normal_mode=True, time=clock_time(10, 0)) + scene_settled(0x2D)
+        + [f"until {GAME_FRAMES} w >= {BENCH_WARMUP}", "mark window"] + play_counters("start")
+        + [f"wait {WINDOW}"] + play_counters("end") + [f"peek end.scene {SCENE_ID} h", "stop"],
     }
 
 
