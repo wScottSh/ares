@@ -314,6 +314,7 @@ static auto testTimeline() -> u32 {
 
 auto testRi() -> u32;  //ri.cpp
 auto testRiSplit() -> u32;  //ri.cpp
+auto testRiRepeat() -> u32;  //ri.cpp
 
 //nall supplies the process entry point and calls this. An argument names one
 //test (the checks.tsv selector); none runs all. A nonzero exit reports failures.
@@ -323,5 +324,6 @@ auto nall::main(Arguments arguments) -> void {
   if(all || arguments.find("timeline")) failed += testTimeline();
   if(all || arguments.find("ri-cost-table")) failed += testRi();
   if(all || arguments.find("ri-split")) failed += testRiSplit();
+  if(all || arguments.find("ri-repeat")) failed += testRiRepeat();
   if(failed) std::exit(1);
 }

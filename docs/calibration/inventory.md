@@ -108,6 +108,7 @@ Every question a console run can answer for the timing model (calibration #16), 
 | `mem-overhead-pipelined` | Does the RDP's per-transaction memory overhead (rdp.mem-overhead-read 21, rdp.mem-overhead-write 19.5 rclk, both fit) hold the memory port until it ends (occupancy, as the fork models it), or only delay that transaction's data while the next transaction starts after the RI wire time (pipelined latency)? | DPC_CLOCK of span-write-release's 256-line 32 bpp rectangles with IM_RD on, 1-320 px: the steady cost per 64 B half, (clock at 320 px - clock at 160 px) / (256 lines x 10 halves), against 21.6 rclk, what one 64 B read and one 64 B write-back need on the RDRAM wire. port is wire-bound at or under it: the overhead does not hold the port in a steady line, which refutes occupancy (pipelined latency, or no overhead). It is above-wire over it: what occupancy predicts (about 60 rclk with the fit values); a pipelined RDP with too few span halves to cover its read and write latency also gives it (inferred), so above-wire alone does not prove occupancy and the steady_half value, a report value, is read against the read plus write hold. one_half_read, the cost a 16 px line's single read adds over the write-only rectangle, per line, is a report value | kit-span2 | span-imrd/port | port per point | exact | `item:16.mem-overhead-pipelined` | pending:calibration-16 |
 | `refresh-latch` | When a VI line is shorter than the 52 rclk refresh holdoff, does the RI keep one refresh request and drop an HSYNC that comes while a refresh waits or runs, or does it queue every HSYNC's request (ri.refresh-latch)? | H_SYNC 9, 19 and 35 (lines of 10, 20 and 36 VCLK: 0.25, 0.5 and 0.9 of the holdoff), no line in V_VIDEO, then an 8 B SP DMA polled 4096 times from the I-cache: starved 1 when it never finished. One latch (the fork) holds the channel at most 52 rclk of every 2 to 6 lines and the DMA finishes (starved 0); a queue gains a request each line and drains one per 52 rclk, so the refresh, which outranks every client, never lets the DMA in (starved 1, and the point restores H_SYNC instead of hanging the ROM). The timed loads that follow log lines per holdoff as report values (the fork 5.0, 3.0 and 2.0, bus-derived/hsync); they are not compared, since whether a burst in flight at an HSYNC pushes the holdoff past the next line depends on fitted RI overheads | kit-bus | bus-hsync/refresh-* | starved per point | exact | `ri.refresh-latch` | pending:calibration-16 |
 | `vi-fetch-overrun` | When a VI line ends before its fetch does, does the line keep fetching while the next lines fetch nothing, or does each HSYNC drop the bursts not yet posted (vi.fetch-overrun)? | H_SYNC 399 (lines of 400 VCLK, shorter than H_START's 432 VCLK, so each line ends before its first burst is due) with vi_init's V_VIDEO, against the same window with no line in V_VIDEO, both from the next field (V_VIDEO latches per field, vi.frame-latch): the VI time is the loads the second window gains at its mean load period, and fetched is 1 when that exceeds one 54 rclk holdoff plus each window's longest load. A line that keeps fetching (the fork) fetches its 15 bursts over 8 lines (14.6 COUNT ticks of VI time per line on the fork, a report value); a VI that drops them at each HSYNC never posts one (fetched 0) | kit-bus | bus-derived/hsync | fetch-overrun-fetched per point | exact | `vi.fetch-overrun` | pending:calibration-16 |
+| `repeat-write` | What does one MI repeat write cost on the RDRAM, and in what structure: how many octbytes RepeatCount 127 moves (16, or n64brew's literal RepeatCount[6:3] = 15), one RI burst or one 8 B request per octbyte (MiSTer memorymux.vhd@5725381 :514-544), and whether its EOK waits the post-write path of an uncached RDRAM write (about 8.9 rclk, unreferenced, sysad.cpp granted), none of which a source fixes and memset-vi cannot separate (prehw-plan.md U-REPEAT-KIT)? | COUNT of N = 16 and 64 iterations of an MI_MODE store setting repeat mode with RepeatCount 7, 8, 119 or 127, then one SD to one RDRAM address, VI off: rclk per write from the N = 64 less N = 16 difference over 48 writes. RepeatCount 7 and 8 straddle one octbyte, 119 and 127 the last octbyte of 128 B. The fork reads 20.0..20.03, 20.97..21.03, 34.0..34.03 and 35.0..35.03 at every layout pad and boot delay (one octbyte is 1 rclk); each iteration also pays its MI_MODE store's register drain | kit-dma | mi-repeat-write/rc*-fit | rclk_per_write per point | range:abs:0.0556 | `bench:mi-memset-repeat` `ri.write-hit` `ri.overhead-write` `sysad.register-write` | pending:calibration-16 |
 
 ## Rows pending calibration #16
 
@@ -120,7 +121,7 @@ Rows whose checks wait on the console run. 30 rows, 30 with a kit question.
 | `ri.post-write-gap` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction hw:ri-write-gap | `hw:sp-dma-direction`, `hw:ri-write-gap` |
 | `ri.refresh-latch` | pending:calibration-16 | ~det ~stepcap hw:refresh-latch | `hw:refresh-latch` |
 | `ri.overhead-read` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
-| `ri.overhead-write` | pass-conditional:#77 pending:calibration-16 pending:report-only | bench:mi-memset-rspdma bench:sp-dma-sweep hw:memset-vi | `hw:memset-vi` |
+| `ri.overhead-write` | pass-conditional:#77 pending:calibration-16 pending:report-only | bench:mi-memset-rspdma bench:sp-dma-sweep hw:memset-vi hw:repeat-write | `hw:memset-vi`, `hw:repeat-write` |
 | `cpu.ifill-stall` | pending:calibration-16 pending:report-only | bench:ifill-isolated hw:ifill | `hw:ifill` |
 | `cpu.dcb` | pending:calibration-16 | ~nemu64:timing/cpu-register-dependency hw:dcb | `hw:dcb` |
 | `cpu.dirty-miss-order` | pending:calibration-16 pending:report-only | bench:dirty-miss-isolated hw:dirty-miss | `hw:dirty-miss` |
@@ -205,7 +206,7 @@ Rows whose deciding check reports a number and asserts none. 15 rows, 14 with a 
 | `ri.post-read-gap` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
 | `ri.post-write-gap` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction hw:ri-write-gap | `hw:sp-dma-direction`, `hw:ri-write-gap` |
 | `ri.overhead-read` | pending:calibration-16 pending:report-only | bench:sp-dma-sweep hw:sp-dma-direction | `hw:sp-dma-direction` |
-| `ri.overhead-write` | pass-conditional:#77 pending:calibration-16 pending:report-only | bench:mi-memset-rspdma bench:sp-dma-sweep hw:memset-vi | `hw:memset-vi` |
+| `ri.overhead-write` | pass-conditional:#77 pending:calibration-16 pending:report-only | bench:mi-memset-rspdma bench:sp-dma-sweep hw:memset-vi hw:repeat-write | `hw:memset-vi`, `hw:repeat-write` |
 | `cpu.ifill-stall` | pending:calibration-16 pending:report-only | bench:ifill-isolated hw:ifill | `hw:ifill` |
 | `cpu.dirty-miss-order` | pending:calibration-16 pending:report-only | bench:dirty-miss-isolated hw:dirty-miss | `hw:dirty-miss` |
 | `cpu.wb-release` | pending:calibration-16 pending:report-only | bench:wb-fifth-store hw:wb-release hw:wb-drain-target | `hw:wb-release`, `hw:wb-drain-target` |
@@ -224,7 +225,7 @@ Checks that fail, pass only consistent with the console, or pass on a model choi
 | Check | Result | Detail | Question |
 |---|---|---|---|
 | `bench:mi-memset-cached` | fail | vi-on pclk_per_line 72.674..72.728 median 72.684 mean 72.682 (expected 71.24, 71.17..71.31, mean) fail | `hw:memset-vi` |
-| `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `hw:memset-vi` |
+| `bench:mi-memset-repeat` | fail | vi-on ms_per_mib 2.184 (expected 3.8, 3.795..3.805, mean) fail | `hw:memset-vi`, `hw:repeat-write` |
 | `bench:mi-memset-rspdma` | pass-conditional:#77 | vi-on b_per_rclk 6.296..6.516 median 6.513 mean 6.509 (expected 6.5, 6.49..6.515, mean) pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
 | `bench:mi-memset-uncached` | fail | vi-on pclk_per_sd 17.69..17.741 median 17.718 mean 17.718 (expected 18.38, 18.346..18.418, mean) fail | `hw:memset-vi` |
 | `bench:uncached-sizes-u32-banked` | consistent-only | u32-banked net_pclk 131..133 median 131.0 mean 131.645 (pads 0:fail 1:consistent-only 2:consistent-only 3:fail 4:consistent-only 5:fail 6:fail 7:fail) (expected 134, 133..135, consistent, window ±1.5% | `hw:cpu-reads` |
@@ -254,7 +255,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `clock.vclk` | derived reference; pending:report-only | `hw:count-per-field` |
 | `scheduler.tie-rank` | model-choice | not-hardware-decidable: the order the emulator's scheduler breaks a same-unit tie in; a console has no scheduler and no observable that orders two events inside one 1.3 ns unit |
 | `ri.read-hit` | datasheet reference | `hw:nemu64-console` |
-| `ri.write-hit` | datasheet reference; check bench:mi-memset-uncached fail | `hw:memset-vi` |
+| `ri.write-hit` | datasheet reference; an inference in its reference or note; check bench:mi-memset-uncached, bench:mi-memset-repeat fail | `hw:memset-vi`, `hw:repeat-write` |
 | `ri.octbyte` | datasheet reference | `hw:sp-dma-direction` |
 | `ri.retry-clean` | datasheet reference; check nemu64:timing/load-from-uncached-vi-on-same-bank fail | `hw:nemu64-console` |
 | `ri.retry-dirty` | datasheet reference | `hw:dirty-row` |
@@ -274,7 +275,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `ri.rank.other` | model-choice | `hw:nemu64-console`, `hw:ri-priority` |
 | `ri.overhead-read` | fit; verify-is-fit; pending:report-only | `hw:sp-dma-direction` |
 | `ri.overhead-vi` | model-choice | `hw:nemu64-console` |
-| `ri.overhead-write` | fit; verify-is-fit; check bench:mi-memset-rspdma pass-conditional:#77; pending:report-only | `hw:memset-vi` |
+| `ri.overhead-write` | fit; verify-is-fit; check bench:mi-memset-rspdma pass-conditional:#77; pending:report-only | `hw:memset-vi`, `hw:repeat-write` |
 | `ri.overhead-rdp` | derived reference; check thar0:separate-bank, thar0:imrd-1cycle fail | `hw:thar0-console` |
 | `ri.request-latency` | model-choice | not-hardware-decidable: one 750 MHz unit (1.3 ns) between a request's post and the arbiter, chosen so a decision never races a post at the same time; no console measurement resolves 1.3 ns, and the fork's results do not move with it (det, stepcap) |
 | `cpu.uncached-read-total` | measured reference; check bench:uncached-sizes-u32-banked, systembench:u32r-banked consistent-only | `hw:cpu-reads`, `hw:nemu64-console`, `hw:systembench` |
@@ -322,7 +323,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `cpu.pi-io-read` | derived reference | `hw:cpu-reads`, `hw:systembench` |
 | `sysad.rdram-write-period` | fit; verify-is-fit; check bench:mi-memset-uncached fail | `hw:memset-vi` |
 | `sysad.rdram-block-write-period` | fit; verify-is-fit; check bench:mi-memset-cached fail | `hw:memset-vi` |
-| `sysad.register-write` | fit; check pidma:logs, bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target` |
+| `sysad.register-write` | fit; an inference in its reference or note; check pidma:logs, bench:mi-memset-repeat fail | `hw:register-write`, `hw:wb-drain-target`, `hw:repeat-write` |
 | `cpu.random-rule` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.wired-write-latency` | fit | `hw:nemu64-console`, `hw:nemu64-cop0hazard-console` |
 | `cpu.ctc1-fpe-ce` | fit; verify-is-fit; an inference in its reference or note | `hw:nemu64-cycle-console`, `hw:ctc1-fpe-ce` |
@@ -404,7 +405,7 @@ Everything a console could have to decide: every behavior row (a fit, a model ch
 | `legacy.cart.flash-mn63-chip-erase` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Matsushita flash with its own timing. What would decide it: a retail cartridge carrying the real Matsushita flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
 | `legacy.cart.flash-mn63-program` | legacy reference; pending:no-corpus | not decidable by this kit: a flashcart emulates the Matsushita flash with its own timing. What would decide it: a retail cartridge carrying the real Matsushita flash with a timing ROM run on it (a cartridge with a modified ROM chip, or a dev cartridge with the chip) |
 | `bench:mi-memset-cached` | result fail | `hw:memset-vi` |
-| `bench:mi-memset-repeat` | result fail | `hw:memset-vi` |
+| `bench:mi-memset-repeat` | result fail | `hw:memset-vi`, `hw:repeat-write` |
 | `bench:mi-memset-rspdma` | result pass-conditional:#77 | `hw:vi-first-line`, `hw:memset-vi` |
 | `bench:mi-memset-uncached` | result fail | `hw:memset-vi` |
 | `bench:uncached-sizes-u32-banked` | result consistent-only | `hw:cpu-reads` |

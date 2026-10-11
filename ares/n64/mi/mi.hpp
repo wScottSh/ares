@@ -43,6 +43,7 @@ struct MI : Memory::RCP<MI> {
 
   //The next uncached RDRAM write is an MI repeat write (MI_MODE).
   auto repeating() const -> bool { return io.repeatMode; }
+  auto repeatCount() const -> u32 { return io.repeatLength; }
   auto ebusTest() const -> bool { return io.ebusTestMode; }
 
 private:

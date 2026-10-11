@@ -1,6 +1,6 @@
 """Builds romgen test ROMs.
 
-usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat|snapper|noise|calib --out DIR
+usage: python tools/n64-timing/romgen/build.py --suite nemu64|bench|thar0|rdpstat|snapper|noise|calib|state --out DIR
        [--ipl3 IPL3_COMPAT_Z64] [--define NAME=VALUE] [--hw] [--jobs N] [--layout-pad P]
 
 Writes one .z64 per set of the suite (romgen/suites/<suite>/sets.py), for example

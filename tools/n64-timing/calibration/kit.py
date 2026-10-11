@@ -957,6 +957,9 @@ def self_test():
     glyph_cases = glyph_self_test()
     failed += glyph_cases.count(False)
     cases += glyph_cases
+    repeat_cases = repeat_self_test()
+    failed += repeat_cases.count(False)
+    cases += repeat_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -1225,6 +1228,46 @@ def glyph_self_test():
         print(f"kit: self-test: kit-zmem: filesel-glyph, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
+
+
+#The fork's pad-0 boot-1 COUNT mins of kit-dma's repeat points (N = 16, N = 64) per RepeatCount.
+REPEAT_FORK = {7: (212, 933), 8: (224, 979), 119: (360, 1584), 127: (370, 1631)}
+
+
+def repeat_log(shift=None, reads=(0, 0)):
+    """A kit-dma log of the repeat-write points at the fork's COUNTs, the N = 64 point of each RepeatCount moved
+    shift[rc] ticks and every N = 16 and N = 64 reading moved reads[0] and reads[1] ticks."""
+    shift = shift or {}
+    body = "".join(f"#bench mi-repeat-write rc{rc}-n{n} rc={rc} n={n} vi=off reps=4 "
+                   f"min={ticks + reads[i] + (shift.get(rc, 0) if n == 64 else 0)} max=0\n"
+                   for rc, pair in REPEAT_FORK.items() for i, (n, ticks) in enumerate(zip((16, 64), pair)))
+    return Log(sample_log(body, rom="kit-dma"))
+
+
+def repeat_self_test():
+    """repeat-write's per-write value, its rule at the COUNT bound (2 ticks over 48 writes) and against the three
+    mutations prehw-plan.md U-REPEAT-KIT fixed, at the shifts the fork's scratch builds measured (u-repeat-kit)."""
+    out = []
+    got = {rc: repeat_log().records.get(("mi-repeat-write", f"rc{rc}-fit"), {}).get("rclk_per_write") for rc in REPEAT_FORK}
+    want = {7: 20.0278, 8: 20.9722, 119: 34.0, 127: 35.0278}
+    out.append(got == want)
+    print(f"kit: self-test: kit-dma: the fork's repeat points derive {want} rclk per write: "
+          f"{'ok' if got == want else 'FAILED'} ({got})")
+    q = next(q for q in questions() if q["id"] == "repeat-write")
+    every = lambda ticks: {rc: ticks for rc in REPEAT_FORK}  # noqa: E731
+    for name, hw, want in [
+            ("both readings at opposite ends of the COUNT bound, 2 ticks over 48 writes", repeat_log(reads=(-1, 1)), "pass"),
+            ("2 ticks under the fork over 48 writes", repeat_log(every(-2)), "pass"),
+            ("3 ticks over the fork over 48 writes, just past the bound", repeat_log(every(3)), "fail"),
+            ("3 ticks under the fork at RepeatCount 127 only", repeat_log({127: -3}), "fail"),
+            ("mutation (a), 15 octbytes: 1 rclk per write under at every RepeatCount", repeat_log(every(-36)), "fail"),
+            ("mutation (b), one 8 B request per octbyte: +2, +28 and +30 rclk at 8, 119 and 127",
+             repeat_log({8: 72, 119: 1008, 127: 1080}), "fail"),
+            ("mutation (c), no post-write path on the EOK: 9 rclk per write under", repeat_log(every(-324)), "fail")]:
+        got, detail = compare(q, [hw], [repeat_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-dma: repeat-write, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
 
 #The mappings of the a, b and c LFSRs a reader tests for each noise use (noise.py). ad is G_AD_NOISE, two
 #cited sources (docs/research/rdp-noise.md:39). cd is G_CD_NOISE and ac the G_AC_DITHER threshold, one value

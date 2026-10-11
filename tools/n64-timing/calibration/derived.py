@@ -334,4 +334,18 @@ def vi_latch(recs):
                                           "vi_bank": got["y-late-bank2"]["vi_bank"]}}
 
 
-DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, hsync]
+def repeat(recs):
+    """kit-dma's single MI repeat writes: rclk per write from the N = 64 less N = 16 COUNT, 48 writes at
+    4/3 rclk per COUNT tick (COUNT at half the 93.75 MHz PClock, RCLK 62.5 MHz), so ticks / 36."""
+    out = {}
+    for (rom, point), f in recs.items():
+        if rom == "mi-repeat-write" and f.get("n") == 16:
+            hi = recs.get((rom, point.replace("-n16", "-n64")))
+            if hi:
+                out[(rom, f"rc{f['rc']}-fit")] = {"rclk_per_write": round((hi["min"] - f["min"]) / 36, 4)}
+    if not out:
+        raise KeyError("mi-repeat-write")
+    return out
+
+
+DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, hsync, repeat]

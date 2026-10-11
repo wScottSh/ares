@@ -59,6 +59,7 @@ hw:rdp-rect-base	pass
 hw:rdp-sync-setter	pass
 hw:refresh-all-banks	pass
 hw:register-write	pass
+hw:repeat-write	fail
 hw:ri-priority	pass
 hw:ri-priority-overlap	pass
 hw:ri-reorder	pass
