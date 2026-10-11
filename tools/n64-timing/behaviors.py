@@ -2232,6 +2232,23 @@ def self_test(root):
         else:
             landed = False
         run_commit = COMMIT.findall(text(work / RESULTS).split("\n")[0])[0]
+        stale_commit = ("0" if run_commit[0] != "0" else "1") + run_commit[1:]
+
+        def wall_edit(change):
+            def apply(t):
+                head, *body = t.split("\n")
+                rows = []
+                for line in body:
+                    if line:
+                        row = dict(zip(WALL_COLUMNS, line.split("\t")))
+                        change(row)
+                        line = "\t".join(row[c] for c in WALL_COLUMNS)
+                    rows.append(line)
+                return "\n".join([head, *rows])
+            return apply
+
+        def regenerated_closure(_):
+            return generated(work)[1][CLOSURE]
 
         def blocker(rid, **cells):
             def change(t):
@@ -2317,17 +2334,20 @@ def self_test(root):
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("an older, slower timing kept as history", WALL_BUDGET,
              lambda t: t.replace("\n", "\nfilesel-rotate\t999\t0000000" + "\t-" * (len(WALL_COLUMNS) - 3) + "\n", 1), None),
-            ("one scene re-timed on the standing run, the others stale", WALL_BUDGET,
-             lambda t: "\n".join(l if l.startswith("filesel-rotate\t") or l.count("\t") < 2
-                                 else l.replace(run_commit, l.split("\t")[2]) for l in t.split("\n")),
+            ("one scene re-timed on the standing run, the others stale", (WALL_BUDGET, CLOSURE, WALL_BUDGET),
+             (wall_edit(lambda r: r.update(commit=run_commit, same_tree_as="-")), regenerated_closure,
+              wall_edit(lambda r: r.update(commit=stale_commit) if r["run"] != "filesel-rotate" else None)),
              f"{CLOSURE} differs from the generated output"),
             ("an empty wall commit", WALL_BUDGET, row_field("sct", "commit", ""), "commit `` is not a 7- to 40-hex commit"),
             ("a short wall commit that prefixes the run's", WALL_BUDGET, row_field("sct", "commit", run_commit[:3]),
              f"commit `{run_commit[:3]}` is not a 7- to 40-hex commit"),
             ("a malformed same_tree_as", WALL_BUDGET, row_field("sct", "same_tree_as", run_commit[:3]),
              f"same_tree_as `{run_commit[:3]}` is not `-` or a 7- to 40-hex commit"),
-            ("a scene whose source only mentions the run commit", WALL_BUDGET,
-             lambda t: row_field("sct", "source", f"not {run_commit}")(row_field("sct", "same_tree_as", "-")(t)),
+            ("a scene whose source only mentions the run commit", (WALL_BUDGET, CLOSURE, WALL_BUDGET),
+             (wall_edit(lambda r: r.update(commit=run_commit, same_tree_as="-") if r["run"] != "sct" else
+                        r.update(commit=stale_commit, same_tree_as=run_commit, source=f"tree identical to {run_commit}")),
+              regenerated_closure,
+              wall_edit(lambda r: r.update(same_tree_as="-", source=f"not {run_commit}") if r["run"] == "sct" else None)),
              f"{CLOSURE} differs from the generated output"),
             ("editing the closure draft", CLOSURE, lambda t: t + "manual edit\n", f"{CLOSURE} differs from the generated output"),
             ("a check with no result", RESULTS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("unit:timeline\t")),
@@ -2410,7 +2430,8 @@ def self_test(root):
              "`clause:mg-3` is a clause of class C, which only clause:mg-4 can be"),
             ("the re-time clause written as C", (RESULTS, BLOCKERS),
              (lambda t: t.replace(run_commit, "0000000", 1),
-              lambda t: t + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
+              lambda t: "".join(l + "\n" for l in t.split("\n") if l and not l.startswith("clause:sr-1\t"))
+              + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
              "`clause:sr-1` is class C; the re-time clause is A whenever it fails"),
             ("fork values from another run", FORK, lambda t: t.replace(run_commit, "0000000", 1),
              "n64-timing-fork.tsv is from `# standing run"),
@@ -2427,7 +2448,7 @@ def self_test(root):
         for name, rel, change, expected in cases:
             if isinstance(rel, tuple):
                 undo = [edit(r, c) for r, c in zip(rel, change)]
-                restore = lambda: [u() for u in undo]  # noqa: E731
+                restore = lambda: [u() for u in reversed(undo)]  # noqa: E731
             else:
                 restore = edit(rel, change) if rel else None
             errors = check(work) if rel in (None, WALL_BUDGET) or expected is not None else validate(work)[0]
@@ -2522,8 +2543,8 @@ def self_test(root):
             ("a mut whose cite is no unit", BLOCKERS, fit_mut(8000, cite="scratch-build"), "sysad.rdram-write-period",
              "whose cite `scratch-build` is no section 4 unit"),
             ("an out-of-kit row whose unit is U-SEPARATES with an empty signed", BLOCKERS,
-             blocker("ri.refresh-latch", **{"class": "C", "decider": "ri.refresh-latch", "unit": "U-SEPARATES"}),
-             "ri.refresh-latch", "signed is empty"),
+             blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick", "unit": "U-SEPARATES"}),
+             "legacy.cart.rtc-tick", "signed is empty"),
             ("an out-of-kit row seeded A on its own unit with an empty signed", BLOCKERS,
              blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick"}),
              "legacy.cart.rtc-tick", "signed is empty"),

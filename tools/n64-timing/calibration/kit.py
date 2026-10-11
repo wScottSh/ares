@@ -56,10 +56,16 @@ KIT_ROMS = {
     "nemu64-cop0hazard": ("nemu64", "cop0hazard", False),
     "kit-tex": ("calib", "kit-tex", True),
     "kit-zmem": ("calib", "kit-zmem", True),
+    "kit-zread": ("calib", "kit-zread", True),
     "kit-cpu2": ("calib", "kit-cpu2", True),
     "kit-bus": ("calib", "kit-bus", True),
     "cpu-llsc": ("cpu", "llsc", False),
+    "kit-pif": ("pif", "kit-pif", False),
 }
+#kit-pif never sends the PIF terminate-boot command, so the PIF halts it and its log has no footer
+#(romgen/suites/pif). It answers no question: its last COUNT is a report (hardware-run.md).
+PIF_ROM = "kit-pif"
+COUNT_HZ = 46_875_000
 SRAM_BYTES = 0x8000
 
 
@@ -559,8 +565,26 @@ def compare_layouts(q, hw, model):
                  + "; ".join(first.values()))
 
 
+def pif_report(log):
+    """(the last COUNT kit-pif logged, its sample number, halted). A complete log ran all its samples
+    unhalted: boot was terminated before the ROM ran."""
+    last = log.records.get((PIF_ROM, "count"), {})
+    return last.get("count"), last.get("n"), not log.complete
+
+
+def pif_line(log):
+    count, n, halted = pif_report(log)
+    if count is None:
+        return "no COUNT line"
+    if not halted:
+        return (f"never halted in {count / COUNT_HZ:.3f} s of COUNT: boot was terminated before the ROM ran (a menu "
+                f"launch, not sc64deployer upload)")
+    return f"last COUNT {count} ({count / COUNT_HZ:.3f} s, sample {n}) before the PIF halted the CPU"
+
+
 def verify_run(run_dir):
-    """Errors in a calibration/run.sh output: a log without a valid footer, a cartridge SRAM copy that
+    """Errors in a calibration/run.sh output: a log without a valid footer (for kit-pif, a log the PIF did
+    not halt), a cartridge SRAM copy that
     differs from the ISViewer copy (the flashcart SD path), or domain-1 PI timing that the output
     layer left changed (hwout.py PI_REGS)."""
     from romgen import hwout
@@ -571,7 +595,10 @@ def verify_run(run_dir):
             continue
         data = txt.read_bytes()
         log = Log(data)
-        if not log.complete:
+        pif = log.rom == PIF_ROM
+        if pif and (pif_report(log)[0] is None or not pif_report(log)[2]):
+            errors.append(f"{txt}: the PIF did not halt kit-pif: {pif_line(log)}")
+        if not log.complete and not pif:
             errors.append(f"{txt}: no valid #kit-end footer")
             continue
         srm = txt.with_suffix(".srm")
@@ -579,9 +606,9 @@ def verify_run(run_dir):
             errors.append(f"{txt}: the run left no cartridge SRAM ({srm.name})")
         elif srm.read_bytes() != data[:SRAM_BYTES].ljust(SRAM_BYTES, b"\0"):
             errors.append(f"{srm}: the SRAM copy differs from the ISViewer copy")
-        if log.pi != hwout.DOM1_HEADER:
+        if not pif and log.pi != hwout.DOM1_HEADER:
             errors.append(f"{txt}: domain-1 PI timing at the end {log.pi}, the ROM header's {hwout.DOM1_HEADER}")
-        if log.timeouts != {"pi": 0, "rdp": 0}:
+        if not pif and log.timeouts != {"pi": 0, "rdp": 0}:
             errors.append(f"{txt}: #kit-timeout {log.timeouts or 'missing'}; on the fork no wait may give up")
         rom = Path(run_dir) / "roms" / log.header.get("build", "?") / f"{log.rom}.z64"
         if not rom.exists() or hwout.rom_sha256(rom.read_bytes()) != log.header.get("rom_sha256"):
@@ -757,6 +784,17 @@ def self_test():
     failed += not ok
     print(f"kit: self-test: kit-hpos samples give a per-load latency histogram in pclk: {'ok' if ok else 'FAILED'} ({got})")
     cases.append(("hpos hist", None, None))
+    samples = "".join(f"#bench kit-pif count n={n} count={2922075 + 468750 * n}\n" for n in range(3))
+    for name, data, want in [
+            ("kit-pif cut by the PIF's halt reports its last COUNT",
+             sample_log(samples, rom="kit-pif", build="single").split(b"#kit-end")[0], (3859575, 2, True)),
+            ("kit-pif with a footer was never halted", sample_log(samples, rom="kit-pif", build="single"),
+             (3859575, 2, False))]:
+        got = pif_report(Log(data))
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {pif_line(Log(data))})")
+        cases.append((name, None, None))
     llsc_q = next(q for q in questions() if q["id"] == "cpu-llsc-console")
 
     def llsc(bad=(), watch=0):
@@ -780,6 +818,9 @@ def self_test():
     span2_cases = span2_self_test()
     failed += span2_cases.count(False)
     cases += span2_cases
+    zread1_cases = zread1_self_test()
+    failed += zread1_cases.count(False)
+    cases += zread1_cases
     noise_cases = noise_self_test()
     failed += noise_cases.count(False)
     cases += noise_cases
@@ -833,6 +874,32 @@ def self_test():
         failed += not ok
         print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
     cases += irqclrs
+    latch_q, overrun_q = (next(q for q in questions() if q["id"] == i) for i in ("refresh-latch", "vi-fetch-overrun"))
+
+    def hsync(starved=0, fetch_n=1117, none_n=1160, slow=(608, 516, 430)):
+        pts = [(f"refresh-{f}", h, s) for (f, h), s in zip((("0.25", 9), ("0.5", 19), ("0.9", 35)), slow)]
+        body = "".join(f"#bench bus-hsync {pt} hsync={h} v_video=none window=29790 reps=1 starved={starved} n=600 "
+                       f"slow={0 if starved else s} lat_max=95\n" for pt, h, s in pts)
+        body += "".join(f"#bench bus-hsync {pt} hsync=399 v_video={v} window=29790 reps=1 starved=0 n={n} slow=78 lat_max={m}\n"
+                        for pt, v, n, m in (("fetch-overrun", "init", fetch_n, 67), ("fetch-overrun-none", "none", none_n, 47)))
+        return Log(sample_log(body, rom="kit-bus"))
+    fork = hsync()
+    shorts = [("refresh-latch: a console with one refresh latch (holdoffs every 6, 4 and 3 lines)", latch_q,
+               hsync(slow=(516, 387, 287)), "pass"),
+              ("refresh-latch: a console that queues every HSYNC's refresh starves the gate DMA", latch_q, hsync(starved=1),
+               "fail"),
+              ("vi-fetch-overrun: a console whose loads run 10% slower and whose VI holds the channel half as long",
+               overrun_q, hsync(fetch_n=1023, none_n=1044), "pass"),
+              ("vi-fetch-overrun: a VI that drops the unposted bursts at each HSYNC (one load apart)", overrun_q,
+               hsync(fetch_n=1159), "fail"),
+              ("vi-fetch-overrun: the derived threshold, 40.5 + 2 x 67 ticks: 8 loads (205 ticks) read as fetched",
+               overrun_q, hsync(fetch_n=1152), "pass")]
+    for name, q, hw, want in shorts:
+        got, detail = compare(q, [hw], [fork])
+        ok = got == want
+        failed += not ok
+        print(f"kit: self-test: {name}: {'ok' if ok else 'FAILED'} ({got}: {detail[:120]})")
+    cases += shorts
     mm_cases, mm_failed = mm_bench.self_test()
     cases += [None] * mm_cases
     failed += mm_failed
@@ -840,12 +907,12 @@ def self_test():
     return failed
 
 
-def span2_log(period=0, stall=256, steady=60.0, at=()):
+def span2_log(period=0, stall=256, steady=60.0, at=(), write=16.0):
     """A kit-span2 log: 256-line write-only rectangles at 32 bpp (16 bpp: twice the pixels per period)
     whose clock grows 256 rclk per pixel plus `stall` at the first pixel of every `period` px past the
     second (0: never) or at each width in `at` (both depths), each width off by the instrument's worst error against the verdict
     (one poll period and two refreshes up on a width without a step, poll plus one refresh down on a step); and IM_RD
-    rectangles costing `steady` rclk per 64 B half and line."""
+    rectangles costing `steady` rclk per 64 B half and line; 32 bpp write-only lines past 80 px cost `write` per half."""
     lines = 256
     body = ""
     for bpp in (32, 16):
@@ -856,8 +923,9 @@ def span2_log(period=0, stall=256, steady=60.0, at=()):
             clock += lines + (stall - derived.POLL_RCLK - derived.REFRESH_RCLK if step else derived.POLL_RCLK + 2 * derived.REFRESH_RCLK - 0.5)
             body += f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 clock={int(clock)}\n"
         for w in (160, 320):
+            per_px = write / 16 if bpp == 32 else 1
             body += (f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
-                     f"clock={int(clock + (w - 80) * lines)}\n")
+                     f"clock={round(clock + (w - 80) * lines * per_px)}\n")
     for w in (1, 8, 16, 32, 64, 128, 160, 192, 256, 320):
         body += (f"#bench span-imrd b32-w{w} bpp=32 w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 "
                  f"clock={int(10000 + max(0, w // 16 - 1) * steady * lines)}\n")
@@ -886,10 +954,56 @@ def span2_self_test():
     rows = {q["id"]: q for q in questions()}
     for qid, hw, model, want in [("span-write-release", span2_log(4), span2_log(16), "fail"),
                                  ("span-write-release", span2_log(16), span2_log(16), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.75), span2_log(16, write=29.0), "pass"),
+                                 ("span-write-release", span2_log(16, write=29.77), span2_log(16, write=29.0), "fail"),
+                                 ("span-write-release", span2_log(16, write=28.23), span2_log(16, write=29.0), "fail"),
                                  ("mem-overhead-pipelined", span2_log(steady=18), span2_log(), "fail")]:
         got, detail = compare(rows[qid], [hw], [model])
         out.append(got == want)
         print(f"kit: self-test: kit-span2: {qid}, want {want}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
+    return out
+
+
+def zread1_log(per_read=0.0, poll=0, count=0, both=None):
+    """A kit-zread log of the 320 px points at the fork's pad-0 values, each 64 B read of a one-image
+    line moved `per_read` rclk (10 reads a line), each both-images point moved `both[(bank, h)]` rclk,
+    every clock moved `poll` rclk and `count` red pixels written."""
+    body = ""
+    for mode, bank, by_h in (("none", "zsep", {8: (2735, 2663), 16: (5337, 5255)}),
+                             ("imrd", "zsep", {8: (4079, 3998), 16: (7684, 7608)}),
+                             ("zcmp", "zsep", {8: (4079, 3998), 16: (7684, 7608)}),
+                             ("both", "zsep", {8: (6148, 6060), 16: (11801, 11723)}),
+                             ("both", "zsame", {8: (6852, 6781), 16: (13252, 13178)})):
+        for h, (clock, buf) in by_h.items():
+            moved = round(per_read * 10 * h) if mode in ("imrd", "zcmp") else (both or {}).get((bank, h), 0)
+            body += (f"#bench zmem-read1 {mode}-{bank}-w320-h{h} mode={mode} z={bank} w=320 h={h} n=1 vi=off reps=4 "
+                     f"clock={clock + moved + poll} bufbusy={buf + moved} count={count}\n")
+    return Log(sample_log(body, rom="kit-zread"))
+
+
+def zread1_self_test():
+    """kit-zread's per-read report value, the zread-1cyc rule against Thar0's per-read average, and each
+    both-images rule against variant-q0's moves at its own bank's points."""
+    out = []
+    got = zread1_log().records.get(("zmem-read1", "imrd-zsep-w320-fit"), {}).get("rclk_per_read")
+    out.append(got == 45.125)
+    print(f"kit: self-test: kit-zread: the fork's 320 px line derives 45.125 rclk per read: "
+          f"{'ok' if got == 45.125 else 'FAILED'} ({got})")
+    rows = {q["id"]: q for q in questions()}
+    for name, qid, hw, want in [
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc", zread1_log(poll=24), "pass"),
+            ("a console at Thar0's 44.17 rclk per read, 0.99 under the fork's 45.16", "zread-1cyc",
+             zread1_log(per_read=-0.99), "fail"),
+            ("a console that writes a pixel", "zread-1cyc", zread1_log(count=1), "fail"),
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc-both-zsep", zread1_log(poll=24), "pass"),
+            ("variant-q0's separate-bank moves, -85 at 16 lines and -43 at 8 (thar0-zcmp-residual.md)",
+             "zread-1cyc-both-zsep", zread1_log(both={("zsep", 16): -85, ("zsep", 8): -43}), "fail"),
+            ("a console at the fork's clocks plus the poll bound", "zread-1cyc-both-zsame", zread1_log(poll=24), "pass"),
+            ("variant-q0's same-bank moves, -277 at 16 lines and -128 at 8", "zread-1cyc-both-zsame",
+             zread1_log(both={("zsame", 16): -277, ("zsame", 8): -128}), "fail")]:
+        got, detail = compare(rows[qid], [hw], [zread1_log()])
+        out.append(got == want)
+        print(f"kit: self-test: kit-zread: {qid}, {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail[:90]})")
     return out
 
 
@@ -1130,9 +1244,9 @@ PHOTO_BYTES = 2048
 
 def run_table(run_dir, root=ROOT):
     """hardware-run.md's run-order table from a calibration/run.sh output: each console build's fork
-    run time, log size, whether it is short enough to film, the layout pads the console runs it at
-    (every pad when one of its questions is layout-sensitive, see compare_layouts), and the questions
-    it answers."""
+    run time (kit-pif's: to its last COUNT), log size, whether it is short enough to film, the layout pads
+    the console runs it at (every pad when one of its questions is layout-sensitive, see compare_layouts),
+    and the questions it answers."""
     run_dir = Path(run_dir)
     asks = {}
     for q in questions(root):
@@ -1144,10 +1258,12 @@ def run_table(run_dir, root=ROOT):
         base = run_dir / ("boot-1" if walks else "single") / rom
         err = base.with_suffix(".err").read_text(errors="replace")
         secs = float(re.search(r"emulated_s=([\d.]+)", err).group(1))
+        if rom == PIF_ROM:
+            secs = pif_report(Log(base.with_suffix(".txt").read_bytes()))[0] / COUNT_HZ
         size = len(base.with_suffix(".txt").read_bytes())
         layouts = f"{pads[0]}-{pads[-1]}" if rom in padded and len(pads) > 1 else "0"
         out.append(f"| {n} | `{rom}` | {secs:.1f} s | {size / 1000:.1f} KB | {'yes' if size <= PHOTO_BYTES else 'no'} | "
-                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, []))} |")
+                   f"{layouts} | {', '.join(f'`{q}`' for q in asks.get(rom, [])) or 'a report, no question'} |")
     return "\n".join(out)
 
 

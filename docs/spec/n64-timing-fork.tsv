@@ -2983,4 +2983,5 @@ cpu-llsc-console	cpu-llsc/1.4	v0	exact	0
 cpu-llsc-console	cpu-llsc/1.5	v0	exact	0
 span-write-release	span-write/release-b16	release	exact	period-4
 span-write-release	span-write/release-b32	release	exact	period-2
+span-write-release	span-write/release-b32	steady_half	range:abs:0.76	28.9988..28.9988
 mem-overhead-pipelined	span-imrd/port	port	exact	above-wire

@@ -32,7 +32,7 @@ sha256sum "$N64_TIMING_HOME/scratch/r29/clones/libdragon/boot/bin/ipl3_compat.z6
 
 That path is the default `romgen/build.py --ipl3` reads. The file is not committed to this repository.
 
-Allow about six and a half hours for the required runs and seven and a half for the recommended ones (inferred from the per-run times below; no console session has been timed). About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
+Allow about six hours and 35 minutes for the required runs and seven hours and 35 minutes for the recommended ones (inferred from the per-run times below, at about three minutes for each power cycle, load and copy; `kit-zread` adds one run to the six and a half hours estimated before it; no console session has been timed). About four and a half of those hours are the layout-pad builds (see [Layout pads](#layout-pads)), and you can run them in a later session. Each kit ROM runs for a few seconds after it boots (the table in [Run the kit](#run-the-kit) has the times). Most of the time is power cycles, loading ROMs and copying files.
 
 ## Build the kit
 
@@ -46,8 +46,8 @@ Allow about six and a half hours for the required runs and seven and a half for 
 
 2. Copy the console builds to the flashcart's SD card:
 
-   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-noise`).
-   - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`.
+   - `$N64_TIMING_HOME/results/calib/roms/boot-1/*.z64`: the walked kit ROMs, one build each (`kit-cpu`, `kit-cpu2`, `kit-vi`, `kit-dma`, `kit-bus`, `kit-hpos`, `kit-rdp`, `kit-span`, `kit-span2`, `kit-tex`, `kit-zmem`, `kit-zread`, `kit-noise`).
+   - `$N64_TIMING_HOME/results/calib/roms/single/*.z64`: `rdpstat-1prim`, `rdpstat-dpc`, `rdpstat-systemtest`, `rdpstat-unsynced`, `nemu64-timing`, `nemu64-cycle`, `nemu64-cop0hazard`, `cpu-llsc`, `kit-pif`. Run `kit-pif` only through the SC64 `upload` path (see [The PIF boot timeout](#the-pif-boot-timeout)).
    - For the layout-pad runs, `$N64_TIMING_HOME/results/calib/roms/p<P>/boot-1/<rom>.z64` for P = 1 to 7, for each ROM whose Layout pads column in the [Order](#order) table reads `0-7`. Rename each to `<rom>-p<P>.z64` (for example `kit-cpu-p3.z64`), because the menu shows file names only. The log's first line names the pad (`build=p3/boot-1`), so the capture's file name does not matter to ingestion.
    - For the recommended phase runs, also `roms/boot-<K>/kit-cpu.z64`, `kit-dma.z64` and `kit-vi.z64` for the other seven delays K (165, 329, 493, 657, 821, 985, 1149). Rename each to `kit-cpu-<K>.z64` and so on, because the menu shows file names only.
 
@@ -72,7 +72,7 @@ Allow about six and a half hours for the required runs and seven and a half for 
    sc64deployer download save capture/kit-cpu.srm
    ```
 
-   If you use the SC64 menu (N64FlashcartMenu) from the SD card instead of `upload`, set the save type to SRAM 32 KiB in the ROM's settings. The menu path does not enable the IS-Viewer, so only the SRAM copy and the screen are captured.
+   If you use the SC64 menu (N64FlashcartMenu) from the SD card instead of `upload`, set the save type to SRAM 32 KiB in the ROM's settings. The menu path does not enable the IS-Viewer, so only the SRAM copy and the screen are captured. `kit-pif` needs `upload`: it measures the PIF's boot timeout, which a menu launch has already ended.
 
 ### EverDrive-64 X7
 
@@ -110,14 +110,16 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 10 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
 | 11 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
 | 12 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
-| 13 | `nemu64-timing` | 0.8 s | 26.7 KB | no | 0 | `nemu64-console` |
+| 13 | `nemu64-timing` | 0.8 s | 26.8 KB | no | 0 | `nemu64-console` |
 | 14 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
 | 15 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
 | 16 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
 | 17 | `kit-zmem` | 1.8 s | 29.2 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 18 | `kit-cpu2` | 0.2 s | 18.9 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
-| 19 | `kit-bus` | 1.6 s | 11.3 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
-| 20 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 18 | `kit-zread` | 1.1 s | 13.9 KB | no | 0 | `zread-1cyc`, `zread-1cyc-both-zsep`, `zread-1cyc-both-zsame` |
+| 19 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 20 | `kit-bus` | 1.6 s | 12.0 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase`, `refresh-latch`, `vi-fetch-overrun` |
+| 21 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 22 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
 
 For each ROM:
 
@@ -153,6 +155,21 @@ A ROM can still stop for good, for example in a CPU exception the kit does not e
 - On the SC64, the listener output stops and the screen never shows text.
 
 If a ROM hangs or logs a nonzero `#kit-timeout`, turn the console off and run it once more from a power cycle. Keep both captures, even the empty or truncated one: ingestion stores a log without a valid footer as INCOMPLETE and does not compare it. Then go on with the next ROM. In [What to send back](#what-to-send-back), name the ROM and the last record its log holds. A hang loses only that ROM's questions; nothing on the console or the flashcart needs a repair.
+
+### The PIF boot timeout
+
+`kit-pif` (`roms/single/kit-pif.z64`) is the one ROM that never finishes. Every other kit ROM sends the PIF terminate-boot command itself (`romgen/runtime.py` `pif_terminate_boot`). `kit-pif` does not, so the PIF halts the CPU through NMI after its boot timeout. n64brew [PIF-NUS](https://n64brew.dev/wiki/PIF-NUS) says the PIF expects the command "before 5 seconds from boot" and halts the CPU if it does not come "within about 5 seconds from boot". The fork's PIF (`ares/n64/pif/hle.cpp`) waits 6 s. The ROM prints `#bench kit-pif count n=<sample> count=<COUNT>` every 10 ms of COUNT, so its last line is the last COUNT before the halt.
+
+Run it only from a cold boot through `sc64deployer upload`:
+
+```sh
+sc64deployer upload --save-type sram roms/single/kit-pif.z64
+sc64deployer debug --isv 0x03FF0000 | tee capture/kit-pif.isviewer.log
+```
+
+Then turn the console on, wait 15 seconds, and turn it off. The screen stays black, and the log has no `#kit-end` line. A flashcart menu (the ED64 menu or the SC64 menu from the SD card) has already sent terminate-boot before it starts a ROM, so the PIF never halts the ROM, and the menu path has no ISViewer. A log that ends with `#kit-end` after about 12 s of samples shows that boot was already terminated: run it again through `upload`.
+
+ingest.py stores the log (it reports it INCOMPLETE, as expected) and prints the last COUNT next to the fork's. This is a report, not a check. COUNT counts from the IPL3's write of 0, and no source bounds the offset between that and the start of the PIF's timer, so the last COUNT cannot decide between 5 s and 6 s (`tools/n64-timing/calibration/undecidable.tsv`, `legacy.pif.boot-timeout`). On the fork the last COUNT is 280890637 to 280890686 ticks over the 8 layout pads, 5.992 s, in sample 593. The fork's PIF halts the CPU 6.000 s after it starts its timer, and the pinned IPL3 writes COUNT 0 1.8 ms before that (measured with a scratch probe in `pif/hle.cpp`), so the next sample, 10 ms later, never runs.
 
 ### Repeat runs
 

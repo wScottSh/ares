@@ -106,6 +106,10 @@ def store(root, capture, name, model):
             note += f"; {hists} latency histograms, recorded (kit.py --hist {dest.name})" if hists else ""
             print(f"ingest: {path.name}: {rom} ({'kit ROM' if known else 'not a kit ROM'}), {len(log.records)} "
                   f"records{note}")
+            if rom == kit.PIF_ROM:
+                fork = [kit.pif_line(m) for m in kit.model_logs(model, rom, None, kit.layout(log))]
+                print(f"ingest: {path.name}: report only, not compared (legacy.pif.boot-timeout): {kit.pif_line(log)}; "
+                      f"the fork's: {'; '.join(fork) or 'no run'}")
     (out / "manifest.tsv").write_text("\n".join(manifest) + "\n", encoding="utf-8", newline="\n")
     return out
 
