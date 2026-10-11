@@ -2,7 +2,7 @@
 # Builds the calibration kit and runs every kit ROM on the fork: the model side of each hardware
 # comparison (docs/calibration/hardware-run.md). Every kit ROM is built at each layout pad
 # (romgen/suites/calib/sets.py PADS, build.py --layout-pad); the calib suite runs at each boot delay
-# (sets.py DELAYS), the other kit ROMs (kit.py KIT_ROMS) once per pad.
+# (sets.py DELAYS), the other kit ROMs (kit.py KIT_ROMS) once per pad. kit-pif runs until the PIF halts it.
 # usage: tools/n64-timing/calibration/run.sh [OUT_DIR]
 # OUT_DIR defaults to $N64_TIMING_HOME/results/calib. Writes OUT_DIR/roms/{boot-<K>,single}/*.z64
 # (boot-1 and single are the console builds), OUT_DIR/{boot-<K>,single}/<rom>.txt (the kit log),
@@ -64,13 +64,19 @@ else
   echo "no $mmroms/mm-bench-*.z64 (calibration/build-mm-bench.sh): hw:mm-bench stays missing" >&2
 fi
 printf 'until 0x804200E8 w == 0x600DF00D\nstop\n' > "$out/stop.script"
+#kit-pif never writes the done word: the PIF halts it. It stops at one second past its last sample, so a
+#build that is not halted still ends its log, and kit.py --verify-run reports it.
+pif_seconds="$("$PYTHON" -c 'import sys; sys.path.insert(0, sys.argv[1]); from romgen.suites.pif import sets; print(sets.SAMPLES * sets.STEP_TICKS // 46875000 + 1)' "$here")"
 find "$out/roms" -name '*.z64' | sort | while read -r rom; do
   rel="${rom#$out/roms/}"
-  echo "$rom $out/${rel%.z64} 1"
-  case "$rel" in boot-*/kit-dma.z64 | p*/boot-*/kit-dma.z64) echo "$rom $out/pads-4/${rel%.z64} 4" ;; esac
-done | xargs -P "${CALIB_JOBS:-4}" -n 3 sh -c '
+  case "$rel" in */kit-pif.z64) limit="$pif_seconds" ;; *) limit=0 ;; esac
+  echo "$rom $out/${rel%.z64} 1 $limit"
+  case "$rel" in boot-*/kit-dma.z64 | p*/boot-*/kit-dma.z64) echo "$rom $out/pads-4/${rel%.z64} 4 0" ;; esac
+done | xargs -P "${CALIB_JOBS:-4}" -n 4 sh -c '
   mkdir -p "$(dirname "$2")"
-  "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err" || echo "run failed: $1 (see $2.err)" >&2
+  "'"$run"'" "$1" --controllers "$3" --script "'"$out"'/stop.script" --emulated-seconds "$4" --wall-seconds 1800 --dump-sram "$2.srm" > "$2.txt" 2> "$2.err"
+  status=$?
+  [ "$status" = 0 ] || { [ "$status" = 2 ] && [ "$4" != 0 ]; } || echo "run failed: $1 (see $2.err)" >&2
 ' sh
 wait "$thar0_pid" || echo "thar0 port run failed (see $out/ext/thar0.err)" >&2
 for pid in "${mm_pids[@]}"; do

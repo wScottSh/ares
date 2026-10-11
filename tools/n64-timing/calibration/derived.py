@@ -46,10 +46,11 @@ def tex(recs):
 
 
 def zmem(records):
-    """kit-zmem (written in place, after the zmem module's report): write-run fits over the Z comb, the
-    per-primitive atomic cost, IM_RD/Z_CMP overlap in 1- and 2-cycle, the 2-cycle read-only
-    per-line and per-rectangle costs, 1 px triangle cost, the clobber verdict, the X-bus
-    and RDRAM command rates, the hold summary and PIPEBUSY's share of memory time."""
+    """kit-zmem and kit-zread (written in place, after the zmem module's report): write-run fits over
+    the Z comb, the per-primitive atomic cost, IM_RD/Z_CMP overlap in 1- and 2-cycle, the 2-cycle and
+    1-cycle read-only per-line and per-rectangle costs, the 1-cycle cost per 64 B read of a 320 px
+    line (10 serial reads), 1 px triangle cost, the clobber verdict, the X-bus and RDRAM command
+    rates, the hold summary and PIPEBUSY's share of memory time."""
     def p(rom, point):
         return records.get((f"zmem-{rom}", point))
 
@@ -102,6 +103,18 @@ def zmem(records):
                 line = (h16["clock"] - h8["clock"]) / 8
                 records[("zmem-read2", f"{mode}-w{w}-fit")] = {"rclk_per_line": round(line, 2),
                                                              "rclk_per_rect": round(h8["clock"] - 8 * line, 1)}
+    #kit-zread's per-line cost is from BUFBUSY, not DPC_CLOCK: the DP-interrupt poll quantizes each clock,
+    #so the clock difference of 16 less 8 lines did not move when the window's row misses did.
+    for mode in ("none", "imrd", "zcmp", "both"):
+        for bank in ("zsep", "zsame"):
+            for w in (8, 32, 64, 128, 320):
+                h8, h16 = p("read1", f"{mode}-{bank}-w{w}-h8"), p("read1", f"{mode}-{bank}-w{w}-h16")
+                if h8 and h16:
+                    line = (h16["bufbusy"] - h8["bufbusy"]) / 8
+                    out = {"rclk_per_line": round(line, 3), "rclk_per_rect": round(h8["bufbusy"] - 8 * line, 1)}
+                    if mode in ("imrd", "zcmp") and w == 320:
+                        out["rclk_per_read"] = round(line / 10, 3)
+                    records[("zmem-read1", f"{mode}-{bank}-w{w}-fit")] = out
     for t in ("fill", "z", "shade", "shade-z"):
         lo, hi = p("tri", f"{t}-16"), p("tri", f"{t}-64")
         if lo and hi:
@@ -274,8 +287,8 @@ def hsync(recs):
 
 def span2(recs):
     """kit-span2: per depth, the spacing of a write-only span's stall steps (segment: every 16 B,
-    half: every 64 B, no-step, else period-<px> or single-<width>), and IM_RD's steady cost per 64 B
-    half against the RI wire time (wire-bound or above-wire)."""
+    half: every 64 B, no-step, else period-<px> or single-<width>), the 32 bpp write-only steady cost
+    per 64 B half, and IM_RD's steady cost per 64 B half against the RI wire time (wire-bound or above-wire)."""
     out = {}
     lines = recs[("span-write", "b32-w1")]["h"]
     for bpp in (32, 16):
@@ -283,10 +296,10 @@ def span2(recs):
         clocks = {f["w"]: f["clock"] for f in pts if f["w"] <= 80}
         px = bpp // 8
         cat, steps = release(clocks, lines, 16 // px, 64 // px)
-        steady = {f["w"]: f["clock"] for f in pts}
-        out[("span-write", f"release-b{bpp}")] = {
-            "release": cat, "steps": ",".join(map(str, steps)) or "none",
-            "steady_half": round((steady[320] - steady[160]) / (lines * 160 * px / 64), 2)}
+        out[("span-write", f"release-b{bpp}")] = {"release": cat, "steps": ",".join(map(str, steps)) or "none"}
+    #span-write-release compares the 32 bpp cost per 64 B half; 4 places keep rounding far under its 0.76 band.
+    write = {f["w"]: f["clock"] for (rom, _), f in recs.items() if rom == "span-write" and f.get("bpp") == 32}
+    out[("span-write", "release-b32")]["steady_half"] = round((write[320] - write[160]) / (lines * 10), 4)
     imrd = {f["w"]: f for (rom, _), f in recs.items() if rom == "span-imrd"}
     steady = (imrd[320]["clock"] - imrd[160]["clock"]) / (lines * 10)
     write16 = recs[("span-write", "b32-w16")]["clock"]
