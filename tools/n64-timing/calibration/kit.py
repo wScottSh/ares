@@ -1461,7 +1461,7 @@ def noise_sweep_self_test():
             ("two periods at pads 0 and 3 span pad 3's excursion", (0, 3), range(1, 81), 37, 0, True),
             ("one period cannot show its phases repeat", (0, 3), range(1, 61), 37, 0, False),
             ("a second period past the first's extent", (0, 3), range(1, 81), 37, 500, False),
-            ("a sweep missing boot delay 50 is not a step-1 sweep", (0,), [k for k in range(1, 81) if k != 50], 37, 0, False)]:
+            ("a sweep missing boot delay 78 is not a step-1 sweep", (0,), [k for k in range(1, 81) if k != 78], 37, 0, False)]:
         with tempfile.TemporaryDirectory() as root:
             table, ok = sweep(root, pads, delays, period, late)
         good = ok == want and (not want or all(
