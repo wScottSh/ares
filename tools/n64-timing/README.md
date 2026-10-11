@@ -142,7 +142,7 @@ Checks `stepcap`: the second run passes `n64-run --step-cap`, which makes the CP
 
 ```sh
 python tools/n64-timing/romgen/build.py --suite nemu64 --out $N64_TIMING_HOME/roms
-tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard timing-phase]
+tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard timing-phase timing-phase-2022]
 ```
 
 `romgen/build.py` generates the three ROMs from the in-repo Python port of nemu64-test, with no external toolchain. See [romgen/README.md](romgen/README.md).
@@ -160,7 +160,7 @@ tools/n64-timing/run-nemu64.sh [timing cycle cop0hazard timing-phase]
 - `values.tsv` (romgen ROMs only) has one row per test value: result, measured cycles, and expected cycles.
 - `categories.tsv` (romgen timing ROM only) assigns each failed value to a root-cause category.
 
-`timing-phase` runs the averaged timing tests at every VI phase of `romgen/suites/nemu64/phases.py` ([romgen README, Phase walk](romgen/README.md#phase-walk)). Its directory holds `phase-<K>/` (`stdout.txt`, `stderr.txt` and `values.tsv` per delay), `runs.txt`, `measurements.tsv` (min, max, median and sum of each averaged value at each delay) and `phase.tsv` (each value's phase ranges, phase mean, bands and verdict).
+`timing-phase` runs the averaged timing tests at every VI phase of `romgen/suites/nemu64/phases.py` ([romgen README, Phase walk](romgen/README.md#phase-walk)). Its directory holds `phase-<K>/` (`stdout.txt`, `stderr.txt` and `values.tsv` per delay), `runs.txt`, `measurements.tsv` (min, max, median and sum of each averaged value at each delay) and `phase.tsv` (each value's phase ranges, phase mean, bands and verdict). `timing-phase-2022` writes the same files for the same tests under nemu64-test's 2022 harness ([romgen README, The 2022 harness](romgen/README.md#the-2022-harness)).
 
 `results/nemu64/summary.txt` concatenates the set summaries.
 
@@ -243,9 +243,9 @@ python tools/n64-timing/systembench/compare.py $N64_TIMING_HOME/results/systembe
 
 The `systembench:*` checks run the hardware-era build. `standing.sh` builds it into `$N64_TIMING_HOME/roms/systembench` and the 845635c build into `roms/systembench-845635c`, which it runs as a report only. Without docker the `systembench:*` checks are `pending:no-rom`. n64-systembench has no license file, so its source and ROMs stay outside the repo; libdragon is public domain (Unlicense).
 
-`build-systembench-era.sh` builds the commit and toolchain the hardware values came from:
+`build-systembench-era.sh` builds the commit and toolchain the table's values were committed with. That a console produced those values, PI I/O R's 144 rclk included, is inferred: main.c states no source for its expected table (`docs/research/hardware-corpora.md` row 3, "presumably console"):
 
-- `git blame` of main.c's table dates the PI values to de9d9dd (2022-08-08), the RDRAM and RCP values to 3c6a0ee (2022-08-09) and the SI and JOY values to 50f5066 (2023-01-25). No value changed after that. From de9d9dd to 50f5066 the timed functions are the same source; later commits add code around them.
+- `git blame` of main.c's table dates the PI DMA and PI I/O W values (a commit date, not a measurement date) to de9d9dd (2022-08-08), PI I/O R's 144 to the earlier 8313bcb (the same day), the RDRAM and RCP values to 3c6a0ee (2022-08-09) and the SI and JOY values to 50f5066 (2023-01-25). No value changed after that. From de9d9dd to 50f5066 the timed functions are the same source; later commits add code around them.
 - `2023` (the default) is 50f5066, the only era commit with every row. `2022` is d12e8ea, the last 2022-08 commit. Each uses the vendored libdragon and a toolchain image built from libdragon's own Dockerfile at the last toolchain change before that date: a54ccd736 (GCC 12.2.0, binutils 2.39) and eed8ef3b7 (GCC 12.1.0, binutils 2.38). The ubuntu:18.04 base is pinned by digest. Two builds give the same z64.
 - The era `timeit_average` drops only one sample when every sample is equal and still divides by n-2. The fork's samples are identical, so an unfixed era build reads (n-1)/(n-2) high wherever that happens: PI DMA 1 KiB 13692 instead of 12170, JOY Empty 4B-56B +2 %, and 64 KiB 9/8 high in other layouts (measured). The script changes `>` to `>=` in its max test. That is two instructions, and `nm` lists the same addresses (measured). `ERA_TIE_FIX=0` builds the original.
 
@@ -341,4 +341,4 @@ The file-select phase sweep (`mmbench.py --phases 5`, default `--jobs`) costs 3.
 
 ## Calibration kit
 
-`calibration/run.sh [OUT]` builds the console calibration kit (`romgen/build.py --suite calib`, and `--hw` builds of the rdpstat and nemu64 ROMs) at each layout pad (`build.py --layout-pad`) and runs every kit ROM on the fork. `calibration/kit.py --layout OUT` lists which questions are layout-sensitive. `calibration/ingest.py CAPTURE_DIR` stores a console capture under `docs/calibration/hardware/` and puts each `hw:<question>` result into the spec. `calibration/dry-run.sh OUT` feeds the fork's own logs to it as a fake capture in a scratch tree. The procedure is [docs/calibration/hardware-run.md](../../docs/calibration/hardware-run.md), and the questions are in [docs/calibration/inventory.md](../../docs/calibration/inventory.md), generated by `behaviors.py` from `calibration/questions.tsv`.
+`calibration/run.sh [OUT]` builds the console calibration kit (`romgen/build.py --suite calib`, and `--hw` builds of the rdpstat and nemu64 ROMs) at each layout pad (`build.py --layout-pad`) and runs every kit ROM on the fork. `calibration/kit.py --layout OUT` lists which questions are layout-sensitive. `calibration/kit.py --noise-rate [OUT]` is the noise-mapping reader: for each question over a G_AD_NOISE, G_CD_NOISE or G_AC_DITHER snap it bounds the false-match rate of the cited mappings and says whether a console capture could decide it. `calibration/ingest.py CAPTURE_DIR` stores a console capture under `docs/calibration/hardware/` and puts each `hw:<question>` result into the spec. `calibration/dry-run.sh OUT` feeds the fork's own logs to it as a fake capture in a scratch tree. The procedure is [docs/calibration/hardware-run.md](../../docs/calibration/hardware-run.md), and the questions are in [docs/calibration/inventory.md](../../docs/calibration/inventory.md), generated by `behaviors.py` from `calibration/questions.tsv`.

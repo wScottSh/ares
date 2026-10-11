@@ -12,7 +12,8 @@ from ...suite import Check, Step, Test, Value, checkpoint
 from ... import runtime as rt
 from . import tables
 from .describe import describe
-from .measure import (cycles_checks, measure_step, VI_DISABLE, VI_WAIT_VSYNC)
+from .measure import (cycles_checks, measure_step, LAYOUT_2022, LAYOUT_2026, VI_DISABLE,
+                      VI_WAIT_VSYNC)
 
 Off, JustFire = ExceptionTimingMode.Off, ExceptionTimingMode.JustFire
 FCSR_DEFAULT = FCSR.DEFAULT
@@ -226,9 +227,14 @@ def port_load_miss_vi_disabled(suite):
     return out
 
 
-def port_uncached_vi_enabled(suite):
+#cache.rs: the same-bank mean is 40.7 under the 2022 harness (0f0eb0bf60, unchanged to de30f2df)
+#and 36.3 under the 2026 one (0603245f76); every other expectation is the same in both.
+SAME_BANK_AVERAGE = {LAYOUT_2026: "36.3", LAYOUT_2022: "40.7"}
+
+
+def port_uncached_vi_enabled(suite, layout=LAYOUT_2026):
     out = []
-    for same_bank, median, average in ((True, 36, "36.3"), (False, 32, "32.5")):
+    for same_bank, median, average in ((True, 36, SAME_BANK_AVERAGE[layout]), (False, 32, "32.5")):
         bank = FRONTBUFFER_BANK if same_bank else (FRONTBUFFER_BANK + 0x100000) & (MEMORY_SIZE - 1)
         base = 0xA0000000 | bank
         out.append(value((same_bank, median, f"{average}f32"), "(bool, u32, f32)", averaged(
@@ -331,9 +337,23 @@ AVERAGED = [
 ]
 
 
-def build_averaged(suite):
-    """The four averaged tests alone, in testlist.rs order: the phase ROMs (phases.py)."""
-    suite.tests += [Test(name, port(suite)) for name, port in AVERAGED]
+def build_averaged(suite, layout=LAYOUT_2026):
+    """The four averaged tests alone, in testlist.rs order: the phase ROMs (phases.py).
+    layout: the harness the ROM links (measure.asm), which picks the same-bank expectation."""
+    if layout == LAYOUT_2022 and getattr(suite, "symbols", None):
+        assert_no_icache_alias(suite.symbols["get_cycles_2022_loop"], suite.symbols["get_cycles_2022_end"],
+                               rt.EXEC_BASE, rt.EXEC_BASE + 256)
+    suite.tests += [Test(name, port_uncached_vi_enabled(suite, layout) if port is port_uncached_vi_enabled
+                         else port(suite)) for name, port in AVERAGED]
+
+
+def assert_no_icache_alias(a0, a1, b0, b1):
+    """The 2022 harness's loop and program buffer sit at addresses nemu64-test's allocator chose;
+    the port places them so no 16 KiB icache index is shared (the case where its results were
+    stable; 14e6f72d's TODO names the shared-line case as the unstable one)."""
+    lines = lambda lo, hi: {(x >> 5) & 0x1FF for x in range(lo & ~31, hi, 32)}
+    shared = lines(a0, a1) & lines(b0, b1)
+    assert not shared, f"2022 loop and program buffer share icache lines {sorted(shared)}"
 
 
 def build(suite):

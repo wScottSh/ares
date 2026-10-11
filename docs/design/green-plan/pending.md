@@ -25,7 +25,7 @@ Rulings that bind (gh issue view 1 -R wScottSh/ares, Notes, cited): "Accuracy is
 - **verified(row)**: the row's status is `pass` under behaviors.py `row_status`, i.e. at least one check that is neither a guard (`~`) nor in the row's `fit-from` passes against an independent hardware reference under its phase rule, no check fails, and no check is weak (`consistent-only`, `pass-conditional:*`).
 - **independent hardware reference**: a published console measurement (test-ROM expected values written from hardware, n64brew/SDK tables measured on hardware, Thar0, snapper64, systembench) or a #16 capture. Vendor/datasheet/RTL/wiki values with no measurement behind them are references to build from, and they verify a row only when a hardware check also agrees. The spec already works this way.
 - **excluded(row)**: in `calibration/undecidable.tsv` with prefix `not-hardware-decidable:` (7 rows: scheduler.tie-rank, ri.request-latency, legacy.clock.vclk-pal, legacy.cpu.sysad-frozen-step, legacy.pif.step-quantum, legacy.cpu.nmi-entry, item fu.pif-ram-dword), cited undecidable.tsv. These can never be green. The predicate counts them apart and names the reason.
-- **out-of-kit(row)**: prefix `not decidable by this kit:` (9 rows: legacy.pif.boot-timeout, 8 legacy.cart.*). A console could decide them, this kit cannot. They block `MAP_GREEN` unless Scott rules them out of scope (decision D1 below).
+- **out-of-kit(row)**: prefix `not decidable by this kit:` (12 rows on current master: legacy.pif.boot-timeout, 8 legacy.cart.*, ri.refresh-latch, vi.fetch-overrun, vi.unfetched-sample; the plan first counted 9). A console could decide them, this kit cannot. They block `MAP_GREEN` unless Scott rules them out of scope (decision D1 below).
 
 ### 1.2 The predicates the program should report
 
@@ -47,7 +47,7 @@ MAP_GREEN  (the map's destination; needs #16)
   AND verified(row) for every row not excluded and not out-of-kit
 ```
 
-Report form: "SOFTWARE_READY: <n> of <m> conditions; MAP_GREEN: <k> of <N> in-scope rows verified; excluded 7 (not hardware-decidable); out-of-kit 9." Today SOFTWARE_READY is false on 4 counts: 23 fail checks plus 5 weak checks, 14 report-only checks, 1 no-rom check, and 4 hw questions that no tool can compare (measured from the results tsv and inventory.md). Sections 2, 3 and 6 table every pending check. Section 6.5 tables every pending row.
+Report form: "SOFTWARE_READY: <n> of <m> conditions; MAP_GREEN: <k> of <N> in-scope rows verified; excluded 7 (not hardware-decidable); out-of-kit 12 (9 when written)." At plan time SOFTWARE_READY was false on 4 counts: 23 fail checks plus 5 weak checks, 14 report-only checks, 1 no-rom check, and 4 hw questions that no tool can compare (measured from the results tsv and inventory.md at plan time; `docs/spec/n64-timing-results.tsv` now has 17 fail). Sections 2, 3 and 6 table every pending check. Section 6.5 tables every pending row.
 
 ### 1.3 What cannot be green without hardware, and what cannot be green even with this kit
 
@@ -59,7 +59,7 @@ Never green without #16 (inferred from each row's checks; inventory.md lists the
 
 Never green even with a clean console session of the current kit:
 - 7 excluded rows (reason above).
-- 9 out-of-kit rows (need retail cart chips or a modified IPL3).
+- 12 out-of-kit rows (9 when written; need retail cart chips, a modified IPL3, or a VI line shorter than a refresh or than H_VIDEO; `undecidable.tsv`).
 - 3 fit-only rows whose only kit question re-runs their fit data: cpu.count-write-hold, cpu.fetch-ahead-slots, cpu.ctc1-fpe-ce (cited calib-kit-fix 2b; calib-kit-merge item 4 exempts them by design). They need a new independent kit point (unit U-FIT3).
 - vi.unfetched-sample, vi.fetch-overrun (`none:` question, no reader).
 - Any row behind `hw:mm-filesel` or `hw:pidma-offset` while those have no reader (U-MMR, U-PIDMA).
@@ -261,7 +261,7 @@ Each unit is no-hardware unless it says so. Effort: S = less than half a day of 
 - **U-WALL** (S). Re-time 600-frame MM on current master with copied runners, interleaved, and record the load average (pref 22, 26). Update wall-budget.tsv.
 
 Decisions for Scott (only he can make them; reversible defaults in brackets):
-- **D1.** Are the 9 out-of-kit legacy rows (cart chips, boot timeout) in MAP_GREEN's scope? [Default: they are reported as "out-of-kit, open" and block MAP_GREEN. Scott could rule them out of scope, since MM benches never save (guess).]
+- **D1.** Are the out-of-kit legacy rows (9 when written, 12 now; cart chips, boot timeout) in MAP_GREEN's scope? [Default: they are reported as "out-of-kit, open" and block MAP_GREEN. Scott could rule them out of scope, since MM benches never save (guess).]
 - **D2.** Video capture for vi.unfetched-sample / vi.fetch-overrun: build it or reclassify? [Default: reclassify as out-of-kit.]
 - **D3.** Merge mm-decomp-60fps PR #1 (Destination item 4 and U-MMR depend on it).
 
@@ -288,6 +288,6 @@ Can reach a final state without hardware: #84, #86 (against the n64brew table), 
 
 Only #16 decides them (kit question): the 19 calibration-16 rows (each row's question is in section 2), 7 of the 10 fit-only rows (fpu-classes, cpu-exceptions, rdp-rect-base), the weak checks (vi-first-line and vi-blank-counting for #77; systembench for the systembench rows; pi-dma-small for the pi rows), and every predicted-F hw check, where the console localizes the failure rather than greening it.
 
-Honest end state is a reclassification: scheduler.tie-rank, ri.request-latency, legacy.clock.vclk-pal (out of target), legacy.cpu.nmi-entry, sysad-frozen-step and pif.step-quantum (excluded); the 9 out-of-kit rows (pending D1); hw:pidma-offset (superseded by U-PIDMA); hw:snapper64 (guard); vi.unfetched-sample and vi.fetch-overrun (pending D2); legacy.cpu.interrupt-entry (pass -> pending:calibration-16); the five dead checks (deleted).
+Honest end state is a reclassification: scheduler.tie-rank, ri.request-latency, legacy.clock.vclk-pal (out of target), legacy.cpu.nmi-entry, sysad-frozen-step and pif.step-quantum (excluded); the out-of-kit rows (9 when written, 12 now; pending D1); hw:pidma-offset (superseded by U-PIDMA); hw:snapper64 (guard); vi.unfetched-sample and vi.fetch-overrun (pending D2); legacy.cpu.interrupt-entry (pass -> pending:calibration-16); the five dead checks (deleted).
 
 No background process of mine is running (ps checked). Scratch: /home/wscottsh/n64-timing/results/plan-pending/vi84-gdb.txt.
