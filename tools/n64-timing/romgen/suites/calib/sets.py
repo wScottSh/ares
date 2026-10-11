@@ -16,9 +16,9 @@ from ..bench import asm as bench_asm, benches
 from ..bench.benches import KSEG0, KSEG1, LIST_BUF, COLOR_IMAGE, Rom, rdp_point
 from ..noise.sets import combiner
 from ..rdpstat import routines
-from ..rdpstat.routines import fill32
+from ..rdpstat.routines import fill32, wait_eq
 from ..snapper import asm as snapper_asm
-from ..snapper.cases import UNCACHED, Lists, emit, run_sync
+from ..snapper.cases import UNCACHED, WAIT, Lists, emit, run_sync
 from . import asm, bus, cpu2, repeat, rspdma, tex, zmem
 
 DELAYS = [int(k) for k in os.environ.get("N64_CALIB_DELAYS", "1,165,329,493,657,821,985,1149").split(",")]
@@ -339,6 +339,21 @@ NOISE2_CASES = [
     next(case for case in NOISE_CASES if case[0] == "ac-dither"),
 ]
 NOISE_KITS = {"kit-noise": NOISE_CASES, "kit-noise2": NOISE2_CASES}
+#The draws start at one VI phase. The CPU polls V_CURRENT's line (bits 9-1; bit 0 is the field) until it reads
+#NOISE_FIELD_LINE, past vi_init's last fetched line (V_VIDEO end 0x1FF), then NOISE_SYNC_LINE, then the line after:
+#the first draw starts within one poll of a line start, in a field that started after vi_init's writes. Without it
+#the boot delay and the VI's first-line timing, which no reference gives (literal-allowlist.tsv, vi.cpp
+#step(0x800)), set where the VI's refreshes and fetches fall among the draws (verify-177b item 2). Either field
+#bit passes: vi_init's odd V_SYNC leaves it where boot put it (k_bus_vline), and the noise sweep reaches both.
+NOISE_FIELD_LINE, NOISE_SYNC_LINE = 0x100, 8
+V_CURRENT = rcp.VI_BASE + 0x10
+
+
+def vi_line_sync():
+    return [wait_eq(V_CURRENT, 0x3FE, line << 1, WAIT, 0)
+            for line in (NOISE_FIELD_LINE, NOISE_SYNC_LINE, NOISE_SYNC_LINE + 1)]
+
+
 SPIN_ASM = """
 # a0 = {iterations}: an idle CPU spin between two RDP lists.
 cal_spin:
@@ -382,7 +397,7 @@ class NoiseKit:
         #dump between two draws made the later draw's noise clock depend on the earlier one's noise bits
         #(verify-173 item 4): a console with other bits could read offset-outside-bound. kit.py's noise order
         #self-test holds this and the draw order.
-        draw_steps = []
+        draw_steps = vi_line_sync()
         for name, width, bpp, surf, draws in cases:
             draw_steps.append(fill32(UNCACHED | surf, width * bpp // 4, 0))
             for spin, lst in draws:

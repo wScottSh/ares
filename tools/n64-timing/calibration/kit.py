@@ -1438,7 +1438,8 @@ def noise_order_self_test():
     """Each noise kit ROM starts every draw before its first dump, each into its own surface, and draws each snap
     a question names after only draws whose stored pixels do not depend on noise. So the noise clock of a snap a
     question reads depends neither on the time a dump took over earlier pixels nor on how many pixels an earlier
-    draw stored (verify-173 item 4; U-NOISE-ORDER)."""
+    draw stored (verify-173 item 4; U-NOISE-ORDER). They start at a V_CURRENT line start, at a VI phase the
+    boot delay does not set (verify-177b)."""
     import itertools
     from types import SimpleNamespace
     from romgen import rcp
@@ -1472,6 +1473,13 @@ def noise_order_self_test():
         out.append(ok)
         print(f"kit: self-test: noise order: {kit} starts its {len(starts)} draws before its {len(dumps)} dumps, "
               f"each on its own surface: {'ok' if ok else 'FAILED'}")
+        waits = [(i, s.params[1], s.params[2] >> 1) for i, s in enumerate(steps)
+                 if s.routine == "step_wait_eq" and s.params[0] == sets.V_CURRENT]
+        synced = (len(waits) >= 2 and waits[-1][0] < min(starts) and waits[-1][2] == waits[-2][2] + 1
+                  and all(mask == 0x3FE for _, mask, _ in waits))
+        out.append(synced)
+        print(f"kit: self-test: noise order: {kit} waits for a V_CURRENT line start, either field, before its first "
+              f"draw: {'ok' if synced else 'FAILED'} ({[line for *_, line in waits]})")
     return out
 
 
