@@ -15,12 +15,10 @@ hw:copy-passfail	pass
 hw:copy-passfail-pixels	pass
 hw:count-per-field	pass
 hw:count-write-hold	pass
-hw:count-write-phase	pass
 hw:cpu-exceptions	pass
 hw:cpu-llsc-console	pass
 hw:cpu-reads	pass
 hw:cpu-watch	pass
-hw:cpu-watch-edge	fail
 hw:ctc1-fpe-ce	pass
 hw:dcb	pass
 hw:dirty-miss	pass
@@ -28,6 +26,7 @@ hw:dirty-row	pass
 hw:dom2-read	pass
 hw:dpc-sequencing	pass
 hw:fetch-ahead	pass
+hw:filesel-glyph	fail
 hw:fill-copy-rate	pass
 hw:fpu-classes	pass
 hw:ifill	pass
@@ -58,12 +57,10 @@ hw:rdp-hold	pass
 hw:rdp-rect-base	pass
 hw:rdp-sync-setter	pass
 hw:refresh-all-banks	pass
-hw:refresh-latch	fail
 hw:register-write	pass
 hw:ri-priority	pass
 hw:ri-priority-overlap	pass
 hw:ri-reorder	pass
-hw:ri-write-gap	fail
 hw:si-write64-poll	pass
 hw:snapper64	pass
 hw:sp-dma-direction	pass
@@ -81,7 +78,6 @@ hw:unsynced-attrs	pass
 hw:vi-blank-counting	pass
 hw:vi-cpu-contention	pass
 hw:vi-fetch-modes	pass
-hw:vi-fetch-overrun	fail
 hw:vi-fetch-position	pass
 hw:vi-first-line	pass
 hw:vi-frame-latch	pass

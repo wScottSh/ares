@@ -49,7 +49,7 @@ def zmem(records):
     """kit-zmem and kit-zread (written in place, after the zmem module's report): write-run fits over
     the Z comb, the per-primitive atomic cost, IM_RD/Z_CMP overlap in 1- and 2-cycle, the 2-cycle and
     1-cycle read-only per-line and per-rectangle costs, the 1-cycle cost per 64 B read of a 320 px
-    line (10 serial reads), 1 px triangle cost, the clobber verdict, the X-bus and RDRAM command
+    line (10 serial reads), 1 px triangle cost, the cost per MM file-name glyph, the clobber verdict, the X-bus and RDRAM command
     rates, the hold summary and PIPEBUSY's share of memory time."""
     def p(rom, point):
         return records.get((f"zmem-{rom}", point))
@@ -115,10 +115,13 @@ def zmem(records):
                     if mode in ("imrd", "zcmp") and w == 320:
                         out["rclk_per_read"] = round(line / 10, 3)
                     records[("zmem-read1", f"{mode}-{bank}-w{w}-fit")] = out
-    for t in ("fill", "z", "shade", "shade-z"):
+    for t in ("fill", "z", "shade", "shade-z", "tex", "shade-tex"):
         lo, hi = p("tri", f"{t}-16"), p("tri", f"{t}-64")
         if lo and hi:
             records[("zmem-tri", f"{t}-setup")] = {"rclk_per_tri": round((hi["clock"] - lo["clock"]) / 48, 2)}
+    lo, hi = p("glyph", "glyph-16"), p("glyph", "glyph-64")
+    if lo and hi:
+        records[("zmem-glyph", "fit")] = {"rclk_per_glyph": round((hi["clock"] - lo["clock"]) / 48, 2)}
     for w in (8, 64):
         blend, coherent, alone = p("clobber", f"blend-w{w}"), p("clobber", f"blend-atomic-w{w}"), p("clobber", f"blend-only-w{w}")
         reject = p("clobber", f"reject-w{w}-atomic0")
