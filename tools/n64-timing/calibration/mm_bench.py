@@ -16,8 +16,10 @@ The scene comes from a BenchConfig block (magic BNCH) patched into a copy of the
 is its own ROM file with its own sha256. build-mm-bench.sh builds the pinned commit and patches them.
 """
 import hashlib
+import re
 import statistics
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -46,6 +48,105 @@ REPORTED = ("rdp_ticks", "dpc_pipebusy")
 #Reported, not judged, when a capture holds both: the named-only work is the gap between the two
 #file-select screens (prehw-plan section 3), so both sides' named-minus-empty median gap is shown.
 GAP = ("file_select_empty", "file_select_named")
+
+
+#The pinned commit's git objects (written by --evidence, read by behaviors.py): its first-parent history back to
+#the merge of MERGED_PR, and the trees down to README. A content hash that does not match its name is an error.
+OBJECTS = Path(__file__).with_name("mm-decomp-objects.txt")
+MERGED_PR = 1
+README = ("tools", "bench", "README.md")
+#README sentences that say the bench runs on the fork and that the func_80173B48 pin is gone (wScottSh/mm-decomp-60fps#1).
+README_SENTENCES = {"fork": "runs the ROM on the ares timing-model fork", "pin": "so the pin is gone"}
+
+
+def git_hash(kind, body):
+    return hashlib.sha1(f"{kind} {len(body)}\0".encode() + body).hexdigest()
+
+
+def tree_entries(text):
+    """`git cat-file -p` tree text as [(mode, sha, name)]."""
+    return [(head.split()[0], head.split()[2], name) for head, _, name in
+            (line.partition("\t") for line in text.decode().split("\n") if line)]
+
+
+def tree_raw(text):
+    return b"".join(f"{mode.lstrip('0')} {name}\0".encode() + bytes.fromhex(sha) for mode, sha, name in tree_entries(text))
+
+
+def read_objects(path=OBJECTS):
+    """{sha: (kind, body)} from an objects file, and the errors: a body that does not hash to its sha is an error
+    and is left out, so it proves nothing."""
+    data, objects, errors, at = Path(path).read_bytes(), {}, [], 0
+    while at < len(data):
+        end = data.index(b"\n", at)
+        head, at = data[at:end].decode(), end + 1
+        if head.startswith("#"):
+            continue
+        kind, sha, size = head.split()
+        body, at = data[at:at + int(size)], at + int(size) + 1
+        if git_hash(kind, tree_raw(body) if kind == "tree" else body) != sha:
+            errors.append(f"{Path(path).name}: the {kind} named {sha[:9]} does not hash to its name; rewrite the file "
+                          f"with mm_bench.py --evidence <{REPO} checkout>")
+        else:
+            objects[sha] = (kind, body)
+    return objects, errors
+
+
+def commit_fields(body):
+    head, _, message = body.decode().partition("\n\n")
+    fields = {}
+    for line in head.split("\n"):
+        key, _, value = line.partition(" ")
+        fields.setdefault(key, []).append(value)
+    return fields, message.split("\n")[0]
+
+
+def sentence(text, needle):
+    """The sentence of a Markdown text that holds needle, or None."""
+    flat = " ".join(line.lstrip("> ").strip() for line in text.split("\n"))
+    return next((s for s in re.split(r"(?<=\.)\**\s+", flat) if needle in s), None)
+
+
+def pin_evidence(path=OBJECTS, commit=COMMIT):
+    """What the objects file proves about the pinned commit, and its errors: merge is (sha, subject) of the merge
+    of MERGED_PR in commit's first-parent history, or None; readme maps each README_SENTENCES key to the sentence
+    of README at commit that holds it, or None."""
+    objects, errors = read_objects(path)
+    merge, at, tree = None, commit, None
+    while at in objects and merge is None:
+        fields, subject = commit_fields(objects[at][1])
+        tree = tree or fields["tree"][0]
+        if subject.startswith(f"Merge pull request #{MERGED_PR} from "):
+            merge = (at, subject)
+        at = fields.get("parent", [None])[0]
+    if commit not in objects:
+        errors.append(f"{Path(path).name} has no commit object {commit[:9]} (mm_bench.py COMMIT); run mm_bench.py "
+                      f"--evidence <{REPO} checkout>")
+    for name in README:
+        tree = next((sha for _, sha, entry in tree_entries(objects[tree][1]) if entry == name), None) if tree in objects else None
+    text = objects[tree][1].decode() if tree in objects else ""
+    return {"merge": merge, "readme": {k: sentence(text, v) for k, v in README_SENTENCES.items()}}, errors
+
+
+def write_evidence(repo, path=OBJECTS):
+    """Writes the objects pin_evidence reads, from a checkout of REPO, read-only (git cat-file)."""
+    def cat(*args):
+        return subprocess.run(["git", "-C", str(repo), "cat-file", *args], capture_output=True, check=True).stdout
+    out, at = [b"# wScottSh/mm-decomp-60fps git objects: `<type> <sha> <bytes>`, then the body (a tree as cat-file -p "
+               b"text). Written by mm_bench.py --evidence; behaviors.py checks each hash.\n"], COMMIT
+    while at:
+        body = cat("commit", at)
+        out.append(f"commit {at} {len(body)}\n".encode() + body + b"\n")
+        fields, subject = commit_fields(body)
+        at = None if subject.startswith(f"Merge pull request #{MERGED_PR} from ") else fields["parent"][0]
+    tree = commit_fields(cat("commit", COMMIT))[0]["tree"][0]
+    for name in README:
+        body = cat("-p", tree)
+        out.append(f"tree {tree} {len(body)}\n".encode() + body + b"\n")
+        tree = next(sha for _, sha, entry in tree_entries(body) if entry == name)
+    body = cat("blob", tree)
+    out.append(f"blob {tree} {len(body)}\n".encode() + body + b"\n")
+    Path(path).write_bytes(b"".join(out))
 
 
 def rom_name(scene):
@@ -240,7 +341,6 @@ def sample(scene="south_clock_town", vi=(3, 3, 4, 3), rdp=(1500000, 1600000, 170
 
 def self_test():
     """(cases, failed): the reader's verdicts and ingest's refusal of a capture of other ROMs."""
-    import subprocess
     import tempfile
     pinned = "".join(f"{SCENES[s][1]}  {rom_name(s)}\n" for s in ("south_clock_town", "file_select_empty", "file_select_named"))
     other = f"{'b' * 64}  {rom_name('south_clock_town')}\n"
@@ -337,5 +437,7 @@ if __name__ == "__main__":
         print(COMMIT)
     elif sys.argv[1:2] == ["--patch"] and len(sys.argv) == 4:
         write_roms(sys.argv[2], sys.argv[3])
+    elif sys.argv[1:2] == ["--evidence"] and len(sys.argv) == 3:
+        write_evidence(sys.argv[2])
     else:
-        sys.exit("usage: mm_bench.py --commit | --patch BASE_ROM OUT_DIR")
+        sys.exit("usage: mm_bench.py --commit | --patch BASE_ROM OUT_DIR | --evidence MM_DECOMP_CHECKOUT")

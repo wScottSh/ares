@@ -392,6 +392,7 @@ def validate(root):
     lint_errors, sites = lint_module().lint(root)
     errors += lint_errors
     wall_rows(root, errors)
+    decomp_pin(root, errors)
     seen = {}
     read = constants_read(root, {constant_name(r["id"]) for r in rows if constant(r)})
     for row in rows:
@@ -716,12 +717,27 @@ COMMIT = re.compile(r"\b[0-9a-f]{7,40}\b")
 WALL_BUDGET = "tools/n64-timing/mmbench/wall-budget.tsv"
 WALL_COLUMNS = ["run", "wall_s", "commit", "same_tree_as", "date", "load", "user_s", "instructions_u", "source"]
 BUDGET_S = 120
-TOOLS_BENCH = (
-    "mm-decomp-60fps `tools/bench` (untracked in the checkout at 56fa21dd) still runs `ares` from PATH "
-    "through `tools/ares/ares-headless.sh` and records the upstream ares revision, and its BENCH build still pins "
-    "`func_80173B48` (`src/code/game.c`, `tools/bench/README.md`). The fork measures MM with its own "
-    "`tools/n64-timing/mmbench` instead, on the retail NTSC-U 1.0 ROM (mmbench.py checks MD5 {md5}), where "
-    "`func_80173B48` is the unpinned retail code. Per-behavior provenance is in `docs/spec/mm-bench.md`.")
+MM_BENCH = "tools/n64-timing/calibration/mm_bench.py"
+
+
+def decomp_pin(root, errors):
+    """mm_bench.py's pinned mm-decomp-60fps commit and what its stored git objects prove about it (pin_evidence)."""
+    spec = importlib.util.spec_from_file_location("calibration_mm_bench", Path(root) / MM_BENCH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    evidence, problems = module.pin_evidence(module.OBJECTS, module.COMMIT)
+    errors += problems
+    return module, evidence
+
+
+def decomp_merged(root):
+    """MAP_GREEN's mm-decomp-60fps#1 clause as (holds, evidence)."""
+    pin, evidence = decomp_pin(root, [])
+    where = f"`{MM_BENCH}` pins {pin.REPO} {pin.COMMIT[:9]}"
+    if evidence["merge"] is None:
+        return False, f"{where}; its first-parent history in `{CALIBRATION}/{pin.OBJECTS.name}` holds no merge of #{pin.MERGED_PR}"
+    sha, subject = evidence["merge"]
+    return True, f"{where}; its first-parent history in `{CALIBRATION}/{pin.OBJECTS.name}` holds {sha[:9]} \"{subject}\""
 
 
 def wall_rows(root, errors):
@@ -752,7 +768,9 @@ def destination(root, found):
     walls = current_walls(root)
     slow = max(walls, key=lambda r: float(r["wall_s"]))
     filesel = [(c, found_result(found, c)) for c in ("mm:filesel-empty", "mm:filesel-named")]
-    md5 = re.search(r'ROM_MD5 = "(\w+)"', (Path(root) / "tools/n64-timing/mmbench/mmbench.py").read_text(encoding="utf-8"))
+    pin, evidence = decomp_pin(root, [])
+    merged, merge_evidence = decomp_merged(root)
+    readme = evidence["readme"]
     return [
         ("Timing is bit-deterministic across runs", "pass" if det[0] == stepcap[0] == "pass" else "fail",
          f"`det` {det[0]}: {det[1]}; `stepcap` {stepcap[0]}: {stepcap[1]}"),
@@ -762,8 +780,11 @@ def destination(root, found):
         ("MM file select (#11): empty files <= 1.05 and named files 1.90-2.10 fields per game frame, both must pass",
          "pass" if all(r[0] == "pass" for _, r in filesel) else "fail",
          "; ".join(f"`{c}` {r[0]}: {r[1]}" for c, r in filesel)),
-        ("MM bench integration: point `tools/bench` at the fork, remove the `func_80173B48` pin", "not done",
-         TOOLS_BENCH.format(md5=md5.group(1) if md5 else "?")),
+        ("MM bench integration: point `tools/bench` at the fork, remove the `func_80173B48` pin",
+         "done" if merged and all(readme.values()) else "not done",
+         f"{merge_evidence}. `{'/'.join(pin.README)}` there: "
+         + "; ".join(f"{key}: " + (f"\"{s}\"" if s else f"no sentence holds \"{pin.README_SENTENCES[key]}\"")
+                     for key, s in readme.items())),
     ]
 
 
@@ -864,7 +885,7 @@ def predicates(root, rows, checks, found):
          [clause_id("SOFTWARE_READY", n) for n, (_, h, _, _) in enumerate(ready, 1) if h is not True]),
         ("mm:filesel-empty and mm:filesel-named pass", all(r == "pass" for _, r in filesel),
          ", ".join(f"`{c}` {r}" for c, r in filesel), [c for c, r in filesel if r != "pass"]),
-        ("wScottSh/mm-decomp-60fps#1 is merged", None, "not computed from the repository: Scott's merge (decision D3)", None),
+        ("wScottSh/mm-decomp-60fps#1 is merged", *decomp_merged(root), None),
         ("every hw:* check is ingested and passes", all(result[c] == "pass" for c in hw),
          f"{sum(1 for c in hw if result[c] == 'pass')} of {len(hw)} pass, "
          f"{sum(1 for c in hw if result[c] == 'pending:calibration-16')} pending:calibration-16",
@@ -2406,8 +2427,8 @@ def self_test(root):
              "blockers-seed.tsv differs from the file its seed commit"),
             ("a failing clause with no row", BLOCKERS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("clause:mg-1\t")),
              "open clause `clause:mg-1` has no row"),
-            ("a clause other than mg-4 decided by hw-run", BLOCKERS, blocker("clause:mg-3", **{"class": "C", "decider": "hw-run"}),
-             "`clause:mg-3` is a clause of class C, which only clause:mg-4 can be"),
+            ("a clause other than mg-4 decided by hw-run", BLOCKERS, blocker("clause:mg-5", **{"class": "C", "decider": "hw-run"}),
+             "`clause:mg-5` is a clause of class C, which only clause:mg-4 can be"),
             ("the re-time clause written as C", (RESULTS, BLOCKERS),
              (lambda t: t.replace(run_commit, "0000000", 1),
               lambda t: t + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
@@ -2479,6 +2500,34 @@ def self_test(root):
             GIT_ROOT[str(work)] = root
             if restore:
                 restore()
+        pin, _ = decomp_pin(work, [])
+        objects = f"{CALIBRATION}/{pin.OBJECTS.name}"
+        merge_parents = pin.commit_fields(pin.read_objects(pin.OBJECTS)[0][pin.pin_evidence()[0]["merge"][0]][1])[0]["parent"]
+        before_merge = f"tree {pin.commit_fields(pin.read_objects(pin.OBJECTS)[0][pin.COMMIT][1])[0]['tree'][0]}\n" \
+                       f"parent {merge_parents[0]}\nauthor self-test <self-test@invalid> 0 +0000\n\nself-test: a pin before #1\n"
+        fake = pin.git_hash("commit", before_merge.encode())
+        repin = lambda sha: lambda t: t.replace(f'COMMIT = "{pin.COMMIT}"', f'COMMIT = "{sha}"')  # noqa: E731
+        for name, rel, change, want, expected in [
+            ("the committed pin, whose history holds the merge of #1", None, None, (True, "done"), None),
+            ("a pin whose history stops before the merge of #1", (MM_BENCH, objects),
+             (repin(fake), lambda t: t + f"commit {fake} {len(before_merge)}\n{before_merge}\n"), (False, "not done"),
+             f"{CLOSURE} differs from the generated output"),
+            ("a pin with no stored commit object", MM_BENCH, repin("0" * 40), (False, "not done"), "has no commit object 0000000"),
+            ("a README sentence edited in the stored objects", objects, lambda t: t.replace("so the pin is gone", "so the pin is kept"),
+             (True, "not done"), "does not hash to its name"),
+        ]:
+            undo = [edit(r, c) for r, c in zip(rel, change)] if isinstance(rel, tuple) else [edit(rel, change)] if rel else []
+            merged = decomp_merged(work)[0]
+            row = next(r for i, r, _ in destination(work, load_results(work, *validate(work)[1:3], [])) if "tools/bench" in i)
+            errors = check(work)
+            hits = [e for e in errors if expected in e] if expected else errors
+            ok = (merged, row) == want and (bool(hits) == (expected is not None))
+            print(f"self-test: the mm-decomp-60fps#1 clause and tools/bench row for {name}: {'ok' if ok else 'FAILED'}: "
+                  f"clause {merged}, row {row}; {hits[0] if hits else 'no errors'}")
+            failures += not ok
+            ran += 1
+            for u in undo:
+                u()
         repeat = ("memset-vi", "mi-memset-repeat/vi-on", "min")
         repeat_fork = fork_cell(*repeat)
         repeat_hi = float(repeat_fork.partition("..")[2])
