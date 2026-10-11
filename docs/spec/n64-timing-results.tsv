@@ -59,10 +59,12 @@ hw:copy-passfail	pending:calibration-16	no complete power-on console capture of 
 hw:copy-passfail-pixels	pending:calibration-16	no complete power-on console capture of kit-tex in docs/calibration/hardware
 hw:count-per-field	pending:calibration-16	no complete power-on console capture of kit-vi in docs/calibration/hardware
 hw:count-write-hold	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
+hw:count-write-phase	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cpu-exceptions	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:cpu-llsc-console	pending:calibration-16	no complete power-on console capture of cpu-llsc in docs/calibration/hardware
 hw:cpu-reads	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:cpu-watch	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
+hw:cpu-watch-edge	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:ctc1-fpe-ce	pending:calibration-16	no complete power-on console capture of kit-cpu2 in docs/calibration/hardware
 hw:dcb	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
 hw:dirty-miss	pending:calibration-16	no complete power-on console capture of kit-cpu in docs/calibration/hardware
@@ -108,6 +110,7 @@ hw:register-write	pending:calibration-16	no complete power-on console capture of
 hw:ri-priority	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:ri-priority-overlap	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:ri-reorder	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
+hw:ri-write-gap	pending:calibration-16	no complete power-on console capture of kit-bus in docs/calibration/hardware
 hw:si-write64-poll	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
 hw:snapper64	pending:calibration-16	no console capture of snapper64 (capture name ext-snapper64*) in docs/calibration/hardware
 hw:sp-dma-direction	pending:calibration-16	no complete power-on console capture of kit-dma in docs/calibration/hardware
