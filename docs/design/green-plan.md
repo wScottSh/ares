@@ -43,23 +43,25 @@ MAP_GREEN  (the map's destination)
 
 SOFTWARE_READY cannot hold without hardware. Clauses 2 and 3 stay false until the console run, because the failing checks in section 3 that only a console decides stay failing. So the software-only goal of this plan is SOFTWARE_COMPLETE, and SOFTWARE_READY is reported as a count of clauses.
 
-Excluded rows are the 7 entries marked `not-hardware-decidable` in `tools/n64-timing/calibration/undecidable.tsv`. They can never be green, and the report names them. Out-of-kit rows are the 9 entries marked `not decidable by this kit`: the cartridge chips and the PIF boot timeout. A console could decide them, but this kit cannot. They block MAP_GREEN unless Scott rules them out of scope (decision D1).
+Excluded rows are the 7 entries marked `not-hardware-decidable` in `tools/n64-timing/calibration/undecidable.tsv`. They can never be green, and the report names them. Out-of-kit rows are the 12 entries marked `not decidable by this kit` in the same file (counted on origin/master): the PIF boot timeout, 8 cartridge chip rows (EEPROM write, RTC tick, 6 flash), `ri.refresh-latch`, `vi.fetch-overrun` and `vi.unfetched-sample`. The last two moved here under decision D2's default. A console could decide them, but this kit cannot. (The plan first counted 9: the boot timeout and the 8 cartridge rows.) They block MAP_GREEN unless Scott rules them out of scope (decision D1).
 
 The console run will not turn every hardware check green. At least 15 hardware checks are predicted to fail, because the emulator already misses a published value for the same quantity (pending.md section 2, inferred). Each of those failures becomes a P6 fix unit with the console value as its reference. MAP_GREEN therefore needs P6, not only P5.
 
-### Where master stands (measured, `docs/spec/n64-timing-results.tsv`)
+### Where master stood when this plan was written, and where it stands now (measured, `docs/spec/n64-timing-results.tsv`)
 
-| Result | Checks |
-|---|---|
-| pass | 87 |
-| fail | 23 |
-| consistent-only | 4 |
-| pass-conditional | 1 |
-| pending:calibration-16 | 80 |
-| pending:report-only | 14 |
-| pending:no-rom | 1 |
+The "At plan time" column is historical: master `8d86b87cd`. The "Now" column counts the results file on master at standing run fix-137/run on d1874254e (`cut -f2 | sort | uniq -c`).
 
-Of the 149 behavior rows, 33 fail, 10 are fit only, 3 are model choices, and 33 are pending. One more failing datum sits outside the check list: `bench:mi-memset-repeat` reads 1.31 ms/MiB against n64brew's 3.8 in the standing run, and no check row asserts it (review S5, measured). Unit U-LBL wires it in.
+| Result | At plan time | Now |
+|---|---|---|
+| pass | 87 | 95 |
+| fail | 23 | 17 |
+| consistent-only | 4 | 2 |
+| pass-conditional | 1 | 1 (`pass-conditional:#77`) |
+| pending:calibration-16 | 80 | 89 |
+| pending:report-only | 14 | 18 |
+| pending:no-rom | 1 | 0 |
+
+At plan time, of the 149 behavior rows, 33 failed, 10 were fit only, 3 were model choices, and 33 were pending (historical). Now the spec has 153 behaviors: 25 fail, 12 are fit only and 4 are model choices (`docs/spec/map-1-closure-draft.md` line 5, same standing run). One more failing datum sits outside the check list: `bench:mi-memset-repeat` reads 1.31 ms/MiB against n64brew's 3.8 in the standing run, and no check row asserts it (review S5, measured). Unit U-LBL wires it in.
 
 ## 2. What the investigations found
 
@@ -70,7 +72,7 @@ Of the 149 behavior rows, 33 fail, 10 are fit only, 3 are model choices, and 33 
   - With refresh running while blank, the uncached VI-off reads get a +0.6 tail (hardware +0.54). The D-fill reads get only +0.47 (hardware +1.5).
   - It also pushes the hardware-era systembench uncached rows +2..+3 out of band. So the two hardware suites conflict under the model's refresh.
   - The model's D-fill mean is also a phase lottery: 41.0..42.03 across idle line lengths.
-  - One model defect candidate remains untraced: a hpos report row shows a 74.67 rclk holdoff against the 52/54 rclk in the RI row (measured). Its cause is a guess. Unit U-REFRESH traces it.
+  - A hpos report row shows a 74.67 rclk holdoff against the 52/54 rclk in the RI row (measured). Unit U-REFRESH traced it: the 74.67 is not a refresh cost. It is the first sample of the window, which pays the rest of a refresh holdoff (45.25 rclk), a cold instruction-cache line (23.83) and a row miss (5.5). The model's refresh cost agrees with the RI row (`docs/research/refresh-holdoff.md`, measured there). The plan's "untraced" is historical.
 - **The same-bank VI-on tail is VI waits, not row misses (measured).** The datasheet's 22 tc row miss reproduces the hardware median shift of +4. The model's tail (mean minus median) is 4.7 same-bank and 1.7 other-bank, against hardware's 0.3 and 0.5. Every lever with a reference was tried, and none fixes it. Retrying a row miss at 11 tc passes the test but breaks four other checks, so it is a circular refit.
 - **`bench:sp-dma-sweep` measures the wrong quantity (inferred).** It times one DMA through setup and a busy-poll. Its reference is the 256-DMA memset rate, which the RSP-DMA port of the same rate already passes.
 - **If the console shows no VI tail and no mechanism with a reference exists**, the VI cost to CPU traffic becomes a "not built" behavior, not a fit (bus.md).
@@ -280,6 +282,8 @@ Within P0, U-LAYOUT and U-MM-PHASE both edit phase rules, so they must not run i
 
 ## 6. Predicted counts
 
+This section is historical: the predictions were made against master `8d86b87cd` and are kept unchanged. The actual count now is 20 failing or weak (17 fail, 2 consistent-only, 1 pass-conditional:#77), measured from `docs/spec/n64-timing-results.tsv` at standing run fix-137/run on d1874254e. The same count was 28 at plan time (23 + 4 + 1). This note does not say which units produced the difference.
+
 These are guesses, each based on the measured experiments in the appendices. "Failing or weak" counts fail, consistent-only and pass-conditional checks.
 
 | After | Failing or weak | What changes |
@@ -299,7 +303,7 @@ Each decision has a default the program uses if Scott does not rule.
 
 | Id | Question | Default |
 |---|---|---|
-| D1 | Are the 9 out-of-kit rows (cartridge chips, PIF boot timeout) in MAP_GREEN's scope? | They stay open and block MAP_GREEN |
+| D1 | Are the 12 out-of-kit rows (cartridge chips, PIF boot timeout, ri.refresh-latch, vi.fetch-overrun, vi.unfetched-sample) in MAP_GREEN's scope? | They stay open and block MAP_GREEN |
 | D2 | Build a video capture for vi.unfetched-sample and vi.fetch-overrun, or reclassify them? | Reclassify as out-of-kit; MM never reaches either path (cited, row note) |
 | D3 | Merge wScottSh/mm-decomp-60fps#1 | Left open for Scott; MAP_GREEN needs it, U-MMR does not |
 | D4 | Contact the author of the n64brew memset table (user Phire) to ask its video state? | No contact; q20 decides it |

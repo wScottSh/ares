@@ -8,7 +8,10 @@ usage: behaviors.py                 write ares/n64/timing/behaviors.hpp, docs/sp
        behaviors.py --fix-lines     rewrite each legacy row's file:line to its current code site
        behaviors.py --results RUN_DIR
                                     write docs/spec/n64-timing-results.tsv, one result per
-                                    check, from one standing run of every suite
+                                    check, from one standing run of every suite, and beside
+                                    it n64-timing-fork.tsv (the fork's side of every kit
+                                    question) and n64-timing-dry-run.tsv (each hw:* check
+                                    after calibration/dry-run.sh on the run's calib/)
        behaviors.py --failing RUN_DIR
                                     print each suite with a check that fails or did not run in
                                     one standing run, and exit 1 if any; writes nothing
@@ -20,6 +23,13 @@ hw:<question> in its verify column; until a capture is ingested
 (tools/n64-timing/calibration/ingest.py) that check is pending:calibration-16. behaviors.py also
 writes docs/calibration/inventory.md, the question table joined with every row and check the
 hardware could decide.
+
+PREHW_COMPLETE (docs/design/prehw-plan.md section 1): tools/n64-timing/calibration/blockers.tsv has
+one row per open item (a check that does not pass, a SOFTWARE_READY or MAP_GREEN clause that does
+not hold, a row that is not verified), with columns id, kind, class, seed, decider, unit, separates,
+signed, searched. blockers-seed.tsv holds each id's class at the seed commit, the commit that added
+it; neither file is edited to move the seed. blocker_audit() states the rules; a unit that opens or
+closes an item updates its row.
 
 behaviors.tsv columns: id, value, unit, basis, reference, verify, fit-from, note, code.
 Every row names a reference and at least one check, and says where the code builds it. A
@@ -53,6 +63,7 @@ the file exists.
 import argparse
 import fnmatch
 import importlib.util
+import math
 import re
 import shutil
 import subprocess
@@ -761,8 +772,10 @@ def ids(items):
 
 
 def predicates(root, rows, checks, found):
-    """The three reports of docs/design/green-plan.md section 1, as {report: [(clause, holds, evidence)]}. holds is
-    None for a clause the repository cannot decide."""
+    """The three reports of docs/design/green-plan.md section 1 and PREHW_COMPLETE (docs/design/prehw-plan.md
+    section 1), as {report: [(clause, holds, evidence, members)]}. holds is None for a clause the repository cannot
+    decide. members lists the open items (checks, rows, clauses) that keep an open clause from holding, or is None
+    when the clause can be open for a reason no single item carries."""
     kit = kit_module(root)
     _, explicit, _, _ = load_checks(root, [])
     qs = {q["id"]: q for q in question_rows(root)}
@@ -783,17 +796,18 @@ def predicates(root, rows, checks, found):
     no_reader = sorted(c for c in result if c.startswith("hw:") and c[3:] in qs and not comparable(kit, qs[c[3:]]))
     complete = [
         ("every P0-P4 unit has landed or is closed with a stated reason", None,
-         "not computed from the repository: docs/design/green-plan.md section 4 lists the units, and the program ledger tracks them"),
+         "not computed from the repository: docs/design/green-plan.md section 4 lists the units, and the program ledger tracks them",
+         None),
         ("every non-green check names the kit question or console condition that decides it", not undecided,
          f"{len(non_green) - len(undecided)} of {len(non_green)} non-green checks (hw:* excluded: each is its own console "
-         f"question) are in a question's closes column or {CALIBRATION}/undecidable.tsv; missing: {ids(undecided)}"),
+         f"question) are in a question's closes column or {CALIBRATION}/undecidable.tsv; missing: {ids(undecided)}", None),
         ("no check is green through its own fit data or a fitted third-party threshold", not fit_green,
          f"no row passes through its own fit data (its status is then fit only); rows that pass only through checks another "
          f"row's value was fit to, so a joint fit can hide their error: {ids(fit_green)}. A fitted third-party threshold is not "
-         f"machine-readable: each check's source in {CHECKS} names its own"),
+         f"machine-readable: each check's source in {CHECKS} names its own", None),
         ("no check is dead (no ROM, no reader, or duplicate)", not no_rom and not no_reader,
          f"no ROM: {ids(no_rom)}; hw checks whose question has no reader: {ids(no_reader)}; duplicates: none, since "
-         f"--check fails on two ids for one check"),
+         f"--check fails on two ids for one check", None),
     ]
 
     det, stepcap = found_result(found, "det")[0], found_result(found, "stepcap")[0]
@@ -826,60 +840,540 @@ def predicates(root, rows, checks, found):
          det == stepcap == "pass" and float(slow["wall_s"]) <= BUDGET_S and retimed,
          f"det {det}, stepcap {stepcap}; slowest scene {slow['run']} {float(slow['wall_s']):g} s; the wall times name "
          f"{ids(sorted(wall_commits))} and the standing run {ids(run_commits)}, and the clause holds only when every scene's "
-         f"last row names the run's commit in its commit or same_tree_as column; scenes whose last row does not: {ids(stale)}"),
-        ("no check is fail", not failing, f"{len(failing)} fail: {ids(failing)}"),
+         f"last row names the run's commit in its commit or same_tree_as column; scenes whose last row does not: {ids(stale)}", None),
+        ("no check is fail", not failing, f"{len(failing)} fail: {ids(failing)}", failing),
         ("no check is consistent-only or pass-conditional", not weak,
-         f"{len(weak)}: " + ", ".join(f"`{c}` {result[c]}" for c in weak) if weak else "none"),
+         f"{len(weak)}: " + ", ".join(f"`{c}` {result[c]}" for c in weak) if weak else "none", weak),
         ("every pending check is pending:calibration-16 on a kit question a tool can compare", not other_gates and not uncomparable,
-         f"other gates: {ids(other_gates)}; hw checks whose question no tool compares: {ids(uncomparable)}"),
+         f"other gates: {ids(other_gates)}; hw checks whose question no tool compares: {ids(uncomparable)}",
+         other_gates + uncomparable),
         ("no check is report-only, no-rom or no-corpus, except on excluded or out-of-kit rows", not gated and not no_corpus,
-         f"report-only or no-rom checks: {ids(gated)}; rows gated on no-corpus: {ids(no_corpus)}"),
+         f"report-only or no-rom checks: {ids(gated)}; rows gated on no-corpus: {ids(no_corpus)}", gated + no_corpus),
         ("every row that is not verified names a hardware question independent of its fit data", not no_question,
          f"{len(no_question)} rows that are not excluded or out of kit, do not pass, and name no hw:<question> a tool compares "
-         f"that does not re-run their fit: {ids(no_question)}"),
+         f"that does not re-run their fit: {ids(no_question)}", no_question),
     ]
 
     hw = sorted(c for c in result if c.startswith("hw:"))
     filesel = [(c, found_result(found, c)[0]) for c in ("mm:filesel-empty", "mm:filesel-named")]
     verified = [r for r in rows if r["id"] not in excluded and status[r["id"]] == "pass"]
     in_scope = [r for r in rows if r["id"] not in excluded]
-    held = sum(1 for _, h, _ in ready if h)
+    held = sum(1 for _, h, _, _ in ready if h)
     green = [
-        ("SOFTWARE_READY", held == len(ready), f"{held} of {len(ready)} clauses hold"),
+        ("SOFTWARE_READY", held == len(ready), f"{held} of {len(ready)} clauses hold",
+         [clause_id("SOFTWARE_READY", n) for n, (_, h, _, _) in enumerate(ready, 1) if h is not True]),
         ("mm:filesel-empty and mm:filesel-named pass", all(r == "pass" for _, r in filesel),
-         ", ".join(f"`{c}` {r}" for c, r in filesel)),
-        ("wScottSh/mm-decomp-60fps#1 is merged", None, "not computed from the repository: Scott's merge (decision D3)"),
+         ", ".join(f"`{c}` {r}" for c, r in filesel), [c for c, r in filesel if r != "pass"]),
+        ("wScottSh/mm-decomp-60fps#1 is merged", None, "not computed from the repository: Scott's merge (decision D3)", None),
         ("every hw:* check is ingested and passes", all(result[c] == "pass" for c in hw),
          f"{sum(1 for c in hw if result[c] == 'pass')} of {len(hw)} pass, "
-         f"{sum(1 for c in hw if result[c] == 'pending:calibration-16')} pending:calibration-16"),
+         f"{sum(1 for c in hw if result[c] == 'pending:calibration-16')} pending:calibration-16",
+         [c for c in hw if result[c] != "pass"]),
         ("every row that is not excluded or out-of-kit is verified", len(verified) == len(in_scope),
          f"{len(verified)} of {len(in_scope)} rows that are not excluded pass, counting the "
          f"{sum(1 for r in rows if r['id'] in out_of_kit)} out-of-kit rows in scope until Scott rules (decision D1); "
-         f"{sum(1 for r in rows if r['id'] in excluded)} rows are excluded as not hardware-decidable"),
+         f"{sum(1 for r in rows if r['id'] in excluded)} rows are excluded as not hardware-decidable",
+         [r["id"] for r in in_scope if status[r["id"]] != "pass"]),
     ]
-    return {"SOFTWARE_COMPLETE": complete, "SOFTWARE_READY": ready, "MAP_GREEN": green}
+    reports = {"SOFTWARE_COMPLETE": complete, "SOFTWARE_READY": ready, "MAP_GREEN": green}
+    reports["PREHW_COMPLETE"] = prehw(root, rows, checks, found, reports)
+    return reports
+
+
+BLOCKERS = "tools/n64-timing/calibration/blockers.tsv"
+BLOCKERS_SEED = "tools/n64-timing/calibration/blockers-seed.tsv"
+BLOCKER_COLUMNS = ["id", "kind", "class", "seed", "decider", "unit", "separates", "signed", "searched"]
+SEED_COLUMNS = ["id", "class"]
+BLOCKER_CLASSES = ("A", "B", "C", "D", "follows")
+OPEN_CLAUSES = {"SOFTWARE_READY": "sr", "MAP_GREEN": "mg"}
+PLAN = "docs/design/prehw-plan.md"
+FORK = "docs/spec/n64-timing-fork.tsv"
+FORK_COLUMNS = ["question", "key", "metric", "rule", "model"]
+DRY_RUN = "docs/spec/n64-timing-dry-run.tsv"
+DRY_RUN_COLUMNS = ["check", "result"]
+#The decider of clause:mg-4 (every hw:* check ingested and passing): no one question decides ingestion.
+HW_RUN = "hw-run"
+INGESTION_CLAUSE = "clause:mg-4"
+RETIME_CLAUSE = "clause:sr-1"
+#The unit whose resolution mutation a fit row with no published alternative takes (prehw-plan D9).
+RESOLUTION_UNIT = "U-SEPARATES"
+#An alternative more than this many tolerances from the fork must be a printed number cited by line.
+ALT_BOUND = 4
+LINE_CITE = re.compile(r"\S:\d+\b|#L\d+")
+
+
+def clause_id(report, n):
+    return f"clause:{OPEN_CLAUSES[report]}-{n}"
+
+
+def open_items(rows, found, reports):
+    """PREHW_COMPLETE's open set N as {id: kind}: every check whose result is not pass (a hw:* check that is only
+    pending:calibration-16 waits on the console run, not on software), every SOFTWARE_READY and MAP_GREEN clause that
+    does not hold (`clause:sr-<n>`, `clause:mg-<n>`), and every behavior row that is not verified. Excluded rows stay
+    in N: their class D row records why no console decides them."""
+    items = {c: "check" for c, (res, _) in found.items()
+             if c != "#source" and res != "pass" and not (c.startswith("hw:") and res == "pending:calibration-16")}
+    items.update({clause_id(name, n): "clause" for name in OPEN_CLAUSES
+                  for n, (_, holds, _, _) in enumerate(reports[name], 1) if holds is not True})
+    items.update({r["id"]: "row" for r in rows if row_status(r, found) != "pass"})
+    return items
+
+
+def git_text(root, *args):
+    """git's stdout in the checkout whose history answers for root (GIT_ROOT maps a scratch copy to it), or None
+    when git cannot answer."""
+    try:
+        proc = subprocess.run(["git", "-C", str(GIT_ROOT.get(str(root), root)), *args], capture_output=True, text=True)
+    except OSError:
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def tsv_text_rows(text, columns):
+    """The rows of a tsv text whose header is columns, `#` lines skipped; None for another header."""
+    lines = [l for l in text.split("\n") if l and not l.startswith("#")]
+    if not lines or lines[0].split("\t") != columns:
+        return None
+    return [dict(zip(columns, l.split("\t"))) for l in lines[1:]]
+
+
+def blocker_seed(root):
+    """(seed commit, {id: seed class}, {id: undecidable.tsv reason at the seed}), or (None, None, None) when git
+    cannot answer. The seed is the oldest first-parent commit that adds blockers-seed.tsv: computed from history,
+    never read from a file, so no edit moves it."""
+    log = git_text(root, "log", "--first-parent", "--diff-filter=A", "--format=%H", "HEAD", "--", BLOCKERS_SEED)
+    if not log or not log.split():
+        return None, None, None
+    seed = log.split()[-1]
+    classes = tsv_text_rows(git_text(root, "show", f"{seed}:{BLOCKERS_SEED}") or "", SEED_COLUMNS) or []
+    reasons = tsv_text_rows(git_text(root, "show", f"{seed}:{CALIBRATION}/undecidable.tsv") or "", ["id", "reason"]) or []
+    return seed, {r["id"]: r["class"] for r in classes}, {r["id"]: r["reason"] for r in reasons}
+
+
+def unit_scopes(root):
+    """{unit: its Scope cell} from the tables of docs/design/prehw-plan.md section 4, cells split on unescaped |."""
+    path = Path(root) / PLAN
+    if not path.exists():
+        return {}
+    section = path.read_text(encoding="utf-8").partition("\n## 4. ")[2].partition("\n## 5. ")[0]
+    scopes, at = {}, None
+    for line in section.split("\n"):
+        if not line.startswith("|"):
+            at = None
+            continue
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line)[1:-1]]
+        if cells[0] == "Unit":
+            at = cells.index("Scope") if "Scope" in cells else None
+        elif at is not None and cells[0].startswith("U-"):
+            scopes[cells[0]] = cells[at]
+    return scopes
+
+
+def names_id(text, iid):
+    """True when text names iid as a whole word (a sentence's final period does not join it)."""
+    return re.search(rf"(?<![\w.:/-]){re.escape(iid)}(?![\w:/-]|\.\w)", text) is not None
+
+
+def model_text(values, exact=False):
+    """A fork value as FORK stores it: `lo..hi`, or the value set `a,b,...` for an exact rule."""
+    def one(v):
+        return f"{v:.10g}" if isinstance(v, float) else str(v)
+    return ",".join(one(v) for v in values) if exact else f"{one(values[0])}..{one(values[1])}"
+
+
+def fork_values(root, model_dir):
+    """[(question, key, metric, rule, model)]: the fork's side of every question a tool compares, from a
+    calibration/run.sh output, as kit.py compares it: lo..hi (a set for an exact rule) over boot delays and layout
+    pads. Keys of the four-controller runs start `pads-4:`. thar0 gives each configuration's pruned BUF and PIPE
+    average under its 1% rule; systembench each row's reading under main.c's rule (`systembench:<unit>`)."""
+    kit = kit_module(root)
+    model_dir = Path(model_dir)
+    out = []
+    for q in question_rows(root):
+        if q["kit"] in kit.KIT_ROMS:
+            metrics, rules = q["metric"].split(), q["rule"].split()
+            rule_of = dict(zip(metrics, rules if len(rules) > 1 else rules * len(metrics)))
+            for prefix, pads in (("", None), ("pads-4:", 0b1111)):
+                merged = {}
+                for logs in kit.model_layouts(model_dir, q["kit"], pads).values():
+                    for (key, metric), v in kit.spread(q, logs).items():
+                        old = merged.get((key, metric))
+                        merged[(key, metric)] = v if old is None else (
+                            tuple(sorted(set(old) | set(v), key=str)) if rule_of[metric] == "exact"
+                            else (min(old[0], v[0]), max(old[1], v[1])))
+                out += [(q["id"], prefix + key, metric, rule_of[metric], model_text(v, rule_of[metric] == "exact"))
+                        for (key, metric), v in sorted(merged.items())]
+        elif q["kit"] == "ext:thar0" and (model_dir / "ext/thar0.txt").exists():
+            from romgen.suites.thar0 import compare as thar0
+            model = thar0.parse(str(model_dir / "ext/thar0.txt"))
+            for i, (sid, _, _) in sorted(thar0.load_expected().items()):
+                for metric in ("BUF", "PIPE"):
+                    if metric in model.get(i, {}):
+                        avg = thar0.reduce(model[i][metric])[1]
+                        out.append((q["id"], sid, metric, "range:rel:1", model_text((avg, avg))))
+        elif q["kit"] == "ext:systembench" and (model_dir / "ext/systembench.txt").exists():
+            from systembench import report as sb
+            model = sb.parse((model_dir / "ext/systembench.txt").read_text(encoding="utf-8", errors="replace")) or {}
+            for r in sb.read_rows():
+                if (r["name"], int(r["qty"])) in model:
+                    unit, _, fork = model[(r["name"], int(r["qty"]))]
+                    out.append((q["id"], r["row"], "reading", f"systembench:{unit}", model_text((fork, fork))))
+    return out
+
+
+def write_fork_values(root, run, commit):
+    lines = [f"# standing run {run_label(run)} on {commit}", "\t".join(FORK_COLUMNS)]
+    lines += ["\t".join(map(str, v)) for v in fork_values(root, Path(run) / "calib")]
+    (Path(root) / FORK).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return len(lines) - 2
+
+
+DRY_RUN_LINE = re.compile(r"^ingest: (hw:\S+): \S+ -> (\S+)$", re.M)
+
+
+def write_dry_run(root, run, commit):
+    """Runs calibration/dry-run.sh on the run's calib/ directory and records each hw:* check's result after it, so
+    PREHW_COMPLETE can read whether the dry run moved every one to pass."""
+    proc = subprocess.run(["bash", str(Path(root) / CALIBRATION / "dry-run.sh"), str(Path(run) / "calib")],
+                          capture_output=True, text=True)
+    moved = dict(DRY_RUN_LINE.findall(proc.stdout))
+    lines = [f"# standing run {run_label(run)} on {commit}", "\t".join(DRY_RUN_COLUMNS)]
+    if proc.returncode == 0:
+        lines += [f"{c}\t{r}" for c, r in sorted(moved.items())]
+    (Path(root) / DRY_RUN).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    tail = (proc.stderr or proc.stdout).strip().split("\n")[-1:]
+    return proc.returncode, len(moved), tail
+
+
+def run_record(root, rel, columns):
+    """(header line, rows) of a file --results writes beside the results, or (None, None) when it is absent."""
+    path = Path(root) / rel
+    if not path.exists():
+        return None, None
+    text = path.read_text(encoding="utf-8")
+    return text.split("\n")[0], tsv_text_rows(text, columns) or []
+
+
+def judge(rule, model, value):
+    """(accepts, tolerances outside the fork's range or None for an exact rule) when the console reads value and
+    the fork's side is model (lo..hi, a value set for exact), under a question's rule."""
+    if rule == "exact":
+        return value in model.split(","), None
+    lo, _, hi = model.partition("..")
+    lo, hi, v = float(lo), float(hi), float(value)
+    if rule.startswith("systembench:"):
+        from systembench import report as sb
+        unit = rule.partition(":")[2]
+        tol = max(sb.MEAS_ERROR[unit], 0.002 * abs(lo))
+        return sb.passes(unit, lo, v), abs(v - lo) / tol
+    _, kind, tol = rule.split(":")
+    slack = float(tol) if kind == "abs" else float(tol) / 100 * max(abs(lo), abs(hi))
+    return lo - slack <= v <= hi + slack, max(lo - v, v - hi, 0) / slack if slack else math.inf
+
+
+def separates_problems(b, row, fork, scopes):
+    """What keeps a C row's separates cell from showing its question tells the fork from an alternative (section 1
+    clause 3): at=<question> <key> <metric>;fork=<value>;alt=<value>;cite=<reference>, or mut=<value>;cite=<unit>."""
+    fields = dict(f.split("=", 1) for f in b["separates"].split(";") if "=" in f)
+    shape = ("fork", "alt", "cite") if "alt" in fields else ("fork", "mut", "cite")
+    if set(fields) != {"at", *shape}:
+        return [f"separates must read `at=<question> <key> <metric>;fork=<value>;alt=<value>;cite=<reference>` or "
+                f"`...;mut=<value>;cite=<unit>`; it reads `{b['separates']}`"]
+    at = fields["at"].split()
+    if len(at) != 3 or at[0] not in b["decider"].split():
+        return [f"separates at=`{fields['at']}` must name one of its deciders, a key and a metric"]
+    known = fork.get(tuple(at))
+    if known is None:
+        return [f"separates at=`{fields['at']}` has no fork value in {FORK}, the standing run's model side"]
+    rule, model = known
+    if fields["fork"] != model:
+        return [f"separates fork=`{fields['fork']}` is not the standing run's model side `{model}` ({FORK})"]
+    kind = shape[1]
+    try:
+        rejects, away = judge(rule, model, fields[kind])
+        accepts_fork = all(judge(rule, model, v)[0] for v in (model.split("..") if rule != "exact" else model.split(",")))
+    except (ValueError, KeyError):
+        return [f"separates {kind}=`{fields[kind]}` is not a value rule `{rule}` can compare"]
+    rejects = not rejects
+    out = []
+    if not accepts_fork:
+        out.append(f"the rule `{rule}` does not accept the fork's own value")
+    if not rejects:
+        out.append(f"the rule `{rule}` accepts {kind}={fields[kind]} against the fork's {model}, so the console "
+                   f"cannot tell them apart")
+    if kind == "alt":
+        if b["signed"] in ("", "-"):
+            out.append("names an alt with an empty signed; the unit verifier who opened its cite names a report there")
+        if away is not None and away > ALT_BOUND and not LINE_CITE.search(fields["cite"]):
+            out.append(f"names an alt {away:.1f} tolerances from the fork, past {ALT_BOUND}, whose cite `{fields['cite']}` "
+                       f"points at no line (path:line or #L<n>)")
+    else:
+        if away is not None and away > ALT_BOUND:
+            out.append(f"names a mut {away:.1f} tolerances from the fork, past {ALT_BOUND}: the question cannot resolve "
+                       f"it (U-SEPARATES outcome (b))")
+        if fields["cite"] not in scopes:
+            out.append(f"names a mut whose cite `{fields['cite']}` is no section 4 unit, the unit that fixed the mutation")
+        if row is not None and row["basis"] == "fit" and (fields["cite"] != RESOLUTION_UNIT or b["searched"] in ("", "-")):
+            out.append(f"is a fit row with a mut and no alt, which counts only with cite {RESOLUTION_UNIT} and the alt "
+                       f"search in searched (D9)")
+    return out
+
+
+def blocker_audit(root, rows, found, reports):
+    """Joins calibration/blockers.tsv to the open items N. Returns (items, table, problems, errors, seed): table maps
+    each open id to its row, problems maps an id to [(PREHW_COMPLETE clause, what is wrong)], errors is what --check
+    reports, and seed is the seed commit or None when git cannot name it.
+
+    A row's class says what still blocks its item: A and B are software work (a unit), C is console data, D is
+    nothing (excluded), and follows is a clause open only through other open items. A row's seed class is its class
+    in blockers-seed.tsv at the seed commit; an id with none joined N later and counts as B. A row seeded A or B names
+    a unit of prehw-plan.md section 4 whose Scope names the id, so relabeling alone moves nothing to C. A C row's
+    decider is one or more questions.tsv ids, each comparable, closing the item and not re-running a fit row's fit,
+    and its separates names a value the question's rule rejects (separates_problems); or the item's own
+    `not decidable by this kit` undecidable.tsv entry, which needs a signed resolution limit when the row was seeded
+    A or B or is U-SEPARATES'. A D row was D at the seed, on its own `not-hardware-decidable` entry unchanged since.
+    clause:mg-4 is C on hw-run: every hw:* question comparable and the standing run's dry run passing them all."""
+    errors, problems = [], {}
+    items = open_items(rows, found, reports)
+    if not (Path(root) / BLOCKERS).exists():
+        return items, {}, problems, [(1, f"{BLOCKERS} is missing. Add one row per open item ({', '.join(BLOCKER_COLUMNS)}).")], None
+    kit = kit_module(root)
+    qs = {q["id"]: q for q in question_rows(root)}
+    _, explicit, _, _ = load_checks(root, [])
+    reasons = {u["id"]: u["reason"] for u in calibration_tsv(root, "undecidable.tsv")}
+    by_id = {r["id"]: r for r in rows}
+    members = {clause_id(name, n): m for name in OPEN_CLAUSES for n, (_, _, _, m) in enumerate(reports[name], 1)}
+    scopes = unit_scopes(root)
+    seed, seed_class, seed_reasons = blocker_seed(root)
+    results_head = (Path(root) / RESULTS).read_text(encoding="utf-8").split("\n")[0] if (Path(root) / RESULTS).exists() else None
+    fork_head, fork_rows = run_record(root, FORK, FORK_COLUMNS)
+    fork = {(f["question"], f["key"], f["metric"]): (f["rule"], f["model"]) for f in fork_rows or []
+            if fork_head == results_head}
+    if fork_head is not None and fork_head != results_head:
+        errors.append((1, f"{FORK} is from `{fork_head}`, not the results' `{results_head}`; behaviors.py --results writes both"))
+    if seed is not None:
+        here = tsv_text_rows((Path(root) / BLOCKERS_SEED).read_text(encoding="utf-8"), SEED_COLUMNS) \
+            if (Path(root) / BLOCKERS_SEED).exists() else None
+        if here != [{"id": i, "class": c} for i, c in seed_class.items()]:
+            errors.append((1, f"{BLOCKERS_SEED} differs from the file its seed commit {seed[:9]} added. The seed is fixed: "
+                          f"restore it, and record a class change in {BLOCKERS}"))
+    table, shape = {}, []
+    for b in read_tsv(root, BLOCKERS, BLOCKER_COLUMNS, shape):
+        bid, where = b["id"], f"{BLOCKERS}:{b['line']}"
+
+        def bad(clause, why, error=True):
+            problems.setdefault(bid, []).append((clause, why))
+            if error:
+                errors.append((clause, f"{where}: `{bid}` {why}"))
+        if bid in table:
+            errors.append((1, f"{where}: `{bid}` has a second row; keep one"))
+            continue
+        if bid not in items:
+            errors.append((1, f"{where}: `{bid}` is not an open item: no check, row or clause by that id fails to pass. "
+                          f"Delete the row."))
+            continue
+        table[bid] = b
+        if b["kind"] != items[bid]:
+            bad(1, f"is a {items[bid]}, not a {b['kind']}; write kind `{items[bid]}`")
+        if b["class"] not in BLOCKER_CLASSES:
+            bad(1, f"has class `{b['class']}`; write one of {', '.join(BLOCKER_CLASSES)}")
+            continue
+        seeded = None if seed is None else seed_class.get(bid)
+        if seed is not None and b["seed"] != (seeded or "-"):
+            bad(1, f"has seed `{b['seed']}`, but its class in {BLOCKERS_SEED} at the seed commit {seed[:9]} is "
+                   f"`{seeded or '-'}` (`-`: not in the seed); the seed column copies it")
+        deciders = [d for d in b["decider"].split() if d != "-"]
+        own_entry = deciders == [bid] and bid in reasons
+        if seed is not None and (seeded in ("A", "B") or seeded is None and b["class"] == "C"):
+            unit = b["unit"]
+            if unit not in scopes or not names_id(scopes[unit], bid):
+                bad(3, f"was {seeded or 'not in the seed, so counts as B'} at the seed, so its unit must be a "
+                       f"{PLAN} section 4 unit whose Scope names `{bid}`; `{unit}` "
+                       + ("is no such unit" if unit not in scopes else "does not name it"))
+        if bid == RETIME_CLAUSE and b["class"] != "A":
+            bad(5, f"is class {b['class']}; the re-time clause is A whenever it fails (re-time the scenes), never C")
+        if b["class"] in ("A", "B"):
+            if b["unit"] in ("", "-"):
+                bad(2, f"is class {b['class']}, software work, but names no unit; name the unit that does it")
+            for d in deciders:
+                if d not in qs and d not in reasons:
+                    bad(2, f"names decider `{d}`, which is no questions.tsv or undecidable.tsv id")
+        elif b["class"] == "D":
+            if seed is None:
+                pass
+            elif seeded != "D":
+                bad(4, f"is class D, but was `{seeded or '-'}` at the seed commit {seed[:9]}; a row cannot become D "
+                       f"after the seed")
+            elif deciders != [bid] or not reasons.get(bid, "").startswith(UNDECIDABLE_PREFIX):
+                bad(4, f"is class D, so its decider must be its own {CALIBRATION}/undecidable.tsv entry starting "
+                       f"`{UNDECIDABLE_PREFIX.strip()}`; it names `{b['decider']}`")
+            elif reasons[bid] != seed_reasons.get(bid):
+                bad(4, f"is class D, but its undecidable.tsv entry differs from the one at the seed commit {seed[:9]}; "
+                       f"an exclusion is fixed at the seed")
+        elif b["class"] == "follows":
+            m = members.get(bid)
+            if not m:
+                bad(5, "is class follows, which only a SOFTWARE_READY or MAP_GREEN clause open through other open items "
+                       "can be; give it its own class")
+            elif any(x not in items for x in m):
+                bad(5, f"is class follows, but {ids([x for x in m if x not in items])} keep it open and are not open "
+                       f"items; give it its own class")
+        elif b["kind"] == "clause":
+            if bid != INGESTION_CLAUSE or deciders != [HW_RUN]:
+                bad(5, f"is a clause of class C, which only {INGESTION_CLAUSE} can be, with decider `{HW_RUN}`")
+            else:
+                hw = [c for c, (res, _) in found.items() if c.startswith("hw:")]
+                blind = [c for c in hw if not (c[3:] in qs and comparable(kit, qs[c[3:]]))]
+                dry_head, dry = run_record(root, DRY_RUN, DRY_RUN_COLUMNS)
+                passed = {d["check"] for d in dry or [] if d["result"] == "pass"} if dry_head == results_head else set()
+                if blind:
+                    bad(5, f"names {HW_RUN}, but no tool compares {ids(blind)}", error=False)
+                if sorted(set(hw) - passed):
+                    bad(5, f"names {HW_RUN}, but the standing run's dry run ({DRY_RUN}, "
+                           f"{'from another run' if dry_head and dry_head != results_head else 'absent' if dry_head is None else 'current'}) "
+                           f"did not move {ids(sorted(set(hw) - passed)[:5])}{' and more' if len(set(hw) - passed) > 5 else ''} "
+                           f"to pass", error=False)
+        elif not deciders:
+            bad(3, "is class C but names no decider; name the questions.tsv question whose console run decides it")
+        elif own_entry:
+            reason = reasons[bid]
+            if not reason.startswith(KIT_LIMIT_PREFIX) or "would decide" not in reason.lower():
+                bad(3, f"is class C on its undecidable.tsv entry, which must start `{KIT_LIMIT_PREFIX.strip()}` and say "
+                       f"what would decide it")
+            elif (seeded in ("A", "B") or seeded is None or b["unit"] == RESOLUTION_UNIT) and b["signed"] in ("", "-"):
+                bad(3, f"is out-of-kit, seeded {seeded or '-'} with unit `{b['unit']}`, so its entry must cite an "
+                       f"instrument-resolution limit that the unit verifier signs in signed; signed is empty", error=False)
+        else:
+            for d in deciders:
+                q = qs.get(d)
+                if q is None:
+                    bad(3, f"names decider `{d}`, which is no questions.tsv id")
+                elif not comparable(kit, q):
+                    bad(3, f"names question `{d}`, whose kit `{q['kit']}` no tool compares")
+                elif bid not in q["closes"].split():
+                    bad(3, f"names question `{d}`, whose closes column does not list `{bid}`")
+                elif items[bid] == "row" and reruns_fit(kit, q, by_id[bid], explicit):
+                    bad(3, f"names question `{d}`, which re-runs the row's fit, so it decides nothing (pref 21)")
+            if bid not in problems and b["separates"] not in ("", "-"):
+                for why in separates_problems(b, by_id.get(bid), fork, scopes):
+                    bad(3, why, error=False)
+    errors += [(1, e) for e in shape]
+    for bid, b in table.items():
+        lacking = [x for x in members.get(bid) or [] if x not in table] if b["class"] == "follows" else []
+        if lacking:
+            problems.setdefault(bid, []).append((5, f"is class follows, but {ids(lacking)} have no row"))
+    for iid, kind in sorted(items.items()):
+        if iid not in table:
+            errors.append((1, f"{BLOCKERS}: open {kind} `{iid}` has no row. Add `{iid}` with its class (A, B, C, D or "
+                          f"follows), seed, decider, unit, separates, signed and searched."))
+    return items, table, problems, errors, seed
+
+
+GIT_ROOT = {}
+
+
+def run_is_current(root, found):
+    """True when the emulator and the tools at HEAD are the standing run's tree (blockers.tsv aside), False when they
+    differ, None when git cannot tell."""
+    commits = COMMIT.findall(results_source(found))
+    if not commits:
+        return False
+    try:
+        proc = subprocess.run(["git", "-C", str(GIT_ROOT.get(str(root), root)), "diff", "--quiet", commits[0], "HEAD", "--", "ares",
+                               "tools/n64-timing", f":(exclude){BLOCKERS}"], capture_output=True)
+    except OSError:
+        return None
+    return {0: True, 1: False}.get(proc.returncode)
+
+
+def prehw(root, rows, checks, found, reports):
+    """PREHW_COMPLETE (docs/design/prehw-plan.md section 1), clauses 1 to 7. A missing input (no blockers.tsv, a
+    check with no result, no git for the seed) fails or leaves a clause not computed, so an open set that a failed
+    read emptied never holds."""
+    items, table, problems, errors, seed = blocker_audit(root, rows, found, reports)
+    wanted = [c for c in referenced_checks(rows, checks, root) if not c.startswith("pending:")]
+    unread = [c for c in wanted if c not in found]
+    missing = sorted(i for i in items if i not in table)
+
+    def failing(clause, among=None):
+        return sorted(i for i, ps in problems.items() if any(c == clause for c, _ in ps) and (among is None or i in among))
+    shape = [e for c, e in errors if c == 1 and not e.startswith(f"{BLOCKERS}: open ")]
+    kinds = {k: sum(1 for v in items.values() if v == k) for k in ("check", "row", "clause")}
+    by_class = {c: sorted(i for i, b in table.items() if b["class"] == c) for c in BLOCKER_CLASSES}
+    c_rows = [i for i in by_class["C"] if items[i] != "clause"]
+    unwritten = [i for i in c_rows if table[i]["decider"] != i
+                 and any(table[i][col] in ("", "-") for col in ("separates", "searched"))]
+    complete = reports["SOFTWARE_COMPLETE"][1:]
+    det, stepcap = found_result(found, "det")[0], found_result(found, "stepcap")[0]
+    current = run_is_current(root, found)
+    results_head = (Path(root) / RESULTS).read_text(encoding="utf-8").split("\n")[0] if (Path(root) / RESULTS).exists() else None
+    dry_head, dry = run_record(root, DRY_RUN, DRY_RUN_COLUMNS)
+    hw = sorted(c for c in found if c.startswith("hw:"))
+    unmoved = [c for c in hw if dry_head != results_head or c not in {d["check"] for d in dry if d["result"] == "pass"}]
+    settled = all(h for _, h, _, _ in complete) and det == stepcap == "pass" and not unmoved
+    bad3, bad4, bad5 = failing(3, c_rows + by_class["A"] + by_class["B"]), failing(4), failing(5)
+    seedless = ("not computed: git names no seed commit" if seed is None
+                else f"seed classes from the commit that added {BLOCKERS_SEED}")
+    return [
+        ("every open item has exactly one blocker row, and no row names an item that is not open",
+         not unread and not missing and not shape,
+         f"{len(items)} open items ({kinds['check']} checks, {kinds['row']} rows, {kinds['clause']} clauses), "
+         f"{len(table)} with a row in {BLOCKERS}; no row: {ids(missing)}; checks with no result: {ids(unread)}; "
+         f"other {BLOCKERS} errors: {len(shape)}", None),
+        ("no open item is class A or B: no software-doable work is left",
+         not missing and not by_class["A"] and not by_class["B"],
+         f"class A: {ids(by_class['A'])}; class B: {ids(by_class['B'])}; no row: {len(missing)}", None),
+        ("every class C row names a console measurement a tool compares that closes it, a value its rule rejects "
+         "that the fork does not give, and the sources searched; every row seeded A or B names a unit whose Scope "
+         "names it",
+         None if seed is None else not bad3 and not unwritten,
+         f"{seedless}; {len(c_rows)} C rows; failing a rule: {len(bad3)} ({ids(bad3)}); with no separates or "
+         f"searched: {len(unwritten)} ({ids(unwritten)})", None),
+        ("every class D row was D at the seed, on its own not-hardware-decidable entry unchanged since",
+         None if seed is None else not bad4,
+         f"{seedless}; {len(by_class['D'])} D rows: {ids(by_class['D'])}; failing: {ids(bad4)}", None),
+        ("every clause row has a decider PRED can check: follows with its members' rows, or clause:mg-4 on hw-run",
+         not bad5, f"clause rows: {ids(sorted(i for i in table if items[i] == 'clause'))}; failing: {ids(bad5)}", None),
+        ("SOFTWARE_COMPLETE clauses 2 to 4 hold, det and stepcap pass, the standing run is the current tree, and its "
+         "dry run moves every hw:* check to pass",
+         False if not settled or current is False else current,
+         f"SOFTWARE_COMPLETE clauses 2 to 4: {', '.join('yes' if h else 'no' for _, h, _, _ in complete)}; det {det}, "
+         f"stepcap {stepcap}; the results header `{results_source(found)}`: ares/ and tools/n64-timing/ at HEAD "
+         + {True: "equal its commit", False: "differ from its commit (or it names none)",
+            None: "not compared (no git)"}[current]
+         + f"; dry run ({DRY_RUN}): {len(hw) - len(unmoved)} of {len(hw)} hw:* checks pass"
+         + ("" if dry_head == results_head else " (absent or from another run)"), None),
+        ("every unit has landed or is closed with a stated reason, and every open issue but #1 and #16 is closed or a "
+         "C decider", None, "not computed from the repository: the program ledger tracks units and issues", None),
+    ]
 
 
 def predicate_line(name, clauses):
-    decided = [h for _, h, _ in clauses if h is not None]
+    decided = [h for _, h, _, _ in clauses if h is not None]
     held = sum(1 for h in decided if h)
     if name == "SOFTWARE_READY":
         return f"SOFTWARE_READY: {held} of {len(clauses)} clauses hold."
     unknown = len(clauses) - len(decided)
     verdict = "does not hold" if held < len(decided) else "not decided" if unknown else "holds"
+    if name == "PREHW_COMPLETE":
+        return (f"PREHW_COMPLETE: {held} of {len(decided)} computed clauses hold; {unknown} not computed from the "
+                f"repository; {verdict}. Open software work, {clauses[1][2]}.")
     return f"{name}: {verdict}. {held} of {len(decided)} computed clauses hold" + (
         f"; {unknown} {'is' if unknown == 1 else 'are'} not computed from the repository." if unknown else ".")
 
 
 def render_predicates(reports):
     out = ["## Green predicates", "",
-           "The three reports of `docs/design/green-plan.md` section 1, computed from the tables and the results. "
+           "The three reports of `docs/design/green-plan.md` section 1 and PREHW_COMPLETE of `docs/design/prehw-plan.md` "
+           "section 1, computed from the tables and the results. "
            "SOFTWARE_COMPLETE is the software-only end state; SOFTWARE_READY cannot hold without the console run (#16); "
-           "MAP_GREEN is the map's destination.", ""]
+           "MAP_GREEN is the map's destination. PREHW_COMPLETE holds when every open item (a check that does not pass, "
+           "a clause above that does not hold, a row that is not verified) has one row in "
+           f"`{BLOCKERS}` and only console data, or nothing, decides it.", ""]
     out += [f"- {predicate_line(n, c)}" for n, c in reports.items()]
     for name, clauses in reports.items():
         out += ["", f"### {name}", "", "| Clause | Holds | Evidence |", "|---|---|---|"]
-        out += [f"| {cell(c)} | {'not computed' if h is None else 'yes' if h else '**no**'} | {cell(e)} |" for c, h, e in clauses]
+        out += [f"| {cell(c)} | {'not computed' if h is None else 'yes' if h else '**no**'} | {cell(e)} |" for c, h, e, _ in clauses]
     return out
 
 
@@ -983,13 +1477,16 @@ def render_closure(root, rows, checks, found, reports):
 
 
 def generated(root):
+    """(errors, outputs, blocker errors). The blocker table's errors fail --check, never generation, so ingesting a
+    capture that turns items green still regenerates the spec."""
     errors, rows, checks, sites = validate(root)
     found = load_results(root, rows, checks, errors)
     errors += calibration_errors(root, rows, checks, found)
     reports = predicates(root, rows, checks, found)
+    blockers = [e for _, e in blocker_audit(root, rows, found, reports)[3]]
     return errors, {HEADER: render_header(rows), SPEC: render_spec(rows, checks, found, reports),
                     CLOSURE: render_closure(root, rows, checks, found, reports),
-                    INVENTORY: render_inventory(root, rows, checks, found)}
+                    INVENTORY: render_inventory(root, rows, checks, found)}, blockers
 
 
 CALIBRATION = "tools/n64-timing/calibration"
@@ -1230,7 +1727,8 @@ def render_inventory(root, rows, checks, found):
 
 
 def check(root):
-    errors, outputs = generated(root)
+    errors, outputs, blockers = generated(root)
+    errors += blockers
     for rel, text in outputs.items():
         path = Path(root) / rel
         if not path.exists() or path.read_text(encoding="utf-8") != text:
@@ -1689,12 +2187,14 @@ def self_test(root):
     """Copies the inputs to a scratch tree, breaks each rule once, and checks the failure names its fix."""
     root = Path(root)
     work = Path(tempfile.mkdtemp(prefix="behaviors-self-test-"))
+    GIT_ROOT[str(work)] = root
     try:
         shutil.copytree(root / "ares/n64", work / "ares/n64")
         shutil.copytree(root / "tools/n64-timing", work / "tools/n64-timing", ignore=shutil.ignore_patterns("__pycache__"))
         (work / SPEC).parent.mkdir(parents=True)
         (work / INVENTORY).parent.mkdir(parents=True)
-        for rel in (SPEC, RESULTS, CLOSURE, INVENTORY):
+        (work / PLAN).parent.mkdir(parents=True)
+        for rel in (SPEC, RESULTS, CLOSURE, INVENTORY, PLAN, FORK, DRY_RUN):
             shutil.copy(root / rel, work / rel)
 
         def edit(rel, change):
@@ -1732,6 +2232,19 @@ def self_test(root):
         else:
             landed = False
         run_commit = COMMIT.findall(text(work / RESULTS).split("\n")[0])[0]
+
+        def blocker(rid, **cells):
+            def change(t):
+                for column, value in cells.items():
+                    t = row_field(rid, column, value)(t)
+                return t
+            return change
+
+        def fork_cell(question, key, metric):
+            return next(f["model"] for f in run_record(work, FORK, FORK_COLUMNS)[1]
+                        if (f["question"], f["key"], f["metric"]) == (question, key, metric))
+        undecidable = f"{CALIBRATION}/undecidable.tsv"
+        failing_timeline = lambda t: re.sub(r"^unit:timeline\tpass\t", "unit:timeline\tfail\t", t, flags=re.M)  # noqa: E731
         cases = [
             ("the committed tree", None, None, None),
             ("a row waiting on calibration #16 with no kit test", TABLE, row_field("cpu.dcb", "verify", "pending:calibration-16"),
@@ -1845,6 +2358,63 @@ def self_test(root):
              "has rule `-`; use consistent, mean, every"),
             ("a bench condition that names no issue", suite_file, lambda t: t.replace("\tcheck\tmean\t#77\t", "\tcheck\tmean\tidle-vi\t", 1),
              "has condition `idle-vi`; write `-`"),
+            ("an open item with no blocker row", BLOCKERS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("cpu.dcb\t")),
+             "open row `cpu.dcb` has no row"),
+            ("a blocker row for a check that passes", BLOCKERS, lambda t: t + "unit:timeline\tcheck\tC\t-\tdcb\t-\t-\t-\t-\n",
+             "`unit:timeline` is not an open item"),
+            ("a C row whose question does not close it", BLOCKERS, row_field("rdp.read-gate", "decider", "ifill"),
+             "names question `ifill`, whose closes column does not list `rdp.read-gate`"),
+            ("a C row whose question no tool compares", (BLOCKERS, "tools/n64-timing/calibration/questions.tsv"),
+             (blocker("cpu.dcb", **{"class": "C"}), row_field("dcb", "kit", "none: self-test")),
+             "names question `dcb`, whose kit `none: self-test` no tool compares"),
+            ("a C row naming no question", BLOCKERS, row_field("rdp.read-gate", "decider", "no-such-question"),
+             "names decider `no-such-question`, which is no questions.tsv id"),
+            ("a C row whose question re-runs the row's fit", BLOCKERS,
+             lambda t: row_field("rdp.mem-overhead-write", "class", "C")(row_field("rdp.mem-overhead-write", "decider", "thar0-console")(t)),
+             "names question `thar0-console`, which re-runs the row's fit"),
+            ("a D row on another id's entry", BLOCKERS, row_field("scheduler.tie-rank", "decider", "ri.request-latency"),
+             "`scheduler.tie-rank` is class D, so its decider must be its own"),
+            ("a check written as follows", BLOCKERS, row_field("thar0:imrd-1cycle", "class", "follows"),
+             "`thar0:imrd-1cycle` is class follows, which only a SOFTWARE_READY or MAP_GREEN clause"),
+            ("an A row relabeled C on a question that does not close it", BLOCKERS,
+             lambda t: row_field("bench:mi-memset-repeat", "class", "C")(row_field("bench:mi-memset-repeat", "decider", "dirty-row")(t)),
+             "names question `dirty-row`, whose closes column does not list `bench:mi-memset-repeat`"),
+            ("an A row relabeled C with no decider", BLOCKERS,
+             lambda t: row_field("legacy.cart.rtc-tick", "class", "C")(row_field("legacy.cart.rtc-tick", "decider", "-")(t)),
+             "`legacy.cart.rtc-tick` is class C but names no decider"),
+            ("a D row added after the seed, on an entry rewritten not-hardware-decidable", (BLOCKERS, undecidable),
+             (blocker("vi.fetch-overrun", **{"class": "D", "decider": "vi.fetch-overrun"}),
+              lambda t: t.replace("vi.fetch-overrun\tnot decidable by this kit: ", "vi.fetch-overrun\tnot-hardware-decidable: ", 1)),
+             "`vi.fetch-overrun` is class D, but was `B` at the seed commit"),
+            ("a D row whose undecidable.tsv entry changed after the seed", undecidable,
+             lambda t: t.replace("scheduler.tie-rank\tnot-hardware-decidable: ", "scheduler.tie-rank\tnot-hardware-decidable: now ", 1),
+             "`scheduler.tie-rank` is class D, but its undecidable.tsv entry differs from the one at the seed commit"),
+            ("an id not in the seed written as D", (BLOCKERS, RESULTS),
+             (lambda t: t + "unit:timeline\tcheck\tD\t-\tunit:timeline\t-\t-\t-\t-\n", failing_timeline),
+             "`unit:timeline` is class D, but was `-` at the seed commit"),
+            ("an id not in the seed made C on a unit whose Scope does not name it", (BLOCKERS, RESULTS),
+             (lambda t: t + "unit:timeline\tcheck\tC\t-\tdcb\tU-DOCS\t-\t-\t-\n", failing_timeline),
+             "`unit:timeline` was not in the seed, so counts as B at the seed"),
+            ("a row seeded A relabeled C with no unit", BLOCKERS,
+             blocker("bench:mi-memset-repeat", **{"class": "C", "unit": "-"}),
+             "`bench:mi-memset-repeat` was A at the seed, so its unit must be a docs/design/prehw-plan.md section 4 unit whose Scope names `bench:mi-memset-repeat`; `-` is no such unit"),
+            ("a row seeded A whose unit's Scope does not name it", BLOCKERS, row_field("bench:mi-memset-repeat", "unit", "U-DOCS"),
+             "Scope names `bench:mi-memset-repeat`; `U-DOCS` does not name it"),
+            ("a seed cell edited after the seed", BLOCKERS, row_field("cpu.dcb", "seed", "C"),
+             "`cpu.dcb` has seed `C`, but its class in tools/n64-timing/calibration/blockers-seed.tsv at the seed commit"),
+            ("a blockers-seed.tsv line edited after the seed", BLOCKERS_SEED, lambda t: t.replace("cpu.dcb\tB", "cpu.dcb\tC"),
+             "blockers-seed.tsv differs from the file its seed commit"),
+            ("a failing clause with no row", BLOCKERS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("clause:mg-1\t")),
+             "open clause `clause:mg-1` has no row"),
+            ("a clause other than mg-4 decided by hw-run", BLOCKERS, blocker("clause:mg-3", **{"class": "C", "decider": "hw-run"}),
+             "`clause:mg-3` is a clause of class C, which only clause:mg-4 can be"),
+            ("the re-time clause written as C", (RESULTS, BLOCKERS),
+             (lambda t: t.replace(run_commit, "0000000", 1),
+              lambda t: t + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
+             "`clause:sr-1` is class C; the re-time clause is A whenever it fails"),
+            ("fork values from another run", FORK, lambda t: t.replace(run_commit, "0000000", 1),
+             "n64-timing-fork.tsv is from `# standing run"),
+            ("a blocker row of the wrong kind", BLOCKERS, row_field("cpu.dcb", "kind", "check"), "`cpu.dcb` is a row, not a check"),
         ]
         if landed:
             cases += [
@@ -1855,7 +2425,11 @@ def self_test(root):
             ]
         failures, ran = 0, 0
         for name, rel, change, expected in cases:
-            restore = edit(rel, change) if rel else None
+            if isinstance(rel, tuple):
+                undo = [edit(r, c) for r, c in zip(rel, change)]
+                restore = lambda: [u() for u in undo]  # noqa: E731
+            else:
+                restore = edit(rel, change) if rel else None
             errors = check(work) if rel in (None, WALL_BUDGET) or expected is not None else validate(work)[0]
             if expected is None:
                 ok = not errors
@@ -1877,6 +2451,128 @@ def self_test(root):
                 shutil.copy(root / TABLE, work / TABLE)
             if restore:
                 restore()
+        for name, rel, change, want in [
+            ("the committed tree, whose A rows only keep clause 2 from holding", None, None, [True, False]),
+            ("no blocker table", BLOCKERS, lambda t: None, [False, False]),
+
+            ("a results file whose reader lost every check", RESULTS, lambda t: t.split("\n")[0] + "\ncheck\tresult\tdetail\n",
+             [False, False]),
+            ("a results file that lost one console question", RESULTS,
+             lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("hw:dcb\t")), [False, False]),
+            ("the A and B rows relabeled C on the questions that close them", BLOCKERS,
+             lambda t: re.sub(r"^([^\t]+\t[^\t]+\t)[AB]\t", r"\1C\t", t, flags=re.M), [True, True, False]),
+            ("a checkout whose git history cannot name the seed", "git", None, [True, False, None, None]),
+        ]:
+            if rel == "git":
+                GIT_ROOT[str(work)] = work / "no-such-checkout"
+                rel = None
+            restore = edit(rel, change if rel != BLOCKERS or name != "no blocker table" else lambda t: t) if rel else None
+            if name == "no blocker table":
+                (work / BLOCKERS).unlink()
+            errors, rows, checks, _ = validate(work)
+            found = load_results(work, rows, checks, errors)
+            got = [h for _, h, _, _ in predicates(work, rows, checks, found)["PREHW_COMPLETE"]][:len(want)]
+            ok = got == want
+            print(f"self-test: PREHW_COMPLETE clauses for {name}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
+            failures += not ok
+            ran += 1
+            GIT_ROOT[str(work)] = root
+            if restore:
+                restore()
+        repeat = ("memset-vi", "mi-memset-repeat/vi-on", "min")
+        repeat_fork = fork_cell(*repeat)
+        repeat_hi = float(repeat_fork.partition("..")[2])
+        uncached = ("memset-vi", "mi-memset-uncached/vi-off", "min")
+        uncached_fork = fork_cell(*uncached)
+        uncached_hi = float(uncached_fork.partition("..")[2])
+
+        def relabeled(alt, cite="asm.py:170", signed="verify-self-test", fork=repeat_fork, kind="alt"):
+            return blocker("bench:mi-memset-repeat", **{
+                "class": "C", "decider": "memset-vi", "signed": signed,
+                "separates": f"at={' '.join(repeat)};fork={fork};{kind}={alt:g};cite={cite}"})
+
+        def fit_mut(step, cite="U-SEPARATES", searched="NEC VR4300 UM: no value"):
+            return blocker("sysad.rdram-write-period", searched=searched, decider="memset-vi", **{"class": "C"},
+                           separates=f"at={' '.join(uncached)};fork={uncached_fork};mut={uncached_hi + step:g};cite={cite}")
+        for name, rel, change, rid, expected in [
+            ("a row seeded A relabeled C on its closing question with a rejected, cited, signed alt", BLOCKERS,
+             relabeled(repeat_hi * 1.01), "bench:mi-memset-repeat", None),
+            ("a row seeded A relabeled C whose rule accepts its alt", BLOCKERS, relabeled(repeat_hi),
+             "bench:mi-memset-repeat", "accepts alt="),
+            ("a row seeded A relabeled C on the question that closes it, with free-text separates", BLOCKERS,
+             blocker("bench:mi-memset-repeat", **{"class": "C", "decider": "memset-vi", "separates": "the fork against hardware"}),
+             "bench:mi-memset-repeat", "separates must read"),
+            ("an alt with an empty signed", BLOCKERS, relabeled(repeat_hi * 1.01, signed="-"), "bench:mi-memset-repeat",
+             "names an alt with an empty signed"),
+            ("an alt of 10x the fork whose cite points at no line", BLOCKERS,
+             relabeled(repeat_hi * 10, cite="n64brew MIPS_Interface"), "bench:mi-memset-repeat", "points at no line"),
+            ("a fork= cell that differs from the standing run's value", BLOCKERS,
+             relabeled(repeat_hi * 1.01, fork=f"{repeat_hi:g}..{repeat_hi + 1:g}"), "bench:mi-memset-repeat",
+             "is not the standing run's model side"),
+            ("separates on a question that is not the row's decider", BLOCKERS,
+             lambda t: relabeled(repeat_hi * 1.01)(t).replace("at=memset-vi ", "at=dirty-row "), "bench:mi-memset-repeat",
+             "must name one of its deciders"),
+            ("a fit row with mut, no alt, and a cite other than U-SEPARATES", BLOCKERS, fit_mut(8000, cite="U-SB-PR2"),
+             "sysad.rdram-write-period", "is a fit row with a mut and no alt"),
+            ("a fit row with mut, no alt, and an empty searched", BLOCKERS, fit_mut(8000, searched="-"),
+             "sysad.rdram-write-period", "is a fit row with a mut and no alt"),
+            ("a fit row's resolution mutation within 4 tolerances, cited U-SEPARATES with its search", BLOCKERS,
+             fit_mut(8000), "sysad.rdram-write-period", None),
+            ("a mut past 4 tolerances", BLOCKERS, fit_mut(30000), "sysad.rdram-write-period", "past 4: the question cannot resolve"),
+            ("a mut whose cite is no unit", BLOCKERS, fit_mut(8000, cite="scratch-build"), "sysad.rdram-write-period",
+             "whose cite `scratch-build` is no section 4 unit"),
+            ("an out-of-kit row whose unit is U-SEPARATES with an empty signed", BLOCKERS,
+             blocker("ri.refresh-latch", **{"class": "C", "decider": "ri.refresh-latch", "unit": "U-SEPARATES"}),
+             "ri.refresh-latch", "signed is empty"),
+            ("an out-of-kit row seeded A on its own unit with an empty signed", BLOCKERS,
+             blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick"}),
+             "legacy.cart.rtc-tick", "signed is empty"),
+            ("an out-of-kit row seeded A with its limit signed", BLOCKERS,
+             blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick", "signed": "verify-self-test"}),
+             "legacy.cart.rtc-tick", None),
+            ("clause:mg-4 without the dry-run result", DRY_RUN, lambda t: "\n".join(t.split("\n")[:2]) + "\n",
+             INGESTION_CLAUSE, "did not move"),
+        ]:
+            restore = edit(rel, change)
+            errors, rows, checks, _ = validate(work)
+            found = load_results(work, rows, checks, errors)
+            _, _, problems, _, _ = blocker_audit(work, rows, found, predicates(work, rows, checks, found))
+            mine = [why for _, why in problems.get(rid, [])]
+            hits = mine if expected is None else [w for w in mine if expected in w]
+            ok = not mine if expected is None else bool(hits)
+            print(f"self-test: blocker rule for {name}: {'ok' if ok else 'FAILED'}: "
+                  f"{(hits or mine or ['no problem'])[0] if ok or expected is None else f'no problem contains `{expected}`; got {mine[:2]}'}")
+            failures += not ok
+            ran += 1
+            restore()
+        seed = blocker_seed(work)[0]
+        restore = [edit(rel, lambda t: t + "# seed 0000000000000000000000000000000000000000\n") for rel in (BLOCKERS, BLOCKERS_SEED)]
+        moved = blocker_seed(work)[0]
+        ok = seed is not None and moved == seed
+        print(f"self-test: a `# seed` line in either file leaves the computed seed: {'ok' if ok else 'FAILED'}: {seed} -> {moved}")
+        failures += not ok
+        ran += 1
+        for undo in restore:
+            undo()
+        restore = edit(RESULTS, lambda t: re.sub(r"^(hw:[^\t]+)\tpending:calibration-16\t", r"\1\tpass\t", t, flags=re.M))
+        gen, _, blockers = generated(work)
+        ok = not gen and any("is not an open item" in e for e in blockers)
+        print(f"self-test: a console run that passes every hw:* check regenerates the spec (ingest, dry-run.sh) and "
+              f"leaves its closed items' blocker rows to --check: {'ok' if ok else 'FAILED'}: {len(gen)} generation errors, "
+              f"{sum('is not an open item' in e for e in blockers)} stale rows")
+        failures += not ok
+        ran += 1
+        restore()
+        for rule, model, value, want in [("exact", "3,5", "5", (True, None)), ("exact", "3,5", "4", (False, None)),
+                                         ("range:abs:2", "10..12", "14", (True, 1.0)), ("range:abs:2", "10..12", "15", (False, 1.5)),
+                                         ("range:rel:1", "200..200", "203", (False, 1.5)),
+                                         ("systembench:RCP", "193..193", "195", (True, 2 / 2)),
+                                         ("systembench:RCP", "193..193", "196", (False, 3 / 2))]:
+            got = judge(rule, model, value)
+            ok = got[0] == want[0] and (got[1] is None) == (want[1] is None) and (got[1] is None or abs(got[1] - want[1]) < 1e-9)
+            print(f"self-test: rule {rule} on fork {model}, console {value}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
+            failures += not ok
+            ran += 1
         found = {"det": ("pass", ""), "stepcap": ("pass", ""), "x:pass": ("pass", ""), "x:fail": ("fail", ""),
                  "x:pass2": ("pass", ""), "x:consistent": ("consistent-only", ""), "x:cond": ("pass-conditional:#77", "")}
         for name, row, want in [
@@ -2011,8 +2707,13 @@ def main():
         errors, out = results(root, args.results)
         write_results(root, args.results, out, commit)
         print(f"behaviors.py: wrote {RESULTS} ({len(out)} checks); run behaviors.py to regenerate the spec")
+        print(f"behaviors.py: wrote {FORK} ({write_fork_values(root, args.results, commit)} fork values)")
+        status, moved, tail = write_dry_run(root, args.results, commit)
+        print(f"behaviors.py: wrote {DRY_RUN} ({moved} hw checks after calibration/dry-run.sh)")
+        if status:
+            errors.append(f"calibration/dry-run.sh on {run_label(args.results)}/calib exited {status}: {tail[0] if tail else ''}")
         return report(errors, "results") if errors else 0
-    errors, outputs = generated(root)
+    errors, outputs, _ = generated(root)
     if errors:
         return report(errors, "generate")
     for rel, text in outputs.items():

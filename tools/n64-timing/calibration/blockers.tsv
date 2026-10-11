@@ -1,0 +1,132 @@
+id	kind	class	seed	decider	unit	separates	signed	searched
+clause:mg-1	clause	follows	follows	-	-	-	-	-
+clause:mg-2	clause	follows	follows	-	-	-	-	-
+clause:mg-3	clause	A	A	-	U-MAP-D3	-	-	-
+clause:mg-4	clause	C	C	hw-run	-	-	-	-
+clause:mg-5	clause	follows	follows	-	-	-	-	-
+clause:sr-2	clause	follows	follows	-	-	-	-	-
+clause:sr-3	clause	follows	follows	-	-	-	-	-
+clause:sr-4	clause	follows	follows	-	-	-	-	-
+clause:sr-5	clause	follows	follows	-	-	-	-	-
+clause:sr-6	clause	follows	follows	-	-	-	-	-
+bench:dirty-miss-isolated	check	B	B	dirty-miss	U-SEPARATES	-	-	prehw-plan 2.3: NEC VR4300 UM s.12.5.2 p.304 gives the order only; systembench PR #2 has invalid victims only; nemu64 cache.rs lists the dirty victim as TODO
+bench:dirty-row-sweep	check	B	A	dirty-row	U-SEPARATES	-	-	-
+bench:ifill-isolated	check	B	A	ifill	U-SEPARATES	-	-	-
+bench:mi-memset-cached	check	B	A	memset-vi	U-SEPARATES	-	-	-
+bench:mi-memset-repeat	check	A	A	memset-vi	U-REPEAT-KIT	-	-	-
+bench:mi-memset-rspdma	check	B	B	vi-first-line memset-vi	U-SEPARATES	-	-	prehw-plan 2.2: n64brew Video_Interface conflicts with RDRAM_Interface and Video_Interface on H_TOTAL defaults; MiSTer and nemu64 do not model it
+bench:mi-memset-uncached	check	B	A	memset-vi	U-SEPARATES	-	-	-
+bench:pi-dma-sizes	check	B	B	pi-dma-small systembench	U-SEPARATES	-	-	prehw-plan 2.3: no phase recording exists
+bench:pi-dma-sizes-8	check	B	B	pi-dma-small	U-SEPARATES	-	-	prehw-plan 2.3: no phase recording exists
+bench:rdp-loadsz-sweep	check	C	C	tmem-load-rate	-	at=tmem-load-rate tex-derived/all load-block-clk-per-byte;fork=0.7028..0.7028;alt=0.418;cite=https://gitlab.com/jgemu/cen64/-/blob/50c9a7f/src/rdp/rdpsoft_core.c#L3350	verify-158	jgemu cen64 50c9a7f rdpsoft_core.c:3346-3353 (0.418 clk/B, rejected by rel:3; reverted in abc292f); MiSTer RTL 8 B/clk (0.125 not printed); libdragon, systembench, nemu64 (no TMEM timing)
+bench:rdp-rectn	check	C	C	rdp-rect-base	-	at=rdp-rect-base rdp-rectn/duty-320x240 clock;fork=77905..77905;alt=80287;cite=https://gitlab.com/jgemu/cen64/-/blob/2f8d7bc/src/rdp/rdp_core.c#L5351	verify-158	cen64 jgemu rdp_core.c:5346-5362 @2f8d7bc (DUTY 80287 measured, rejected on clock; RECTN 2021.4); Thar0 alpha-fail rows (fit data, excluded)
+bench:si-dma-read64-2	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
+bench:si-dma-read64-3	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
+bench:si-dma-read64-4	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
+bench:sp-dma-sweep	check	C	A	sp-dma-direction	U-SB-PR2	-	-	systembench PR #2 @7c2f96d4 main.c:1613 SPDMAW 0x1000 = 623 RCP (one DMA; the question's chain keys give 4.2 tolerances, derived, past the bound); n64brew 6.5 B/rclk and hcs64 5.55 (far, and hcs64 is ri.overhead-read's fit datum)
+bench:uncached-sizes-u32-banked	check	B	A	cpu-reads	U-SEPARATES	-	-	-
+bench:wb-fifth-store	check	B	B	wb-release	U-SEPARATES	-	-	prehw-plan 2.3: NEC VR4300 UM ('has a space') conflicts with R4300i ('emptied'), vr4300-wb.md:37; systembench PR #2 RCP I/O R+W shows a read empties the buffer but does not time the 5th store
+mm:filesel-named	check	B	B	mm-filesel	U-GLYPH	-	-	-
+mm:south-clock-town	check	B	B	count-per-field	U-SCT-MATCH	-	-	-
+nemu64:timing/load-from-uncached-vi-on-same-bank	check	A	A	vi-cpu-contention nemu64-console	U-NEMU-2022	-	-	-
+nemu64:timing/load-miss-vi-off	check	A	A	dirty-miss nemu64-console	U-NEMU-2022	-	-	-
+pidma:logs	check	B	B	pi-dma-small	U-PIROW-CROSS	-	-	-
+rdpstat:1prim-32px	check	C	C	stale-read	-	at=stale-read rdpstat-1prim/1.0 v0;fork=1;alt=0;cite=https://gitlab.com/jgemu/cen64/-/blob/2f8d7bc/src/rdp/rdp_core.c#L4599	verify-158	cen64 jgemu rdp_core.c:4584-4617 @2f8d7bc (D/L law gives the four-blend value at 32 px, v0=0, exact rejects 1); green-plan/rdp.md:65 (32 px is cen64's extrapolation); snapper64, repeater64, Thar0 (no stacked IM_RD rects)
+systembench:joy-2j	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
+systembench:joy-3j	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
+systembench:joy-4j	check	A	A	joybus-pads	U-SB-PR2	-	-	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
+systembench:pi-dma-8	check	B	B	systembench	U-SEPARATES	-	-	prehw-plan 2.1: rasky/n64-systembench has no README, issues #1 and #2 unrelated, no hardware notes; the pidma recording agrees with the model's 8 B cost
+systembench:u32r-banked	check	B	A	systembench	U-SEPARATES	-	-	-
+thar0:ac-zbsame-vioff-imrd-1cyc	check	B	B	thar0-console	U-ZREAD-1CYC	-	-	-
+thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	check	B	B	thar0-console	U-ZREAD-1CYC	-	-	-
+thar0:imrd-1cycle	check	C	C	thar0-console	-	at=thar0-console nozb-vioff-imrd-1cyc BUF;fork=176749..176749;alt=163555.506;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:4	verify-158	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
+thar0:nozb-visame-noimrd-1cyc	check	C	C	thar0-console	-	at=thar0-console nozb-visame-noimrd-1cyc BUF;fork=77772..77772;alt=81791.406;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:6	verify-158	prehw-plan 2.1: n64brew Set Color Image is the only F1 reference; verify-139 (#139 moves it to -1.14%, held under D5)
+thar0:nozb-visep-imrd-1cyc	check	C	C	thar0-console	-	at=thar0-console nozb-visep-imrd-1cyc BUF;fork=181036.8387..181036.8387;alt=174059.431;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:12	verify-158	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
+thar0:separate-bank	check	B	C	thar0-console	U-SEPARATES	-	-	Thar0 expected.tsv:50 (console 225678.562, inside rel:1 of the fork); plan T13 225518 (same row's min, accepted); cen64, MiSTer, n64brew (no value)
+thar0:zbrw-fail-zbsame-visame-imrd-2cyc	check	C	C	thar0-console zread-2cyc	-	at=thar0-console zbrw-fail-zbsame-visame-imrd-2cyc BUF;fork=199070.625..199070.625;alt=208861.181;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:69	verify-158	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright); no source covers 2-cycle Z read exposure
+thar0:zbrw-pass-zbsep-visep-noimrd-1cyc	check	C	C	thar0-console	-	at=thar0-console zbrw-pass-zbsep-visep-noimrd-1cyc BUF;fork=232525.3548..232525.3548;alt=245638.919;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:70	verify-158	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
+thar0:zcmp	check	B	B	thar0-console	U-ZREAD-1CYC	-	-	-
+ai.fetch-bytes	row	B	B	ai-fetch	U-SEPARATES	-	-	-
+clock.vclk	row	B	B	count-per-field	U-SEPARATES	-	-	-
+cpu.count-write-hold	row	B	B	count-write-hold	U-SEPARATES	-	-	-
+cpu.ctc1-fpe-ce	row	B	B	ctc1-fpe-ce	U-SEPARATES	-	-	-
+cpu.dcb	row	B	B	dcb	U-SEPARATES	-	-	-
+cpu.dfill-total	row	B	C	dirty-miss nemu64-console	U-SEPARATES	-	-	cen64 e0641c8 fault.h:15 (44 pclk stall; a kit-point value needs the fork's kernel arithmetic, so not a cited alt); gopher64 43 (accepted); NEC Table 11-1 (the fork's basis)
+cpu.dirty-miss-order	row	B	B	dirty-miss	U-SEPARATES	-	-	-
+cpu.eret	row	B	B	cpu-exceptions	U-SEPARATES	-	-	-
+cpu.exc-fpu	row	B	B	fpu-classes	U-SEPARATES	-	-	-
+cpu.exc-fpu-detect	row	B	B	fpu-classes	U-SEPARATES	-	-	-
+cpu.fetch-ahead-slots	row	B	B	fetch-ahead	U-SEPARATES	-	-	-
+cpu.fpu-trivial	row	B	B	fpu-classes	U-SEPARATES	-	-	-
+cpu.ifill-stall	row	B	B	ifill	U-SEPARATES	-	-	-
+cpu.irq-sample	row	C	B	irq-clear	U-IRQ-CLEAR	at=irq-clear cpu2-irqclr/timer-d0 fired;fork=0;mut=4;cite=U-SEPARATES	-	alt search (fix-158b), each source with no separating value: NEC VR4300 UM U10504EJ7V0UM00 (https://n64brew.dev/wiki/File:VR4300-Users-Manual.pdf) Table 19-1 p.621 (MTC0 destination hazard 7; Interrupt source Cause.IP, Status.IM, IE, EXL, ERL 3) and Table 19-2 p.625 (MTC0 Status[IE] to an instruction causing an interrupt: 3 instructions, 7-(3+1)) give the spacing software must leave, with values equivalent to or less than the VR4400's (p.620), so they are a bound: every irq-clear point clears inside that 3-instruction window, where the manual states no outcome, and read as an exact latency the table is refuted by the fit data (SoftwareInterrupt1 hazard takes Int 2 instructions after the MTC0 Cause, not 4; inferred); same manual Fig 4-12 p.104 (INTR detected in DC), 4.7.1 p.114 (an interrupt is accepted only if the previous PCycle was a run cycle), 14.4 p.354 and 6.4.18 p.199 (a Compare write clears IP7): no instruction count; n64brew.dev: no COP0, CP0 or Interrupts page (404 on 2026-10-11), CPU and VR4300 pages have no interrupt timing, MIPS_Interface says a mask enable signals the CPU right away (no instruction count), MIPS_Assembly defers CP0 hazards to the manual; lkml.iu.edu/hypermail/linux/kernel/1111.1/00651.html (R4000: mtc0 at stage 7, interrupts sampled at stage 3, a 3-cycle hazard) and 00668.html (Cause updated in WB on later cores): the same bound for other chips; nemu64-test 9a8b9f7 src/tests/exception_instructions/mod.rs:344-411,614-737 and docs/research/nemu64-timing-failures.md:54-56 (sampling lags MTC0 Cause by 1 instruction; a back-to-back set and clear is never taken): the fit data and a reading of it, excluded as an alt source; mut 4 is the fired count at timer-d0 and mi-d0 of the plan-fixed scratch build with the delayed CP0 write rule (u-irq-clear, measured; U-IRQ-CLEAR fixed it), against the fork's 0, which the rule exact rejects at every pad and boot delay; cpu-exceptions irq-sw cannot separate: it reads the same under the mutation (u-irq-clear, measured)
+cpu.uncached-read-total	row	B	C	cpu-reads nemu64-console systembench	U-SEPARATES	-	-	cen64 e0641c8 fault.h:17 (38 pclk; kit-point value needs the fork's kernel arithmetic); systembench U32R 34 (verify data, accepted); gopher64 ~32.3 (accepted)
+cpu.wb-block-entries	row	B	C	wb-release wb-drain-target	U-SEPARATES	-	-	R4300i datasheet p.9 and MiSTer cpu.vhd:719-727 (2 entries, the fork); NEC App C.3.2 (no block count); deciders issue uncached stores only (sets.py:36, cpu2.py:563-594)
+cpu.wb-release	row	B	B	wb-release wb-drain-target	U-SEPARATES	-	-	-
+legacy.ai.power-on-rate	row	B	C	ai-rate	U-SEPARATES	-	-	n64brew Audio_Interface (no power-on value); libultra aisetfreq.c (rounds a set rate, not the power-on state); MiSTer AI.vhd:128,371 (reset 16384 VCLK, derived and far)
+legacy.cart.eeprom-write	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.flash-mn63-chip-erase	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.flash-mn63-program	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.flash-mn63-sector-erase	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.flash-mx-chip-erase	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.flash-mx-program	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.flash-mx-sector-erase	row	A	A	-	U-LABELS-2	-	-	-
+legacy.cart.rtc-tick	row	A	A	-	U-LABELS-2	-	-	-
+legacy.clock.vclk-pal	row	D	D	legacy.clock.vclk-pal	-	-	-	-
+legacy.cpu.interrupt-entry	row	B	B	cpu-exceptions nemu64-cop0hazard-console	U-SEPARATES	-	-	-
+legacy.cpu.nmi-entry	row	D	D	legacy.cpu.nmi-entry	-	-	-	-
+legacy.cpu.sysad-frozen-step	row	D	D	legacy.cpu.sysad-frozen-step	-	-	-	-
+legacy.pi.cart-read	row	B	B	dom2-read	U-SEPARATES	-	-	-
+legacy.pif.boot-timeout	row	A	A	-	U-PIF-TIMEOUT	-	-	-
+legacy.pif.step-quantum	row	D	D	legacy.pif.step-quantum	-	-	-	-
+pi.block-bytes	row	B	C	pi-dma-small	U-SEPARATES	-	-	n64brew PI (128 B, the fork); n64_pi_dma_test (different loop); systembench main.c:589-592 (other binary); MiSTer PI.vhd (no kit-metric value)
+pi.block-writeback	row	B	C	pi-dma-small	U-SEPARATES	-	-	dma-timing.md (the fit); systembench main.c:589-592 and bench pi-dma-sizes (fit data); n64_pi_dma_test (different loop); n64brew PI (no writeback figure)
+pi.first-block-empty-write	row	B	C	pi-row-end	U-SEPARATES	-	-	n64brew PI first-block rule (the fork's basis); pi-rowend.md (pidma replay, different program); rdram-bus-arbitration.md B2
+pi.halfword-bias	row	B	C	pi-dma-small systembench	U-SEPARATES	-	-	n64brew PI (the fork); rasky systembench main.c:589 193 (other binary, inside its codegen spread); bench expected.tsv:12; MiSTer PI.vhd
+pi.io-busy	row	B	B	poll-phase systembench	U-SEPARATES	-	-	-
+pi.page-setup	row	B	C	pi-dma-small systembench	U-SEPARATES	-	-	n64brew PI 14+LAT+1 (the fork); dma-timing.md; systembench main.c:589-592 (other binary); MiSTer PI.vhd
+pif.joybus-no-device	row	B	C	joybus-pads	U-SEPARATES	-	-	hacktarux PR #2 main.c:1566 60965 (2 pads, other program; the fork agrees within systembench's 0.2%); rasky main.c:610 57972 (fit datum); pif-joy.md
+rdp.cmd-fetch-burst	row	C	C	cmd-fetch-burst	-	at=cmd-fetch-burst cmd-fetch/burst burst_gcd;fork=128;alt=176;cite=https://github.com/MiSTer-devel/N64_MiSTer/blob/5725381/rtl/RDP.vhd#L691	verify-158	MiSTer RDP.vhd:682-692 @5725381 (22-word burst, 176 B, rejected by exact); rdp-command-timing.md:54,84; n64brew RDP Interface (no number); cen64 (no burst size)
+rdp.cmd-fifo-dwords	row	C	C	cmd-fifo-depth	-	at=cmd-fifo-depth fifo-depth/nops-512 current_minus_start;fork=240;alt=512;cite=https://github.com/MiSTer-devel/N64_MiSTer/blob/5725381/rtl/RDP_command.vhd#L97	-	n64-systemtest rdp/mod.rs:21-23 (240 B, the fork's value); MiSTer RDP_command.vhd:97-98 @5725381 (SIZE 64 x DATAWIDTH 64: the alt 512 B is the FIFO capacity, not the DPC_CURRENT-START reading, which NEARFULLDISTANCE 32 at :99 and the 22-dword burst keep below it; rejected by exact either way, verify-158); rdp-command-timing.md:54,236
+rdp.color-half-pixels-16bpp	row	B	B	color-half-16bpp	U-SEPARATES	-	-	-
+rdp.fill-copy-rate	row	C	C	thar0-console fill-copy-rate copy-passfail	-	at=fill-copy-rate tex-derived/all fill-b16-bytes-per-clk;fork=6.69..6.696;alt=8;cite=https://ultra64.ca/files/documentation/online-manuals/man-v5-1/pro-man/pro12/12-01.htm#L89	verify-158	SDK 5.1 pro-man 12-01.htm 12.1.4 (fill 64 bits per clock = 8 B, rejected) and 12.1.5; n64brew RDP Pipeline (no per-clock rate); rdp-command-timing.md:66-67
+rdp.mem-overhead-read	row	B	C	span-width	U-SEPARATES	-	-	span-ram.md (no latency); rdp-memory-traffic.md Q1 (open); thar0-zcmp-residual.md:53 (fit data); cen64 rdp_core.c:5346-5362 (no-read law only)
+rdp.mem-overhead-write	row	B	B	-	U-WRITE-HOLD-Q	-	-	-
+rdp.noise-alpha-dither	row	B	B	noise-alpha-dither	U-NOISE-READER	-	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:39-41 cite a/b/c mappings for G_AD_NOISE only (Angrylion 0-7, MiSTer odd 1-7), none for the G_AC_DITHER threshold, so ac-dither has no mapping to test; ad-noise-threshold stores nothing for any value (alpha 0x78 + 7 < blend 0x80), b = 0, false-match rate >= 2 at K = 0; report-only until a kit-noise ROM change
+rdp.noise-dither-bits	row	B	B	noise-dither-bits	U-NOISE-READER	-	-	U-NOISE-READER (kit.py --noise-rate): rdp-noise.md:40 names Angrylion irand and MiSTer lfsr(8:0), neither a mapping of a, b, c; cd-noise-16's gray 0x80 has low bits 0, so no dither value rounds it (b = 0, fork 1 dump over 64 logs); report-only until a kit-noise ROM change
+rdp.port-lookahead	row	B	C	imrd-zcmp-slots-2cyc	U-SEPARATES	-	-	behaviors.tsv reference (no source for reorder depth); questions.tsv imrd-zcmp-slots-2cyc (fork values only); span-ram.md; MiSTer RDP.vhd (no reorder queue)
+rdp.primitive-base	row	C	C	rdp-rect-base	-	at=rdp-rect-base rdp-rectn/duty-320x240 clock;fork=77905..77905;alt=80287;cite=https://gitlab.com/jgemu/cen64/-/blob/2f8d7bc/src/rdp/rdp_core.c#L5351	verify-158	cen64 jgemu rdp_core.c:5346-5362 @2f8d7bc (DUTY 80287 measured, rejected on clock; RECTN 2021.4); Thar0 alpha-fail rows (fit data, excluded)
+rdp.read-gate	row	C	C	thar0-console	-	at=thar0-console ac-zcmp-zbsep-vioff-imrd-2cyc BUF;fork=170714..170714;alt=183344.306;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:101	verify-158	SDK 15.7 and US 6,166,748 claim 1 (gate rule, no timing); Thar0 expected.tsv:101 (console 183344.306, rejected at rel:1); rdp-memory-traffic.md (no value)
+rdp.span-2cycle	row	B	C	noise-2cycle zread-2cyc	U-SEPARATES	-	-	Thar0 expected.tsv:91 row 89 (659.0 rclk/line; a kit-point value needs the fork's own per-line slope, so not a cited alt); row 87 (734.7/line, past 4 tolerances, not printed per point); noise-2cycle (exact hash, none published)
+rdp.span-dead-pixels	row	C	C	rdp-rect-base	-	at=rdp-rect-base rdp-rectn/duty-320x240 clock;fork=77905..77905;alt=80287;cite=https://gitlab.com/jgemu/cen64/-/blob/2f8d7bc/src/rdp/rdp_core.c#L5351	verify-158	cen64 jgemu rdp_core.c:5346-5362 @2f8d7bc (DUTY 80287 measured, rejected on clock; RECTN 2021.4); Thar0 alpha-fail rows (fit data, excluded)
+rdp.span-line-gap	row	C	C	rdp-rect-base	-	at=rdp-rect-base rdp-rectn/duty-320x240 clock;fork=77905..77905;alt=80287;cite=https://gitlab.com/jgemu/cen64/-/blob/2f8d7bc/src/rdp/rdp_core.c#L5351	verify-158	cen64 jgemu rdp_core.c:5346-5362 @2f8d7bc (DUTY 80287 measured, rejected on clock; RECTN 2021.4); Thar0 alpha-fail rows (fit data, excluded)
+rdp.span-read-latency	row	B	C	span-width mm-filesel imrd-zcmp-slots imrd-zcmp-slots-2cyc zread-2cyc	U-SEPARATES	-	-	span-ram.md:40,70,150-163 (no public latency); thar0-zcmp-residual.md (fit configs); Thar0 rows 87/89 (VI-off grid data); mm-filesel-slowdown.md (no fork values: no BENCH ROMs in the standing home)
+rdp.span-slots	row	C	C	span-width thar0-console snapper64 imrd-zcmp-slots imrd-zcmp-slots-2cyc zread-2cyc	-	at=thar0-console ac-zcmp-zbsame-vioff-noimrd-2cyc BUF;fork=155493..155493;alt=176339.712;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:89	verify-158	SDK 12.2.3 (at least 2 span buffers, no count); span-ram.md, span-ram-attempt.md; Thar0 expected.tsv:89 (console 176339.712, rejected at rel:1); MiSTer (implementation only)
+rdp.tmem-load-rate	row	C	C	tmem-load-rate tmem-load-setup loadtile-rows	-	at=tmem-load-rate tex-derived/all load-block-clk-per-byte;fork=0.7028..0.7028;alt=0.418;cite=https://gitlab.com/jgemu/cen64/-/blob/50c9a7f/src/rdp/rdpsoft_core.c#L3350	verify-158	jgemu cen64 50c9a7f rdpsoft_core.c:3346-3353 (0.418 clk/B, rejected by rel:3; reverted in abc292f); MiSTer RTL 8 B/clk (0.125 not printed); libdragon, systembench, nemu64 (no TMEM timing)
+ri.arbitration	row	B	C	vi-cpu-contention thar0-console nemu64-console ri-priority ri-reorder ri-priority-overlap	U-SEPARATES	-	-	rdram-bus-arbitration.md B4 (MiSTer order only); nemu64 cache.rs:304 36.3 (a hardware reading of nemu64 20.0, not an alternative arbitration); ri-priority, ri-reorder, ri-priority-overlap (fork predictions only)
+ri.bank-of	row	B	C	nemu64-console	U-SEPARATES	-	-	n64brew RDRAM_Interface (the fork's map); NEC uPD488170L (consistent); nemu64 cache.rs:304 (hardware reading, not an alternative map)
+ri.overhead-rdp	row	C	C	thar0-console	-	at=thar0-console zbrw-pass-zbsep-visame-noimrd-1cyc BUF;fork=239729.4194..239729.4194;alt=258978.019;cite=tools/n64-timing/romgen/suites/thar0/expected.tsv:74	verify-158	NEC uPD488170L (no RDP overhead); rdram-bus-arbitration.md (no per-burst RDP figure); Thar0 expected.tsv:74 (console 258978.019, rejected at rel:1; not the configs the value was derived from); MiSTer DDR3Mux (no RDRAM timing)
+ri.overhead-read	row	B	C	sp-dma-direction	U-SEPARATES	-	-	hcs64 5.55 (the row's fit data); n64brew 6.5 B/rclk (26 tolerances, derived); systembench PR #2 main.c:1600-1607 (24-27 tolerances, not printed per point); gopher64 (8.9 tolerances)
+ri.overhead-write	row	C	C	memset-vi	-	at=memset-vi mi-memset-rspdma/vi-off min;fork=113702..113702;alt=115056;cite=https://github.com/hacktarux/n64-systembench/blob/7c2f96d4/src/main.c#L1615	verify-158	systembench PR #2 @7c2f96d4 main.c:1615 (SPDMAW 128 KiB in 19176 RCP, VI off: 115056 COUNT per MiB, 2.4 tolerances, rejected); n64brew 2.58 ms (12.7 tolerances, derived, out); hcs64 5.55 (far)
+ri.post-read-gap	row	B	C	sp-dma-direction	U-SEPARATES	-	-	hcs64 (13-18 tolerances, derived); PR #2 SPDMAR main.c:1604,1606 (far, not printed in COUNT); n64brew 2.58 ms on a write key (weakly coupled to the row)
+ri.post-write-gap	row	B	C	sp-dma-direction	U-SEPARATES	-	-	n64brew 2.58 ms memset rate applied to the sp-dma chain (asserts chain = memset rate, unpublished); hcs64 (13-18 tolerances); PR #2 SPDMAW main.c:1613,1615 (4.2 tolerances, past the bound)
+ri.rank.vi	row	B	C	vi-cpu-contention nemu64-console ri-priority	U-SEPARATES	-	-	rdram-bus-arbitration.md B4 (MiSTer rank, no metric); vi-cpu-contention (nemu64 means within abs:2); nemu64 cache.rs:304 (hardware reading, not an alternative rank)
+ri.refresh-latch	row	B	B	-	U-VI-SHORT-LINE	-	-	-
+ri.request-latency	row	D	D	ri.request-latency	-	-	-	-
+ri.retry-clean	row	B	C	nemu64-console	U-SEPARATES	-	-	NEC tRetrySensedClean (the fork's basis); nemu64 cache.rs:304 (hardware reading, not an alternative)
+ri.row-of	row	B	C	nemu64-console	U-SEPARATES	-	-	NEC 2 KiB row (the fork); nemu64 cache.rs:304 (hardware reading, not an alternative)
+ri.write-hit	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 49.8 ms (3.95 tolerances; sysad.rdram-block-write-period's fit datum); 25.7 ms (7.5 tolerances, derived); NEC tWriteHit (the fork's basis)
+scheduler.tie-rank	row	D	D	scheduler.tie-rank	-	-	-	-
+si.io-busy	row	B	B	poll-phase systembench	U-SEPARATES	-	-	-
+si.write64	row	B	B	si-write64-poll	U-SEPARATES	-	-	-
+si.write64-rom	row	B	B	si-write64-poll	U-SEPARATES	-	-	-
+sp.dma-burst	row	B	C	sp-dma-direction	U-SEPARATES	-	-	dma-timing.md:50 (the row's basis); n64brew 2.58 ms applied to the sp-dma chain (unpublished equivalence); hcs64 (far)
+sysad.rdram-block-write-period	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 49.8 ms (the row's fit data); PR #2 DCACHE rows 35/39 (fill only); nemu64 cache.rs:21-22 (TODO); MiSTer memorymux (no total)
+sysad.rdram-write-period	row	B	C	memset-vi	U-SEPARATES	-	-	n64brew memset 25.7 ms (the row's fit data); PR #2 U32W 46 (latency, far, not printed as a total); MiSTer memorymux (no total)
+sysad.register-write	row	B	C	register-write wb-drain-target	U-SEPARATES	-	-	MiSTer memorymux.vhd:362-367 @5725381 (write 3 SClock; a kit-point value needs the fork's per-store slope, so not a cited alt); n64brew Memory map 5-6 PClock (read/write unspecified); systembench RCP I/O W (commented out)
+vi.aa-mode-lines	row	B	C	vi-cpu-contention nemu64-console vi-fetch-modes	U-SEPARATES	-	-	Angrylion 9c8b9ed fetch.c:10-27 (2 rows in mode 2; a software renderer's reads, scaled by the fork's per-line loads, not a cited bus value); SDK pro-man 24.4 and US 6,166,748 (3 lines, the fork); MiSTer VI_linefetch.vhd (1 line, far)
+vi.display-window	row	B	B	vi-fetch-modes vi-fetch-position	U-SEPARATES	-	-	-
+vi.fetch-overrun	row	B	B	-	U-VI-SHORT-LINE	-	-	-
+vi.lines-per-output-line	row	B	C	nemu64-console vi-fetch-modes	U-SEPARATES	-	-	SDK pro-man 24.4 and US 6,166,748 (3, the fork); Angrylion and paraLLEl 4 rows and MiSTer 1 line (past 4 tolerances, not printed per point)
+vi.register-sample	row	B	B	vi-fetch-modes vi-frame-latch	U-SEPARATES	-	-	-
+vi.unfetched-sample	row	A	A	-	U-LABELS-2	-	-	-

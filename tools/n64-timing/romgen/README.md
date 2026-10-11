@@ -51,6 +51,12 @@ The phase ROMs hold these four tests alone. `measure.py`'s phase variant spins `
 
 `run-nemu64.sh timing-phase` runs every phase ROM. `python -m romgen.suites.nemu64.phase` then writes `measurements.tsv` (each value at each delay) and `phase.tsv` (each value's verdict). The rule is green-plan.md section 3, "nemu64 phase walk". A value passes when the model's mean over the phases is within the hardware mean +- the test's published epsilon, and the ROM's min..max and median +-1 checks hold at every phase. No value passes because one phase passes. The checks `nemu64:timing/load-*` read `phase.tsv`.
 
+### The 2022 harness
+
+nemu64-test measured the averaged tests twice on hardware, under two harnesses. Its 2022 harness (`cache.rs` at de30f2df, MIT, the same `LICENSE.nemu64-test`) ran a fixed `get_cycles` loop that called the preconditions and the body in a separate 64-word buffer. Commit 0603245f76 (2026) moved the loop into the generated buffer and re-measured only the same-bank mean, from 40.7 to 36.3. The other expectations are the same in both.
+
+The `timing-phase-2022` ROMs (`phase-<K>/nemu64-timing-2022.z64`) link `measure.asm(layout=LAYOUT_2022)`. Its `get_cycles_2022` loop is the de30f2df inline asm, instruction for instruction, and the buffer sits at `EXEC_BASE`. nemu64-test's allocator chose both addresses, and they are not published. The port places them on disjoint icache lines, and `timing.build_averaged` asserts it. `run-nemu64.sh timing-phase-2022` judges them under the same phase rule against the 2022 expectations. The checks `nemu64:timing-2022/load-*` read that `phase.tsv`.
+
 ## Port notes
 
 These are the places where the port is not a direct translation of the Rust source.
