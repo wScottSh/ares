@@ -189,6 +189,16 @@ def cpu2(records):
     return {("cpu2-derived", "all"): out}
 
 
+def countw(recs):
+    """kit-cpu2's COUNT write points: dmax - min per slot, the reading's spread over the eight entry phases.
+    It shows the COUNT divider's phase through an MTC0 COUNT apart from the hold length that min reads."""
+    out = {("cpu2-countw-spread", point): {"spread": f["dmax"] - f["min"]}
+           for (rom, point), f in recs.items() if rom == "cpu2-countw"}
+    if not out:
+        raise KeyError("cpu2-countw")
+    return out
+
+
 def bus(recs):
     """kit-bus: the AI's power-on VCLK per sample (against the 1103-VCLK point, so the VI:COUNT clock
     ratio cancels), per-load slowdown under each RDRAM client, the SP DMA's slowdown from same-bank
@@ -321,4 +331,4 @@ def vi_latch(recs):
                                           "vi_bank": got["y-late-bank2"]["vi_bank"]}}
 
 
-DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch, span2, hsync]
+DERIVED = [tex, zmem, cpu2, countw, bus, vintr, vi_latch, span2, hsync]

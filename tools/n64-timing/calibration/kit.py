@@ -244,7 +244,44 @@ def model_layouts(run_dir, rom, pads=None):
     base = Path(run_dir) / PAD_SETUPS[pads]
     found = [0] + sorted(int(d.name[1:]) for d in base.glob("p*") if re.fullmatch(r"p\d+", d.name))
     out = {pad: [m for m in model_logs(run_dir, rom, pads, pad) if m.complete] for pad in found}
+    walk = phase_walk(run_dir, rom)
+    if walk:
+        for logs in out.values():
+            for log in logs:
+                for key, fields in log.records.items():
+                    if key in walk[0].records:
+                        fields.pop("v0", None)
+            logs += walk
     return {pad: logs for pad, logs in out.items() if logs}
+
+
+#nemu64-timing's averaged values depend on the VI phase a run starts at, and a console boots into any phase, so
+#their model side is the fork's verdict at every phase of the nemu64 phase walk (run-nemu64.sh timing-phase),
+#which a standing run keeps beside its calib/ directory, not the one phase of the kit ROM's own run.
+PHASE_WALKS = {"nemu64-timing": "nemu64/timing-phase"}
+WALK_RECORD = re.compile(r"^@(\d+)\.(\d+) (-?\d+)")
+
+
+def phase_walk_dir(run_dir, rom):
+    return Path(run_dir).parent / PHASE_WALKS[rom] if rom in PHASE_WALKS else None
+
+
+def phase_walk(run_dir, rom):
+    """The phase walk's verdicts as one log per phase, keyed as the kit ROM numbers its values; None when the
+    ROM's averaged values have no walk, [] when the walk is missing."""
+    walk = phase_walk_dir(run_dir, rom)
+    if walk is None:
+        return None
+    from romgen.suites.nemu64 import timing
+    logs = []
+    for path in sorted(walk.glob("phase-*/stdout.txt")):
+        log = Log(b"")
+        log.header, log.complete = {"rom": rom, "build": f"phase-walk {path.parent.name}"}, True
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if m := WALK_RECORD.match(line):
+                log.records[(rom, f"{int(m[1]) + timing.AVERAGED_AT}.{m[2]}")] = {"v0": int(m[3])}
+        logs.append(log)
+    return logs
 
 
 def spread(question, logs):
@@ -521,6 +558,9 @@ def result_from(root, model_dir, qid):
         group = [log for log in logs if log.pads == pads]
         if pads not in PAD_SETUPS:
             return "fail", f"{kit}: controller ports {pads:04b} answered; the fork runs 1 pad (0001) or 4 (1111)"
+        if phase_walk(model_dir, kit) == []:
+            return "missing", (f"no nemu64 phase walk in {phase_walk_dir(model_dir, kit)}, the model side of {kit}'s "
+                               f"averaged values; run tools/n64-timing/run-nemu64.sh timing-phase there")
         model = model_layouts(model_dir, kit, pads)
         if not model:
             return "missing", f"no fork run of {kit} in {model_dir}/{PAD_SETUPS[pads]}; run tools/n64-timing/calibration/run.sh there"
