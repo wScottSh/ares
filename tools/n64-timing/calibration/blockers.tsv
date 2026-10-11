@@ -37,8 +37,8 @@ systembench:joy-3j	check	C	joybus-pads	-	the fork's pif.joybus-no-device, fit fr
 systembench:joy-4j	check	C	joybus-pads	-	the fork's pif.joybus-no-device, fit from 2J assuming one pad, against a rig with more pads attached (prehw-plan 2.3)	prehw-plan 2.3: rasky/n64-systembench (no README, no rig notes), n64brew PIF-NUS, hardware-corpora.md:23, web search: the hardware rig's pad count is unpublished
 systembench:pi-dma-8	check	C	systembench	-	-	prehw-plan 2.1: rasky/n64-systembench has no README, issues #1 and #2 unrelated, no hardware notes; the pidma recording agrees with the model's 8 B cost
 systembench:u32r-banked	check	A	systembench	U-SB-PR2	-	-
-thar0:ac-zbsame-vioff-imrd-1cyc	check	B	thar0-console	U-ZREAD-1CYC	-	-
-thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	check	B	thar0-console	U-ZREAD-1CYC	-	-
+thar0:ac-zbsame-vioff-imrd-1cyc	check	C	zread-1cyc	U-ZREAD-1CYC	fork=7684 (zmem-read1/imrd-zsep-w320-h16 clock, 45.125 rclk per read);mut=7535 (44.15 rclk per read: the post-to-grant hop removed for DpColor and DpDepth posts, thar0-zcmp-residual.md variant-q0; zread-1cyc rejects it at 16 of 120 values, every pad);cite=U-ZREAD-1CYC	prehw-plan 2.1 (as thar0:imrd-1cycle and thar0-zcmp-residual.md): Thar0 RDP-Timing-Tests has one rectangle size and whole-run averages only; n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748 and cen64 give no per-read cost; not re-searched by U-ZREAD-1CYC
+thar0:ac-zcmp-zbsep-vioff-imrd-1cyc	check	C	zread-1cyc-both	U-ZREAD-1CYC	fork=13252 (zmem-read1/both-zsame-w320-h16 clock);mut=12975 (variant-q0, as thar0:zcmp's; zread-1cyc-both rejects it only at that same-bank point: at the separate-bank points this config repeats it moves 42 rclk at 320x16, inside abs:164.86);cite=U-ZREAD-1CYC	prehw-plan 2.1 (as thar0:imrd-1cycle and thar0-zcmp-residual.md): Thar0 RDP-Timing-Tests has one rectangle size and whole-run averages only; n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748 and cen64 give no per-read cost; not re-searched by U-ZREAD-1CYC
 thar0:fill-mode	check	A	fill-copy-rate	U-LABELS-2	-	-
 thar0:imrd-1cycle	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
 thar0:nozb-visame-noimrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: n64brew Set Color Image is the only F1 reference; verify-139 (#139 moves it to -1.14%, held under D5)
@@ -46,7 +46,7 @@ thar0:nozb-visep-imrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-T
 thar0:separate-bank	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright); the NEC datasheet is already used for ri.*
 thar0:zbrw-fail-zbsame-visame-imrd-2cyc	check	C	thar0-console zread-2cyc	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright); no source covers 2-cycle Z read exposure
 thar0:zbrw-pass-zbsep-visep-noimrd-1cyc	check	C	thar0-console	-	-	prehw-plan 2.1: Thar0 RDP-Timing-Tests (2 commits, one results file, README gives issue order only; strict order measured worse, behaviors.tsv:131); n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748, cen64: nothing on stream overlap; the RDP RTL leak is not usable (Nintendo copyright)
-thar0:zcmp	check	B	thar0-console	U-ZREAD-1CYC	-	-
+thar0:zcmp	check	C	zread-1cyc	U-ZREAD-1CYC	fork=7684 (zmem-read1/imrd-zsep-w320-h16 clock, 45.125 rclk per read);mut=7535 (44.15 rclk per read: the post-to-grant hop removed for DpColor and DpDepth posts, thar0-zcmp-residual.md variant-q0; zread-1cyc rejects it at 16 of 120 values, every pad);cite=U-ZREAD-1CYC	prehw-plan 2.1 (as thar0:imrd-1cycle and thar0-zcmp-residual.md): Thar0 RDP-Timing-Tests has one rectangle size and whole-run averages only; n64brew RDP pages, MiSTer RDP.vhd, patents US6331856/US6239810/US6166748 and cen64 give no per-read cost; not re-searched by U-ZREAD-1CYC
 ai.fetch-bytes	row	C	ai-fetch	-	-	-
 clock.vclk	row	C	count-per-field	-	-	-
 cpu.count-write-hold	row	C	count-write-hold	-	-	-
@@ -91,7 +91,7 @@ rdp.cmd-fetch-burst	row	C	cmd-fetch-burst	-	-	-
 rdp.cmd-fifo-dwords	row	C	cmd-fifo-depth	-	-	-
 rdp.color-half-pixels-16bpp	row	C	color-half-16bpp	-	-	-
 rdp.fill-copy-rate	row	C	thar0-console fill-copy-rate copy-passfail	-	-	-
-rdp.mem-overhead-read	row	C	span-width	-	-	-
+rdp.mem-overhead-read	row	C	span-width zread-1cyc	-	-	-
 rdp.mem-overhead-write	row	B	-	U-WRITE-HOLD-Q	-	-
 rdp.noise-alpha-dither	row	B	noise-alpha-dither	U-NOISE-READER	-	-
 rdp.noise-dither-bits	row	B	noise-dither-bits	U-NOISE-READER	-	-
@@ -101,7 +101,7 @@ rdp.read-gate	row	C	thar0-console	-	-	-
 rdp.span-2cycle	row	C	noise-2cycle zread-2cyc	-	-	-
 rdp.span-dead-pixels	row	C	rdp-rect-base	-	-	-
 rdp.span-line-gap	row	C	rdp-rect-base	-	-	-
-rdp.span-read-latency	row	C	span-width mm-filesel imrd-zcmp-slots imrd-zcmp-slots-2cyc zread-2cyc	-	-	-
+rdp.span-read-latency	row	C	span-width mm-filesel imrd-zcmp-slots imrd-zcmp-slots-2cyc zread-2cyc zread-1cyc	-	-	-
 rdp.span-slots	row	C	span-width thar0-console snapper64 imrd-zcmp-slots imrd-zcmp-slots-2cyc zread-2cyc	-	-	-
 rdp.tmem-load-rate	row	C	tmem-load-rate tmem-load-setup loadtile-rows	-	-	-
 ri.arbitration	row	C	vi-cpu-contention thar0-console nemu64-console ri-priority ri-reorder ri-priority-overlap	-	-	-
