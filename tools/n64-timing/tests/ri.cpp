@@ -108,8 +108,8 @@ auto testRi() -> u32 {
     c.post(burst(0, 128, Direction::Write, Requester::SpDma), Clock{0});
     auto g = c.decide();
     c.post({0, 0, Direction::Write, Requester::Refresh, 0}, g.start + Clock{1});
-    CHECK(c.next() == nextRclkEdge(c.free), "refresh waits for the burst in flight, got %lld vs %lld",
-          (long long)c.next().units, (long long)c.free.units);
+    CHECK(c.next() == nextRclkEdge(c.writeGapEnd), "refresh waits for the burst in flight and its write gap, got %lld vs %lld",
+          (long long)c.next().units, (long long)c.writeGapEnd.units);
 
     c.reset();
     c.post(burst(0, 8, Direction::Read, Requester::PiDma), Clock{5});
@@ -119,6 +119,39 @@ auto testRi() -> u32 {
     c.post({0, 0, Direction::Write, Requester::Refresh, 0}, Clock{20});
     c.post(burst(0, 8, Direction::Read, Requester::PiDma), Clock{0});
     CHECK(c.next() == Clock{12} && order(Requester::PiDma), "a refresh that has not arrived by the decision does not win it");
+  }
+
+  //Post-write gap (NEC uPD488170L p44): 4 tc before the next transaction to
+  //the written 2 MiB device, none before one to another device; reads leave no
+  //device gap. Defects: the gap charged on every write, the gap dropped, a
+  //device boundary other than 2 MiB, a blocked winner that does not let the
+  //decision wait for the gap.
+  {
+    for(u32 next : {0x0008'0000u, 0x0010'0000u, 0x0020'0000u, 0x0060'0000u}) {
+      const bool same = deviceOf(next) == 0;
+      Channel c; c.reset();
+      c.post(burst(0, 8, Direction::Write), Clock{0});
+      c.decide();
+      CHECK(c.writeGapEnd == c.free + Behavior::RiPostWriteGap, "a write sets its device's gap");
+      c.post(burst(next, 8, Direction::Read), Clock{0});
+      Clock expect = nextRclkEdge(same ? c.writeGapEnd : c.free);
+      CHECK(c.next() == expect, "a read of 0x%06x after a write to 0 decides at %lld, got %lld",
+            next, (long long)expect.units, (long long)c.next().units);
+      c.decide();
+      CHECK(c.writeGapEnd == c.free, "a read leaves no device gap");
+    }
+    CHECK(deviceOf(0x001f'ffff) == 0 && deviceOf(0x0020'0000) == 1 && deviceOf(0x007f'ffff) == 3, "2 MiB devices");
+
+    //VI wins the decision but goes to the written device, so the channel waits
+    //for the gap; the CPU read to another device does not get in first
+    Channel c; c.reset();
+    c.post(burst(0, 8, Direction::Write), Clock{0});
+    c.decide();
+    c.post(burst(0x0020'0000, 8, Direction::Read), Clock{0});
+    c.post(burst(0, 8, Direction::Read, Requester::ViFetch), Clock{0});
+    CHECK(c.next() == nextRclkEdge(c.writeGapEnd), "a blocked winner moves the decision to the gap's end");
+    auto g = c.decide();
+    CHECK(g.burst.requester == Requester::ViFetch, "VI still wins at the gap's end");
   }
 
   //Refresh: 52 rclk when no bank is dirty, 54 when one is; it clears every

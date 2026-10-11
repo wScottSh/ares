@@ -104,6 +104,9 @@ constexpr auto rank(Requester r) -> s64 {
 //ri.bank-of, ri.row-of: 8 banks of 1 MiB, rows of 2 KiB.
 constexpr auto bankOf(u32 address) -> u32 { return address >> 20 & 7; }
 constexpr auto rowOf (u32 address) -> u32 { return address >> 11 & 511; }
+//Every retail module is a 2 MiB device of two banks, matched on IdField[35:21]
+//(n64brew RDRAM, DeviceId: "k = 21 for 16/18Mbit RDRAM"; B6).
+constexpr auto deviceOf(u32 address) -> u32 { return address >> 21 & 3; }
 
 //Octbytes on the wire: the RI computes Count from the length and Adr[2:0] (B2).
 constexpr auto octbytes(u32 address, u32 bytes) -> u32 { return ((address & 7) + bytes + 7) >> 3; }
@@ -121,13 +124,14 @@ constexpr auto wire(Direction direction, u32 octs, Row row) -> Clock {
 
 //Channel time a burst holds beyond its wire time before the next request
 //packet: the per-direction RI overhead fitted from SP DMA throughput, then the
-//NEC post-transaction gap. Scanout has its own overhead (ri.overhead-vi).
+//NEC post-read gap. Scanout has its own overhead (ri.overhead-vi). The
+//post-write gap binds only the written device (Channel::writeGapEnd).
 constexpr auto trailer(Requester requester, Direction direction) -> Clock {
   if(requester == Requester::ViFetch) return Timing::Behavior::RiOverheadVi + Timing::Behavior::RiPostReadGap;
   bool dp = requester >= Requester::DpCommand && requester <= Requester::DpFill;
   if(direction == Direction::Read)
     return (dp ? Timing::Behavior::RiOverheadRdp : Timing::Behavior::RiOverheadRead) + Timing::Behavior::RiPostReadGap;
-  return (dp ? Timing::Behavior::RiOverheadRdp : Timing::Behavior::RiOverheadWrite) + Timing::Behavior::RiPostWriteGap;
+  return dp ? Timing::Behavior::RiOverheadRdp : Timing::Behavior::RiOverheadWrite;
 }
 
 struct Channel {
@@ -145,6 +149,8 @@ struct Channel {
     for(auto& p : pending) p = {};
     for(auto& n : sequences) n = 0;
     free = {};
+    writeGapEnd = {};
+    writeDevice = 0;
     refreshEnd = {};
     for(auto& bank : banks) bank = {};
     for(auto& c : counters) c = {};
@@ -157,9 +163,7 @@ struct Channel {
     if(count == Capacity) abort();
     Clock arrival = at + Timing::Behavior::RiRequestLatency;
     pending[count++] = {burst, arrival, sequences[(u32)burst.requester]++};
-    //no decision before `free`, so a refresh never cuts into a granted burst (ri.refresh-waits-for-burst)
-    Clock d = Timing::nextRclkEdge(arrival > free ? arrival : free);
-    if(d < cachedNext) cachedNext = d;
+    recompute();
   }
 
   //The rclk edge of the next decision, or never when nothing is pending.
@@ -177,11 +181,7 @@ struct Channel {
   //bank's row state, and updates the bank.
   auto decide() -> Grant {
     const Clock d = cachedNext;
-    u32 w = count;
-    for(u32 i = 0; i < count; i++) {
-      if(pending[i].arrival > d) continue;
-      if(w == count || before(pending[i], pending[w])) w = i;
-    }
+    const u32 w = winnerAt(d);
     //removing in place keeps the array a pure function of the live requests,
     //so a save state does not depend on the order the host posted them in
     const Pending p = pending[w];
@@ -212,9 +212,18 @@ struct Channel {
       bank.valid  = true;
       bank.row    = row;
       free = g.dataEnd + trailer(b.requester, b.direction);
-      if(write) c.bytesWritten += b.bytes; else c.bytesRead += b.bytes;
+      if(write) {
+        c.bytesWritten += b.bytes;
+        writeDevice = deviceOf(b.address);
+      } else {
+        c.bytesRead += b.bytes;
+      }
       c.rowMisses += g.rowMiss;
     }
+    //NEC uPD488170L p44 tPostMemWriteDelay: 4 tCYCLE before the next transaction
+    //to the same device, "zero delay if the next transaction is to a different device"
+    writeGapEnd = b.direction == Direction::Write && b.requester != Requester::Refresh
+                ? free + Timing::Behavior::RiPostWriteGap : free;
     c.bursts++;
     c.busy += free - d;
     c.wait += d - p.arrival;
@@ -240,6 +249,8 @@ struct Channel {
       s(bank.dirty);
     }
     s(free.units);
+    s(writeGapEnd.units);
+    s(writeDevice);
     s(refreshEnd.units);
     for(auto& n : sequences) s(n);
     for(auto& c : counters) {
@@ -257,6 +268,8 @@ struct Channel {
   u32      count = 0;
   Bank     banks[8] = {};
   Clock    free;  //the channel takes its next request packet from here
+  Clock    writeGapEnd;  //from here for the device the last write went to; == free after a read or refresh
+  u32      writeDevice = 0;
   Clock    refreshEnd;  //the last granted refresh releases the channel here
   u32      sequences[(u32)Requester::Count] = {};  //per requester: its posts arrive in its own order
   Counters counters[(u32)Requester::Count] = {};
@@ -287,11 +300,35 @@ private:
     return a.sequence > b.sequence;
   }
 
+  //The pending request that wins a decision at `d`, by (rank, arrival, requester, sequence).
+  auto winnerAt(Clock d) const -> u32 {
+    u32 w = count;
+    for(u32 i = 0; i < count; i++) {
+      if(pending[i].arrival > d) continue;
+      if(w == count || before(pending[i], pending[w])) w = i;
+    }
+    return w;
+  }
+
+  //A refresh is a broadcast, so it reaches the written device too.
+  auto waitsForWriteGap(const Burst& b) const -> bool {
+    return b.requester == Requester::Refresh || deviceOf(b.address) == writeDevice;
+  }
+
+  //The next decision is the first rclk edge after `free` with a request in. If
+  //the request that would win it goes to the device still in its post-write
+  //gap, the channel instead decides at the gap's end, among everything in by
+  //then. No decision before `free`, so a refresh never cuts into a granted
+  //burst (ri.refresh-waits-for-burst).
   auto recompute() -> void {
     if(!count) { cachedNext = Clock::never(); return; }
     Clock first = pending[0].arrival;
     for(u32 i = 1; i < count; i++) if(pending[i].arrival < first) first = pending[i].arrival;
-    cachedNext = Timing::nextRclkEdge(first > free ? first : free);
+    const Clock d = Timing::nextRclkEdge(first > free ? first : free);
+    const Clock gapped = Timing::nextRclkEdge(first > writeGapEnd ? first : writeGapEnd);
+    cachedNext = d;
+    if(d == gapped) return;
+    if(waitsForWriteGap(pending[winnerAt(d)].burst)) cachedNext = gapped;
   }
 
   Clock cachedNext = Clock::never();
