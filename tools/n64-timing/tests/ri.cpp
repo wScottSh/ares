@@ -208,3 +208,31 @@ auto testRiSplit() -> u32 {
   else std::printf("ri-split: ok\n");
   return f;
 }
+
+//unit:ri-repeat: an MI repeat write's RI burst (n64brew MIPS_Interface, Repeat
+//Mode). Defects: bytes counted from the address instead of its octbyte (Count
+//then grows with Addr[2:0]), the literal 15-transfer reading at RepeatCount 127,
+//and a zero-byte repeat dropped or sent with no octbyte on the wire.
+auto testRiRepeat() -> u32 {
+  u32 before = failures;
+  u32 wrong = 0;
+  for(u32 count = 0; count < 128; count++) {
+    for(u32 low = 0; low < 8; low++) {
+      const u32 address = 0x2000 + low;
+      wrong += octbytes(address, repeatBytes(address, count)) != count / 8 + 1;
+    }
+  }
+  CHECK(wrong == 0, "every RepeatCount and Addr[2:0] gives RepeatCount/8+1 octbytes (%u wrong)", wrong);
+  CHECK(repeatBytes(0x2000, 127) == 128, "RepeatCount 127 at an aligned address is 128 B");
+  CHECK(repeatBytes(0x2003, 127) == 125, "Addr[2:0] = 3 masks the first 3 bytes of 128");
+  CHECK(repeatBytes(0x2005, 3) == 0, "RepeatCount+1 = 4 <= Addr[2:0] = 5 leaves no byte");
+  Channel empty, single;
+  empty.reset(); single.reset();
+  const s64 zero = wireTc(empty, burst(0x2005, repeatBytes(0x2005, 3), Direction::Write), 0);
+  const s64 one  = wireTc(single, burst(0x2005, 1, Direction::Write), 0);
+  CHECK(zero == one && zero > 0, "the zero-byte repeat still writes one masked octbyte: %lld tc, a 1 B write %lld tc", (long long)zero, (long long)one);
+  u32 f = failures - before;
+  if(f) std::printf("ri-repeat: %u failure(s)\n", f);
+  else std::printf("ri-repeat: ok\n");
+  return f;
+}

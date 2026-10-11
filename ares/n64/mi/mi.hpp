@@ -43,13 +43,7 @@ struct MI : Memory::RCP<MI> {
 
   //The next uncached RDRAM write is an MI repeat write (MI_MODE).
   auto repeating() const -> bool { return io.repeatMode; }
-  //Bytes a repeat write at `address` covers: RepeatCount+1 counted from the
-  //start of its octbyte, so the RI sends (RepeatCount+1)/8 octbytes rounded up
-  //and the bytes below Addr[2:0] are masked off (n64brew MIPS_Interface, Repeat Mode).
-  auto repeatBytes(u32 address) const -> u8 {
-    const s32 bytes = io.repeatLength + 1 - (address & 7);
-    return bytes > 0 ? bytes : 0;
-  }
+  auto repeatCount() const -> u32 { return io.repeatLength; }
   auto ebusTest() const -> bool { return io.ebusTestMode; }
 
 private:

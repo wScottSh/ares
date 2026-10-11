@@ -121,7 +121,7 @@ auto SysAD::run(Clock limit) -> void {
     e.repeat = true;
     e.phase = Entry::Phase::Posted;
     update();
-    ri.post({e.address, mi.repeatBytes(e.address), RiBus::Direction::Write, RiBus::Requester::CpuSysAD, (u16)(&e - entries)}, start);
+    ri.post({e.address, RiBus::repeatBytes(e.address, mi.repeatCount()), RiBus::Direction::Write, RiBus::Requester::CpuSysAD, (u16)(&e - entries)}, start);
     return;
   }
   //Fit to the systembench poll rows; no hardware measures the drain itself (vr4300-wb.md); sysad.register-write.
