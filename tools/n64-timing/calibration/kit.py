@@ -791,10 +791,10 @@ def self_test():
     return failed
 
 
-def span2_log(period=0, stall=256, steady=60.0):
+def span2_log(period=0, stall=256, steady=60.0, at=()):
     """A kit-span2 log: 256-line write-only rectangles at 32 bpp (16 bpp: twice the pixels per period)
     whose clock grows 256 rclk per pixel plus `stall` at the first pixel of every `period` px past the
-    second (0: never), each width off by the instrument's worst error against the verdict
+    second (0: never) or at each width in `at` (both depths), each width off by the instrument's worst error against the verdict
     (one poll period and two refreshes up on a width without a step, poll plus one refresh down on a step); and IM_RD
     rectangles costing `steady` rclk per 64 B half and line."""
     lines = 256
@@ -803,7 +803,7 @@ def span2_log(period=0, stall=256, steady=60.0):
         p = period * 32 // bpp
         clock = 1000
         for w in range(1, 81):
-            step = p and w > 2 * p and w % p == 1
+            step = w in at or p and w > 2 * p and w % p == 1
             clock += lines + (stall - derived.POLL_RCLK - derived.REFRESH_RCLK if step else derived.POLL_RCLK + 2 * derived.REFRESH_RCLK - 0.5)
             body += f"#bench span-write b{bpp}-w{w} bpp={bpp} w={w} h={lines} n=1 vi=off reps=4 min=1 max=1 clock={int(clock)}\n"
         for w in (160, 320):
@@ -825,6 +825,9 @@ def span2_self_test():
             ("no stall reads no-step under the worst error", span2_log(0), "release-b32", "release", "no-step"),
             ("a stall the error could make reads no-step", span2_log(16, stall=60), "release-b32", "release", "no-step"),
             ("a stall every 8 px at 32 bpp reads period-8", span2_log(8), "release-b32", "release", "period-8"),
+            ("one stall at 40 px reads single-40", span2_log(at={40}), "release-b32", "release", "single-40"),
+            ("step spacings 6 and 4 tied as most common read their gcd, period-2",
+             span2_log(at={10, 16, 22, 26, 30}), "release-b32", "release", "period-2"),
             ("IM_RD at 21.5 rclk per half reads wire-bound", span2_log(steady=21.5), "port", "port", "wire-bound"),
             ("IM_RD at 22 rclk per half reads above-wire", span2_log(steady=22), "port", "port", "above-wire")]:
         rom = "span-imrd" if key == "port" else "span-write"
