@@ -40,7 +40,7 @@ The three reports of `docs/design/green-plan.md` section 1 and PREHW_COMPLETE of
 | SOFTWARE_READY | **no** | 2 of 6 clauses hold |
 | mm:filesel-empty and mm:filesel-named pass | **no** | `mm:filesel-empty` pass, `mm:filesel-named` fail |
 | wScottSh/mm-decomp-60fps#1 is merged | yes | `tools/n64-timing/calibration/mm_bench.py` pins wScottSh/mm-decomp-60fps eb7d6cc1a; its first-parent history in `tools/n64-timing/calibration/mm-decomp-objects.txt` holds 707602c67 "Merge pull request #1 from wScottSh/bench/fork" |
-| every hw:* check is ingested and passes | **no** | 0 of 103 pass, 103 pending:calibration-16 |
+| every hw:* check is ingested and passes | **no** | 0 of 104 pass, 104 pending:calibration-16 |
 | every row that is not excluded or out-of-kit is verified | **no** | 69 of 147 rows that are not excluded pass, counting the 10 out-of-kit rows in scope until Scott rules (decision D1); 6 rows are excluded as not hardware-decidable |
 
 ### PREHW_COMPLETE
@@ -52,7 +52,7 @@ The three reports of `docs/design/green-plan.md` section 1 and PREHW_COMPLETE of
 | every class C row names a console measurement a tool compares that closes it, a value its rule rejects that the fork does not give, and the sources searched; every row seeded A or B names a unit whose Scope names it | **no** | seed classes from the commit that added tools/n64-timing/calibration/blockers-seed.tsv; 91 C rows; failing a rule: 12 (`cpu.eret`, `cpu.fpu-trivial`, `cpu.irq-sample`, `mm:filesel-named`, `rdp.mem-overhead-write`, `rdp.noise-alpha-dither`, `rdp.noise-dither-bits`, `ri.refresh-latch`, `thar0:ac-zbsame-vioff-imrd-1cyc`, `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc`, `thar0:zcmp`, `vi.fetch-overrun`); with no separates or searched: 1 (`bench:sp-dma-sweep`) |
 | every class D row was D at the seed, on its own not-hardware-decidable entry unchanged since | yes | seed classes from the commit that added tools/n64-timing/calibration/blockers-seed.tsv; 6 D rows: `legacy.clock.vclk-pal`, `legacy.cpu.nmi-entry`, `legacy.cpu.sysad-frozen-step`, `legacy.pif.step-quantum`, `ri.request-latency`, `scheduler.tie-rank`; failing: none |
 | every clause row has a decider PRED can check: follows with its members' rows, or clause:mg-4 on hw-run | **no** | clause rows: `clause:mg-1`, `clause:mg-2`, `clause:mg-4`, `clause:mg-5`, `clause:sr-2`, `clause:sr-3`, `clause:sr-4`, `clause:sr-5`; failing: `clause:mg-4` |
-| SOFTWARE_COMPLETE clauses 2 to 4 hold, det and stepcap pass, the standing run is the current tree, and its dry run moves every hw:* check to pass | **no** | SOFTWARE_COMPLETE clauses 2 to 4: yes, no, yes; det pass, stepcap pass; the results header `standing run fix-137/run on d1874254e`: ares/ and tools/n64-timing/ at HEAD differ from its commit (or it names none); dry run (docs/spec/n64-timing-dry-run.tsv): 89 of 103 hw:* checks pass |
+| SOFTWARE_COMPLETE clauses 2 to 4 hold, det and stepcap pass, the standing run is the current tree, and its dry run moves every hw:* check to pass | **no** | SOFTWARE_COMPLETE clauses 2 to 4: yes, no, yes; det pass, stepcap pass; the results header `standing run fix-137/run on d1874254e`: ares/ and tools/n64-timing/ at HEAD differ from its commit (or it names none); dry run (docs/spec/n64-timing-dry-run.tsv): 89 of 104 hw:* checks pass |
 | every unit has landed or is closed with a stated reason, and every open issue but #1 and #16 is closed or a C decider | not computed | not computed from the repository: the program ledger tracks units and issues |
 
 ## Destination
@@ -90,7 +90,7 @@ Every check whose result is fail, with its residual, and the rows that name it.
 
 ## Checks that pass only weakly
 
-Check results: 2 consistent-only, 17 fail, 95 pass, 1 pass-conditional:#77, 120 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
+Check results: 2 consistent-only, 17 fail, 95 pass, 1 pass-conditional:#77, 121 pending. A weak pass counts apart from pass. consistent-only: a point passes its consistent rule while the model's mean misses the band, or a bench or hardware check's verdict differs between code-layout pads, so it is consistent with the hardware number, not agreement. pass-conditional:#<issue>: the pass rests on a model choice with no hardware reference.
 
 | Check | Result | Detail | Rows (verify) | Rows (fit from) |
 |---|---|---|---|---|

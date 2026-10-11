@@ -396,6 +396,7 @@ One line per check a behavior names, from `docs/spec/n64-timing-results.tsv` (st
 | `hw:snapper64` | pending:calibration-16 | no console capture of snapper64 (capture name ext-snapper64*) in docs/calibration/hardware |
 | `hw:sp-dma-direction` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
 | `hw:sp-dma-rsp` | pending:calibration-16 | no complete power-on console capture of kit-dma in docs/calibration/hardware |
+| `hw:span-cost` | pending:calibration-16 | no complete power-on console capture of kit-span2 in docs/calibration/hardware |
 | `hw:span-width` | pending:calibration-16 | no complete power-on console capture of kit-span in docs/calibration/hardware |
 | `hw:span-write-release` | pending:calibration-16 | no complete power-on console capture of kit-span2 in docs/calibration/hardware |
 | `hw:stale-read` | pending:calibration-16 | no complete power-on console capture of rdpstat-1prim in docs/calibration/hardware |

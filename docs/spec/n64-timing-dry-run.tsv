@@ -67,6 +67,7 @@ hw:si-write64-poll	pass
 hw:snapper64	pass
 hw:sp-dma-direction	pass
 hw:sp-dma-rsp	pass
+hw:span-cost	fail
 hw:span-width	pass
 hw:span-write-release	pass
 hw:stale-read	pass
