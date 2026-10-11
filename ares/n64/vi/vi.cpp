@@ -66,6 +66,8 @@ auto VI::line() -> void {
       io.vcounter = 0;
       io.field += !io.halfLinesPerField.bit(0);
       if(++io.leapCounter == 5) io.leapCounter = 0;
+      if(frame.settle == Frame::Settle::Fetched) frame.settle = Frame::Settle::Latched;
+      if(frame.settle == Frame::Settle::Latched) latchFrame();
     }
 
     if(io.vcounter == io.vstart >> 1) {
@@ -105,6 +107,7 @@ auto VI::line() -> void {
     // We do that every 200 simulated lines of 0x800 quarter-clocks. This is just arbitrary,
     // the real VI is not clocking at all when inactive; the period is host liveness, not a cost.
     io.vcounter = 0;
+    frame.settle = Frame::Settle::Unfetched;
     if(++inactiveCounter >= 200) {
       inactiveCounter = 0;
       refreshed = true;
@@ -113,9 +116,18 @@ auto VI::line() -> void {
   }
 }
 
+//At the HSYNC that starts a field (vi.frame-latch), and at every line until the
+//frame settles.
+auto VI::latchFrame() -> void {
+  frame.vstart = io.vstart;
+  frame.vend   = io.vend;
+  frame.y      = io.ysubpixel;
+  frame.row    = io.vstart;
+}
+
 auto VI::sample() const -> Geometry {
-  return {io.colorDepth, io.serrate, io.field, io.hstart, io.hend, io.vstart, io.vend,
-          io.xscale, io.xsubpixel, io.yscale, io.ysubpixel};
+  return {io.colorDepth, io.serrate, io.field, io.hstart, io.hend, frame.vstart, frame.vend,
+          io.xscale, io.xsubpixel, io.yscale};
 }
 
 auto VI::Geometry::window() const -> Window {
@@ -156,7 +168,7 @@ auto VI::compose() -> void {
   const u32 fetched = Fetch::Lines * fetch.pitch;
   for(s32 dy = 2 * fetch.output; dy < 2 * fetch.output + 2; dy++) {
     if(!g.drawn(w, dy)) continue;
-    u32 y = g.ysubpixel + g.yscale * (dy - g.vstart);
+    u32 y = fetch.y + g.yscale * (dy - fetch.row);
     u32 base = ((y >> 11) - fetch.line) * fetch.pitch;
     auto row = screen->pixels(0).data() + (dy - w.vscanStart) * w.hscanLen;
     u32 x = g.xsubpixel + g.xscale * (w.dx0 - g.hstart);
@@ -179,16 +191,24 @@ auto VI::compose() -> void {
 auto VI::startFetch() -> void {
   if(io.colorDepth < 2 || !io.width) return;
   if(fetch.next < fetch.count || fetch.inFlight) return;
+  if(frame.settle != Frame::Settle::Latched) latchFrame();
   auto g = sample();
   auto w = g.window();
   s32 dy = 2 * io.vcounter;
   if(!g.drawn(w, dy)) dy++;
   if(!g.drawn(w, dy)) return;
+  if(frame.settle == Frame::Settle::Unfetched) frame.settle = Frame::Settle::Fetched;
   fetch.hsync    = vclk;
   fetch.geometry = g;
   fetch.output   = io.vcounter;
   if(dy == w.dy0 || dy == w.dy0 + 1) scannedOrigin = io.dramAddress;
-  fetch.line     = g.ysubpixel + g.yscale * (dy - g.vstart) >> 11;
+  //the accumulator advances by the Y_SCALE read at this HSYNC over the rows since
+  //the last fetched line
+  frame.y       += g.yscale * (dy - frame.row);
+  frame.row      = dy;
+  fetch.y        = frame.y;
+  fetch.row      = dy;
+  fetch.line     = frame.y >> 11;
   const u32 pitch = io.width * g.bpp();
   fetch.start(io.dramAddress + fetch.line * pitch, pitch);
   fetch.next = 0;
@@ -264,6 +284,7 @@ auto VI::power(bool reset) -> void {
   Thread::reset();
   screen->power();
   io = {};
+  frame = {};
   refreshed = false;
   vclk = {system.vclkPeriod()};
   fetch.count = fetch.next = 0;

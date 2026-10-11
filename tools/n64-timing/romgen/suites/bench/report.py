@@ -130,6 +130,12 @@ def derive(rom, points):
             base = points["none-0"] if not p["kind"].startswith("rect+") else points[f"rect-{n}"]
             metric = "per_sync_clk" if rom == "rdp-sync-sweep" else "per_cmd_clk"
             per(name, metric, (p["clock"] - base["clock"]) / n)
+    if rom == "vi-frame-latch" and not any(p.get("timeout") for p in points.values()):
+        #Which reference each late write's loads match: no threshold, so no fitted constant. A timed-out
+        #point loaded nothing, so it matches neither.
+        late, base, nofetch = (points[k]["n"] for k in ("vvideo-outside-late", "base", "vvideo-outside"))
+        per("vvideo-outside-late", "fetches", int(abs(late - base) < abs(late - nofetch)))
+        per("y-late-bank2", "vi_bank", 2 if points["y-late-bank2"]["n"] < points["y-late-bank3"]["n"] else 3)
     if rom == "rdp-atomic-sweep":
         for name, p in points.items():
             if p["atomic"]:

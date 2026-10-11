@@ -374,6 +374,20 @@ def rdp_loadsz_sweep(suite):
     tex.tmem_load_rate(suite, "rdp-loadsz-sweep")
 
 
+def vi_frame_latch(suite):
+    """kit-bus's frame-latch points (calib/bus.py, #107) on the fork: the no-fetch and no-write
+    references, V_VIDEO moved outside the window once V_CURRENT reads the target, and the late
+    ORIGIN and Y_SCALE / Y_OFFSET write with loads in either bank the VI could then read. Last:
+    ORIGIN stays moved."""
+    from ..calib import bus
+    rom = Rom(suite, "vi-frame-latch")
+    for name, writes, late in (("base", [], 0), ("vvideo-outside", [(bus.VI_V_VIDEO, bus.V_VIDEO_EARLY_OFF)], 0),
+                               ("vvideo-outside-late", [(bus.VI_V_VIDEO, bus.V_VIDEO_EARLY_OFF)], 1)):
+        bus.vline_point(rom, name, bus.VI_BANK_LOAD, writes, late, [("case", name)])
+    for bank, addr in ((2, bus.VI_BANK_LOAD), (3, bus.LOAD_BANK3)):
+        bus.vline_point(rom, f"y-late-bank{bank}", addr, bus.Y_LATE, 1, [("case", "y-late")])
+
+
 ROMS = {
     "mi-memset-uncached": mi_memset_uncached,
     "mi-memset-cached": mi_memset_cached,
@@ -398,6 +412,7 @@ ROMS = {
     "ifill-isolated": ifill_isolated,
     "wb-fifth-store": wb_fifth_store,
     "rdp-loadsz-sweep": rdp_loadsz_sweep,
+    "vi-frame-latch": vi_frame_latch,
 }
 #Kernels a ROM needs beyond asm.ASM.
 ROM_ASM = {"ifill-isolated": [kit_asm.ASM], "wb-fifth-store": [kit_asm.ASM]}
