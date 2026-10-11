@@ -1338,7 +1338,7 @@ def noise_table(run_dir=None, root=ROOT):
                 continue
             fixed = noise.offset_set(question, snap, Path(root) / QUESTIONS)
             read_out.append(f"{snap}: offset set " + (f"D = {fixed[0]} +- {fixed[1]} ({question} source)" if fixed else
-                                                      f"not fixed in {question}'s source; run kit.py --layout"))
+                                                      f"not fixed in {question}'s source; run calibration/noise-sweep.sh"))
             got = [log.records.get(("snap", snap), {}) for log in logs]
             results = collections.Counter(r.get("mapping", "unread") for r in got)
             rates = [float(r["rate"]) for r in got if r.get("rate", "-") != "-"]
@@ -1380,12 +1380,95 @@ def noise_self_test():
         out.append(got == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if got == want else 'FAILED'} ({got}: {detail})")
     out += noise_reader_self_test(draws, draws2, mutated("cd-noise-84", 0x808080FF, "kit-noise2")["cd-noise-84"])
+    out += noise_order_self_test()
+    out += noise_sweep_self_test()
     for name, draw, want in [("gray 0x80 bounds b at 0", draws["cd-noise-16"], 0),
                              ("gray 0x84 bounds b at 256", mutated("cd-noise-16", 0x848484FF)["cd-noise-16"], 256),
                              ("cd-noise-84 bounds b at 512", draws2["cd-noise-84"], 512)]:
         bits = noise_bits(draw)
         out.append(bits == want)
         print(f"kit: self-test: noise reader: {name}: {'ok' if bits == want else 'FAILED'} ({bits})")
+    return out
+
+
+def noise_order_self_test():
+    """Each noise kit ROM starts every draw before its first dump, each into its own surface, and draws each snap
+    a question names after only draws whose stored pixels do not depend on noise. So the noise clock of a snap a
+    question reads depends neither on the time a dump took over earlier pixels nor on how many pixels an earlier
+    draw stored (verify-173 item 4; U-NOISE-ORDER)."""
+    import itertools
+    from types import SimpleNamespace
+    from romgen import rcp
+    from romgen.suites.calib import sets
+
+    def fixed_stores(name, width, bpp, lists):
+        commands = [c for _, dl in lists for c in dl]
+        if not next(c for c in commands if c >> 56 == 0xEF) & 1:
+            return True
+        draw = noise_draw(name, width, bpp, commands)
+        ranges = [NOISE_RANGE[u] if u in draw["uses"] else (0,) for u in ("ad", "cd", "ac")]
+        return len({noise_pixel(draw, *v) is None for v in itertools.product(*ranges)}) == 1
+
+    out = []
+    for kit, cases in sets.NOISE_KITS.items():
+        names = [c[0] for c in cases]
+        named = {p.removeprefix("snap/") for q in questions() if q["kit"] == kit for p in q["points"].split()}
+        for snap in [n for n in names if n in named]:
+            varying = [c[0] for c in cases[:names.index(snap)] if not fixed_stores(*c)]
+            out.append(not varying)
+            print(f"kit: self-test: noise order: {kit} {snap} follows only draws whose stored pixels do not depend on "
+                  f"noise: {'ok' if not varying else 'FAILED'} ({', '.join(varying) or 'none vary'})")
+        suite = SimpleNamespace(tests=[])
+        sets.NoiseKit(set_name=kit).build(suite)
+        steps = [s for v in suite.tests[0].values for s in v.steps]
+        starts = [i for i, s in enumerate(steps) if s.routine == "step_write32" and s.params[0] == rcp.DPC_END]
+        dumps = [i for i, s in enumerate(steps) if s.routine == "snap_emit"]
+        spans = sorted((s.params[1], s.params[1] + s.params[2]) for s in steps if s.routine == "snap_emit")
+        ok = (len(starts) == sum(len(d) for *_, d in sets.NOISE_KITS[kit]) and len(dumps) == len(sets.NOISE_KITS[kit])
+              and max(starts) < min(dumps) and all(hi <= lo for (_, hi), (lo, _) in zip(spans, spans[1:])))
+        out.append(ok)
+        print(f"kit: self-test: noise order: {kit} starts its {len(starts)} draws before its {len(dumps)} dumps, "
+              f"each on its own surface: {'ok' if ok else 'FAILED'}")
+    return out
+
+
+def noise_sweep_self_test():
+    """noise.sweep_table on synthetic ARES_DPLOG sweeps: every draw takes 7000 clocks plus the boot delay mod the
+    period, and at pad 3 only the anchor takes 300 more for 9 delays of each period, so the set must span that pad."""
+    import itertools
+    import tempfile
+    from romgen.suites.calib import sets
+
+    def dist(n, pad, k, period, late):
+        return n * (7000 + k % period) + 300 * (n > 0 and pad == 3 and k % period < 9) + late * (n > 0 and k == 70)
+
+    def sweep(root, pads, delays, period, late):
+        for pad, k in itertools.product(pads, delays):
+            for kit, cases in sets.NOISE_KITS.items():
+                n = sum(len(draws) for *_, draws in cases)
+                path = Path(root) / (f"p{pad}/" if pad else "") / f"boot-{k}" / f"{kit}.dplog"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("".join(f"S {i} noise={1000 + dist(i, pad, k, period, late)} y=0\n" for i in range(n)))
+        return noise.sweep_table(root)
+
+    def want_set(snap, kit, pads, delays, period):
+        n = sum(len(draws) for *_, draws in itertools.takewhile(lambda c: c[0] != snap, sets.NOISE_KITS[kit]))
+        return "offset set %s D = %d +- %d" % (snap, *noise.offset_set_of(
+            [dist(n, p, k, period, 0) for p in pads for k in delays]))
+
+    out = []
+    for name, pads, delays, period, late, want in [
+            ("two periods at pads 0 and 3 span pad 3's excursion", (0, 3), range(1, 81), 37, 0, True),
+            ("one period cannot show its phases repeat", (0, 3), range(1, 61), 37, 0, False),
+            ("a second period past the first's extent", (0, 3), range(1, 81), 37, 500, False),
+            ("a sweep missing boot delay 78 is not a step-1 sweep", (0,), [k for k in range(1, 81) if k != 78], 37, 0, False)]:
+        with tempfile.TemporaryDirectory() as root:
+            table, ok = sweep(root, pads, delays, period, late)
+        good = ok == want and (not want or all(
+            f"period {period} boot delays" in line and want_set(snap, kit, pads, delays, period) in line
+            for line, (kit, snap) in zip(table.split("\n"), noise.READS)))
+        out.append(good)
+        print(f"kit: self-test: noise sweep: {name}: {'ok' if good else 'FAILED'} ({table.split(chr(10))[0]})")
     return out
 
 
@@ -1531,6 +1614,10 @@ if __name__ == "__main__":
         print(layout_table(sys.argv[2]))
         print(noise.offset_table(sys.argv[2]))
         sys.exit(0)
+    if sys.argv[1:2] == ["--noise-sweep"] and sys.argv[2:]:
+        table, ok = noise.sweep_table(sys.argv[2])
+        print(table)
+        sys.exit(0 if ok else 1)
     if sys.argv[1:2] == ["--noise-rate"]:
         table, consistent = noise_table(sys.argv[2] if sys.argv[2:] else None)
         print(table)
@@ -1549,4 +1636,4 @@ if __name__ == "__main__":
         print(f"kit: {len(list(Path(sys.argv[2]).glob('*/**/*.srm')))} SRAM copies checked, {len(errs)} errors",
               file=sys.stderr)
         sys.exit(1 if errs else 0)
-    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --layout RUN_DIR | --noise-rate [RUN_DIR] | --hist LOG... | --self-test")
+    sys.exit("usage: kit.py --verify-run RUN_DIR | --table RUN_DIR | --layout RUN_DIR | --noise-sweep SWEEP_DIR | --noise-rate [RUN_DIR] | --hist LOG... | --self-test")
