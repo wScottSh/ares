@@ -2193,7 +2193,8 @@ def self_test(root):
         shutil.copytree(root / "tools/n64-timing", work / "tools/n64-timing", ignore=shutil.ignore_patterns("__pycache__"))
         (work / SPEC).parent.mkdir(parents=True)
         (work / INVENTORY).parent.mkdir(parents=True)
-        for rel in (SPEC, RESULTS, CLOSURE, INVENTORY):
+        (work / PLAN).parent.mkdir(parents=True)
+        for rel in (SPEC, RESULTS, CLOSURE, INVENTORY, PLAN, FORK, DRY_RUN):
             shutil.copy(root / rel, work / rel)
 
         def edit(rel, change):
@@ -2231,6 +2232,19 @@ def self_test(root):
         else:
             landed = False
         run_commit = COMMIT.findall(text(work / RESULTS).split("\n")[0])[0]
+
+        def blocker(rid, **cells):
+            def change(t):
+                for column, value in cells.items():
+                    t = row_field(rid, column, value)(t)
+                return t
+            return change
+
+        def fork_cell(question, key, metric):
+            return next(f["model"] for f in run_record(work, FORK, FORK_COLUMNS)[1]
+                        if (f["question"], f["key"], f["metric"]) == (question, key, metric))
+        undecidable = f"{CALIBRATION}/undecidable.tsv"
+        failing_timeline = lambda t: re.sub(r"^unit:timeline\tpass\t", "unit:timeline\tfail\t", t, flags=re.M)  # noqa: E731
         cases = [
             ("the committed tree", None, None, None),
             ("a row waiting on calibration #16 with no kit test", TABLE, row_field("cpu.dcb", "verify", "pending:calibration-16"),
@@ -2346,20 +2360,20 @@ def self_test(root):
              "has condition `idle-vi`; write `-`"),
             ("an open item with no blocker row", BLOCKERS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("cpu.dcb\t")),
              "open row `cpu.dcb` has no row"),
-            ("a blocker row for a check that passes", BLOCKERS, lambda t: t + "unit:timeline\tcheck\tC\tdcb\t-\t-\t-\n",
+            ("a blocker row for a check that passes", BLOCKERS, lambda t: t + "unit:timeline\tcheck\tC\t-\tdcb\t-\t-\t-\t-\n",
              "`unit:timeline` is not an open item"),
-            ("a C row whose question does not close it", BLOCKERS, row_field("cpu.dcb", "decider", "ifill"),
-             "names question `ifill`, whose closes column does not list `cpu.dcb`"),
-            ("a C row whose question no tool compares", "tools/n64-timing/calibration/questions.tsv",
-             row_field("dcb", "kit", "none: self-test"), "names question `dcb`, whose kit `none: self-test` no tool compares"),
-            ("a C row naming no question", BLOCKERS, row_field("cpu.dcb", "decider", "no-such-question"),
+            ("a C row whose question does not close it", BLOCKERS, row_field("rdp.read-gate", "decider", "ifill"),
+             "names question `ifill`, whose closes column does not list `rdp.read-gate`"),
+            ("a C row whose question no tool compares", (BLOCKERS, "tools/n64-timing/calibration/questions.tsv"),
+             (blocker("cpu.dcb", **{"class": "C"}), row_field("dcb", "kit", "none: self-test")),
+             "names question `dcb`, whose kit `none: self-test` no tool compares"),
+            ("a C row naming no question", BLOCKERS, row_field("rdp.read-gate", "decider", "no-such-question"),
              "names decider `no-such-question`, which is no questions.tsv id"),
             ("a C row whose question re-runs the row's fit", BLOCKERS,
              lambda t: row_field("rdp.mem-overhead-write", "class", "C")(row_field("rdp.mem-overhead-write", "decider", "thar0-console")(t)),
              "names question `thar0-console`, which re-runs the row's fit"),
-            ("a D row not in undecidable.tsv", BLOCKERS,
-             lambda t: row_field("cpu.dcb", "class", "D")(row_field("cpu.dcb", "decider", "cpu.dcb")(t)),
-             "`cpu.dcb` is class D, so its decider must be its own"),
+            ("a D row on another id's entry", BLOCKERS, row_field("scheduler.tie-rank", "decider", "ri.request-latency"),
+             "`scheduler.tie-rank` is class D, so its decider must be its own"),
             ("a check written as follows", BLOCKERS, row_field("thar0:imrd-1cycle", "class", "follows"),
              "`thar0:imrd-1cycle` is class follows, which only a SOFTWARE_READY or MAP_GREEN clause"),
             ("an A row relabeled C on a question that does not close it", BLOCKERS,
@@ -2368,16 +2382,38 @@ def self_test(root):
             ("an A row relabeled C with no decider", BLOCKERS,
              lambda t: row_field("legacy.cart.rtc-tick", "class", "C")(row_field("legacy.cart.rtc-tick", "decider", "-")(t)),
              "`legacy.cart.rtc-tick` is class C but names no decider"),
-            ("a D row on an exclusion added after the PREHW base", BLOCKERS,
-             lambda t: row_field("vi.fetch-overrun", "class", "D")(row_field("vi.fetch-overrun", "decider", "vi.fetch-overrun")(t)),
-             "is class D, so its decider must be its own"),
-            ("a D row whose undecidable.tsv entry was rewritten not-hardware-decidable",
-             (BLOCKERS, "tools/n64-timing/calibration/undecidable.tsv"),
-             (lambda t: row_field("vi.fetch-overrun", "class", "D")(row_field("vi.fetch-overrun", "decider", "vi.fetch-overrun")(t)),
+            ("a D row added after the seed, on an entry rewritten not-hardware-decidable", (BLOCKERS, undecidable),
+             (blocker("vi.fetch-overrun", **{"class": "D", "decider": "vi.fetch-overrun"}),
               lambda t: t.replace("vi.fetch-overrun\tnot decidable by this kit: ", "vi.fetch-overrun\tnot-hardware-decidable: ", 1)),
-             "but its undecidable.tsv entry is not one of behaviors.py NOT_HARDWARE_DECIDABLE"),
-            ("the console run named for a check", BLOCKERS, row_field("cpu.dcb", "decider", "#16"),
-             "names #16, which decides only a clause open on hw:* checks"),
+             "`vi.fetch-overrun` is class D, but was `B` at the seed commit"),
+            ("a D row whose undecidable.tsv entry changed after the seed", undecidable,
+             lambda t: t.replace("scheduler.tie-rank\tnot-hardware-decidable: ", "scheduler.tie-rank\tnot-hardware-decidable: now ", 1),
+             "`scheduler.tie-rank` is class D, but its undecidable.tsv entry differs from the one at the seed commit"),
+            ("an id not in the seed written as D", (BLOCKERS, RESULTS),
+             (lambda t: t + "unit:timeline\tcheck\tD\t-\tunit:timeline\t-\t-\t-\t-\n", failing_timeline),
+             "`unit:timeline` is class D, but was `-` at the seed commit"),
+            ("an id not in the seed made C on a unit whose Scope does not name it", (BLOCKERS, RESULTS),
+             (lambda t: t + "unit:timeline\tcheck\tC\t-\tdcb\tU-DOCS\t-\t-\t-\n", failing_timeline),
+             "`unit:timeline` was not in the seed, so counts as B at the seed"),
+            ("a row seeded A relabeled C with no unit", BLOCKERS,
+             blocker("bench:mi-memset-repeat", **{"class": "C", "unit": "-"}),
+             "`bench:mi-memset-repeat` was A at the seed, so its unit must be a docs/design/prehw-plan.md section 4 unit whose Scope names `bench:mi-memset-repeat`; `-` is no such unit"),
+            ("a row seeded A whose unit's Scope does not name it", BLOCKERS, row_field("bench:mi-memset-repeat", "unit", "U-DOCS"),
+             "Scope names `bench:mi-memset-repeat`; `U-DOCS` does not name it"),
+            ("a seed cell edited after the seed", BLOCKERS, row_field("cpu.dcb", "seed", "C"),
+             "`cpu.dcb` has seed `C`, but its class in tools/n64-timing/calibration/blockers-seed.tsv at the seed commit"),
+            ("a blockers-seed.tsv line edited after the seed", BLOCKERS_SEED, lambda t: t.replace("cpu.dcb\tB", "cpu.dcb\tC"),
+             "blockers-seed.tsv differs from the file its seed commit"),
+            ("a failing clause with no row", BLOCKERS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("clause:mg-1\t")),
+             "open clause `clause:mg-1` has no row"),
+            ("a clause other than mg-4 decided by hw-run", BLOCKERS, blocker("clause:mg-3", **{"class": "C", "decider": "hw-run"}),
+             "`clause:mg-3` is a clause of class C, which only clause:mg-4 can be"),
+            ("the re-time clause written as C", (RESULTS, BLOCKERS),
+             (lambda t: t.replace(run_commit, "0000000", 1),
+              lambda t: t + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
+             "`clause:sr-1` is class C; the re-time clause is A whenever it fails"),
+            ("fork values from another run", FORK, lambda t: t.replace(run_commit, "0000000", 1),
+             "n64-timing-fork.tsv is from `# standing run"),
             ("a blocker row of the wrong kind", BLOCKERS, row_field("cpu.dcb", "kind", "check"), "`cpu.dcb` is a row, not a check"),
         ]
         if landed:
@@ -2418,15 +2454,18 @@ def self_test(root):
         for name, rel, change, want in [
             ("the committed tree, whose A rows only keep clause 2 from holding", None, None, [True, False]),
             ("no blocker table", BLOCKERS, lambda t: None, [False, False]),
-            ("the hw:* clause decided by the console run", BLOCKERS,
-             lambda t: row_field("clause:map_green:4", "class", "C")(row_field("clause:map_green:4", "decider", "#16")(t)), [True, False]),
+
             ("a results file whose reader lost every check", RESULTS, lambda t: t.split("\n")[0] + "\ncheck\tresult\tdetail\n",
              [False, False]),
             ("a results file that lost one console question", RESULTS,
              lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("hw:dcb\t")), [False, False]),
             ("the A and B rows relabeled C on the questions that close them", BLOCKERS,
-             lambda t: re.sub(r"^([^\t]+\t[^\t]+\t)[AB]\t", r"\1C\t", t, flags=re.M), [False, True, False]),
+             lambda t: re.sub(r"^([^\t]+\t[^\t]+\t)[AB]\t", r"\1C\t", t, flags=re.M), [True, True, False]),
+            ("a checkout whose git history cannot name the seed", "git", None, [True, False, None, None]),
         ]:
+            if rel == "git":
+                GIT_ROOT[str(work)] = work / "no-such-checkout"
+                rel = None
             restore = edit(rel, change if rel != BLOCKERS or name != "no blocker table" else lambda t: t) if rel else None
             if name == "no blocker table":
                 (work / BLOCKERS).unlink()
@@ -2437,8 +2476,101 @@ def self_test(root):
             print(f"self-test: PREHW_COMPLETE clauses for {name}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
             failures += not ok
             ran += 1
+            GIT_ROOT[str(work)] = root
             if restore:
                 restore()
+        repeat = ("memset-vi", "mi-memset-repeat/vi-on", "min")
+        repeat_fork = fork_cell(*repeat)
+        repeat_hi = float(repeat_fork.partition("..")[2])
+        uncached = ("memset-vi", "mi-memset-uncached/vi-off", "min")
+        uncached_fork = fork_cell(*uncached)
+        uncached_hi = float(uncached_fork.partition("..")[2])
+
+        def relabeled(alt, cite="asm.py:170", signed="verify-self-test", fork=repeat_fork, kind="alt"):
+            return blocker("bench:mi-memset-repeat", **{
+                "class": "C", "decider": "memset-vi", "signed": signed,
+                "separates": f"at={' '.join(repeat)};fork={fork};{kind}={alt:g};cite={cite}"})
+
+        def fit_mut(step, cite="U-SEPARATES", searched="NEC VR4300 UM: no value"):
+            return blocker("sysad.rdram-write-period", searched=searched, decider="memset-vi", **{"class": "C"},
+                           separates=f"at={' '.join(uncached)};fork={uncached_fork};mut={uncached_hi + step:g};cite={cite}")
+        for name, rel, change, rid, expected in [
+            ("a row seeded A relabeled C on its closing question with a rejected, cited, signed alt", BLOCKERS,
+             relabeled(repeat_hi * 1.01), "bench:mi-memset-repeat", None),
+            ("a row seeded A relabeled C whose rule accepts its alt", BLOCKERS, relabeled(repeat_hi),
+             "bench:mi-memset-repeat", "accepts alt="),
+            ("a row seeded A relabeled C on the question that closes it, with free-text separates", BLOCKERS,
+             blocker("bench:mi-memset-repeat", **{"class": "C", "decider": "memset-vi", "separates": "the fork against hardware"}),
+             "bench:mi-memset-repeat", "separates must read"),
+            ("an alt with an empty signed", BLOCKERS, relabeled(repeat_hi * 1.01, signed="-"), "bench:mi-memset-repeat",
+             "names an alt with an empty signed"),
+            ("an alt of 10x the fork whose cite points at no line", BLOCKERS,
+             relabeled(repeat_hi * 10, cite="n64brew MIPS_Interface"), "bench:mi-memset-repeat", "points at no line"),
+            ("a fork= cell that differs from the standing run's value", BLOCKERS,
+             relabeled(repeat_hi * 1.01, fork=f"{repeat_hi:g}..{repeat_hi + 1:g}"), "bench:mi-memset-repeat",
+             "is not the standing run's model side"),
+            ("separates on a question that is not the row's decider", BLOCKERS,
+             lambda t: relabeled(repeat_hi * 1.01)(t).replace("at=memset-vi ", "at=dirty-row "), "bench:mi-memset-repeat",
+             "must name one of its deciders"),
+            ("a fit row with mut, no alt, and a cite other than U-SEPARATES", BLOCKERS, fit_mut(8000, cite="U-SB-PR2"),
+             "sysad.rdram-write-period", "is a fit row with a mut and no alt"),
+            ("a fit row with mut, no alt, and an empty searched", BLOCKERS, fit_mut(8000, searched="-"),
+             "sysad.rdram-write-period", "is a fit row with a mut and no alt"),
+            ("a fit row's resolution mutation within 4 tolerances, cited U-SEPARATES with its search", BLOCKERS,
+             fit_mut(8000), "sysad.rdram-write-period", None),
+            ("a mut past 4 tolerances", BLOCKERS, fit_mut(30000), "sysad.rdram-write-period", "past 4: the question cannot resolve"),
+            ("a mut whose cite is no unit", BLOCKERS, fit_mut(8000, cite="scratch-build"), "sysad.rdram-write-period",
+             "whose cite `scratch-build` is no section 4 unit"),
+            ("an out-of-kit row whose unit is U-SEPARATES with an empty signed", BLOCKERS,
+             blocker("ri.refresh-latch", **{"class": "C", "decider": "ri.refresh-latch", "unit": "U-SEPARATES"}),
+             "ri.refresh-latch", "signed is empty"),
+            ("an out-of-kit row seeded A on its own unit with an empty signed", BLOCKERS,
+             blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick"}),
+             "legacy.cart.rtc-tick", "signed is empty"),
+            ("an out-of-kit row seeded A with its limit signed", BLOCKERS,
+             blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick", "signed": "verify-self-test"}),
+             "legacy.cart.rtc-tick", None),
+            ("clause:mg-4 without the dry-run result", DRY_RUN, lambda t: "\n".join(t.split("\n")[:2]) + "\n",
+             INGESTION_CLAUSE, "did not move"),
+        ]:
+            restore = edit(rel, change)
+            errors, rows, checks, _ = validate(work)
+            found = load_results(work, rows, checks, errors)
+            _, _, problems, _, _ = blocker_audit(work, rows, found, predicates(work, rows, checks, found))
+            mine = [why for _, why in problems.get(rid, [])]
+            hits = mine if expected is None else [w for w in mine if expected in w]
+            ok = not mine if expected is None else bool(hits)
+            print(f"self-test: blocker rule for {name}: {'ok' if ok else 'FAILED'}: "
+                  f"{(hits or mine or ['no problem'])[0] if ok or expected is None else f'no problem contains `{expected}`; got {mine[:2]}'}")
+            failures += not ok
+            ran += 1
+            restore()
+        seed = blocker_seed(work)[0]
+        restore = [edit(rel, lambda t: t + "# seed 0000000000000000000000000000000000000000\n") for rel in (BLOCKERS, BLOCKERS_SEED)]
+        moved = blocker_seed(work)[0]
+        ok = seed is not None and moved == seed
+        print(f"self-test: a `# seed` line in either file leaves the computed seed: {'ok' if ok else 'FAILED'}: {seed} -> {moved}")
+        failures += not ok
+        ran += 1
+        for undo in restore:
+            undo()
+        restore = edit(BLOCKERS, lambda t: t + "unit:timeline\tcheck\tC\t-\tdcb\t-\t-\t-\t-\n")
+        gen, _, blockers = generated(work)
+        ok = not any(BLOCKERS in e for e in gen) and any("`unit:timeline` is not an open item" in e for e in blockers)
+        print(f"self-test: a stale blocker row fails --check, not generation (ingest regenerates): {'ok' if ok else 'FAILED'}")
+        failures += not ok
+        ran += 1
+        restore()
+        for rule, model, value, want in [("exact", "3,5", "5", (True, None)), ("exact", "3,5", "4", (False, None)),
+                                         ("range:abs:2", "10..12", "14", (True, 1.0)), ("range:abs:2", "10..12", "15", (False, 1.5)),
+                                         ("range:rel:1", "100..100", "102", (False, 2.0)),
+                                         ("systembench:RCP", "193..193", "195", (True, 2 / 2)),
+                                         ("systembench:RCP", "193..193", "196", (False, 3 / 2))]:
+            got = judge(rule, model, value)
+            ok = got[0] == want[0] and (got[1] is None) == (want[1] is None) and (got[1] is None or abs(got[1] - want[1]) < 1e-9)
+            print(f"self-test: rule {rule} on fork {model}, console {value}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
+            failures += not ok
+            ran += 1
         found = {"det": ("pass", ""), "stepcap": ("pass", ""), "x:pass": ("pass", ""), "x:fail": ("fail", ""),
                  "x:pass2": ("pass", ""), "x:consistent": ("consistent-only", ""), "x:cond": ("pass-conditional:#77", "")}
         for name, row, want in [
