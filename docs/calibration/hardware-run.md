@@ -110,14 +110,15 @@ Run the ROMs in this order. The times are the fork's emulated time from boot to 
 | 10 | `rdpstat-dpc` | 0.2 s | 0.6 KB | yes | 0 | `dpc-sequencing` |
 | 11 | `rdpstat-systemtest` | 0.2 s | 0.9 KB | yes | 0 | `systemtest-rdp` |
 | 12 | `rdpstat-unsynced` | 0.2 s | 0.7 KB | yes | 0 | `unsynced-attrs` |
-| 13 | `nemu64-timing` | 0.8 s | 26.7 KB | no | 0 | `nemu64-console` |
+| 13 | `nemu64-timing` | 0.8 s | 26.8 KB | no | 0 | `nemu64-console` |
 | 14 | `nemu64-cycle` | 0.2 s | 1.5 KB | yes | 0 | `nemu64-cycle-console` |
 | 15 | `nemu64-cop0hazard` | 0.2 s | 0.8 KB | yes | 0 | `nemu64-cop0hazard-console` |
 | 16 | `kit-tex` | 0.3 s | 16.3 KB | no | 0-7 | `tmem-load-rate`, `fill-copy-rate`, `tmem-load-setup`, `loadtile-rows`, `copy-passfail`, `copy-passfail-pixels`, `attribute-stage`, `attribute-sync-cost` |
 | 17 | `kit-zmem` | 1.8 s | 29.2 KB | no | 0-7 | `write-granularity`, `write-granularity-pixels`, `atomic-contention`, `imrd-zcmp-slots`, `imrd-zcmp-slots-2cyc`, `zread-2cyc`, `clobber`, `xbus-fetch-rate`, `rdp-hold`, `triangle-setup`, `pipebusy-stall` |
-| 18 | `kit-cpu2` | 0.2 s | 18.9 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
+| 18 | `kit-cpu2` | 0.2 s | 19.5 KB | no | 0-7 | `cpu-exceptions`, `cpu-watch`, `irq-clear`, `cache-ops`, `count-write-hold`, `fetch-ahead`, `ctc1-fpe-ce`, `load-interlock-cop`, `fpu-classes`, `cache-ops-sum`, `wb-drain-target` |
 | 19 | `kit-bus` | 1.6 s | 11.3 KB | no | 0-7 | `ri-priority`, `ri-reorder`, `vi-fetch-modes`, `vi-frame-latch`, `ri-priority-overlap`, `ai-rate`, `ai-fetch`, `vi-fetch-position`, `vi-blank-counting`, `refresh-all-banks`, `vi-intr-latency`, `vi-rcp-phase` |
 | 20 | `cpu-llsc` | 0.2 s | 0.8 KB | yes | 0 | `cpu-llsc-console` |
+| 21 | `kit-pif` | 6.0 s | 25.5 KB | no | 0 | a report, no question |
 
 For each ROM:
 
@@ -167,7 +168,7 @@ sc64deployer debug --isv 0x03FF0000 | tee capture/kit-pif.isviewer.log
 
 Then turn the console on, wait 15 seconds, and turn it off. The screen stays black, and the log has no `#kit-end` line. A flashcart menu (the ED64 menu or the SC64 menu from the SD card) has already sent terminate-boot before it starts a ROM, so the PIF never halts the ROM, and the menu path has no ISViewer. A log that ends with `#kit-end` after about 12 s of samples shows that boot was already terminated: run it again through `upload`.
 
-ingest.py stores the log (it reports it INCOMPLETE, as expected) and prints the last COUNT next to the fork's. This is a report, not a check. COUNT counts from the IPL3's write of 0, and no source bounds the offset between that and the start of the PIF's timer, so the last COUNT cannot decide between 5 s and 6 s (`tools/n64-timing/calibration/undecidable.tsv`, `legacy.pif.boot-timeout`). On the fork the last COUNT is 280890806 ticks, 5.992 s.
+ingest.py stores the log (it reports it INCOMPLETE, as expected) and prints the last COUNT next to the fork's. This is a report, not a check. COUNT counts from the IPL3's write of 0, and no source bounds the offset between that and the start of the PIF's timer, so the last COUNT cannot decide between 5 s and 6 s (`tools/n64-timing/calibration/undecidable.tsv`, `legacy.pif.boot-timeout`). On the fork the last COUNT is 280890637 to 280890686 ticks over the 8 layout pads, 5.992 s, in sample 593. The fork's PIF halts the CPU 6.000 s after it starts its timer, and the pinned IPL3 writes COUNT 0 1.8 ms before that (measured with a scratch probe in `pif/hle.cpp`), so the next sample, 10 ms later, never runs.
 
 ### Repeat runs
 
