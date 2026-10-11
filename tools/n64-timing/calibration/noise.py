@@ -3,10 +3,10 @@ noise bits a kit-noise or kit-noise2 snap's pixels show, over an offset set fixe
 
 The anchor is the noise clock of snap/rect-1016's first pixel in the same log, found from its a bits (Thar0's
 all-ones window method, rdp-noise.md:37, 62). A mapping snap's first pixel is at the anchor plus D + k,
-|k| <= K, where D and K come from the fork (kit.py --layout) and are written in the question's source. Each
-mapping predicts each pixel the snap stores; the reader returns the mapping that alone matches,
-`offset-outside-bound` when none does, or `ambiguous`, and the false-match rate (2K+1) x mappings x 2^-b,
-with b the fewest pixels the mappings disagree on at any offset in the set.
+|k| <= K, where D and K come from the fork's step-1 boot-delay sweep (noise-sweep.sh, kit.py --noise-sweep) and
+are written in the question's source. Each mapping predicts each pixel the snap stores; the reader returns the
+mapping that alone matches, `offset-outside-bound` when none does, or `ambiguous`, and the false-match rate
+(2K+1) x mappings x 2^-b, with b the fewest pixels the mappings disagree on at any offset in the set.
 """
 import itertools
 import re
@@ -33,6 +33,7 @@ CD_MAPPINGS = {"abc-top3": lambda a3, b3, c3: a3 << 6 | b3 << 3 | c3,
 MAPPINGS = {"noise-alpha-dither": AD_MAPPINGS, "noise-dither-bits": CD_MAPPINGS}
 FORK = {"noise-alpha-dither": "angrylion", "noise-dither-bits": "abc-top3"}
 RATE_MAX = 1e-6
+SWEEP_LAST = 6575
 ANCHOR = "rect-1016"
 #(kit ROM, mapping snap): the question that reads it, whose source holds the snap's offset set.
 READS = {("kit-noise", "ad-noise-7f"): "noise-alpha-dither",
@@ -199,7 +200,7 @@ def read(anchor_data, snap_data, draw, question, d, k):
 
 
 def offset_set(question, snap, questions_path=QUESTIONS):
-    """(D, K) for the snap from the question's source, or None before kit.py --layout has fixed it."""
+    """(D, K) for the snap from the question's source, or None before kit.py --noise-sweep has fixed it."""
     for line in Path(questions_path).read_text(encoding="utf-8").split("\n"):
         cols = line.split("\t")
         if cols[0] == question and len(cols) > 8:
@@ -239,24 +240,81 @@ def distance(dplog, kit, snap):
     return clocks[first[snap]] - clocks[first[ANCHOR]]
 
 
+def runs(run_dir, kit, snap):
+    """{layout pad: {boot delay: distance}} over every fork run of the kit ROM in a calibration/run.sh or
+    noise-sweep.sh output, from the .dplog beside each log."""
+    run_dir, out = Path(run_dir), {}
+    for path in run_dir.glob(f"**/{kit}.dplog"):
+        rel = path.relative_to(run_dir).parts
+        pad = int(rel[0][1:]) if re.fullmatch(r"p\d+", rel[0]) else 0
+        out.setdefault(pad, {})[int(path.parent.name.removeprefix("boot-"))] = distance(path.read_text(), kit, snap)
+    return out
+
+
+def offset_set_of(every):
+    """(D, K): the centered set that spans every distance."""
+    lo, hi = min(every), max(every)
+    d = (lo + hi) // 2
+    return d, max(hi - d, d - lo)
+
+
 def offset_table(run_dir):
-    """The offset set kit.py --layout fixes for each READS snap: D and K over every fork run of its kit ROM
-    (layout pads 0-7, every boot delay), from the .dplog run.sh writes beside each log."""
-    run_dir = Path(run_dir)
+    """kit.py --layout's view of each READS snap's offset set: D and K over the fork runs in a run.sh output (layout
+    pads 0-7, its 8 boot delays), from the .dplog beside each log. The source's set comes from noise-sweep.sh."""
     out = []
     for (kit, snap), question in READS.items():
-        by_pad = {}
-        for path in sorted(run_dir.glob(f"**/{kit}.dplog")):
-            rel = path.relative_to(run_dir).parts
-            pad = int(rel[0][1:]) if re.fullmatch(r"p\d+", rel[0]) else 0
-            by_pad.setdefault(pad, []).append(distance(path.read_text(), kit, snap))
+        by_pad = runs(run_dir, kit, snap)
         if not by_pad:
             out.append(f"noise offset {snap}: no {kit} .dplog in {run_dir} (calibration/run.sh writes them)")
             continue
-        every = [d for ds in by_pad.values() for d in ds]
-        lo, hi = min(every), max(every)
-        d = (lo + hi) // 2
-        out.append(f"noise offset {snap} ({question}): {len(every)} runs, pads " +
-                   ", ".join(f"{p}: {min(ds)}..{max(ds)}" for p, ds in sorted(by_pad.items())) +
-                   f"; offset set {snap} D = {d} +- {max(hi - d, d - lo)}")
+        d, k = offset_set_of([d for ds in by_pad.values() for d in ds.values()])
+        out.append(f"noise offset {snap} ({question}): {sum(map(len, by_pad.values()))} runs, pads " +
+                   ", ".join(f"{p}: {min(ds.values())}..{max(ds.values())}" for p, ds in sorted(by_pad.items())) +
+                   f"; offset set {snap} D = {d} +- {k}")
     return "\n".join(out)
+
+
+def period(series):
+    """The boot-delay period of a snap's distance over step-1 sweeps (one {delay: distance} per pad): the lag
+    whose mean |d(k + lag) - d(k)|, summed over the sweeps, is the least of the curve's local minima past lag 1.
+    Nearby delays sit at nearly the same phase, so the curve starts at its lowest; lag 1 is not a minimum."""
+    curves = [[s[k] for k in sorted(s)] for s in series]
+    n = min(map(len, curves))
+    mad = {lag: sum(sum(map(abs, map(int.__sub__, c[lag:], c[:-lag]))) / (len(c) - lag) for c in curves)
+           for lag in range(1, n // 2 + 2)}
+    minima = [lag for lag in range(2, n // 2 + 1) if mad[lag] < mad[lag - 1] and mad[lag] <= mad[lag + 1]]
+    return min(minima, key=mad.get) if minima else None
+
+
+def sweep_table(run_dir):
+    """noise-sweep.sh's derivation of each READS snap's offset set (prehw-plan.md U-NOISE-ORDER): the fork's
+    distance at every layout pad and every boot delay 1..last, step 1. The boot phase moves a draw's start by up
+    to hundreds of clocks where a refresh or VI fetch lands between two draws (verify-177 item 4), and that
+    repeats with a period in boot delays. The sweep must span two periods, and the delays past the first period
+    must add nothing to its extent, which shows the first period held every phase. D +- K spans the sweep."""
+    out, ok = [], True
+    for (kit, snap), question in READS.items():
+        by_pad = runs(run_dir, kit, snap)
+        last = min((max(ds) for ds in by_pad.values()), default=0)
+        steps = [p for p, ds in sorted(by_pad.items()) if sorted(ds) != list(range(1, max(ds) + 1))]
+        if not by_pad or steps:
+            out.append(f"{snap}: no step-1 sweep from boot delay 1 at pads {steps or 'any'} in {run_dir}")
+            ok = False
+            continue
+        p = period(list(by_pad.values()))
+        if p is None or last < 2 * p:
+            out.append(f"{snap}: sweep 1..{last} does not span two periods (period {p})")
+            ok = False
+            continue
+        every = [v for ds in by_pad.values() for v in ds.values()]
+        first = [v for ds in by_pad.values() for k, v in ds.items() if k <= p]
+        rest = [v for ds in by_pad.values() for k, v in ds.items() if k > p]
+        held = min(rest) >= min(first) and max(rest) <= max(first)
+        ok &= held
+        d, k = offset_set_of(every)
+        out.append(f"{snap} ({question}): period {p} boot delays; {len(by_pad)} pads x delays 1..{last}; pads " +
+                   ", ".join(f"{q}: {min(ds.values()) - d:+d}..{max(ds.values()) - d:+d}" for q, ds in sorted(by_pad.items())) +
+                   f" from D; delays 1..{p} span {min(first)}..{max(first)}, {p + 1}..{last} span {min(rest)}..{max(rest)}"
+                   f"{'' if held else ' (past the first period: the sweep has not held every phase)'}; "
+                   f"offset set {snap} D = {d} +- {k}")
+    return "\n".join(out), ok

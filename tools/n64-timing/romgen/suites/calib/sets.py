@@ -322,13 +322,16 @@ NOISE_CASES = [
                                             rcp.AC_THRESHOLD, prim_combiner(), prim=0xFFFFFF7F, blend=0x00000080))]),
     # Last: its stored pixels, and so its draw time, depend on the noise bits, and no question names it but
     # noise-reset's snap/*. Every snap a question names follows only draws that store a fixed pixel set.
+    # Rejected: ad-noise-7f right after the anchor instead. It fixed ad-noise-7f's clock, but then idle-gap,
+    # two-cycle and im-rd-stall followed ad-noise-7f, whose stored pixels depend on the AD bits, and moved by up
+    # to 146 clocks on the MiSTer-odd scratch fork (U-NOISE-ORDER, measured).
     ("ac-dither", 256, 4, [(0, noise_list(256, B32, 0, 256, rcp.CYC_1CYCLE | rcp.CD_DISABLE | AD_NOISE, AC_DITHER,
                                           prim_combiner(), prim=0xFFFFFF80))]),
 ]
 #kit-noise2 (prehw-plan.md U-NOISE-KIT2), for the G_CD_NOISE and G_AC_DITHER bits, since kit-noise's log has no
 #SRAM left for them. Gray 0x84 has low bits 4, so a channel rounds up iff its dither value is below 4: one bit per
-#channel per pixel. It stores every pixel, so ac-dither's clock does not depend on its bits. The anchor and
-#ac-dither are kit-noise's draws, copied.
+#channel per pixel. cd-noise-84 stores every pixel, so ac-dither, drawn after it, has a clock that does not
+#depend on cd-noise-84's bits. The anchor and ac-dither are kit-noise's draws, copied.
 NOISE2_CASES = [
     NOISE_CASES[0],
     ("cd-noise-84", 512, 2, [(0, noise_list(512, B16, 0, 512, rcp.CYC_1CYCLE | CD_NOISE | rcp.AD_DISABLE, 0,
