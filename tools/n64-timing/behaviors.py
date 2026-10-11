@@ -926,9 +926,11 @@ RETIME_CLAUSE = "clause:sr-1"
 RESOLUTION_UNIT = "U-SEPARATES"
 #An alternative more than this many tolerances from the fork must be a printed number cited by line.
 ALT_BOUND = 4
-#A mut that is one quantum of a named model parameter: step=1<unit>, the parameter's own unit (clause 3).
+#A mut that is one quantum of a named model parameter: step=1<unit>, the parameter's own unit, or step=<n><unit>;eq=1
+#when n stored units is the first step that changes the output, the effective quantum (clause 3).
 STEP = re.compile(r"(\d+)([A-Za-z][\w/-]*)")
 QUANTUM = ("param", "step")
+EFFECTIVE = "eq"
 LINE_CITE = re.compile(r"\S:\d+\b|#L\d+")
 
 
@@ -1118,7 +1120,7 @@ def judge(rule, model, value):
 def separates_problems(b, row, fork, scopes):
     """What keeps a C row's separates cell from showing its question tells the fork from an alternative (section 1
     clause 3): at=<question> <key> <metric>;fork=<value>;alt=<value>;cite=<reference>, or mut=<value>;cite=<unit>,
-    optionally with param=<parameter>;step=<n><unit> naming the model parameter the mutation steps."""
+    optionally with param=<parameter>;step=<n><unit>[;eq=1] naming the model parameter the mutation steps."""
     fields = dict(f.split("=", 1) for f in b["separates"].split(";") if "=" in f)
     shape = ("fork", "alt", "cite") if "alt" in fields else ("fork", "mut", "cite")
     if shape[1] == "mut" and any(f in fields for f in QUANTUM):
@@ -1126,14 +1128,16 @@ def separates_problems(b, row, fork, scopes):
         if missing:
             return [f"names a mut with {' and '.join(f'{f}=' for f in QUANTUM if f not in missing)} but no "
                     f"{' or '.join(f'{f}=' for f in missing)}; a stepped mut names both the parameter and the step"]
-        shape += QUANTUM
+        shape += QUANTUM + ((EFFECTIVE,) if EFFECTIVE in fields else ())
     if set(fields) != {"at", *shape}:
         return [f"separates must read `at=<question> <key> <metric>;fork=<value>;alt=<value>;cite=<reference>` or "
-                f"`...;mut=<value>;cite=<unit>[;param=<parameter>;step=<n><unit>]`; it reads `{b['separates']}`"]
+                f"`...;mut=<value>;cite=<unit>[;param=<parameter>;step=<n><unit>[;eq=1]]`; it reads `{b['separates']}`"]
     step = STEP.fullmatch(fields["step"]) if "step" in fields else None
     if "step" in fields and step is None:
         return [f"separates step=`{fields['step']}` must read <count><unit>, such as step=1pclk"]
-    quantum = step is not None and int(step[1]) == 1
+    if fields.get(EFFECTIVE, "1") != "1":
+        return [f"separates eq=`{fields[EFFECTIVE]}` must read eq=1: the step is the parameter's effective quantum"]
+    quantum = step is not None and (int(step[1]) == 1 or EFFECTIVE in fields)
     at = fields["at"].split()
     if len(at) != 3 or at[0] not in b["decider"].split():
         return [f"separates at=`{fields['at']}` must name one of its deciders, a key and a metric"]
@@ -1165,7 +1169,7 @@ def separates_problems(b, row, fork, scopes):
     else:
         if quantum and b["signed"] in ("", "-"):
             out.append(f"names a one-quantum mut of `{fields['param']}` with an empty signed; the unit verifier who "
-                       f"confirmed the parameter, its quantum {step[2]} and the one-quantum step names a report there")
+                       f"confirmed the parameter, its quantum {fields['step']} and the one-quantum step names a report there")
         if not quantum and away is not None and away > ALT_BOUND:
             out.append(f"names a mut {away:.1f} tolerances from the fork, past {ALT_BOUND}: the question cannot resolve "
                        f"it (U-SEPARATES outcome (b))")
@@ -2635,6 +2639,7 @@ def self_test(root):
                            **{"class": "C"}, separates=f"at={' '.join(uncached)};fork={uncached_fork};"
                                                        f"mut={uncached_hi + step:g};cite={cite}{quantum}")
         one_pclk = ";param=sysad.rdram-write-period;step=1pclk"
+        effective = ";param=sysad.rdram-write-period;step=12unit;eq=1"
         for name, rel, change, rid, expected in [
             ("a row seeded A relabeled C on its closing question with a rejected, cited, signed alt", BLOCKERS,
              relabeled(repeat_hi * 1.01), "bench:mi-memset-repeat", None),
@@ -2675,6 +2680,20 @@ def self_test(root):
              "sysad.rdram-write-period", "must read <count><unit>"),
             ("a one-quantum mut the rule accepts", BLOCKERS,
              fit_mut(0, quantum=one_pclk, signed="verify-self-test"), "sysad.rdram-write-period", "accepts mut="),
+            ("an effective-quantum mut (eq=1, 12 stored units) far past 4 tolerances, signed", BLOCKERS,
+             fit_mut(300000, quantum=effective, signed="verify-self-test"), "sysad.rdram-write-period", None),
+            ("an effective-quantum mut with an empty signed", BLOCKERS, fit_mut(300000, quantum=effective),
+             "sysad.rdram-write-period", "names a one-quantum mut of `sysad.rdram-write-period` with an empty signed"),
+            ("a 12-unit mut without eq=1 past 4 tolerances, signed", BLOCKERS,
+             fit_mut(300000, quantum=effective.replace(";eq=1", ""), signed="verify-self-test"),
+             "sysad.rdram-write-period", "past 4: the question cannot resolve"),
+            ("an eq= other than 1", BLOCKERS,
+             fit_mut(300000, quantum=effective.replace("eq=1", "eq=2"), signed="verify-self-test"),
+             "sysad.rdram-write-period", "must read eq=1"),
+            ("an eq=1 with no param or step", BLOCKERS, fit_mut(300000, quantum=";eq=1", signed="verify-self-test"),
+             "sysad.rdram-write-period", "separates must read"),
+            ("an effective-quantum mut the rule accepts", BLOCKERS,
+             fit_mut(0, quantum=effective, signed="verify-self-test"), "sysad.rdram-write-period", "accepts mut="),
             ("a mut whose cite is no unit", BLOCKERS, fit_mut(8000, cite="scratch-build"), "sysad.rdram-write-period",
              "whose cite `scratch-build` is no section 4 unit"),
             ("an out-of-kit row whose unit is U-SEPARATES with an empty signed", BLOCKERS,
