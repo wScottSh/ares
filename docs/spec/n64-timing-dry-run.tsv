@@ -50,6 +50,7 @@ hw:noise-idle	pass
 hw:noise-pixel-offset	pass
 hw:noise-reset	pass
 hw:noise-stall	pass
+hw:op-slope	fail
 hw:pi-dma-small	pass
 hw:pi-row-end	pass
 hw:pipebusy-stall	pass

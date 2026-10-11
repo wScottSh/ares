@@ -11,7 +11,7 @@ The three reports of `docs/design/green-plan.md` section 1 and PREHW_COMPLETE of
 - SOFTWARE_COMPLETE: does not hold. 2 of 3 computed clauses hold; 1 is not computed from the repository.
 - SOFTWARE_READY: 2 of 6 clauses hold.
 - MAP_GREEN: does not hold. 1 of 5 computed clauses hold.
-- PREHW_COMPLETE: 2 of 6 computed clauses hold; 1 not computed from the repository; does not hold. Open software work, class A: none; class B: `ai.fetch-bytes`, `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:uncached-sizes-u32-banked`, `bench:wb-fifth-store`, `cpu.dcb`, `cpu.dfill-total`, `cpu.dirty-miss-order`, `cpu.ifill-stall`, `cpu.uncached-read-total`, `cpu.wb-block-entries`, `cpu.wb-release`, `mm:south-clock-town`, `ri.arbitration`, `ri.post-read-gap`, `ri.rank.vi`, `ri.retry-clean`, `sysad.rdram-block-write-period`, `sysad.register-write`, `vi.register-sample`; no row: 0.
+- PREHW_COMPLETE: 2 of 6 computed clauses hold; 1 not computed from the repository; does not hold. Open software work, class A: none; class B: `ai.fetch-bytes`, `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:uncached-sizes-u32-banked`, `bench:wb-fifth-store`, `cpu.dcb`, `cpu.dfill-total`, `cpu.dirty-miss-order`, `cpu.ifill-stall`, `cpu.uncached-read-total`, `cpu.wb-block-entries`, `cpu.wb-release`, `mm:south-clock-town`, `ri.arbitration`, `ri.post-read-gap`, `ri.rank.vi`, `ri.retry-clean`, `sysad.rdram-block-write-period`, `vi.register-sample`; no row: 0.
 
 ### SOFTWARE_COMPLETE
 
@@ -48,8 +48,8 @@ The three reports of `docs/design/green-plan.md` section 1 and PREHW_COMPLETE of
 | Clause | Holds | Evidence |
 |---|---|---|
 | every open item has exactly one blocker row, and no row names an item that is not open | yes | 129 open items (37 checks, 84 rows, 8 clauses), 129 with a row in tools/n64-timing/calibration/blockers.tsv; no row: none; checks with no result: none; other tools/n64-timing/calibration/blockers.tsv errors: 0 |
-| no open item is class A or B: no software-doable work is left | **no** | class A: none; class B: `ai.fetch-bytes`, `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:uncached-sizes-u32-banked`, `bench:wb-fifth-store`, `cpu.dcb`, `cpu.dfill-total`, `cpu.dirty-miss-order`, `cpu.ifill-stall`, `cpu.uncached-read-total`, `cpu.wb-block-entries`, `cpu.wb-release`, `mm:south-clock-town`, `ri.arbitration`, `ri.post-read-gap`, `ri.rank.vi`, `ri.retry-clean`, `sysad.rdram-block-write-period`, `sysad.register-write`, `vi.register-sample`; no row: 0 |
-| every class C row names a console measurement a tool compares that closes it, a value its rule rejects that the fork does not give, and the sources searched; every row seeded A or B names a unit whose Scope names it | **no** | seed classes from the commit that added tools/n64-timing/calibration/blockers-seed.tsv; 92 C rows; failing a rule: 12 (`cpu.eret`, `cpu.fpu-trivial`, `cpu.irq-sample`, `mm:filesel-named`, `rdp.mem-overhead-write`, `rdp.noise-alpha-dither`, `rdp.noise-dither-bits`, `ri.refresh-latch`, `thar0:ac-zbsame-vioff-imrd-1cyc`, `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc`, `thar0:zcmp`, `vi.fetch-overrun`); with no separates or searched: 1 (`bench:sp-dma-sweep`) |
+| no open item is class A or B: no software-doable work is left | **no** | class A: none; class B: `ai.fetch-bytes`, `bench:dirty-miss-isolated`, `bench:dirty-row-sweep`, `bench:ifill-isolated`, `bench:mi-memset-cached`, `bench:mi-memset-repeat`, `bench:uncached-sizes-u32-banked`, `bench:wb-fifth-store`, `cpu.dcb`, `cpu.dfill-total`, `cpu.dirty-miss-order`, `cpu.ifill-stall`, `cpu.uncached-read-total`, `cpu.wb-block-entries`, `cpu.wb-release`, `mm:south-clock-town`, `ri.arbitration`, `ri.post-read-gap`, `ri.rank.vi`, `ri.retry-clean`, `sysad.rdram-block-write-period`, `vi.register-sample`; no row: 0 |
+| every class C row names a console measurement a tool compares that closes it, a value its rule rejects that the fork does not give, and the sources searched; every row seeded A or B names a unit whose Scope names it | **no** | seed classes from the commit that added tools/n64-timing/calibration/blockers-seed.tsv; 93 C rows; failing a rule: 13 (`cpu.eret`, `cpu.fpu-trivial`, `cpu.irq-sample`, `mm:filesel-named`, `rdp.mem-overhead-write`, `rdp.noise-alpha-dither`, `rdp.noise-dither-bits`, `ri.refresh-latch`, `sysad.register-write`, `thar0:ac-zbsame-vioff-imrd-1cyc`, `thar0:ac-zcmp-zbsep-vioff-imrd-1cyc`, `thar0:zcmp`, `vi.fetch-overrun`); with no separates or searched: 1 (`bench:sp-dma-sweep`) |
 | every class D row was D at the seed, on its own not-hardware-decidable entry unchanged since | yes | seed classes from the commit that added tools/n64-timing/calibration/blockers-seed.tsv; 6 D rows: `legacy.clock.vclk-pal`, `legacy.cpu.nmi-entry`, `legacy.cpu.sysad-frozen-step`, `legacy.pif.step-quantum`, `ri.request-latency`, `scheduler.tie-rank`; failing: none |
 | every clause row has a decider PRED can check: follows with its members' rows, or clause:mg-4 on hw-run | **no** | clause rows: `clause:mg-1`, `clause:mg-2`, `clause:mg-4`, `clause:mg-5`, `clause:sr-2`, `clause:sr-3`, `clause:sr-4`, `clause:sr-5`; failing: `clause:mg-4` |
 | SOFTWARE_COMPLETE clauses 2 to 4 hold, det and stepcap pass, the standing run is the current tree, and its dry run moves every hw:* check to pass | **no** | SOFTWARE_COMPLETE clauses 2 to 4: yes, no, yes; det pass, stepcap pass; the results header `standing run fix-137/run on d1874254e`: ares/ and tools/n64-timing/ at HEAD differ from its commit (or it names none); dry run (docs/spec/n64-timing-dry-run.tsv): 89 of 104 hw:* checks pass |
@@ -216,7 +216,7 @@ These checks are gated too, but another check already decides their row.
 | `ri.read-hit` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `ri.write-hit` | fail | `hw:memset-vi` pending (calibration-16); `hw:repeat-write` pending (calibration-16) |
 | `ri.octbyte` | pass | `bench:sp-dma-sweep` pending (report-only); `hw:sp-dma-direction` pending (calibration-16) |
-| `ri.retry-clean` | fail | `hw:nemu64-console` pending (calibration-16) |
+| `ri.retry-clean` | fail | `hw:nemu64-console` pending (calibration-16); `hw:op-slope` pending (calibration-16) |
 | `ri.retry-dirty` | pass | `bench:dirty-row-sweep` pending (report-only); `hw:dirty-row` pending (calibration-16) |
 | `ri.max-burst` | pass | `hw:sp-dma-direction` pending (calibration-16) |
 | `ri.bank-of` | fail | `hw:nemu64-console` pending (calibration-16) |
@@ -232,9 +232,9 @@ These checks are gated too, but another check already decides their row.
 | `ri.overhead-vi` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `ri.overhead-write` | pass-conditional:#77 pending:calibration-16 pending:report-only | `bench:sp-dma-sweep` pending (report-only); `hw:memset-vi` pending (calibration-16); `hw:repeat-write` pending (calibration-16) |
 | `ri.overhead-rdp` | fail | `hw:thar0-console` pending (calibration-16) |
-| `cpu.uncached-read-total` | consistent-only | `hw:cpu-reads` pending (calibration-16); `hw:nemu64-console` pending (calibration-16); `hw:systembench` pending (calibration-16) |
+| `cpu.uncached-read-total` | consistent-only | `hw:cpu-reads` pending (calibration-16); `hw:nemu64-console` pending (calibration-16); `hw:systembench` pending (calibration-16); `hw:op-slope` pending (calibration-16) |
 | `cpu.uncached-read-dword-total` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
-| `cpu.dfill-total` | fail | `hw:dirty-miss` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
+| `cpu.dfill-total` | fail | `hw:dirty-miss` pending (calibration-16); `hw:nemu64-console` pending (calibration-16); `hw:op-slope` pending (calibration-16) |
 | `cpu.dcache-hit` | pass | `hw:nemu64-console` pending (calibration-16) |
 | `cpu.ldi` | pass | `hw:load-interlock-cop` pending (calibration-16); `hw:nemu64-console` pending (calibration-16) |
 | `cpu.mci` | pass | `hw:nemu64-console` pending (calibration-16) |
@@ -272,8 +272,8 @@ These checks are gated too, but another check already decides their row.
 | `cpu.pif-ram-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `cpu.pi-io-read` | pass | `hw:cpu-reads` pending (calibration-16); `hw:systembench` pending (calibration-16) |
 | `sysad.rdram-write-period` | fail | `hw:memset-vi` pending (calibration-16) |
-| `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only); `hw:memset-vi` pending (calibration-16); `hw:block-write-slope` pending (calibration-16) |
-| `sysad.register-write` | fail | `hw:register-write` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16); `hw:repeat-write` pending (calibration-16) |
+| `sysad.rdram-block-write-period` | fail | `bench:dirty-miss-isolated` pending (report-only); `hw:memset-vi` pending (calibration-16) |
+| `sysad.register-write` | fail | `hw:register-write` pending (calibration-16); `hw:wb-drain-target` pending (calibration-16); `hw:repeat-write` pending (calibration-16); `hw:op-slope` pending (calibration-16) |
 | `cpu.random-rule` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
 | `cpu.wired-write-latency` | pass | `hw:nemu64-console` pending (calibration-16); `hw:nemu64-cop0hazard-console` pending (calibration-16) |
 | `cpu.ctc1-fpe-ce` | fit only | `hw:ctc1-fpe-ce` pending (calibration-16) |
