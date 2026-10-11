@@ -13,7 +13,7 @@ bench:dirty-miss-isolated	check	B	B	dirty-miss	U-SEPARATES	-	-	prehw-plan 2.3: N
 bench:dirty-row-sweep	check	B	A	dirty-row	U-SEPARATES	-	-	-
 bench:ifill-isolated	check	B	A	ifill	U-SEPARATES	-	-	-
 bench:mi-memset-cached	check	B	A	memset-vi	U-SEPARATES	-	-	-
-bench:mi-memset-repeat	check	A	A	memset-vi	U-REPEAT-KIT	-	-	-
+bench:mi-memset-repeat	check	A	A	memset-vi	U-REPEAT-RI	-	-	-
 bench:mi-memset-rspdma	check	B	B	vi-first-line memset-vi	U-SEPARATES	-	-	prehw-plan 2.2: n64brew Video_Interface conflicts with RDRAM_Interface and Video_Interface on H_TOTAL defaults; MiSTer and nemu64 do not model it
 bench:mi-memset-uncached	check	B	A	memset-vi	U-SEPARATES	-	-	-
 bench:pi-dma-sizes	check	B	B	pi-dma-small systembench	U-SEPARATES	-	-	prehw-plan 2.3: no phase recording exists
