@@ -258,10 +258,37 @@ def release(clocks, lines, segment_px, half_px):
     return {segment_px: "segment", half_px: "half"}.get(period, f"period-{period}"), steps
 
 
+#COUNT runs at half the 93.75 MHz PClock (VR4300 User's Manual 6.3.3); VCLK at 48.681812 MHz and the RCP
+#at 62.5 MHz on NTSC (n64brew Clock_Timing). The longest refresh holdoff is 54 rclk (n64brew RDRAM_Interface).
+TICKS_PER_VCLK = 46.875 / 48.681812
+REFRESH_MAX_TICKS = 54 * 46.875 / 62.5
+
+
+def hsync(recs):
+    """kit-bus's short lines (bus.py hsync_short). On the refresh points no line is in V_VIDEO, so each
+    slow load is one refresh holdoff: lines per holdoff from the lines H_SYNC puts in the window.
+    fetch-overrun's VI time is the loads fetch-overrun-none gains, at its mean load period. With no
+    burst both windows hold the same one refresh per line, so they differ by at most one holdoff, and
+    by the load each window ends on: `fetch-overrun-fetched` is 1 when the VI time exceeds that."""
+    out = {}
+    pts = {point: f for (rom, point), f in recs.items() if rom == "bus-hsync" and f.get("starved") == 0}
+    for point, f in pts.items():
+        lines = f["window"] / ((f["hsync"] + 1) * TICKS_PER_VCLK)
+        if point.startswith("refresh-") and f["slow"]:
+            out[f"{point}-lines-per-holdoff"] = round(lines / f["slow"], 3)
+    if "fetch-overrun" in pts and "fetch-overrun-none" in pts:
+        fetch, none = pts["fetch-overrun"], pts["fetch-overrun-none"]
+        vi = (none["n"] - fetch["n"]) * none["window"] / none["n"]
+        lines = fetch["window"] / ((fetch["hsync"] + 1) * TICKS_PER_VCLK)
+        out["fetch-overrun-vi-ticks-per-line"] = round(vi / lines, 2)
+        out["fetch-overrun-fetched"] = int(vi > REFRESH_MAX_TICKS + 2 * max(fetch["lat_max"], none["lat_max"]))
+    return {("bus-derived", "hsync"): out} if out else {}
+
+
 def span2(recs):
     """kit-span2: per depth, the spacing of a write-only span's stall steps (segment: every 16 B,
-    half: every 64 B, no-step, else period-<px> or single-<width>), and IM_RD's steady cost per 64 B
-    half against the RI wire time (wire-bound or above-wire)."""
+    half: every 64 B, no-step, else period-<px> or single-<width>), the 32 bpp write-only steady cost
+    per 64 B half, and IM_RD's steady cost per 64 B half against the RI wire time (wire-bound or above-wire)."""
     out = {}
     lines = recs[("span-write", "b32-w1")]["h"]
     for bpp in (32, 16):
@@ -269,10 +296,10 @@ def span2(recs):
         clocks = {f["w"]: f["clock"] for f in pts if f["w"] <= 80}
         px = bpp // 8
         cat, steps = release(clocks, lines, 16 // px, 64 // px)
-        steady = {f["w"]: f["clock"] for f in pts}
-        out[("span-write", f"release-b{bpp}")] = {
-            "release": cat, "steps": ",".join(map(str, steps)) or "none",
-            "steady_half": round((steady[320] - steady[160]) / (lines * 160 * px / 64), 2)}
+        out[("span-write", f"release-b{bpp}")] = {"release": cat, "steps": ",".join(map(str, steps)) or "none"}
+    #span-write-release compares the 32 bpp cost per 64 B half; 4 places keep rounding far under its 0.76 band.
+    write = {f["w"]: f["clock"] for (rom, _), f in recs.items() if rom == "span-write" and f.get("bpp") == 32}
+    out[("span-write", "release-b32")]["steady_half"] = round((write[320] - write[160]) / (lines * 10), 4)
     imrd = {f["w"]: f for (rom, _), f in recs.items() if rom == "span-imrd"}
     steady = (imrd[320]["clock"] - imrd[160]["clock"]) / (lines * 10)
     write16 = recs[("span-write", "b32-w16")]["clock"]
@@ -294,4 +321,4 @@ def vi_latch(recs):
                                           "vi_bank": got["y-late-bank2"]["vi_bank"]}}
 
 
-DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch, span2]
+DERIVED = [tex, zmem, cpu2, bus, vintr, vi_latch, span2, hsync]

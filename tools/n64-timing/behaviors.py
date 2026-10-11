@@ -205,8 +205,9 @@ def load_checks(root, errors):
         if not EXPECT.match(row["expect"]):
             errors.append(f"{where}: expect `{row['expect']}` is not self, suite, report, equal, pass, gate, file:PATH or a number")
         if cid.endswith(":*"):
-            if not row["expect"].startswith("file:"):
-                errors.append(f"{where}: suite row `{cid}` needs expect file:<expected.tsv path>")
+            if not row["expect"].startswith("file:") and row["expect"] != "self":
+                errors.append(f"{where}: suite row `{cid}` needs expect file:<expected.tsv path>, or `self` when its "
+                              f"runner judges each check itself")
             suites[cid[:-2]] = row
         else:
             explicit[cid] = row
@@ -214,8 +215,13 @@ def load_checks(root, errors):
             errors.append(f"{where}: a pending check is a gate; its expect is `gate`")
     suite_files = {}
     for prefix, row in suites.items():
+        if not row["expect"].startswith("file:"):
+            continue
         path = Path(root) / row["expect"][5:]
         if not path.exists():
+            errors.append(f"{CHECKS}:{row['line']}: suite row `{prefix}:*` expects {row['expect'][5:]}, which does not "
+                          f"exist. Point it at the suite's expected file, or write `self` when its runner judges each "
+                          f"check itself")
             continue
         lines = [l.split("\t") for l in path.read_text(encoding="utf-8").split("\n") if l]
         header, body = lines[0], [dict(zip(lines[0], l)) for l in lines[1:]]
@@ -702,7 +708,7 @@ def render_spec(rows, checks, found, reports):
         if cid != "#source":
             out.append(f"| `{cid}` | {result} | {cell(detail)} |")
     out += ["", "## Checks", "",
-            "From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file defines every check under its prefix.", "",
+            "From `tools/n64-timing/checks.tsv`. A `:*` row names a suite whose expected file defines every check under its prefix, or `self` when the suite's runner judges each check itself.", "",
             "| Check | Runner | Target | Selector | Expectation | Source |", "|---|---|---|---|---|---|"]
     for c in checks:
         out.append(f"| `{c['id']}` | {c['runner']} | {cell(c['target'])} | {cell(c['selector'])} | {cell(c['expect'])} | {cell(c['source'])} |")
@@ -2006,9 +2012,9 @@ def gen_result(run, row):
         return None
     ok = all(line in log for line in ("behaviors.py: check: ok", "lint-literals: ok")) and "FAILED" not in log \
         and all(re.search(rf"^{tool}: self-test: \d+ cases, 0 failed$", log, re.M)
-                for tool in ("behaviors.py", "pidma-replay", "systembench report", "kit.py"))
+                for tool in ("behaviors.py", "pidma-replay", "systembench report", "kit.py", "scripts"))
     return ("pass" if ok else "fail"), ("behaviors.py --check and --self-test, lint-literals.py, pidma-replay.py, "
-                                        "systembench/report.py and calibration/kit.py --self-test")
+                                        "systembench/report.py, calibration/kit.py --self-test and scripts-selftest.py")
 
 
 MM_SCENES = {"file-select": "filesel", "south-clock-town": "sct"}
@@ -2034,8 +2040,10 @@ def mm_result(run, row):
 
 
 def pidma_result(run, row):
-    m = re.search(r"^pidma: (PASS|FAIL): (.*)$", text(run / "pidma" / "summary.txt") or "", re.M)
-    return (m.group(1).lower(), m.group(2)) if m else None
+    m = re.search(r"^pidma: (PASS|FAIL|UNCHECKED): (.*)$", text(run / "pidma" / "summary.txt") or "", re.M)
+    if not m:
+        return None
+    return {"PASS": "pass", "FAIL": "fail", "UNCHECKED": "pending:replay-unchecked"}[m.group(1)], m.group(2)
 
 
 READERS = {"nemu64": nemu64_result, "cpu": cpu_result, "det": lambda run, row: suite_runs(run, "det-*.txt", "determinism"),
@@ -2253,6 +2261,23 @@ def self_test(root):
         else:
             landed = False
         run_commit = COMMIT.findall(text(work / RESULTS).split("\n")[0])[0]
+        stale_commit = ("0" if run_commit[0] != "0" else "1") + run_commit[1:]
+
+        def wall_edit(change):
+            def apply(t):
+                head, *body = t.split("\n")
+                rows = []
+                for line in body:
+                    if line:
+                        row = dict(zip(WALL_COLUMNS, line.split("\t")))
+                        change(row)
+                        line = "\t".join(row[c] for c in WALL_COLUMNS)
+                    rows.append(line)
+                return "\n".join([head, *rows])
+            return apply
+
+        def regenerated_closure(_):
+            return generated(work)[1][CLOSURE]
 
         def blocker(rid, **cells):
             def change(t):
@@ -2338,17 +2363,20 @@ def self_test(root):
             ("editing the generated spec", SPEC, lambda t: t + "manual edit\n", "docs/spec/n64-timing.md differs from the generated output"),
             ("an older, slower timing kept as history", WALL_BUDGET,
              lambda t: t.replace("\n", "\nfilesel-rotate\t999\t0000000" + "\t-" * (len(WALL_COLUMNS) - 3) + "\n", 1), None),
-            ("one scene re-timed on the standing run, the others stale", WALL_BUDGET,
-             lambda t: "\n".join(l if l.startswith("filesel-rotate\t") or l.count("\t") < 2
-                                 else l.replace(run_commit, l.split("\t")[2]) for l in t.split("\n")),
+            ("one scene re-timed on the standing run, the others stale", (WALL_BUDGET, CLOSURE, WALL_BUDGET),
+             (wall_edit(lambda r: r.update(commit=run_commit, same_tree_as="-")), regenerated_closure,
+              wall_edit(lambda r: r.update(commit=stale_commit) if r["run"] != "filesel-rotate" else None)),
              f"{CLOSURE} differs from the generated output"),
             ("an empty wall commit", WALL_BUDGET, row_field("sct", "commit", ""), "commit `` is not a 7- to 40-hex commit"),
             ("a short wall commit that prefixes the run's", WALL_BUDGET, row_field("sct", "commit", run_commit[:3]),
              f"commit `{run_commit[:3]}` is not a 7- to 40-hex commit"),
             ("a malformed same_tree_as", WALL_BUDGET, row_field("sct", "same_tree_as", run_commit[:3]),
              f"same_tree_as `{run_commit[:3]}` is not `-` or a 7- to 40-hex commit"),
-            ("a scene whose source only mentions the run commit", WALL_BUDGET,
-             lambda t: row_field("sct", "source", f"not {run_commit}")(row_field("sct", "same_tree_as", "-")(t)),
+            ("a scene whose source only mentions the run commit", (WALL_BUDGET, CLOSURE, WALL_BUDGET),
+             (wall_edit(lambda r: r.update(commit=run_commit, same_tree_as="-") if r["run"] != "sct" else
+                        r.update(commit=stale_commit, same_tree_as=run_commit, source=f"tree identical to {run_commit}")),
+              regenerated_closure,
+              wall_edit(lambda r: r.update(same_tree_as="-", source=f"not {run_commit}") if r["run"] == "sct" else None)),
              f"{CLOSURE} differs from the generated output"),
             ("editing the closure draft", CLOSURE, lambda t: t + "manual edit\n", f"{CLOSURE} differs from the generated output"),
             ("a check with no result", RESULTS, lambda t: "\n".join(l for l in t.split("\n") if not l.startswith("unit:timeline\t")),
@@ -2375,6 +2403,9 @@ def self_test(root):
              "names no ares/n64/<path>:<symbol>. Name the code that does instead"),
             ("a code column on a legacy row", TABLE, row_field("legacy.pi.cart-read", "code", "ares/n64/pi/bus.hpp:PI::writeWord"),
              "is built at its literal-allowlist code site; clear its code column"),
+            ("a suite row whose expected file does not exist", CHECKS,
+             lambda t: t.replace("file:tools/n64-timing/romgen/suites/thar0/expected.tsv", "file:tools/n64-timing/no-such.tsv", 1),
+             "expects tools/n64-timing/no-such.tsv, which does not exist"),
             ("a bench check without a phase rule", suite_file, lambda t: t.replace("\tcheck\tmean\t", "\tcheck\t-\t", 1),
              "has rule `-`; use consistent, mean, every"),
             ("a bench condition that names no issue", suite_file, lambda t: t.replace("\tcheck\tmean\t#77\t", "\tcheck\tmean\tidle-vi\t", 1),
@@ -2431,7 +2462,8 @@ def self_test(root):
              "`clause:mg-5` is a clause of class C, which only clause:mg-4 can be"),
             ("the re-time clause written as C", (RESULTS, BLOCKERS),
              (lambda t: t.replace(run_commit, "0000000", 1),
-              lambda t: t + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
+              lambda t: "".join(l + "\n" for l in t.split("\n") if l and not l.startswith("clause:sr-1\t"))
+              + "clause:sr-1\tclause\tC\t-\thw-run\t-\t-\t-\t-\n"),
              "`clause:sr-1` is class C; the re-time clause is A whenever it fails"),
             ("fork values from another run", FORK, lambda t: t.replace(run_commit, "0000000", 1),
              "n64-timing-fork.tsv is from `# standing run"),
@@ -2448,7 +2480,7 @@ def self_test(root):
         for name, rel, change, expected in cases:
             if isinstance(rel, tuple):
                 undo = [edit(r, c) for r, c in zip(rel, change)]
-                restore = lambda: [u() for u in undo]  # noqa: E731
+                restore = lambda: [u() for u in reversed(undo)]  # noqa: E731
             else:
                 restore = edit(rel, change) if rel else None
             errors = check(work) if rel in (None, WALL_BUDGET) or expected is not None else validate(work)[0]
@@ -2571,8 +2603,8 @@ def self_test(root):
             ("a mut whose cite is no unit", BLOCKERS, fit_mut(8000, cite="scratch-build"), "sysad.rdram-write-period",
              "whose cite `scratch-build` is no section 4 unit"),
             ("an out-of-kit row whose unit is U-SEPARATES with an empty signed", BLOCKERS,
-             blocker("ri.refresh-latch", **{"class": "C", "decider": "ri.refresh-latch", "unit": "U-SEPARATES"}),
-             "ri.refresh-latch", "signed is empty"),
+             blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick", "unit": "U-SEPARATES"}),
+             "legacy.cart.rtc-tick", "signed is empty"),
             ("an out-of-kit row seeded A on its own unit with an empty signed", BLOCKERS,
              blocker("legacy.cart.rtc-tick", **{"class": "C", "decider": "legacy.cart.rtc-tick"}),
              "legacy.cart.rtc-tick", "signed is empty"),
@@ -2681,6 +2713,14 @@ def self_test(root):
         print(f"self-test: a systembench row that fails at every run: {'ok' if ok else 'FAILED'}: {got} (expected fail, 130, -4)")
         failures += not ok
         ran += 1
+        (run / "pidma").mkdir()
+        for word, want in (("PASS", "pass"), ("FAIL", "fail"), ("UNCHECKED", "pending:replay-unchecked")):
+            (run / "pidma" / "summary.txt").write_text(f"24512 points timed\npidma: {word}: exact COUNT replay\n", encoding="utf-8")
+            got = pidma_result(run, {})
+            ok = got is not None and got[0] == want
+            print(f"self-test: a pidma replay that reads {word}: {'ok' if ok else 'FAILED'}: {got} (expected {want})")
+            failures += not ok
+            ran += 1
         git = ["git", "-C", str(work), "-c", "user.name=self-test", "-c", "user.email=self-test@invalid"]
         subprocess.run(git[:3] + ["init", "-q"], check=True)
         subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "scoring tree"], check=True)
